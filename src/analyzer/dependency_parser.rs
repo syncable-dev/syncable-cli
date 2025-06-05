@@ -350,22 +350,180 @@ impl DependencyParser {
     fn parse_python_deps(&self, project_root: &Path) -> Result<Vec<DependencyInfo>> {
         let mut deps = Vec::new();
         
-        // Try requirements.txt first
-        let requirements_txt = project_root.join("requirements.txt");
-        if requirements_txt.exists() {
-            let content = fs::read_to_string(&requirements_txt)?;
-            for line in content.lines() {
-                if !line.trim().is_empty() && !line.starts_with('#') {
-                    let parts: Vec<&str> = line.split(&['=', '>', '<', '~', '!'][..]).collect();
-                    if !parts.is_empty() {
-                        let name = parts[0].trim();
-                        let version = if parts.len() > 1 {
-                            line[name.len()..].trim().to_string()
-                        } else {
-                            "*".to_string()
-                        };
+        // Try pyproject.toml first (modern Python packaging)
+        let pyproject = project_root.join("pyproject.toml");
+        if pyproject.exists() {
+            debug!("Found pyproject.toml, parsing Python dependencies");
+            let content = fs::read_to_string(&pyproject)?;
+            if let Ok(parsed) = toml::from_str::<toml::Value>(&content) {
+                // Poetry dependencies
+                if let Some(poetry_deps) = parsed
+                    .get("tool")
+                    .and_then(|t| t.get("poetry"))
+                    .and_then(|p| p.get("dependencies"))
+                    .and_then(|d| d.as_table())
+                {
+                    debug!("Found Poetry dependencies in pyproject.toml");
+                    for (name, value) in poetry_deps {
+                        if name != "python" {
+                            let version = extract_version_from_toml_value(value);
+                            deps.push(DependencyInfo {
+                                name: name.clone(),
+                                version,
+                                dep_type: DependencyType::Production,
+                                license: detect_pypi_license(name).unwrap_or_else(|| "Unknown".to_string()),
+                                source: Some("pypi".to_string()),
+                                language: Language::Python,
+                            });
+                        }
+                    }
+                }
+                
+                // Poetry dev dependencies
+                if let Some(poetry_dev_deps) = parsed
+                    .get("tool")
+                    .and_then(|t| t.get("poetry"))
+                    .and_then(|p| p.get("group"))
+                    .and_then(|g| g.get("dev"))
+                    .and_then(|d| d.get("dependencies"))
+                    .and_then(|d| d.as_table())
+                    .or_else(|| {
+                        // Fallback to older Poetry format
+                        parsed
+                            .get("tool")
+                            .and_then(|t| t.get("poetry"))
+                            .and_then(|p| p.get("dev-dependencies"))
+                            .and_then(|d| d.as_table())
+                    })
+                {
+                    debug!("Found Poetry dev dependencies in pyproject.toml");
+                    for (name, value) in poetry_dev_deps {
+                        let version = extract_version_from_toml_value(value);
                         deps.push(DependencyInfo {
-                            name: name.to_string(),
+                            name: name.clone(),
+                            version,
+                            dep_type: DependencyType::Dev,
+                            license: detect_pypi_license(name).unwrap_or_else(|| "Unknown".to_string()),
+                            source: Some("pypi".to_string()),
+                            language: Language::Python,
+                        });
+                    }
+                }
+                
+                // PEP 621 dependencies (setuptools, flit, hatch, pdm)
+                if let Some(project_deps) = parsed
+                    .get("project")
+                    .and_then(|p| p.get("dependencies"))
+                    .and_then(|d| d.as_array())
+                {
+                    debug!("Found PEP 621 dependencies in pyproject.toml");
+                    for dep in project_deps {
+                        if let Some(dep_str) = dep.as_str() {
+                            let (name, version) = self.parse_python_requirement_spec(dep_str);
+                            deps.push(DependencyInfo {
+                                name: name.clone(),
+                                version,
+                                dep_type: DependencyType::Production,
+                                license: detect_pypi_license(&name).unwrap_or_else(|| "Unknown".to_string()),
+                                source: Some("pypi".to_string()),
+                                language: Language::Python,
+                            });
+                        }
+                    }
+                }
+                
+                // PEP 621 optional dependencies (test, dev, etc.)
+                if let Some(optional_deps) = parsed
+                    .get("project")
+                    .and_then(|p| p.get("optional-dependencies"))
+                    .and_then(|d| d.as_table())
+                {
+                    debug!("Found PEP 621 optional dependencies in pyproject.toml");
+                    for (group_name, group_deps) in optional_deps {
+                        if let Some(deps_array) = group_deps.as_array() {
+                            let is_dev = group_name.contains("dev") || group_name.contains("test");
+                            for dep in deps_array {
+                                if let Some(dep_str) = dep.as_str() {
+                                    let (name, version) = self.parse_python_requirement_spec(dep_str);
+                                    deps.push(DependencyInfo {
+                                        name: name.clone(),
+                                        version,
+                                        dep_type: if is_dev { DependencyType::Dev } else { DependencyType::Optional },
+                                        license: detect_pypi_license(&name).unwrap_or_else(|| "Unknown".to_string()),
+                                        source: Some("pypi".to_string()),
+                                        language: Language::Python,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // PDM dependencies
+                if let Some(pdm_deps) = parsed
+                    .get("tool")
+                    .and_then(|t| t.get("pdm"))
+                    .and_then(|p| p.get("dev-dependencies"))
+                    .and_then(|d| d.as_table())
+                {
+                    debug!("Found PDM dev dependencies in pyproject.toml");
+                    for (group_name, group_deps) in pdm_deps {
+                        if let Some(deps_array) = group_deps.as_array() {
+                            for dep in deps_array {
+                                if let Some(dep_str) = dep.as_str() {
+                                    let (name, version) = self.parse_python_requirement_spec(dep_str);
+                                    deps.push(DependencyInfo {
+                                        name: name.clone(),
+                                        version,
+                                        dep_type: DependencyType::Dev,
+                                        license: detect_pypi_license(&name).unwrap_or_else(|| "Unknown".to_string()),
+                                        source: Some("pypi".to_string()),
+                                        language: Language::Python,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Setuptools dependencies (legacy)
+                if let Some(setuptools_deps) = parsed
+                    .get("tool")
+                    .and_then(|t| t.get("setuptools"))
+                    .and_then(|s| s.get("dynamic"))
+                    .and_then(|d| d.get("dependencies"))
+                    .and_then(|d| d.as_array())
+                {
+                    debug!("Found setuptools dependencies in pyproject.toml");
+                    for dep in setuptools_deps {
+                        if let Some(dep_str) = dep.as_str() {
+                            let (name, version) = self.parse_python_requirement_spec(dep_str);
+                            deps.push(DependencyInfo {
+                                name: name.clone(),
+                                version,
+                                dep_type: DependencyType::Production,
+                                license: detect_pypi_license(&name).unwrap_or_else(|| "Unknown".to_string()),
+                                source: Some("pypi".to_string()),
+                                language: Language::Python,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Try Pipfile (pipenv)
+        let pipfile = project_root.join("Pipfile");
+        if pipfile.exists() && deps.is_empty() {
+            debug!("Found Pipfile, parsing pipenv dependencies");
+            let content = fs::read_to_string(&pipfile)?;
+            if let Ok(parsed) = toml::from_str::<toml::Value>(&content) {
+                // Production dependencies
+                if let Some(packages) = parsed.get("packages").and_then(|p| p.as_table()) {
+                    for (name, value) in packages {
+                        let version = extract_version_from_toml_value(value);
+                        deps.push(DependencyInfo {
+                            name: name.clone(),
                             version,
                             dep_type: DependencyType::Production,
                             license: detect_pypi_license(name).unwrap_or_else(|| "Unknown".to_string()),
@@ -374,6 +532,71 @@ impl DependencyParser {
                         });
                     }
                 }
+                
+                // Dev dependencies
+                if let Some(dev_packages) = parsed.get("dev-packages").and_then(|p| p.as_table()) {
+                    for (name, value) in dev_packages {
+                        let version = extract_version_from_toml_value(value);
+                        deps.push(DependencyInfo {
+                            name: name.clone(),
+                            version,
+                            dep_type: DependencyType::Dev,
+                            license: detect_pypi_license(name).unwrap_or_else(|| "Unknown".to_string()),
+                            source: Some("pypi".to_string()),
+                            language: Language::Python,
+                        });
+                    }
+                }
+            }
+        }
+        
+        // Try requirements.txt (legacy, but still widely used)
+        let requirements_txt = project_root.join("requirements.txt");
+        if requirements_txt.exists() && deps.is_empty() {
+            debug!("Found requirements.txt, parsing legacy Python dependencies");
+            let content = fs::read_to_string(&requirements_txt)?;
+            for line in content.lines() {
+                let line = line.trim();
+                if !line.is_empty() && !line.starts_with('#') && !line.starts_with('-') {
+                    let (name, version) = self.parse_python_requirement_spec(line);
+                    deps.push(DependencyInfo {
+                        name: name.clone(),
+                        version,
+                        dep_type: DependencyType::Production,
+                        license: detect_pypi_license(&name).unwrap_or_else(|| "Unknown".to_string()),
+                        source: Some("pypi".to_string()),
+                        language: Language::Python,
+                    });
+                }
+            }
+        }
+        
+        // Try requirements-dev.txt
+        let requirements_dev = project_root.join("requirements-dev.txt");
+        if requirements_dev.exists() {
+            debug!("Found requirements-dev.txt, parsing dev dependencies");
+            let content = fs::read_to_string(&requirements_dev)?;
+            for line in content.lines() {
+                let line = line.trim();
+                if !line.is_empty() && !line.starts_with('#') && !line.starts_with('-') {
+                    let (name, version) = self.parse_python_requirement_spec(line);
+                    deps.push(DependencyInfo {
+                        name: name.clone(),
+                        version,
+                        dep_type: DependencyType::Dev,
+                        license: detect_pypi_license(&name).unwrap_or_else(|| "Unknown".to_string()),
+                        source: Some("pypi".to_string()),
+                        language: Language::Python,
+                    });
+                }
+            }
+        }
+        
+        debug!("Parsed {} Python dependencies", deps.len());
+        if !deps.is_empty() {
+            debug!("Sample Python dependencies:");
+            for dep in deps.iter().take(5) {
+                debug!("  - {} v{} ({:?})", dep.name, dep.version, dep.dep_type);
             }
         }
         
@@ -422,6 +645,62 @@ impl DependencyParser {
         }
         
         Ok(deps)
+    }
+    
+    /// Parse a Python requirement specification string (e.g., "package>=1.0.0")
+    fn parse_python_requirement_spec(&self, spec: &str) -> (String, String) {
+        // Handle requirement specification formats like:
+        // - package==1.0.0
+        // - package>=1.0.0,<2.0.0
+        // - package~=1.0.0
+        // - package[extra]>=1.0.0
+        // - package
+        
+        let spec = spec.trim();
+        
+        // Remove any index URLs or other options
+        let spec = if let Some(index) = spec.find("--") {
+            &spec[..index]
+        } else {
+            spec
+        }.trim();
+        
+        // Find the package name (before any version operators)
+        let version_operators = ['=', '>', '<', '~', '!'];
+        let version_start = spec.find(&version_operators[..]);
+        
+        if let Some(pos) = version_start {
+            // Extract package name (including any extras)
+            let package_part = spec[..pos].trim();
+            let version_part = spec[pos..].trim();
+            
+            // Handle extras like package[extra] - keep them as part of the name
+            let package_name = if package_part.contains('[') && package_part.contains(']') {
+                // For packages with extras, extract just the base name
+                if let Some(bracket_start) = package_part.find('[') {
+                    package_part[..bracket_start].trim().to_string()
+                } else {
+                    package_part.to_string()
+                }
+            } else {
+                package_part.to_string()
+            };
+            
+            (package_name, version_part.to_string())
+        } else {
+            // No version specified - handle potential extras
+            let package_name = if spec.contains('[') && spec.contains(']') {
+                if let Some(bracket_start) = spec.find('[') {
+                    spec[..bracket_start].trim().to_string()
+                } else {
+                    spec.to_string()
+                }
+            } else {
+                spec.to_string()
+            };
+            
+            (package_name, "*".to_string())
+        }
     }
     
     fn parse_java_deps(&self, project_root: &Path) -> Result<Vec<DependencyInfo>> {
@@ -1597,6 +1876,190 @@ assert_cmd = "2.0"
         assert!(matches!(vuln.severity, VulnerabilitySeverity::High));
     }
     
+    #[test]
+    fn test_parse_python_requirement_spec() {
+        let parser = DependencyParser::new();
+        
+        // Test basic package name
+        let (name, version) = parser.parse_python_requirement_spec("requests");
+        assert_eq!(name, "requests");
+        assert_eq!(version, "*");
+        
+        // Test package with exact version
+        let (name, version) = parser.parse_python_requirement_spec("requests==2.28.0");
+        assert_eq!(name, "requests");
+        assert_eq!(version, "==2.28.0");
+        
+        // Test package with version constraint
+        let (name, version) = parser.parse_python_requirement_spec("requests>=2.25.0,<3.0.0");
+        assert_eq!(name, "requests");
+        assert_eq!(version, ">=2.25.0,<3.0.0");
+        
+        // Test package with extras
+        let (name, version) = parser.parse_python_requirement_spec("fastapi[all]>=0.95.0");
+        assert_eq!(name, "fastapi");
+        assert_eq!(version, ">=0.95.0");
+        
+        // Test package with tilde operator
+        let (name, version) = parser.parse_python_requirement_spec("django~=4.1.0");
+        assert_eq!(name, "django");
+        assert_eq!(version, "~=4.1.0");
+    }
+
+    #[test]
+    fn test_parse_pyproject_toml_poetry() {
+        use std::fs;
+        use tempfile::tempdir;
+        
+        let dir = tempdir().unwrap();
+        let pyproject_path = dir.path().join("pyproject.toml");
+        
+        let pyproject_content = r#"
+[tool.poetry]
+name = "test-project"
+version = "0.1.0"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+fastapi = "^0.95.0"
+uvicorn = {extras = ["standard"], version = "^0.21.0"}
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.0.0"
+black = "^23.0.0"
+"#;
+        
+        fs::write(&pyproject_path, pyproject_content).unwrap();
+        
+        let parser = DependencyParser::new();
+        let deps = parser.parse_python_deps(dir.path()).unwrap();
+        
+        assert!(!deps.is_empty());
+        
+        // Check that we found FastAPI and Uvicorn as production dependencies
+        let fastapi = deps.iter().find(|d| d.name == "fastapi");
+        assert!(fastapi.is_some());
+        assert!(matches!(fastapi.unwrap().dep_type, DependencyType::Production));
+        
+        let uvicorn = deps.iter().find(|d| d.name == "uvicorn");
+        assert!(uvicorn.is_some());
+        assert!(matches!(uvicorn.unwrap().dep_type, DependencyType::Production));
+        
+        // Check that we found pytest and black as dev dependencies
+        let pytest = deps.iter().find(|d| d.name == "pytest");
+        assert!(pytest.is_some());
+        assert!(matches!(pytest.unwrap().dep_type, DependencyType::Dev));
+        
+        let black = deps.iter().find(|d| d.name == "black");
+        assert!(black.is_some());
+        assert!(matches!(black.unwrap().dep_type, DependencyType::Dev));
+        
+        // Make sure we didn't include python as a dependency
+        assert!(deps.iter().find(|d| d.name == "python").is_none());
+    }
+
+    #[test]
+    fn test_parse_pyproject_toml_pep621() {
+        use std::fs;
+        use tempfile::tempdir;
+        
+        let dir = tempdir().unwrap();
+        let pyproject_path = dir.path().join("pyproject.toml");
+        
+        let pyproject_content = r#"
+[project]
+name = "test-project"
+version = "0.1.0"
+dependencies = [
+    "fastapi>=0.95.0",
+    "uvicorn[standard]>=0.21.0",
+    "pydantic>=1.10.0"
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0"
+]
+dev = [
+    "black>=23.0.0",
+    "mypy>=1.0.0"
+]
+"#;
+        
+        fs::write(&pyproject_path, pyproject_content).unwrap();
+        
+        let parser = DependencyParser::new();
+        let deps = parser.parse_python_deps(dir.path()).unwrap();
+        
+        assert!(!deps.is_empty());
+        
+        // Check production dependencies
+        let prod_deps: Vec<_> = deps.iter().filter(|d| matches!(d.dep_type, DependencyType::Production)).collect();
+        assert_eq!(prod_deps.len(), 3);
+        assert!(prod_deps.iter().any(|d| d.name == "fastapi"));
+        assert!(prod_deps.iter().any(|d| d.name == "uvicorn"));
+        assert!(prod_deps.iter().any(|d| d.name == "pydantic"));
+        
+        // Check dev/test dependencies
+        let dev_deps: Vec<_> = deps.iter().filter(|d| matches!(d.dep_type, DependencyType::Dev)).collect();
+        assert!(dev_deps.iter().any(|d| d.name == "pytest"));
+        assert!(dev_deps.iter().any(|d| d.name == "black"));
+        assert!(dev_deps.iter().any(|d| d.name == "mypy"));
+        
+        // Check optional dependencies (test group is treated as dev)
+        let test_deps: Vec<_> = deps.iter().filter(|d| d.name == "pytest-cov").collect();
+        assert_eq!(test_deps.len(), 1);
+        assert!(matches!(test_deps[0].dep_type, DependencyType::Dev));
+    }
+
+    #[test]
+    fn test_parse_pipfile() {
+        use std::fs;
+        use tempfile::tempdir;
+        
+        let dir = tempdir().unwrap();
+        let pipfile_path = dir.path().join("Pipfile");
+        
+        let pipfile_content = r#"
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+django = "~=4.1.0"
+django-rest-framework = "*"
+psycopg2 = ">=2.9.0"
+
+[dev-packages]
+pytest = "*"
+flake8 = "*"
+black = ">=22.0.0"
+"#;
+        
+        fs::write(&pipfile_path, pipfile_content).unwrap();
+        
+        let parser = DependencyParser::new();
+        let deps = parser.parse_python_deps(dir.path()).unwrap();
+        
+        assert!(!deps.is_empty());
+        
+        // Check production dependencies
+        let prod_deps: Vec<_> = deps.iter().filter(|d| matches!(d.dep_type, DependencyType::Production)).collect();
+        assert_eq!(prod_deps.len(), 3);
+        assert!(prod_deps.iter().any(|d| d.name == "django"));
+        assert!(prod_deps.iter().any(|d| d.name == "django-rest-framework"));
+        assert!(prod_deps.iter().any(|d| d.name == "psycopg2"));
+        
+        // Check dev dependencies
+        let dev_deps: Vec<_> = deps.iter().filter(|d| matches!(d.dep_type, DependencyType::Dev)).collect();
+        assert_eq!(dev_deps.len(), 3);
+        assert!(dev_deps.iter().any(|d| d.name == "pytest"));
+        assert!(dev_deps.iter().any(|d| d.name == "flake8"));
+        assert!(dev_deps.iter().any(|d| d.name == "black"));
+    }
+
     #[test]
     fn test_dependency_analysis_summary() {
         let mut deps = DetailedDependencyMap::new();

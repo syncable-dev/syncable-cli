@@ -298,6 +298,7 @@ pub fn analyze_project_with_config(path: &Path, config: &AnalysisConfig) -> Resu
     let duration = start_time.elapsed();
     let confidence = calculate_confidence_score(&languages, &frameworks);
     
+    #[allow(deprecated)]
     let analysis = ProjectAnalysis {
         project_root,
         languages,

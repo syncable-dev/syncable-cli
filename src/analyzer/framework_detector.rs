@@ -57,7 +57,14 @@ pub fn detect_frameworks(
 /// Detect Rust technologies with proper classification
 fn detect_rust_technologies(language: &DetectedLanguage) -> Vec<DetectedTechnology> {
     let rules = get_rust_technology_rules();
-    detect_technologies_by_dependencies(&rules, &language.main_dependencies, language.confidence)
+    
+    // Combine main and dev dependencies for comprehensive detection
+    let all_deps: Vec<String> = language.main_dependencies.iter()
+        .chain(language.dev_dependencies.iter())
+        .cloned()
+        .collect();
+    
+    detect_technologies_by_dependencies(&rules, &all_deps, language.confidence)
 }
 
 /// Detect JavaScript/TypeScript technologies with proper classification
@@ -94,19 +101,40 @@ fn detect_js_technologies(language: &DetectedLanguage) -> Vec<DetectedTechnology
 /// Detect Python technologies with proper classification
 fn detect_python_technologies(language: &DetectedLanguage) -> Vec<DetectedTechnology> {
     let rules = get_python_technology_rules();
-    detect_technologies_by_dependencies(&rules, &language.main_dependencies, language.confidence)
+    
+    // Combine main and dev dependencies for comprehensive detection
+    let all_deps: Vec<String> = language.main_dependencies.iter()
+        .chain(language.dev_dependencies.iter())
+        .cloned()
+        .collect();
+    
+    detect_technologies_by_dependencies(&rules, &all_deps, language.confidence)
 }
 
 /// Detect Go technologies with proper classification
 fn detect_go_technologies(language: &DetectedLanguage) -> Vec<DetectedTechnology> {
     let rules = get_go_technology_rules();
-    detect_technologies_by_dependencies(&rules, &language.main_dependencies, language.confidence)
+    
+    // Combine main and dev dependencies for comprehensive detection
+    let all_deps: Vec<String> = language.main_dependencies.iter()
+        .chain(language.dev_dependencies.iter())
+        .cloned()
+        .collect();
+    
+    detect_technologies_by_dependencies(&rules, &all_deps, language.confidence)
 }
 
 /// Detect JVM technologies with proper classification
 fn detect_jvm_technologies(language: &DetectedLanguage) -> Vec<DetectedTechnology> {
     let rules = get_jvm_technology_rules();
-    detect_technologies_by_dependencies(&rules, &language.main_dependencies, language.confidence)
+    
+    // Combine main and dev dependencies for comprehensive detection
+    let all_deps: Vec<String> = language.main_dependencies.iter()
+        .chain(language.dev_dependencies.iter())
+        .cloned()
+        .collect();
+    
+    detect_technologies_by_dependencies(&rules, &all_deps, language.confidence)
 }
 
 /// Generic technology detection based on dependency patterns
@@ -909,9 +937,10 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
     ]
 }
 
-// Placeholder implementations for other languages (simplified for now)
+/// Rust technology detection rules with comprehensive framework coverage
 fn get_rust_technology_rules() -> Vec<TechnologyRule> {
     vec![
+        // WEB FRAMEWORKS
         TechnologyRule {
             name: "Actix Web".to_string(),
             category: TechnologyCategory::BackendFramework,
@@ -922,32 +951,1024 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             is_primary_indicator: true,
             alternative_names: vec!["actix".to_string()],
         },
-        // ... other Rust technologies
-    ]
-}
-
-fn get_python_technology_rules() -> Vec<TechnologyRule> {
-    vec![
         TechnologyRule {
-            name: "Django".to_string(),
+            name: "Axum".to_string(),
             category: TechnologyCategory::BackendFramework,
             confidence: 0.95,
-            dependency_patterns: vec!["django".to_string()],
+            dependency_patterns: vec!["axum".to_string()],
+            requires: vec!["Tokio".to_string()],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Rocket".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["rocket".to_string()],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
         },
-        // ... other Python technologies
+        TechnologyRule {
+            name: "Warp".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["warp".to_string()],
+            requires: vec!["Tokio".to_string()],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Loco".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["loco-rs".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec!["loco".to_string()],
+        },
+        TechnologyRule {
+            name: "Poem".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["poem".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Salvo".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["salvo".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Trillium".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["trillium".to_string()],
+            requires: vec!["Tokio".to_string()],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        
+        // ASYNC RUNTIMES
+        TechnologyRule {
+            name: "Tokio".to_string(),
+            category: TechnologyCategory::Runtime,
+            confidence: 0.90,
+            dependency_patterns: vec!["tokio".to_string()],
+            requires: vec![],
+            conflicts_with: vec!["async-std".to_string()],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "async-std".to_string(),
+            category: TechnologyCategory::Runtime,
+            confidence: 0.90,
+            dependency_patterns: vec!["async-std".to_string()],
+            requires: vec![],
+            conflicts_with: vec!["Tokio".to_string()],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        
+        // DATABASE/ORM
+        TechnologyRule {
+            name: "SeaORM".to_string(),
+            category: TechnologyCategory::Database,
+            confidence: 0.90,
+            dependency_patterns: vec!["sea-orm".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec!["sea_orm".to_string()],
+        },
+        TechnologyRule {
+            name: "Diesel".to_string(),
+            category: TechnologyCategory::Database,
+            confidence: 0.90,
+            dependency_patterns: vec!["diesel".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "SQLx".to_string(),
+            category: TechnologyCategory::Database,
+            confidence: 0.90,
+            dependency_patterns: vec!["sqlx".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        
+        // SERIALIZATION
+        TechnologyRule {
+            name: "Serde".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.85,
+            dependency_patterns: vec!["serde".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        
+        // TESTING
+        TechnologyRule {
+            name: "Criterion".to_string(),
+            category: TechnologyCategory::Testing,
+            confidence: 0.85,
+            dependency_patterns: vec!["criterion".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        
+        // GUI FRAMEWORKS (WASM/Desktop)
+        TechnologyRule {
+            name: "Leptos".to_string(),
+            category: TechnologyCategory::FrontendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["leptos".to_string()],
+            requires: vec![],
+            conflicts_with: vec!["Yew".to_string(), "Dioxus".to_string()],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Yew".to_string(),
+            category: TechnologyCategory::FrontendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["yew".to_string()],
+            requires: vec![],
+            conflicts_with: vec!["Leptos".to_string(), "Dioxus".to_string()],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Dioxus".to_string(),
+            category: TechnologyCategory::FrontendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["dioxus".to_string()],
+            requires: vec![],
+            conflicts_with: vec!["Leptos".to_string(), "Yew".to_string()],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Tauri".to_string(),
+            category: TechnologyCategory::Library(LibraryType::UI),
+            confidence: 0.95,
+            dependency_patterns: vec!["tauri".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "egui".to_string(),
+            category: TechnologyCategory::Library(LibraryType::UI),
+            confidence: 0.95,
+            dependency_patterns: vec!["egui".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
     ]
 }
 
-fn get_go_technology_rules() -> Vec<TechnologyRule> {
-    vec![]
+/// Python technology detection rules with comprehensive framework coverage
+fn get_python_technology_rules() -> Vec<TechnologyRule> {
+    vec![
+        // WEB FRAMEWORKS - Full Stack
+        TechnologyRule {
+            name: "Django".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["django".to_string(), "Django".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Django REST Framework".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["djangorestframework".to_string(), "rest_framework".to_string()],
+            requires: vec!["Django".to_string()],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec!["DRF".to_string()],
+        },
+        
+        // MICRO FRAMEWORKS
+        TechnologyRule {
+            name: "Flask".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["flask".to_string(), "Flask".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "FastAPI".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["fastapi".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Starlette".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["starlette".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Quart".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["quart".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Sanic".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["sanic".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Tornado".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["tornado".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Falcon".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["falcon".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Bottle".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["bottle".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "aiohttp".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["aiohttp".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        
+        // DATABASE/ORM
+        TechnologyRule {
+            name: "SQLAlchemy".to_string(),
+            category: TechnologyCategory::Database,
+            confidence: 0.90,
+            dependency_patterns: vec!["sqlalchemy".to_string(), "SQLAlchemy".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Peewee".to_string(),
+            category: TechnologyCategory::Database,
+            confidence: 0.90,
+            dependency_patterns: vec!["peewee".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Tortoise ORM".to_string(),
+            category: TechnologyCategory::Database,
+            confidence: 0.90,
+            dependency_patterns: vec!["tortoise-orm".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec!["tortoise".to_string()],
+        },
+        TechnologyRule {
+            name: "Django ORM".to_string(),
+            category: TechnologyCategory::Database,
+            confidence: 0.95,
+            dependency_patterns: vec!["django.db".to_string()],
+            requires: vec!["Django".to_string()],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        
+        // ASYNC FRAMEWORKS
+        TechnologyRule {
+            name: "asyncio".to_string(),
+            category: TechnologyCategory::Runtime,
+            confidence: 0.85,
+            dependency_patterns: vec!["asyncio".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        
+        // DATA SCIENCE FRAMEWORKS (Important for containerization/deployment)
+        TechnologyRule {
+            name: "NumPy".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.85,
+            dependency_patterns: vec!["numpy".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Pandas".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.85,
+            dependency_patterns: vec!["pandas".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Scikit-learn".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.85,
+            dependency_patterns: vec!["scikit-learn".to_string(), "sklearn".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec!["sklearn".to_string()],
+        },
+        TechnologyRule {
+            name: "TensorFlow".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.90,
+            dependency_patterns: vec!["tensorflow".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "PyTorch".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.90,
+            dependency_patterns: vec!["torch".to_string(), "pytorch".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec!["torch".to_string()],
+        },
+        
+        // TASK QUEUES
+        TechnologyRule {
+            name: "Celery".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.90,
+            dependency_patterns: vec!["celery".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        
+        // TESTING
+        TechnologyRule {
+            name: "pytest".to_string(),
+            category: TechnologyCategory::Testing,
+            confidence: 0.85,
+            dependency_patterns: vec!["pytest".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "unittest".to_string(),
+            category: TechnologyCategory::Testing,
+            confidence: 0.80,
+            dependency_patterns: vec!["unittest".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        
+        // WSGI/ASGI SERVERS
+        TechnologyRule {
+            name: "Gunicorn".to_string(),
+            category: TechnologyCategory::Runtime,
+            confidence: 0.85,
+            dependency_patterns: vec!["gunicorn".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Uvicorn".to_string(),
+            category: TechnologyCategory::Runtime,
+            confidence: 0.85,
+            dependency_patterns: vec!["uvicorn".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+    ]
 }
 
+/// Go technology detection rules with comprehensive framework coverage
+fn get_go_technology_rules() -> Vec<TechnologyRule> {
+    vec![
+        // WEB FRAMEWORKS
+        TechnologyRule {
+            name: "Gin".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["github.com/gin-gonic/gin".to_string(), "gin-gonic".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec!["gin-gonic".to_string()],
+        },
+        TechnologyRule {
+            name: "Echo".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["github.com/labstack/echo".to_string(), "labstack/echo".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec!["labstack/echo".to_string()],
+        },
+        TechnologyRule {
+            name: "Fiber".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["github.com/gofiber/fiber".to_string(), "gofiber".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec!["gofiber".to_string()],
+        },
+        TechnologyRule {
+            name: "Beego".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["github.com/beego/beego".to_string(), "beego".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Chi".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["github.com/go-chi/chi".to_string(), "go-chi".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec!["go-chi".to_string()],
+        },
+        TechnologyRule {
+            name: "Gorilla Mux".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["github.com/gorilla/mux".to_string(), "gorilla/mux".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec!["mux".to_string(), "gorilla".to_string()],
+        },
+        TechnologyRule {
+            name: "Revel".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["github.com/revel/revel".to_string(), "revel".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Buffalo".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["github.com/gobuffalo/buffalo".to_string(), "gobuffalo".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec!["gobuffalo".to_string()],
+        },
+        TechnologyRule {
+            name: "Iris".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["github.com/kataras/iris".to_string(), "kataras/iris".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "FastHTTP".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["github.com/valyala/fasthttp".to_string(), "fasthttp".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec!["valyala/fasthttp".to_string()],
+        },
+        TechnologyRule {
+            name: "Hertz".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["github.com/cloudwego/hertz".to_string(), "cloudwego/hertz".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec!["cloudwego".to_string()],
+        },
+        
+        // DATABASE/ORM
+        TechnologyRule {
+            name: "GORM".to_string(),
+            category: TechnologyCategory::Database,
+            confidence: 0.90,
+            dependency_patterns: vec!["gorm.io/gorm".to_string(), "gorm".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Ent".to_string(),
+            category: TechnologyCategory::Database,
+            confidence: 0.90,
+            dependency_patterns: vec!["entgo.io/ent".to_string(), "facebook/ent".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec!["entgo".to_string()],
+        },
+        TechnologyRule {
+            name: "Xorm".to_string(),
+            category: TechnologyCategory::Database,
+            confidence: 0.85,
+            dependency_patterns: vec!["xorm.io/xorm".to_string(), "xorm".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        
+        // MICROSERVICES
+        TechnologyRule {
+            name: "Go Kit".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.90,
+            dependency_patterns: vec!["github.com/go-kit/kit".to_string(), "go-kit".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec!["kit".to_string()],
+        },
+        TechnologyRule {
+            name: "Kratos".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["github.com/go-kratos/kratos".to_string(), "go-kratos".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec!["go-kratos".to_string()],
+        },
+        
+        // MESSAGE QUEUES
+        TechnologyRule {
+            name: "Sarama".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.85,
+            dependency_patterns: vec!["github.com/shopify/sarama".to_string(), "sarama".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec!["shopify/sarama".to_string()],
+        },
+        
+        // TESTING
+        TechnologyRule {
+            name: "Testify".to_string(),
+            category: TechnologyCategory::Testing,
+            confidence: 0.85,
+            dependency_patterns: vec!["github.com/stretchr/testify".to_string(), "testify".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec!["stretchr/testify".to_string()],
+        },
+        TechnologyRule {
+            name: "Ginkgo".to_string(),
+            category: TechnologyCategory::Testing,
+            confidence: 0.85,
+            dependency_patterns: vec!["github.com/onsi/ginkgo".to_string(), "ginkgo".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec!["onsi/ginkgo".to_string()],
+        },
+        
+        // CLI FRAMEWORKS
+        TechnologyRule {
+            name: "Cobra".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.85,
+            dependency_patterns: vec!["github.com/spf13/cobra".to_string(), "cobra".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec!["spf13/cobra".to_string()],
+        },
+        
+        // CONFIG MANAGEMENT
+        TechnologyRule {
+            name: "Viper".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.80,
+            dependency_patterns: vec!["github.com/spf13/viper".to_string(), "viper".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec!["spf13/viper".to_string()],
+        },
+    ]
+}
+
+/// Java/JVM technology detection rules with comprehensive framework coverage
 fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
-    vec![]
+    vec![
+        // SPRING ECOSYSTEM
+        TechnologyRule {
+            name: "Spring Boot".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["spring-boot".to_string(), "org.springframework.boot".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec!["spring".to_string()],
+        },
+        TechnologyRule {
+            name: "Spring Framework".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["spring-context".to_string(), "org.springframework".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec!["spring".to_string()],
+        },
+        TechnologyRule {
+            name: "Spring Data".to_string(),
+            category: TechnologyCategory::Database,
+            confidence: 0.90,
+            dependency_patterns: vec!["spring-data".to_string(), "org.springframework.data".to_string()],
+            requires: vec!["Spring Framework".to_string()],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Spring Security".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.90,
+            dependency_patterns: vec!["spring-security".to_string(), "org.springframework.security".to_string()],
+            requires: vec!["Spring Framework".to_string()],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Spring Cloud".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.90,
+            dependency_patterns: vec!["spring-cloud".to_string(), "org.springframework.cloud".to_string()],
+            requires: vec!["Spring Boot".to_string()],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        
+        // MICROSERVICES FRAMEWORKS
+        TechnologyRule {
+            name: "Quarkus".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["quarkus".to_string(), "io.quarkus".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Micronaut".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["micronaut".to_string(), "io.micronaut".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Helidon".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["helidon".to_string(), "io.helidon".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Vert.x".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["vertx".to_string(), "io.vertx".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec!["eclipse vert.x".to_string(), "vertx".to_string()],
+        },
+        
+        // TRADITIONAL FRAMEWORKS
+        TechnologyRule {
+            name: "Struts".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["struts".to_string(), "org.apache.struts".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec!["apache struts".to_string()],
+        },
+        TechnologyRule {
+            name: "JSF".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.85,
+            dependency_patterns: vec!["jsf".to_string(), "javax.faces".to_string(), "jakarta.faces".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec!["javaserver faces".to_string()],
+        },
+        
+        // LIGHTWEIGHT FRAMEWORKS
+        TechnologyRule {
+            name: "Dropwizard".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["dropwizard".to_string(), "io.dropwizard".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Spark Java".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["spark-core".to_string(), "com.sparkjava".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec!["spark".to_string()],
+        },
+        TechnologyRule {
+            name: "Javalin".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["javalin".to_string(), "io.javalin".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Ratpack".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["ratpack".to_string(), "io.ratpack".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+        
+        // PLAY FRAMEWORK
+        TechnologyRule {
+            name: "Play Framework".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["play".to_string(), "com.typesafe.play".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec!["play".to_string()],
+        },
+        
+        // ORM/DATABASE
+        TechnologyRule {
+            name: "Hibernate".to_string(),
+            category: TechnologyCategory::Database,
+            confidence: 0.90,
+            dependency_patterns: vec!["hibernate".to_string(), "org.hibernate".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec!["hibernate orm".to_string()],
+        },
+        TechnologyRule {
+            name: "MyBatis".to_string(),
+            category: TechnologyCategory::Database,
+            confidence: 0.90,
+            dependency_patterns: vec!["mybatis".to_string(), "org.mybatis".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "JOOQ".to_string(),
+            category: TechnologyCategory::Database,
+            confidence: 0.85,
+            dependency_patterns: vec!["jooq".to_string(), "org.jooq".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        
+        // ENTERPRISE JAVA
+        TechnologyRule {
+            name: "Jakarta EE".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["jakarta.".to_string(), "jakarta-ee".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec!["java ee".to_string()],
+        },
+        
+        // BUILD TOOLS
+        TechnologyRule {
+            name: "Maven".to_string(),
+            category: TechnologyCategory::BuildTool,
+            confidence: 0.80,
+            dependency_patterns: vec!["maven".to_string(), "org.apache.maven".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec!["apache maven".to_string()],
+        },
+        TechnologyRule {
+            name: "Gradle".to_string(),
+            category: TechnologyCategory::BuildTool,
+            confidence: 0.80,
+            dependency_patterns: vec!["gradle".to_string(), "org.gradle".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        
+        // TESTING
+        TechnologyRule {
+            name: "JUnit".to_string(),
+            category: TechnologyCategory::Testing,
+            confidence: 0.85,
+            dependency_patterns: vec!["junit".to_string(), "org.junit".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "TestNG".to_string(),
+            category: TechnologyCategory::Testing,
+            confidence: 0.85,
+            dependency_patterns: vec!["testng".to_string(), "org.testng".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Mockito".to_string(),
+            category: TechnologyCategory::Testing,
+            confidence: 0.80,
+            dependency_patterns: vec!["mockito".to_string(), "org.mockito".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        
+        // REACTIVE FRAMEWORKS
+        TechnologyRule {
+            name: "Reactor".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.85,
+            dependency_patterns: vec!["reactor".to_string(), "io.projectreactor".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec!["project reactor".to_string()],
+        },
+        TechnologyRule {
+            name: "RxJava".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.85,
+            dependency_patterns: vec!["rxjava".to_string(), "io.reactivex".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+        },
+        
+        // KOTLIN SPECIFIC
+        TechnologyRule {
+            name: "Ktor".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["ktor".to_string(), "io.ktor".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+        },
+    ]
 }
 
 #[cfg(test)]
@@ -1058,5 +2079,179 @@ mod tests {
         // Should also detect React
         let react = technologies.iter().find(|t| t.name == "React");
         assert!(react.is_some(), "React should be detected as a dependency");
+    }
+
+    #[test]
+    fn test_comprehensive_python_detection() {
+        let language = DetectedLanguage {
+            name: "Python".to_string(),
+            version: Some("3.11.0".to_string()),
+            confidence: 0.95,
+            files: vec![PathBuf::from("app.py")],
+            main_dependencies: vec![
+                "fastapi".to_string(),
+                "sqlalchemy".to_string(),
+                "pandas".to_string(),
+                "torch".to_string(),
+                "gunicorn".to_string(),
+            ],
+            dev_dependencies: vec!["pytest".to_string()],
+            package_manager: Some("pip".to_string()),
+        };
+        
+        let technologies = detect_python_technologies(&language);
+        let tech_names: Vec<&str> = technologies.iter().map(|t| t.name.as_str()).collect();
+        
+        // Should detect FastAPI as primary backend framework
+        assert!(tech_names.contains(&"FastAPI"));
+        assert!(tech_names.contains(&"SQLAlchemy"));
+        assert!(tech_names.contains(&"Pandas"));
+        assert!(tech_names.contains(&"PyTorch"));
+        assert!(tech_names.contains(&"Gunicorn"));
+        assert!(tech_names.contains(&"pytest"));
+        
+        // FastAPI should be marked as primary
+        let fastapi = technologies.iter().find(|t| t.name == "FastAPI").unwrap();
+        assert!(fastapi.is_primary);
+        assert!(matches!(fastapi.category, TechnologyCategory::BackendFramework));
+    }
+
+    #[test]
+    fn test_comprehensive_go_detection() {
+        let language = DetectedLanguage {
+            name: "Go".to_string(),
+            version: Some("1.21.0".to_string()),
+            confidence: 0.95,
+            files: vec![PathBuf::from("main.go")],
+            main_dependencies: vec![
+                "github.com/gin-gonic/gin".to_string(),
+                "gorm.io/gorm".to_string(),
+                "github.com/spf13/cobra".to_string(),
+                "github.com/spf13/viper".to_string(),
+            ],
+            dev_dependencies: vec!["github.com/stretchr/testify".to_string()],
+            package_manager: Some("go mod".to_string()),
+        };
+        
+        let technologies = detect_go_technologies(&language);
+        let tech_names: Vec<&str> = technologies.iter().map(|t| t.name.as_str()).collect();
+        
+        // Should detect Gin as primary backend framework
+        assert!(tech_names.contains(&"Gin"));
+        assert!(tech_names.contains(&"GORM"));
+        assert!(tech_names.contains(&"Cobra"));
+        assert!(tech_names.contains(&"Viper"));
+        assert!(tech_names.contains(&"Testify"));
+        
+        // Gin should be marked as primary
+        let gin = technologies.iter().find(|t| t.name == "Gin").unwrap();
+        assert!(gin.is_primary);
+        assert!(matches!(gin.category, TechnologyCategory::BackendFramework));
+    }
+
+    #[test]
+    fn test_comprehensive_jvm_detection() {
+        let language = DetectedLanguage {
+            name: "Java".to_string(),
+            version: Some("17.0.0".to_string()),
+            confidence: 0.95,
+            files: vec![PathBuf::from("src/main/java/Application.java")],
+            main_dependencies: vec![
+                "spring-boot".to_string(),
+                "spring-data".to_string(),
+                "hibernate".to_string(),
+                "io.projectreactor".to_string(),
+            ],
+            dev_dependencies: vec!["junit".to_string(), "mockito".to_string()],
+            package_manager: Some("maven".to_string()),
+        };
+        
+        let technologies = detect_jvm_technologies(&language);
+        let tech_names: Vec<&str> = technologies.iter().map(|t| t.name.as_str()).collect();
+        
+        // Should detect Spring Boot as primary backend framework
+        assert!(tech_names.contains(&"Spring Boot"));
+        assert!(tech_names.contains(&"Spring Data"));
+        assert!(tech_names.contains(&"Hibernate"));
+        assert!(tech_names.contains(&"Reactor"));
+        assert!(tech_names.contains(&"JUnit"));
+        assert!(tech_names.contains(&"Mockito"));
+        
+        // Spring Boot should be marked as primary
+        let spring_boot = technologies.iter().find(|t| t.name == "Spring Boot").unwrap();
+        assert!(spring_boot.is_primary);
+        assert!(matches!(spring_boot.category, TechnologyCategory::BackendFramework));
+    }
+
+    #[test]
+    fn test_comprehensive_rust_detection() {
+        let language = DetectedLanguage {
+            name: "Rust".to_string(),
+            version: Some("1.70.0".to_string()),
+            confidence: 0.95,
+            files: vec![PathBuf::from("src/main.rs")],
+            main_dependencies: vec![
+                "axum".to_string(),
+                "tokio".to_string(),
+                "sqlx".to_string(),
+                "serde".to_string(),
+                "tauri".to_string(),
+            ],
+            dev_dependencies: vec!["criterion".to_string()],
+            package_manager: Some("cargo".to_string()),
+        };
+        
+        let technologies = detect_rust_technologies(&language);
+        let tech_names: Vec<&str> = technologies.iter().map(|t| t.name.as_str()).collect();
+        
+        // Should detect Axum as primary backend framework
+        assert!(tech_names.contains(&"Axum"));
+        assert!(tech_names.contains(&"Tokio"));
+        assert!(tech_names.contains(&"SQLx"));
+        assert!(tech_names.contains(&"Serde"));
+        assert!(tech_names.contains(&"Tauri"));
+        assert!(tech_names.contains(&"Criterion"));
+        
+        // Axum should be marked as primary
+        let axum = technologies.iter().find(|t| t.name == "Axum").unwrap();
+        assert!(axum.is_primary);
+        assert!(matches!(axum.category, TechnologyCategory::BackendFramework));
+        
+        // Axum should require Tokio
+        assert!(axum.requires.contains(&"Tokio".to_string()));
+    }
+
+    #[test]
+    fn test_technology_conflicts_resolution() {
+        use crate::analyzer::AnalysisConfig;
+        use std::path::Path;
+        
+        let language = DetectedLanguage {
+            name: "Rust".to_string(),
+            version: Some("1.70.0".to_string()),
+            confidence: 0.95,
+            files: vec![PathBuf::from("src/main.rs")],
+            main_dependencies: vec![
+                "tokio".to_string(),
+                "async-std".to_string(), // These should conflict
+            ],
+            dev_dependencies: vec![],
+            package_manager: Some("cargo".to_string()),
+        };
+        
+        let config = AnalysisConfig::default();
+        let project_root = Path::new(".");
+        
+        // Use the main detection function which includes conflict resolution
+        let technologies = detect_frameworks(project_root, &[language], &config).unwrap();
+        let _tech_names: Vec<&str> = technologies.iter().map(|t| t.name.as_str()).collect();
+        
+        // Should only have one async runtime (higher confidence wins)
+        let async_runtimes: Vec<_> = technologies.iter()
+            .filter(|t| matches!(t.category, TechnologyCategory::Runtime))
+            .collect();
+        
+        assert!(async_runtimes.len() <= 1, "Should resolve conflicting async runtimes: found {:?}", 
+               async_runtimes.iter().map(|t| &t.name).collect::<Vec<_>>());
     }
 } 
