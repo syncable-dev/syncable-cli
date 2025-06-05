@@ -1,4 +1,4 @@
-use crate::analyzer::{AnalysisConfig, DetectedFramework, DetectedLanguage, EntryPoint, EnvVar, Port, Protocol, ProjectType, BuildScript};
+use crate::analyzer::{AnalysisConfig, DetectedTechnology, DetectedLanguage, EntryPoint, EnvVar, Port, Protocol, ProjectType, BuildScript, TechnologyCategory, LibraryType};
 use crate::error::{Result, AnalysisError};
 use crate::common::file_utils::{read_file_safe, is_readable_file};
 use std::path::{Path, PathBuf};
@@ -25,7 +25,7 @@ fn create_regex(pattern: &str) -> Result<Regex> {
 pub fn analyze_context(
     project_root: &Path,
     languages: &[DetectedLanguage],
-    frameworks: &[DetectedFramework],
+    technologies: &[DetectedTechnology],
     config: &AnalysisConfig,
 ) -> Result<ProjectContext> {
     log::info!("Analyzing project context");
@@ -62,14 +62,14 @@ pub fn analyze_context(
     analyze_env_files(project_root, &mut env_vars)?;
     analyze_makefile(project_root, &mut build_scripts)?;
     
-    // Framework-specific analysis
-    for framework in frameworks {
-        analyze_framework_specifics(framework, project_root, &mut entry_points, &mut ports)?;
+    // Technology-specific analysis
+    for technology in technologies {
+        analyze_technology_specifics(technology, project_root, &mut entry_points, &mut ports)?;
     }
     
     // Determine project type
     let ports_vec: Vec<Port> = ports.iter().cloned().collect();
-    let project_type = determine_project_type(languages, frameworks, &entry_points, &ports_vec);
+    let project_type = determine_project_type(languages, technologies, &entry_points, &ports_vec);
     
     // Convert collections to vectors
     let ports: Vec<Port> = ports.into_iter().collect();
@@ -809,13 +809,22 @@ fn analyze_docker_compose(
                     if let Some(port_str) = port_entry.as_str() {
                         // Parse port mappings like "8080:80" or just "80"
                         let parts: Vec<&str> = port_str.split(':').collect();
-                        let port_num = parts.last().unwrap_or(&"");
                         
-                        if let Ok(port) = port_num.parse::<u16>() {
+                        let (external_port, internal_port) = if parts.len() >= 2 {
+                            // Format: "external:internal" - use external port for IaC
+                            (parts[0].trim(), parts[1].trim())
+                        } else {
+                            // Format: just "port" - same for both
+                            let port = parts[0].trim();
+                            (port, port)
+                        };
+                        
+                        // For IaC purposes, we primarily care about external ports (what's exposed to infrastructure)
+                        if let Ok(port) = external_port.parse::<u16>() {
                             ports.insert(Port {
                                 number: port,
                                 protocol: Protocol::Tcp,
-                                description: Some("Docker Compose service".to_string()),
+                                description: Some(format!("Docker Compose service (external port, internal: {})", internal_port)),
                             });
                         }
                     }
@@ -946,14 +955,14 @@ fn analyze_makefile(
     Ok(())
 }
 
-/// Analyzes framework-specific configurations
-fn analyze_framework_specifics(
-    framework: &DetectedFramework,
+/// Analyzes technology-specific configurations
+fn analyze_technology_specifics(
+    technology: &DetectedTechnology,
     root: &Path,
     entry_points: &mut Vec<EntryPoint>,
     ports: &mut HashSet<Port>,
 ) -> Result<()> {
-    match framework.name.as_str() {
+    match technology.name.as_str() {
         "Next.js" => {
             // Next.js typically runs on port 3000
             ports.insert(Port {
@@ -972,12 +981,60 @@ fn analyze_framework_specifics(
                 });
             }
         }
-        "Express" | "Fastify" | "Koa" => {
+        "Express" | "Fastify" | "Koa" | "Hono" | "Elysia" => {
             // Common Node.js web framework ports
             ports.insert(Port {
                 number: 3000,
                 protocol: Protocol::Http,
-                description: Some(format!("{} server", framework.name)),
+                description: Some(format!("{} server", technology.name)),
+            });
+        }
+        "Encore" => {
+            // Encore development server typically runs on port 4000
+            ports.insert(Port {
+                number: 4000,
+                protocol: Protocol::Http,
+                description: Some("Encore development server".to_string()),
+            });
+        }
+        "Astro" => {
+            // Astro development server typically runs on port 3000 or 4321
+            ports.insert(Port {
+                number: 4321,
+                protocol: Protocol::Http,
+                description: Some("Astro development server".to_string()),
+            });
+        }
+        "SvelteKit" => {
+            // SvelteKit development server typically runs on port 5173
+            ports.insert(Port {
+                number: 5173,
+                protocol: Protocol::Http,
+                description: Some("SvelteKit development server".to_string()),
+            });
+        }
+        "Nuxt.js" => {
+            // Nuxt.js development server typically runs on port 3000
+            ports.insert(Port {
+                number: 3000,
+                protocol: Protocol::Http,
+                description: Some("Nuxt.js development server".to_string()),
+            });
+        }
+        "Tanstack Start" => {
+            // Modern React framework typically runs on port 3000
+            ports.insert(Port {
+                number: 3000,
+                protocol: Protocol::Http,
+                description: Some(format!("{} development server", technology.name)),
+            });
+        }
+        "React Router v7" => {
+            // React Router v7 development server typically runs on port 5173
+            ports.insert(Port {
+                number: 5173,
+                protocol: Protocol::Http,
+                description: Some("React Router v7 development server".to_string()),
             });
         }
         "Django" => {
@@ -991,7 +1048,7 @@ fn analyze_framework_specifics(
             ports.insert(Port {
                 number: 5000,
                 protocol: Protocol::Http,
-                description: Some(format!("{} server", framework.name)),
+                description: Some(format!("{} server", technology.name)),
             });
         }
         "Spring Boot" => {
@@ -1005,7 +1062,7 @@ fn analyze_framework_specifics(
             ports.insert(Port {
                 number: 8080,
                 protocol: Protocol::Http,
-                description: Some(format!("{} server", framework.name)),
+                description: Some(format!("{} server", technology.name)),
             });
         }
         _ => {}
@@ -1057,32 +1114,35 @@ fn get_script_description(name: &str) -> Option<String> {
 /// Determines the project type based on analysis
 fn determine_project_type(
     languages: &[DetectedLanguage],
-    frameworks: &[DetectedFramework],
+    technologies: &[DetectedTechnology],
     entry_points: &[EntryPoint],
     ports: &[Port],
 ) -> ProjectType {
     // Check for web frameworks
     let web_frameworks = ["Express", "Fastify", "Koa", "Next.js", "React", "Vue", "Angular",
                          "Django", "Flask", "FastAPI", "Spring Boot", "Actix Web", "Rocket",
-                         "Gin", "Echo", "Fiber"];
+                         "Gin", "Echo", "Fiber", "Svelte", "SvelteKit", "SolidJS", "Astro",
+                         "Encore", "Hono", "Elysia", "React Router v7", "Tanstack Start",
+                         "SolidStart", "Qwik", "Nuxt.js", "Gatsby"];
     
-    let has_web_framework = frameworks.iter()
-        .any(|f| web_frameworks.contains(&f.name.as_str()));
+    let has_web_framework = technologies.iter()
+        .any(|t| web_frameworks.contains(&t.name.as_str()));
     
     // Check for CLI indicators
     let cli_indicators = ["cobra", "clap", "argparse", "commander"];
-    let has_cli_framework = frameworks.iter()
-        .any(|f| cli_indicators.contains(&f.name.to_lowercase().as_str()));
+    let has_cli_framework = technologies.iter()
+        .any(|t| cli_indicators.contains(&t.name.to_lowercase().as_str()));
     
     // Check for API indicators
-    let api_frameworks = ["FastAPI", "Express", "Gin", "Echo", "Actix Web", "Spring Boot"];
-    let has_api_framework = frameworks.iter()
-        .any(|f| api_frameworks.contains(&f.name.as_str()));
+    let api_frameworks = ["FastAPI", "Express", "Gin", "Echo", "Actix Web", "Spring Boot",
+                          "Fastify", "Koa", "Nest.js", "Encore", "Hono", "Elysia"];
+    let has_api_framework = technologies.iter()
+        .any(|t| api_frameworks.contains(&t.name.as_str()));
     
     // Check for static site generators
-    let static_generators = ["Gatsby", "Hugo", "Jekyll", "Eleventy"];
-    let has_static_generator = frameworks.iter()
-        .any(|f| static_generators.contains(&f.name.as_str()));
+    let static_generators = ["Gatsby", "Hugo", "Jekyll", "Eleventy", "Astro"];
+    let has_static_generator = technologies.iter()
+        .any(|t| static_generators.contains(&t.name.as_str()));
     
     // Determine type based on indicators
     if has_static_generator {
@@ -1109,7 +1169,7 @@ fn determine_project_type(
         } else {
             ProjectType::Unknown
         }
-    } else if !ports.is_empty() && frameworks.len() > 1 {
+    } else if !ports.is_empty() && technologies.len() > 1 {
         ProjectType::Microservice
     } else {
         ProjectType::Unknown
@@ -1119,7 +1179,7 @@ fn determine_project_type(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::FrameworkCategory;
+    use crate::analyzer::TechnologyCategory;
     use std::fs;
     use tempfile::TempDir;
     
@@ -1135,12 +1195,15 @@ mod tests {
         }
     }
     
-    fn create_test_framework(name: &str, category: FrameworkCategory) -> DetectedFramework {
-        DetectedFramework {
+    fn create_test_technology(name: &str, category: TechnologyCategory) -> DetectedTechnology {
+        DetectedTechnology {
             name: name.to_string(),
             version: None,
             category,
             confidence: 0.8,
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary: false,
         }
     }
     
@@ -1178,10 +1241,10 @@ app.listen(PORT, () => {
         fs::write(root.join("index.js"), index_js).unwrap();
         
         let languages = vec![create_test_language("JavaScript")];
-        let frameworks = vec![create_test_framework("Express", FrameworkCategory::Web)];
+        let technologies = vec![create_test_technology("Express", TechnologyCategory::BackendFramework)];
         let config = AnalysisConfig::default();
         
-        let context = analyze_context(root, &languages, &frameworks, &config).unwrap();
+        let context = analyze_context(root, &languages, &technologies, &config).unwrap();
         
         // Verify entry points
         assert!(!context.entry_points.is_empty());
@@ -1229,10 +1292,10 @@ if __name__ == '__main__':
         fs::write(root.join("app.py"), app_py).unwrap();
         
         let languages = vec![create_test_language("Python")];
-        let frameworks = vec![create_test_framework("Flask", FrameworkCategory::Web)];
+        let technologies = vec![create_test_technology("Flask", TechnologyCategory::BackendFramework)];
         let config = AnalysisConfig::default();
         
-        let context = analyze_context(root, &languages, &frameworks, &config).unwrap();
+        let context = analyze_context(root, &languages, &technologies, &config).unwrap();
         
         // Verify entry points
         assert!(context.entry_points.iter().any(|ep| ep.file.ends_with("app.py")));
@@ -1467,7 +1530,7 @@ clean:
     fn test_project_type_detection() {
         // Test CLI tool detection
         let languages = vec![create_test_language("Rust")];
-        let frameworks = vec![create_test_framework("clap", FrameworkCategory::Other("CLI".to_string()))];
+        let technologies = vec![create_test_technology("clap", TechnologyCategory::Library(LibraryType::Other("CLI".to_string())))];
         let entry_points = vec![EntryPoint {
             file: PathBuf::from("src/main.rs"),
             function: Some("main".to_string()),
@@ -1475,18 +1538,18 @@ clean:
         }];
         let ports = vec![];
         
-        let project_type = determine_project_type(&languages, &frameworks, &entry_points, &ports);
+        let project_type = determine_project_type(&languages, &technologies, &entry_points, &ports);
         assert_eq!(project_type, ProjectType::CliTool);
         
         // Test API service detection
-        let frameworks = vec![create_test_framework("FastAPI", FrameworkCategory::Web)];
+        let technologies = vec![create_test_technology("FastAPI", TechnologyCategory::BackendFramework)];
         let ports = vec![Port {
             number: 8000,
             protocol: Protocol::Http,
             description: None,
         }];
         
-        let project_type = determine_project_type(&languages, &frameworks, &vec![], &ports);
+        let project_type = determine_project_type(&languages, &technologies, &vec![], &ports);
         assert_eq!(project_type, ProjectType::ApiService);
         
         // Test library detection

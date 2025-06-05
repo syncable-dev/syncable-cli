@@ -1,6 +1,6 @@
 use clap::Parser;
 use syncable_cli::{
-    analyzer::{self, vulnerability_checker::VulnerabilitySeverity},
+    analyzer::{self, vulnerability_checker::VulnerabilitySeverity, DetectedTechnology, TechnologyCategory, LibraryType},
     cli::{Cli, Commands, OutputFormat, SeverityThreshold},
     config,
     generator,
@@ -114,15 +114,8 @@ fn handle_analyze(
             }
         }
         
-        // Frameworks
-        println!("\n🚀 Frameworks Detected ({}):", analysis.frameworks.len());
-        for (i, framework) in analysis.frameworks.iter().enumerate() {
-            println!("   {}. {} (confidence: {:.1}%)", 
-                i + 1,
-                framework.name, 
-                framework.confidence * 100.0
-            );
-        }
+        // Technologies with proper categorization
+        display_technologies_detailed(&analysis.technologies);
         
         // Entry Points
         println!("\n📍 Entry Points ({}):", analysis.entry_points.len());
@@ -268,10 +261,7 @@ fn handle_analyze(
         for lang in &analysis.languages {
             println!("│   ├── {} (confidence: {:.1}%)", lang.name, lang.confidence * 100.0);
         }
-        println!("├── Frameworks detected: {}", analysis.frameworks.len());
-        for framework in &analysis.frameworks {
-            println!("│   ├── {} (confidence: {:.1}%)", framework.name, framework.confidence * 100.0);
-        }
+        display_technologies_summary(&analysis.technologies);
         println!("├── Dependencies found: {}", analysis.dependencies.len());
         println!("├── Entry points: {}", analysis.entry_points.len());
         println!("├── Ports detected: {}", analysis.ports.len());
@@ -812,4 +802,149 @@ async fn handle_vulnerabilities(
     }
     
     Ok(())
+}
+
+/// Display technologies in detailed format with proper categorization
+fn display_technologies_detailed(technologies: &[DetectedTechnology]) {
+    if technologies.is_empty() {
+        println!("\n🛠️  Technologies Detected: None");
+        return;
+    }
+
+    // Group technologies by IaC-relevant categories
+    let mut meta_frameworks = Vec::new();
+    let mut backend_frameworks = Vec::new();
+    let mut frontend_frameworks = Vec::new();
+    let mut ui_libraries = Vec::new();
+    let mut build_tools = Vec::new();
+    let mut databases = Vec::new();
+    let mut testing = Vec::new();
+    let mut runtimes = Vec::new();
+    let mut other_libraries = Vec::new();
+
+    for tech in technologies {
+        match &tech.category {
+            TechnologyCategory::MetaFramework => meta_frameworks.push(tech),
+            TechnologyCategory::BackendFramework => backend_frameworks.push(tech),
+            TechnologyCategory::FrontendFramework => frontend_frameworks.push(tech),
+            TechnologyCategory::Library(lib_type) => match lib_type {
+                LibraryType::UI => ui_libraries.push(tech),
+                _ => other_libraries.push(tech),
+            },
+            TechnologyCategory::BuildTool => build_tools.push(tech),
+            TechnologyCategory::Database => databases.push(tech),
+            TechnologyCategory::Testing => testing.push(tech),
+            TechnologyCategory::Runtime => runtimes.push(tech),
+            _ => other_libraries.push(tech),
+        }
+    }
+
+    println!("\n🛠️  Technology Stack:");
+    
+    // Primary Framework (highlighted)
+    if let Some(primary) = technologies.iter().find(|t| t.is_primary) {
+        println!("   🎯 PRIMARY: {} (confidence: {:.1}%)", primary.name, primary.confidence * 100.0);
+        println!("      Architecture driver for this project");
+    }
+
+    // Meta-frameworks
+    if !meta_frameworks.is_empty() {
+        println!("\n   🏗️  Meta-Frameworks:");
+        for tech in meta_frameworks {
+            println!("      • {} (confidence: {:.1}%)", tech.name, tech.confidence * 100.0);
+        }
+    }
+
+    // Backend frameworks
+    if !backend_frameworks.is_empty() {
+        println!("\n   🖥️  Backend Frameworks:");
+        for tech in backend_frameworks {
+            println!("      • {} (confidence: {:.1}%)", tech.name, tech.confidence * 100.0);
+        }
+    }
+
+    // Frontend frameworks
+    if !frontend_frameworks.is_empty() {
+        println!("\n   🌐 Frontend Frameworks:");
+        for tech in frontend_frameworks {
+            println!("      • {} (confidence: {:.1}%)", tech.name, tech.confidence * 100.0);
+        }
+    }
+
+    // UI Libraries
+    if !ui_libraries.is_empty() {
+        println!("\n   🎨 UI Libraries:");
+        for tech in ui_libraries {
+            println!("      • {} (confidence: {:.1}%)", tech.name, tech.confidence * 100.0);
+        }
+    }
+
+    // Note: Removed utility library categories (Data Fetching, Routing, State Management)
+    // as they don't provide value for IaC generation
+
+    // Build Tools
+    if !build_tools.is_empty() {
+        println!("\n   🔨 Build Tools:");
+        for tech in build_tools {
+            println!("      • {} (confidence: {:.1}%)", tech.name, tech.confidence * 100.0);
+        }
+    }
+
+    // Databases
+    if !databases.is_empty() {
+        println!("\n   🗃️  Database & ORM:");
+        for tech in databases {
+            println!("      • {} (confidence: {:.1}%)", tech.name, tech.confidence * 100.0);
+        }
+    }
+
+    // Testing
+    if !testing.is_empty() {
+        println!("\n   🧪 Testing:");
+        for tech in testing {
+            println!("      • {} (confidence: {:.1}%)", tech.name, tech.confidence * 100.0);
+        }
+    }
+
+    // Runtimes
+    if !runtimes.is_empty() {
+        println!("\n   ⚡ Runtimes:");
+        for tech in runtimes {
+            println!("      • {} (confidence: {:.1}%)", tech.name, tech.confidence * 100.0);
+        }
+    }
+
+    // Other Libraries
+    if !other_libraries.is_empty() {
+        println!("\n   📚 Other Libraries:");
+        for tech in other_libraries {
+            println!("      • {} (confidence: {:.1}%)", tech.name, tech.confidence * 100.0);
+        }
+    }
+}
+
+/// Display technologies in summary format for simple view
+fn display_technologies_summary(technologies: &[DetectedTechnology]) {
+    println!("├── Technologies detected: {}", technologies.len());
+    
+    // Show primary technology first
+    if let Some(primary) = technologies.iter().find(|t| t.is_primary) {
+        println!("│   ├── 🎯 {} (PRIMARY, {:.1}%)", primary.name, primary.confidence * 100.0);
+    }
+    
+    // Show other technologies
+    for tech in technologies.iter().filter(|t| !t.is_primary) {
+        let icon = match &tech.category {
+            TechnologyCategory::MetaFramework => "🏗️",
+            TechnologyCategory::BackendFramework => "🖥️",
+            TechnologyCategory::FrontendFramework => "🌐",
+            TechnologyCategory::Library(LibraryType::UI) => "🎨",
+            TechnologyCategory::BuildTool => "🔨",
+            TechnologyCategory::Database => "🗃️",
+            TechnologyCategory::Testing => "🧪",
+            TechnologyCategory::Runtime => "⚡",
+            _ => "📚",
+        };
+        println!("│   ├── {} {} (confidence: {:.1}%)", icon, tech.name, tech.confidence * 100.0);
+    }
 }

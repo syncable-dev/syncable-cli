@@ -37,24 +37,79 @@ pub struct DetectedLanguage {
     pub package_manager: Option<String>,
 }
 
-/// Represents a detected framework or library
+/// Categories of detected technologies with proper classification
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct DetectedFramework {
-    pub name: String,
-    pub version: Option<String>,
-    pub category: FrameworkCategory,
-    pub confidence: f32,
+pub enum TechnologyCategory {
+    /// Full-stack meta-frameworks that provide complete application structure
+    MetaFramework,
+    /// Frontend frameworks that provide application structure (Angular, Svelte)
+    FrontendFramework,
+    /// Backend frameworks that provide server structure (Express, Django, Spring Boot)
+    BackendFramework,
+    /// Libraries that provide specific functionality (React, Tanstack Query, Axios)
+    Library(LibraryType),
+    /// Build and development tools (Vite, Webpack, Rollup)
+    BuildTool,
+    /// Database and ORM tools (Prisma, TypeORM, SQLAlchemy)
+    Database,
+    /// Testing frameworks and libraries (Jest, Vitest, Cypress)
+    Testing,
+    /// JavaScript/Python/etc runtimes (Node.js, Bun, Deno)
+    Runtime,
+    /// Package managers (npm, yarn, pnpm, pip, cargo)
+    PackageManager,
 }
 
-/// Categories of frameworks
+/// Specific types of libraries for better classification
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum FrameworkCategory {
-    Web,
-    Database,
-    Testing,
-    BuildTool,
-    Runtime,
+pub enum LibraryType {
+    /// UI libraries (React, Vue, Preact)
+    UI,
+    /// State management (Zustand, Redux, Pinia)
+    StateManagement,
+    /// Data fetching (Tanstack Query, Apollo, Relay)
+    DataFetching,
+    /// Routing (React Router, Vue Router - when not meta-framework)
+    Routing,
+    /// Styling (Styled Components, Emotion, Tailwind)
+    Styling,
+    /// Utilities (Lodash, Date-fns, Zod)
+    Utility,
+    /// HTTP clients (Axios, Fetch libraries)
+    HttpClient,
+    /// Authentication (Auth0, Firebase Auth)
+    Authentication,
+    /// Other specific types
     Other(String),
+}
+
+/// Represents a detected technology (framework, library, or tool)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DetectedTechnology {
+    pub name: String,
+    pub version: Option<String>,
+    pub category: TechnologyCategory,
+    pub confidence: f32,
+    /// Dependencies this technology requires (e.g., Next.js requires React)
+    pub requires: Vec<String>,
+    /// Technologies that conflict with this one (e.g., Tanstack Start conflicts with React Router v7)
+    pub conflicts_with: Vec<String>,
+    /// Whether this is the primary technology driving the architecture
+    pub is_primary: bool,
+}
+
+/// Represents a service within a microservice architecture
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ServiceAnalysis {
+    pub name: String,
+    pub path: PathBuf,
+    pub languages: Vec<DetectedLanguage>,
+    pub technologies: Vec<DetectedTechnology>,
+    pub entry_points: Vec<EntryPoint>,
+    pub ports: Vec<Port>,
+    pub environment_variables: Vec<EnvVar>,
+    pub build_scripts: Vec<BuildScript>,
+    pub service_type: ProjectType,
 }
 
 /// Represents application entry points
@@ -117,11 +172,29 @@ pub struct BuildScript {
 /// Type alias for dependency maps
 pub type DependencyMap = HashMap<String, String>;
 
-/// Main analysis result containing all detected project information
+/// Types of project architectures
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ArchitectureType {
+    /// Single application/service
+    Monolithic,
+    /// Multiple services in one repository
+    Microservices,
+    /// Mixed approach with both
+    Hybrid,
+}
+
+/// Backward compatibility type alias
+pub type DetectedFramework = DetectedTechnology;
+
+/// Enhanced project analysis with proper technology classification and microservice support
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ProjectAnalysis {
     pub project_root: PathBuf,
     pub languages: Vec<DetectedLanguage>,
+    /// All detected technologies (frameworks, libraries, tools) with proper classification
+    pub technologies: Vec<DetectedTechnology>,
+    /// Legacy field for backward compatibility - will be populated from technologies
+    #[deprecated(note = "Use technologies field instead")]
     pub frameworks: Vec<DetectedFramework>,
     pub dependencies: DependencyMap,
     pub entry_points: Vec<EntryPoint>,
@@ -129,6 +202,10 @@ pub struct ProjectAnalysis {
     pub environment_variables: Vec<EnvVar>,
     pub project_type: ProjectType,
     pub build_scripts: Vec<BuildScript>,
+    /// Individual service analyses for microservice architectures
+    pub services: Vec<ServiceAnalysis>,
+    /// Whether this is a monolithic project or microservice architecture
+    pub architecture_type: ArchitectureType,
     pub analysis_metadata: AnalysisMetadata,
 }
 
@@ -217,13 +294,16 @@ pub fn analyze_project_with_config(path: &Path, config: &AnalysisConfig) -> Resu
     let analysis = ProjectAnalysis {
         project_root,
         languages,
-        frameworks,
+        technologies: frameworks.clone(), // New field with proper technology classification
+        frameworks, // Backward compatibility
         dependencies,
         entry_points: context.entry_points,
         ports: context.ports,
         environment_variables: context.environment_variables,
         project_type: context.project_type,
         build_scripts: context.build_scripts,
+        services: vec![], // TODO: Implement microservice detection
+        architecture_type: ArchitectureType::Monolithic, // TODO: Detect architecture type
         analysis_metadata: AnalysisMetadata {
             timestamp: Utc::now().to_rfc3339(),
             analyzer_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -274,14 +354,19 @@ mod tests {
             }
         ];
         
-        let frameworks = vec![
-            DetectedFramework {
+        let technologies = vec![
+            DetectedTechnology {
                 name: "Actix Web".to_string(),
                 version: Some("4.0".to_string()),
-                category: FrameworkCategory::Web,
+                category: TechnologyCategory::BackendFramework,
                 confidence: 0.8,
+                requires: vec!["serde".to_string(), "tokio".to_string()],
+                conflicts_with: vec![],
+                is_primary: true,
             }
         ];
+        
+        let frameworks = technologies.clone(); // For backward compatibility
         
         let score = calculate_confidence_score(&languages, &frameworks);
         assert!(score > 0.8);
