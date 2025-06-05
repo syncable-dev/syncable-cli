@@ -39,7 +39,7 @@
 # Prerequisites: Rust 1.70+ and Git
 
 # Clone the repository
-git clone https://github.com/yourusername/syncable-cli.git
+git clone https://github.com/syncable-dev/syncable-cli.git
 cd syncable-cli
 
 # Build and install
@@ -51,7 +51,7 @@ sync-ctl --version
 
 ### Pre-built Binaries
 
-Coming soon! Check the [releases page](https://github.com/yourusername/syncable-cli/releases).
+Coming soon! Check the [releases page](https://github.com/syncable-dev/syncable-cli/releases).
 
 ## 🚀 Quick Start
 
