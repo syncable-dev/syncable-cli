@@ -12,6 +12,7 @@
 - **Framework Recognition**: Identifies 70+ frameworks including Express, React, Django, FastAPI, Spring Boot
 - **Dependency Analysis**: Parses all package managers and extracts version constraints
 - **Vulnerability Scanning**: Integrates with security databases for each language ecosystem
+- **Security Analysis**: Basic secret detection and environment variable security checks
 - **Context Extraction**: Discovers entry points, ports, environment variables, and build scripts
 
 ### 🎯 Current Capabilities (Phase 1 Complete ✅)
@@ -19,7 +20,7 @@
 - ✅ Framework and library detection with confidence scoring
 - ✅ Comprehensive dependency parsing
 - ✅ Security vulnerability checking
-- ✅ **Multi-layered security analysis**
+- ✅ **Basic security analysis with secret detection**
 - ✅ Project context analysis (ports, env vars, build scripts)
 - ✅ Project type classification
 
@@ -27,7 +28,7 @@
 - 🤖 AI-powered Dockerfile generation
 - 🐳 Intelligent Docker Compose creation
 - ☁️ Cloud-ready Terraform configurations
-- 🔒 Security hardening recommendations
+- 🔒 **Advanced security analysis** (infrastructure, framework-specific, compliance)
 - 📊 Performance optimization suggestions
 
 ## 📦 Installation
@@ -83,7 +84,7 @@ sync-ctl vulnerabilities --format json --output vuln-report.json
 ### Security Analysis
 
 ```bash
-# Comprehensive security analysis
+# Basic security analysis with secret detection
 sync-ctl security /path/to/project
 
 # Include low severity findings
@@ -98,6 +99,15 @@ sync-ctl security --format json --output security-report.json
 # Fail CI/CD pipeline on security findings
 sync-ctl security --fail-on-findings
 ```
+
+**Current Security Features:**
+- ✅ Secret detection (API keys, tokens, passwords)
+- ✅ Environment variable security analysis
+- ✅ Basic code pattern analysis (limited rules)
+- ✅ Security scoring and risk assessment
+- 🚧 Infrastructure security analysis (coming soon)
+- 🚧 Framework-specific security checks (coming soon)
+- 🚧 Compliance framework validation (coming soon)
 
 ## 📖 Usage Examples
 
@@ -165,28 +175,39 @@ $ sync-ctl analyze ./fastapi-service --json
 ```bash
 $ sync-ctl security ./my-project
 
+🛡️  Analyzing project structure... [00:00:02] ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰ 100/100 100%
+
 🛡️  Security Analysis Results
 ============================================================
 
 📊 SECURITY SUMMARY
-✅ Security Score: 85.0/100
+✅ Security Score: 92.0/100
 
 🔍 ANALYSIS SCOPE
 ✅ Configuration Security    (2 files analyzed)
 ✅ Code Security Patterns   (15 files analyzed)
-✅ Infrastructure Security  (1 files analyzed)
-✅ Compliance Check         (SOC 2, GDPR ready)
+🚧 Infrastructure Security  (coming soon)
 
 🎯 FINDINGS BY CATEGORY
 🔐 Secret Detection: 0 findings
 🔒 Code Security: 1 finding  
 🏗️ Infrastructure: 0 findings
-📋 Compliance: 1 finding
+📋 Compliance: 0 findings
 
 💡 RECOMMENDATIONS
 • Enable dependency vulnerability scanning in CI/CD
 • Consider implementing rate limiting for API endpoints
 • Review environment variable security practices
+
+🔍 DETAILED FINDINGS
+
+1. ⚡ [js-002] innerHTML Usage
+   📝 innerHTML can lead to XSS vulnerabilities if used with unsanitized data
+   📁 File: src/components/Dashboard.js (line 42)
+   🔧 Fix:
+      • Use textContent instead of innerHTML for text
+      • Sanitize HTML content before setting innerHTML
+      • Consider using secure templating libraries
 ```
 
 ## 🛠️ Advanced Configuration
@@ -259,7 +280,7 @@ cargo clippy
 - [x] Framework Detection  
 - [x] Dependency Parsing
 - [x] Vulnerability Checking
-- [x] **Security Analysis**
+- [x] **Basic Security Analysis** (secret detection, env vars)
 - [x] Project Context Analysis
 
 ### Phase 2: AI Integration 🚧

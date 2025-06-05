@@ -1,11 +1,11 @@
 [package]
 name = "syncable-cli"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 authors = ["Syncable Team"]
 description = "A Rust-based CLI that analyzes code repositories and generates Infrastructure as Code configurations"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/syncable/syncable-cli"
+repository = "https://github.com/syncable-dev/syncable-cli"
 keywords = ["iac", "infrastructure", "docker", "terraform", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 
