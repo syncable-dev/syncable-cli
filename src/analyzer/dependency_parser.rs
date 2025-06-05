@@ -1,10 +1,11 @@
 use crate::analyzer::{AnalysisConfig, DetectedLanguage, DependencyMap};
+use crate::analyzer::vulnerability_checker::{VulnerabilityChecker, VulnerabilityInfo};
 use crate::error::{Result, AnalysisError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 use std::fs;
-use log::debug;
+use log::{debug, info, warn};
 
 /// Detailed dependency information
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -99,6 +100,49 @@ pub struct DependencyParser;
 impl DependencyParser {
     pub fn new() -> Self {
         Self
+    }
+    
+    /// Check vulnerabilities for dependencies using the vulnerability checker
+    async fn check_vulnerabilities_for_dependencies(
+        &self,
+        dependencies: &HashMap<Language, Vec<DependencyInfo>>,
+        project_path: &Path,
+    ) -> HashMap<String, Vec<VulnerabilityInfo>> {
+        let mut vulnerability_map = HashMap::new();
+        
+        let checker = VulnerabilityChecker::new();
+        
+        match checker.check_all_dependencies(dependencies, project_path).await {
+            Ok(report) => {
+                info!("Found {} total vulnerabilities across all dependencies", report.total_vulnerabilities);
+                
+                // Map vulnerabilities by dependency name
+                for vuln_dep in report.vulnerable_dependencies {
+                    vulnerability_map.insert(vuln_dep.name, vuln_dep.vulnerabilities);
+                }
+            }
+            Err(e) => {
+                warn!("Failed to check vulnerabilities: {}", e);
+            }
+        }
+        
+        vulnerability_map
+    }
+    
+    /// Convert VulnerabilityInfo to legacy Vulnerability format
+    fn convert_vulnerability_info(vuln_info: &VulnerabilityInfo) -> Vulnerability {
+        Vulnerability {
+            id: vuln_info.id.clone(),
+            severity: match vuln_info.severity {
+                crate::analyzer::vulnerability_checker::VulnerabilitySeverity::Critical => VulnerabilitySeverity::Critical,
+                crate::analyzer::vulnerability_checker::VulnerabilitySeverity::High => VulnerabilitySeverity::High,
+                crate::analyzer::vulnerability_checker::VulnerabilitySeverity::Medium => VulnerabilitySeverity::Medium,
+                crate::analyzer::vulnerability_checker::VulnerabilitySeverity::Low => VulnerabilitySeverity::Low,
+                crate::analyzer::vulnerability_checker::VulnerabilitySeverity::Info => VulnerabilitySeverity::Info,
+            },
+            description: vuln_info.description.clone(),
+            fixed_in: vuln_info.patched_versions.clone(),
+        }
     }
     
     pub fn parse_all_dependencies(&self, project_root: &Path) -> Result<HashMap<Language, Vec<DependencyInfo>>> {
@@ -753,7 +797,7 @@ pub fn parse_dependencies(
 }
 
 /// Parse detailed dependencies with vulnerability and license information
-pub fn parse_detailed_dependencies(
+pub async fn parse_detailed_dependencies(
     project_root: &Path,
     languages: &[DetectedLanguage],
     _config: &AnalysisConfig,
@@ -761,6 +805,7 @@ pub fn parse_detailed_dependencies(
     let mut detailed_deps = DetailedDependencyMap::new();
     let mut license_summary = HashMap::new();
     
+    // First, get all dependencies without vulnerabilities
     for language in languages {
         let deps = match language.name.as_str() {
             "Rust" => parse_rust_dependencies_detailed(project_root)?,
@@ -779,6 +824,20 @@ pub fn parse_detailed_dependencies(
         }
         
         detailed_deps.extend(deps);
+    }
+    
+    // Check vulnerabilities for all dependencies
+    let parser = DependencyParser::new();
+    let all_deps = parser.parse_all_dependencies(project_root)?;
+    let vulnerability_map = parser.check_vulnerabilities_for_dependencies(&all_deps, project_root).await;
+    
+    // Update dependencies with vulnerability information
+    for (dep_name, dep_info) in detailed_deps.iter_mut() {
+        if let Some(vulns) = vulnerability_map.get(dep_name) {
+            dep_info.vulnerabilities = vulns.iter()
+                .map(|v| DependencyParser::convert_vulnerability_info(v))
+                .collect();
+        }
     }
     
     let total_count = detailed_deps.len();
@@ -855,7 +914,7 @@ fn parse_rust_dependencies_detailed(project_root: &Path) -> Result<DetailedDepen
                 version,
                 is_dev: false,
                 license: detect_rust_license(name),
-                vulnerabilities: vec![], // TODO: Integrate with rustsec
+                vulnerabilities: vec![], // Populated by vulnerability checker in parse_detailed_dependencies
                 source: "crates.io".to_string(),
             });
         }
@@ -869,7 +928,7 @@ fn parse_rust_dependencies_detailed(project_root: &Path) -> Result<DetailedDepen
                 version,
                 is_dev: true,
                 license: detect_rust_license(name),
-                vulnerabilities: vec![], // TODO: Integrate with rustsec
+                vulnerabilities: vec![], // Populated by vulnerability checker in parse_detailed_dependencies
                 source: "crates.io".to_string(),
             });
         }
@@ -939,7 +998,7 @@ fn parse_js_dependencies_detailed(project_root: &Path) -> Result<DetailedDepende
                     version: ver_str.to_string(),
                     is_dev: false,
                     license: detect_npm_license(name),
-                    vulnerabilities: vec![], // TODO: Integrate with npm audit
+                    vulnerabilities: vec![], // Populated by vulnerability checker in parse_detailed_dependencies
                     source: "npm".to_string(),
                 });
             }
@@ -954,7 +1013,7 @@ fn parse_js_dependencies_detailed(project_root: &Path) -> Result<DetailedDepende
                     version: ver_str.to_string(),
                     is_dev: true,
                     license: detect_npm_license(name),
-                    vulnerabilities: vec![], // TODO: Integrate with npm audit
+                    vulnerabilities: vec![], // Populated by vulnerability checker in parse_detailed_dependencies
                     source: "npm".to_string(),
                 });
             }
@@ -1070,7 +1129,7 @@ fn parse_python_dependencies_detailed(project_root: &Path) -> Result<DetailedDep
                         version,
                         is_dev: false,
                         license: detect_pypi_license(name),
-                        vulnerabilities: vec![], // TODO: Integrate with safety
+                        vulnerabilities: vec![], // Populated by vulnerability checker in parse_detailed_dependencies
                         source: "pypi".to_string(),
                     });
                 }
@@ -1208,7 +1267,7 @@ fn parse_go_dependencies_detailed(project_root: &Path) -> Result<DetailedDepende
                     version: version.to_string(),
                     is_dev: is_indirect,
                     license: detect_go_license(name),
-                    vulnerabilities: vec![], // TODO: Integrate with go vulnerability database
+                    vulnerabilities: vec![], // Populated by vulnerability checker in parse_detailed_dependencies
                     source: "go modules".to_string(),
                 });
             }
@@ -1330,7 +1389,7 @@ fn parse_jvm_dependencies_detailed(project_root: &Path) -> Result<DetailedDepend
                         version: version.to_string(),
                         is_dev: scope == "test" || scope == "provided",
                         license: detect_maven_license(&name),
-                        vulnerabilities: vec![], // TODO: Integrate with OWASP dependency check
+                        vulnerabilities: vec![], // Populated by vulnerability checker in parse_detailed_dependencies
                         source: "maven".to_string(),
                     });
                 }

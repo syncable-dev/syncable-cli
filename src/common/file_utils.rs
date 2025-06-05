@@ -170,6 +170,48 @@ pub fn get_relative_path(root: &Path, target: &Path) -> PathBuf {
         .to_path_buf()
 }
 
+/// Find files matching specific patterns using glob
+pub fn find_files_by_patterns(root: &Path, patterns: &[&str]) -> Result<Vec<PathBuf>, std::io::Error> {
+    use glob::glob;
+    let mut files = Vec::new();
+    
+    for pattern in patterns {
+        let full_pattern = root.join(pattern);
+        let pattern_str = full_pattern.to_string_lossy();
+        
+        // Use glob to find matching files
+        if let Ok(entries) = glob(&pattern_str) {
+            for entry in entries {
+                if let Ok(path) = entry {
+                    if path.is_file() {
+                        files.push(path);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Also try recursive patterns
+    for pattern in patterns {
+        let recursive_pattern = root.join("**").join(pattern);
+        let pattern_str = recursive_pattern.to_string_lossy();
+        
+        if let Ok(entries) = glob(&pattern_str) {
+            for entry in entries {
+                if let Ok(path) = entry {
+                    if path.is_file() && !files.contains(&path) {
+                        files.push(path);
+                    }
+                }
+            }
+        }
+    }
+    
+    files.sort();
+    files.dedup();
+    Ok(files)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

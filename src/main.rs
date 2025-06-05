@@ -60,6 +60,31 @@ async fn run() -> syncable_cli::Result<()> {
         Commands::Vulnerabilities { path, severity, format, output } => {
             handle_vulnerabilities(path, severity, format, output).await
         }
+        Commands::Security { 
+            path, 
+            include_low, 
+            no_secrets, 
+            no_code_patterns, 
+            no_infrastructure, 
+            no_compliance, 
+            frameworks, 
+            format, 
+            output, 
+            fail_on_findings 
+        } => {
+            handle_security(
+                path, 
+                include_low, 
+                no_secrets, 
+                no_code_patterns, 
+                no_infrastructure, 
+                no_compliance, 
+                frameworks, 
+                format, 
+                output, 
+                fail_on_findings
+            )
+        }
     };
     
     if let Err(e) = result {
@@ -398,7 +423,7 @@ async fn handle_dependencies(
         &project_path,
         &analysis.languages,
         &analyzer::AnalysisConfig::default(),
-    )?;
+    ).await?;
     
     if format == OutputFormat::Table {
         // Table output
@@ -947,4 +972,211 @@ fn display_technologies_summary(technologies: &[DetectedTechnology]) {
         };
         println!("│   ├── {} {} (confidence: {:.1}%)", icon, tech.name, tech.confidence * 100.0);
     }
+}
+
+fn handle_security(
+    path: std::path::PathBuf,
+    include_low: bool,
+    no_secrets: bool,
+    no_code_patterns: bool,
+    no_infrastructure: bool,
+    no_compliance: bool,
+    frameworks: Vec<String>,
+    format: OutputFormat,
+    output: Option<std::path::PathBuf>,
+    fail_on_findings: bool,
+) -> syncable_cli::Result<()> {
+    use syncable_cli::analyzer::{SecurityAnalyzer, SecurityAnalysisConfig};
+    
+    let project_path = path.canonicalize()
+        .unwrap_or_else(|_| path.clone());
+    
+    println!("🛡️  Running security analysis for: {}", project_path.display());
+    
+    // First perform project analysis
+    let project_analysis = analyzer::analyze_project(&project_path)?;
+    
+    // Configure security analysis
+    let config = SecurityAnalysisConfig {
+        include_low_severity: include_low,
+        check_secrets: !no_secrets,
+        check_code_patterns: !no_code_patterns,
+        check_infrastructure: !no_infrastructure,
+        check_compliance: !no_compliance,
+        frameworks_to_check: frameworks,
+        ignore_patterns: vec![
+            "node_modules".to_string(),
+            ".git".to_string(),
+            "target".to_string(),
+            "build".to_string(),
+            ".next".to_string(),
+            "dist".to_string(),
+        ],
+    };
+    
+    // Create and run security analyzer
+    let security_analyzer = SecurityAnalyzer::with_config(config)
+        .map_err(|e| syncable_cli::error::IaCGeneratorError::Analysis(
+            syncable_cli::error::AnalysisError::InvalidStructure(
+                format!("Failed to create security analyzer: {}", e)
+            )
+        ))?;
+    
+    let security_report = security_analyzer.analyze_security(&project_analysis)
+        .map_err(|e| syncable_cli::error::IaCGeneratorError::Analysis(
+            syncable_cli::error::AnalysisError::InvalidStructure(
+                format!("Security analysis failed: {}", e)
+            )
+        ))?;
+    
+    // Format output
+    let output_string = match format {
+        OutputFormat::Table => {
+            let mut output = String::new();
+            
+            output.push_str("📋 Security Analysis Report\n");
+            output.push_str(&format!("{}\n", "=".repeat(80)));
+            output.push_str(&format!("Analyzed at: {}\n", security_report.analyzed_at.format("%Y-%m-%d %H:%M:%S UTC")));
+            output.push_str(&format!("Project: {}\n", project_path.display()));
+            output.push_str(&format!("Overall Score: {:.1}/100\n", security_report.overall_score));
+            output.push_str(&format!("Risk Level: {:?}\n", security_report.risk_level));
+            output.push_str(&format!("Total Findings: {}\n", security_report.total_findings));
+            
+            if !security_report.findings_by_severity.is_empty() {
+                output.push_str("\nFindings by Severity:\n");
+                for (severity, count) in &security_report.findings_by_severity {
+                    let emoji = match severity {
+                        syncable_cli::analyzer::SecuritySeverity::Critical => "🚨",
+                        syncable_cli::analyzer::SecuritySeverity::High => "⚠️ ",
+                        syncable_cli::analyzer::SecuritySeverity::Medium => "⚡",
+                        syncable_cli::analyzer::SecuritySeverity::Low => "ℹ️ ",
+                        syncable_cli::analyzer::SecuritySeverity::Info => "💡",
+                    };
+                    output.push_str(&format!("  {} {:?}: {}\n", emoji, severity, count));
+                }
+            }
+            
+            if !security_report.findings_by_category.is_empty() {
+                output.push_str("\nFindings by Category:\n");
+                for (category, count) in &security_report.findings_by_category {
+                    let emoji = match category {
+                        syncable_cli::analyzer::SecurityCategory::SecretsExposure => "🔐",
+                        syncable_cli::analyzer::SecurityCategory::InsecureConfiguration => "⚙️ ",
+                        syncable_cli::analyzer::SecurityCategory::CodeSecurityPattern => "💻",
+                        syncable_cli::analyzer::SecurityCategory::InfrastructureSecurity => "🏗️ ",
+                        syncable_cli::analyzer::SecurityCategory::AuthenticationSecurity => "🔑",
+                        syncable_cli::analyzer::SecurityCategory::DataProtection => "🛡️ ",
+                        syncable_cli::analyzer::SecurityCategory::NetworkSecurity => "🌐",
+                        syncable_cli::analyzer::SecurityCategory::Compliance => "📜",
+                    };
+                    output.push_str(&format!("  {} {:?}: {}\n", emoji, category, count));
+                }
+            }
+            
+            // Detailed findings
+            if !security_report.findings.is_empty() {
+                output.push_str(&format!("\n{}\n", "-".repeat(80)));
+                output.push_str("Security Findings:\n\n");
+                
+                for (i, finding) in security_report.findings.iter().enumerate() {
+                    let severity_emoji = match finding.severity {
+                        syncable_cli::analyzer::SecuritySeverity::Critical => "🚨",
+                        syncable_cli::analyzer::SecuritySeverity::High => "⚠️ ",
+                        syncable_cli::analyzer::SecuritySeverity::Medium => "⚡",
+                        syncable_cli::analyzer::SecuritySeverity::Low => "ℹ️ ",
+                        syncable_cli::analyzer::SecuritySeverity::Info => "💡",
+                    };
+                    
+                    output.push_str(&format!("{}. {} [{}] {}\n", i + 1, severity_emoji, finding.id, finding.title));
+                    output.push_str(&format!("   📝 {}\n", finding.description));
+                    
+                    if let Some(file) = &finding.file_path {
+                        output.push_str(&format!("   📁 File: {}", file.display()));
+                        if let Some(line) = finding.line_number {
+                            output.push_str(&format!(" (line {})", line));
+                        }
+                        output.push_str("\n");
+                    }
+                    
+                    if let Some(evidence) = &finding.evidence {
+                        output.push_str(&format!("   🔍 Evidence: {}\n", evidence));
+                    }
+                    
+                    if !finding.remediation.is_empty() {
+                        output.push_str("   🔧 Remediation:\n");
+                        for remediation in &finding.remediation {
+                            output.push_str(&format!("      • {}\n", remediation));
+                        }
+                    }
+                    
+                    if let Some(cwe) = &finding.cwe_id {
+                        output.push_str(&format!("   🏷️  CWE: {}\n", cwe));
+                    }
+                    
+                    output.push_str("\n");
+                }
+            }
+            
+            // Recommendations
+            if !security_report.recommendations.is_empty() {
+                output.push_str("💡 Security Recommendations:\n");
+                for (i, recommendation) in security_report.recommendations.iter().enumerate() {
+                    output.push_str(&format!("{}. {}\n", i + 1, recommendation));
+                }
+                output.push_str("\n");
+            }
+            
+            // Compliance status
+            if !security_report.compliance_status.is_empty() {
+                output.push_str("📜 Compliance Status:\n");
+                for (framework, status) in &security_report.compliance_status {
+                    output.push_str(&format!("🏛️  {}: {:.1}% coverage\n", framework, status.coverage));
+                    if !status.missing_controls.is_empty() {
+                        output.push_str(&format!("   Missing controls: {}\n", status.missing_controls.join(", ")));
+                    }
+                }
+                output.push_str("\n");
+            }
+            
+            if security_report.total_findings == 0 {
+                output.push_str("✅ No security issues found!\n");
+            }
+            
+            output
+        }
+        OutputFormat::Json => {
+            serde_json::to_string_pretty(&security_report)?
+        }
+    };
+    
+    // Output results
+    if let Some(output_path) = output {
+        std::fs::write(&output_path, output_string)?;
+        println!("Security report saved to: {}", output_path.display());
+    } else {
+        print!("{}", output_string);
+    }
+    
+    // Exit with error code if requested and findings exist
+    if fail_on_findings && security_report.total_findings > 0 {
+        let critical_count = security_report.findings_by_severity
+            .get(&syncable_cli::analyzer::SecuritySeverity::Critical)
+            .unwrap_or(&0);
+        let high_count = security_report.findings_by_severity
+            .get(&syncable_cli::analyzer::SecuritySeverity::High)
+            .unwrap_or(&0);
+        
+        if *critical_count > 0 {
+            eprintln!("❌ Critical security issues found. Please address immediately.");
+            std::process::exit(1);
+        } else if *high_count > 0 {
+            eprintln!("⚠️  High severity security issues found. Review recommended.");
+            std::process::exit(2);
+        } else {
+            eprintln!("ℹ️  Security issues found but none are critical or high severity.");
+            std::process::exit(3);
+        }
+    }
+    
+    Ok(())
 }

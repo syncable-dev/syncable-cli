@@ -117,6 +117,14 @@ fn detect_technologies_by_dependencies(
 ) -> Vec<DetectedTechnology> {
     let mut technologies = Vec::new();
     
+    // Debug logging for Tanstack Start detection
+    let tanstack_deps: Vec<_> = dependencies.iter()
+        .filter(|dep| dep.contains("tanstack") || dep.contains("vinxi"))
+        .collect();
+    if !tanstack_deps.is_empty() {
+        log::debug!("Found potential Tanstack dependencies: {:?}", tanstack_deps);
+    }
+    
     for rule in rules {
         let mut matches = 0;
         let total_patterns = rule.dependency_patterns.len();
@@ -126,8 +134,17 @@ fn detect_technologies_by_dependencies(
         }
         
         for pattern in &rule.dependency_patterns {
-            if dependencies.iter().any(|dep| matches_pattern(dep, pattern)) {
+            let matching_deps: Vec<_> = dependencies.iter()
+                .filter(|dep| matches_pattern(dep, pattern))
+                .collect();
+                
+            if !matching_deps.is_empty() {
                 matches += 1;
+                
+                // Debug logging for Tanstack Start specifically
+                if rule.name.contains("Tanstack") {
+                    log::debug!("Tanstack Start: Pattern '{}' matched dependencies: {:?}", pattern, matching_deps);
+                }
             }
         }
         
@@ -135,6 +152,12 @@ fn detect_technologies_by_dependencies(
         if matches > 0 {
             let pattern_confidence = matches as f32 / total_patterns as f32;
             let final_confidence = (rule.confidence * pattern_confidence * base_confidence).min(1.0);
+            
+            // Debug logging for Tanstack Start detection
+            if rule.name.contains("Tanstack") {
+                log::debug!("Tanstack Start detected with {} matches out of {} patterns, confidence: {:.2}", 
+                          matches, total_patterns, final_confidence);
+            }
             
             technologies.push(DetectedTechnology {
                 name: rule.name.clone(),
@@ -145,6 +168,10 @@ fn detect_technologies_by_dependencies(
                 conflicts_with: rule.conflicts_with.clone(),
                 is_primary: rule.is_primary_indicator,
             });
+        } else if rule.name.contains("Tanstack") {
+            // Debug logging when Tanstack Start is not detected
+            log::debug!("Tanstack Start not detected - no patterns matched. Available dependencies: {:?}", 
+                      dependencies.iter().take(10).collect::<Vec<_>>());
         }
     }
     
@@ -296,6 +323,19 @@ fn detect_technologies_from_source_files(language: &DetectedLanguage, rules: &[T
                     confidence: encore_confidence,
                     requires: vec![],
                     conflicts_with: vec![],
+                    is_primary: true,
+                });
+            }
+            
+            // Analyze Tanstack Start usage patterns
+            if let Some(tanstack_confidence) = analyze_tanstack_start_usage(&content, file_path) {
+                detected.push(DetectedTechnology {
+                    name: "Tanstack Start".to_string(),
+                    version: None,
+                    category: TechnologyCategory::MetaFramework,
+                    confidence: tanstack_confidence,
+                    requires: vec!["React".to_string()],
+                    conflicts_with: vec!["Next.js".to_string(), "React Router v7".to_string(), "SvelteKit".to_string(), "Nuxt.js".to_string()],
                     is_primary: true,
                 });
             }
@@ -473,6 +513,98 @@ fn analyze_encore_usage(content: &str, file_path: &std::path::Path) -> Option<f3
     }
 }
 
+/// Analyzes Tanstack Start usage patterns in source files
+fn analyze_tanstack_start_usage(content: &str, file_path: &std::path::Path) -> Option<f32> {
+    let file_name = file_path.file_name()?.to_string_lossy();
+    let mut confidence: f32 = 0.0;
+    let mut has_start_patterns = false;
+    
+    // Configuration files (high confidence)
+    if file_name == "app.config.ts" || file_name == "app.config.js" {
+        if content.contains("@tanstack/react-start") || content.contains("tanstack") {
+            confidence += 0.5;
+            has_start_patterns = true;
+        }
+    }
+    
+    // Router configuration patterns (very high confidence)
+    if file_name.contains("router.") && (file_name.ends_with(".ts") || file_name.ends_with(".tsx")) {
+        if content.contains("createRouter") && content.contains("@tanstack/react-router") {
+            confidence += 0.4;
+            has_start_patterns = true;
+        }
+        if content.contains("routeTree") {
+            confidence += 0.2;
+            has_start_patterns = true;
+        }
+    }
+    
+    // Server entry point patterns
+    if file_name == "ssr.tsx" || file_name == "ssr.ts" {
+        if content.contains("createStartHandler") || content.contains("@tanstack/react-start/server") {
+            confidence += 0.5;
+            has_start_patterns = true;
+        }
+    }
+    
+    // Client entry point patterns
+    if file_name == "client.tsx" || file_name == "client.ts" {
+        if content.contains("StartClient") && content.contains("@tanstack/react-start") {
+            confidence += 0.5;
+            has_start_patterns = true;
+        }
+        if content.contains("hydrateRoot") && content.contains("createRouter") {
+            confidence += 0.3;
+            has_start_patterns = true;
+        }
+    }
+    
+    // Root route patterns (in app/routes/__root.tsx)
+    if file_name == "__root.tsx" || file_name == "__root.ts" {
+        if content.contains("createRootRoute") && content.contains("@tanstack/react-router") {
+            confidence += 0.4;
+            has_start_patterns = true;
+        }
+        if content.contains("HeadContent") && content.contains("Scripts") {
+            confidence += 0.3;
+            has_start_patterns = true;
+        }
+    }
+    
+    // Route files with createFileRoute
+    if file_path.to_string_lossy().contains("routes/") {
+        if content.contains("createFileRoute") && content.contains("@tanstack/react-router") {
+            confidence += 0.3;
+            has_start_patterns = true;
+        }
+    }
+    
+    // Server functions (key Tanstack Start feature)
+    if content.contains("createServerFn") && content.contains("@tanstack/react-start") {
+        confidence += 0.4;
+        has_start_patterns = true;
+    }
+    
+    // Import patterns specific to Tanstack Start
+    if content.contains("from '@tanstack/react-start'") {
+        confidence += 0.3;
+        has_start_patterns = true;
+    }
+    
+    // Vinxi configuration patterns
+    if file_name == "vinxi.config.ts" || file_name == "vinxi.config.js" {
+        confidence += 0.2;
+        has_start_patterns = true;
+    }
+    
+    // Only return confidence if we have actual Tanstack Start patterns
+    if confidence > 0.0 && has_start_patterns {
+        Some(confidence.min(1.0_f32))
+    } else {
+        None
+    }
+}
+
 /// JavaScript/TypeScript technology detection rules with proper classification
 fn get_js_technology_rules() -> Vec<TechnologyRule> {
     vec![
@@ -495,7 +627,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             requires: vec!["React".to_string()],
             conflicts_with: vec!["Next.js".to_string(), "React Router v7".to_string(), "SvelteKit".to_string(), "Nuxt.js".to_string()],
             is_primary_indicator: true,
-            alternative_names: vec!["tanstack-start".to_string()],
+            alternative_names: vec!["tanstack-start".to_string(), "TanStack Start".to_string()],
         },
         TechnologyRule {
             name: "React Router v7".to_string(),
@@ -890,5 +1022,41 @@ mod tests {
         assert!(framework_names.contains(&"Drizzle ORM"));
         assert!(framework_names.contains(&"React Router v7"));
         assert!(framework_names.contains(&"Tanstack Start"));
+    }
+    
+    #[test]
+    fn test_tanstack_start_detection() {
+        let language = DetectedLanguage {
+            name: "TypeScript".to_string(),
+            version: Some("5.0.0".to_string()),
+            confidence: 0.925,
+            files: vec![PathBuf::from("src/routes/index.tsx")],
+            main_dependencies: vec![
+                "@tanstack/react-start".to_string(),
+                "@tanstack/react-router".to_string(),
+                "react".to_string(),
+                "react-dom".to_string(),
+            ],
+            dev_dependencies: vec![
+                "vinxi".to_string(),
+                "typescript".to_string(),
+            ],
+            package_manager: Some("npm".to_string()),
+        };
+        
+        let technologies = detect_js_technologies(&language);
+        
+        // Should detect Tanstack Start
+        let tanstack_start = technologies.iter().find(|t| t.name == "Tanstack Start");
+        assert!(tanstack_start.is_some(), "Tanstack Start should be detected");
+        
+        let tanstack_start = tanstack_start.unwrap();
+        assert!(matches!(tanstack_start.category, TechnologyCategory::MetaFramework));
+        assert!(tanstack_start.is_primary, "Tanstack Start should be marked as primary");
+        assert!(tanstack_start.confidence > 0.8, "Tanstack Start detection confidence should be high");
+        
+        // Should also detect React
+        let react = technologies.iter().find(|t| t.name == "React");
+        assert!(react.is_some(), "React should be detected as a dependency");
     }
 } 

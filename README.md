@@ -19,6 +19,7 @@
 - ✅ Framework and library detection with confidence scoring
 - ✅ Comprehensive dependency parsing
 - ✅ Security vulnerability checking
+- ✅ **Multi-layered security analysis**
 - ✅ Project context analysis (ports, env vars, build scripts)
 - ✅ Project type classification
 
@@ -70,10 +71,32 @@ sync-ctl analyze --json > analysis.json
 
 ```bash
 # Run vulnerability scan
-sync-ctl vuln-check /path/to/project
+sync-ctl vulnerabilities /path/to/project
 
 # Check only high severity and above
-sync-ctl vuln-check --severity high
+sync-ctl vulnerabilities --severity high
+
+# Export vulnerability report
+sync-ctl vulnerabilities --format json --output vuln-report.json
+```
+
+### Security Analysis
+
+```bash
+# Comprehensive security analysis
+sync-ctl security /path/to/project
+
+# Include low severity findings
+sync-ctl security --include-low
+
+# Skip specific analysis types
+sync-ctl security --no-secrets --no-code-patterns
+
+# Generate security report
+sync-ctl security --format json --output security-report.json
+
+# Fail CI/CD pipeline on security findings
+sync-ctl security --fail-on-findings
 ```
 
 ## 📖 Usage Examples
@@ -135,6 +158,35 @@ $ sync-ctl analyze ./fastapi-service --json
     { "name": "REDIS_URL", "required": false }
   ]
 }
+```
+
+### Example: Security Analysis
+
+```bash
+$ sync-ctl security ./my-project
+
+🛡️  Security Analysis Results
+============================================================
+
+📊 SECURITY SUMMARY
+✅ Security Score: 85.0/100
+
+🔍 ANALYSIS SCOPE
+✅ Configuration Security    (2 files analyzed)
+✅ Code Security Patterns   (15 files analyzed)
+✅ Infrastructure Security  (1 files analyzed)
+✅ Compliance Check         (SOC 2, GDPR ready)
+
+🎯 FINDINGS BY CATEGORY
+🔐 Secret Detection: 0 findings
+🔒 Code Security: 1 finding  
+🏗️ Infrastructure: 0 findings
+📋 Compliance: 1 finding
+
+💡 RECOMMENDATIONS
+• Enable dependency vulnerability scanning in CI/CD
+• Consider implementing rate limiting for API endpoints
+• Review environment variable security practices
 ```
 
 ## 🛠️ Advanced Configuration
@@ -207,6 +259,7 @@ cargo clippy
 - [x] Framework Detection  
 - [x] Dependency Parsing
 - [x] Vulnerability Checking
+- [x] **Security Analysis**
 - [x] Project Context Analysis
 
 ### Phase 2: AI Integration 🚧

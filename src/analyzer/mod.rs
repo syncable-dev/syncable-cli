@@ -17,12 +17,19 @@ pub mod framework_detector;
 pub mod language_detector;
 pub mod project_context;
 pub mod vulnerability_checker;
+pub mod security_analyzer;
 pub mod tool_installer;
 
 // Re-export dependency analysis types
 pub use dependency_parser::{
     DependencyInfo, DependencyAnalysis, DetailedDependencyMap,
     Vulnerability, VulnerabilitySeverity
+};
+
+// Re-export security analysis types
+pub use security_analyzer::{
+    SecurityAnalyzer, SecurityReport, SecurityFinding, SecuritySeverity,
+    SecurityCategory, ComplianceStatus, SecurityAnalysisConfig
 };
 
 /// Represents a detected programming language

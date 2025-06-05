@@ -158,6 +158,49 @@ pub enum Commands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+
+    /// Perform comprehensive security analysis
+    Security {
+        /// Path to the project directory to analyze
+        #[arg(value_name = "PROJECT_PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Include low severity findings
+        #[arg(long)]
+        include_low: bool,
+
+        /// Skip secrets detection
+        #[arg(long)]
+        no_secrets: bool,
+
+        /// Skip code pattern analysis
+        #[arg(long)]
+        no_code_patterns: bool,
+
+        /// Skip infrastructure analysis
+        #[arg(long)]
+        no_infrastructure: bool,
+
+        /// Skip compliance checks
+        #[arg(long)]
+        no_compliance: bool,
+
+        /// Compliance frameworks to check
+        #[arg(long, value_delimiter = ',', default_values = ["SOC2", "GDPR", "OWASP"])]
+        frameworks: Vec<String>,
+
+        /// Output format
+        #[arg(long, value_enum, default_value = "table")]
+        format: OutputFormat,
+
+        /// Export report to file
+        #[arg(long)]
+        output: Option<PathBuf>,
+
+        /// Exit with error code on security findings
+        #[arg(long)]
+        fail_on_findings: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
