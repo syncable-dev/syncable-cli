@@ -177,16 +177,16 @@ pub enum Commands {
         #[arg(long)]
         no_code_patterns: bool,
 
-        /// Skip infrastructure analysis
-        #[arg(long)]
+        /// Skip infrastructure analysis (not implemented yet)
+        #[arg(long, hide = true)]
         no_infrastructure: bool,
 
-        /// Skip compliance checks
-        #[arg(long)]
+        /// Skip compliance checks (not implemented yet)
+        #[arg(long, hide = true)]
         no_compliance: bool,
 
-        /// Compliance frameworks to check
-        #[arg(long, value_delimiter = ',', default_values = ["SOC2", "GDPR", "OWASP"])]
+        /// Compliance frameworks to check (not implemented yet)
+        #[arg(long, value_delimiter = ',', hide = true)]
         frameworks: Vec<String>,
 
         /// Output format

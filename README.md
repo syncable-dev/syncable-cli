@@ -175,22 +175,24 @@ $ sync-ctl analyze ./fastapi-service --json
 ```bash
 $ sync-ctl security ./my-project
 
-🛡️  Analyzing project structure... [00:00:02] ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰ 100/100 100%
+🛡️  Finalizing analysis... [00:00:01] ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰ 100/100 100%
 
 🛡️  Security Analysis Results
 ============================================================
 
 📊 SECURITY SUMMARY
-✅ Security Score: 92.0/100
+✅ Security Score: 100.0/100
 
 🔍 ANALYSIS SCOPE
-✅ Configuration Security    (2 files analyzed)
-✅ Code Security Patterns   (15 files analyzed)
+✅ Secret Detection         (5 files analyzed)
+✅ Environment Variables    (3 variables checked)
+ℹ️  Code Security Patterns   (no applicable files found)
 🚧 Infrastructure Security  (coming soon)
+🚧 Compliance Frameworks    (coming soon)
 
 🎯 FINDINGS BY CATEGORY
 🔐 Secret Detection: 0 findings
-🔒 Code Security: 1 finding  
+🔒 Code Security: 0 findings
 🏗️ Infrastructure: 0 findings
 📋 Compliance: 0 findings
 
@@ -198,16 +200,6 @@ $ sync-ctl security ./my-project
 • Enable dependency vulnerability scanning in CI/CD
 • Consider implementing rate limiting for API endpoints
 • Review environment variable security practices
-
-🔍 DETAILED FINDINGS
-
-1. ⚡ [js-002] innerHTML Usage
-   📝 innerHTML can lead to XSS vulnerabilities if used with unsanitized data
-   📁 File: src/components/Dashboard.js (line 42)
-   🔧 Fix:
-      • Use textContent instead of innerHTML for text
-      • Sanitize HTML content before setting innerHTML
-      • Consider using secure templating libraries
 ```
 
 ## 🛠️ Advanced Configuration

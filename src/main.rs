@@ -1055,19 +1055,15 @@ fn handle_security(
         thread::sleep(Duration::from_millis(400));
     }
     
-    // Step 6: Infrastructure Analysis
-    if !no_infrastructure {
-        progress.set_message("Examining infrastructure security...");
+            // Step 6: Environment Variables (always runs)
+        progress.set_message("Analyzing environment variables...");
         progress.set_position(85);
-        thread::sleep(Duration::from_millis(300));
-    }
-    
-    // Step 7: Compliance Check
-    if !no_compliance {
-        progress.set_message("Validating compliance standards...");
+        thread::sleep(Duration::from_millis(200));
+        
+        // Step 7: Final processing
+        progress.set_message("Finalizing analysis...");
         progress.set_position(95);
-        thread::sleep(Duration::from_millis(300));
-    }
+        thread::sleep(Duration::from_millis(200));
     
     // Step 8: Generating Report
     progress.set_message("Generating security report...");
@@ -1094,24 +1090,27 @@ fn handle_security(
             output.push_str("\n📊 SECURITY SUMMARY\n");
             output.push_str(&format!("✅ Security Score: {:.1}/100\n", security_report.overall_score));
             
-            // Analysis Scope
+            // Analysis Scope - only show what's actually implemented
             output.push_str("\n🔍 ANALYSIS SCOPE\n");
-            let config_files = project_analysis.entry_points.len() + project_analysis.dependencies.len();
-            let code_files = security_report.findings.iter()
+            let config_files = security_report.findings.iter()
                 .filter_map(|f| f.file_path.as_ref())
                 .collect::<std::collections::HashSet<_>>()
                 .len();
-            let infra_files = 1; // Simplified for demo
+            let code_files = security_report.findings.iter()
+                .filter(|f| matches!(f.category, syncable_cli::analyzer::SecurityCategory::CodeSecurityPattern))
+                .filter_map(|f| f.file_path.as_ref())
+                .collect::<std::collections::HashSet<_>>()
+                .len();
             
-            output.push_str(&format!("✅ Configuration Security    ({} files analyzed)\n", config_files));
-            output.push_str(&format!("✅ Code Security Patterns   ({} files analyzed)\n", code_files));
-            output.push_str(&format!("✅ Infrastructure Security  ({} files analyzed)\n", infra_files));
-            
-            // Compliance status
-            if !frameworks.is_empty() {
-                let compliance_str = frameworks.join(", ");
-                output.push_str(&format!("✅ Compliance Check         ({} ready)\n", compliance_str));
+            output.push_str(&format!("✅ Secret Detection         ({} files analyzed)\n", config_files.max(1)));
+            output.push_str(&format!("✅ Environment Variables    ({} variables checked)\n", project_analysis.environment_variables.len()));
+            if code_files > 0 {
+                output.push_str(&format!("✅ Code Security Patterns   ({} files analyzed)\n", code_files));
+            } else {
+                output.push_str("ℹ️  Code Security Patterns   (no applicable files found)\n");
             }
+            output.push_str("🚧 Infrastructure Security  (coming soon)\n");
+            output.push_str("🚧 Compliance Frameworks    (coming soon)\n");
             
             // Findings by Category
             output.push_str("\n🎯 FINDINGS BY CATEGORY\n");

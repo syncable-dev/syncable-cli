@@ -274,23 +274,9 @@ impl SecurityAnalyzer {
             }
         }
         
-        // 3. Infrastructure Security
-        if self.config.check_infrastructure {
-            if let Some(ref pb) = main_pb {
-                pb.set_message("Analyzing infrastructure security...");
-            }
-            
-            if is_verbose {
-                findings.extend(self.analyze_infrastructure_security(&analysis.project_root, &analysis.technologies)?);
-            } else {
-                findings.extend(self.analyze_infrastructure_security_with_progress(&analysis.project_root, &analysis.technologies, &multi_progress)?);
-            }
-            
-            if let Some(ref pb) = main_pb {
-                current_progress += phase_weight;
-                pb.set_position(current_progress);
-            }
-        }
+        // 3. Infrastructure Security (skipped - not implemented yet)
+        // TODO: Implement infrastructure security analysis
+        // Currently all infrastructure analysis methods return empty results
         
         // 4. Environment Variables Security
         if let Some(ref pb) = main_pb {
@@ -303,16 +289,9 @@ impl SecurityAnalyzer {
             pb.set_position(current_progress);
         }
         
-        // 5. Framework-specific Security
-        if let Some(ref pb) = main_pb {
-            pb.set_message("Analyzing framework security...");
-        }
-        
-        if is_verbose {
-            findings.extend(self.analyze_framework_security(&analysis.project_root, &analysis.technologies)?);
-        } else {
-            findings.extend(self.analyze_framework_security_with_progress(&analysis.project_root, &analysis.technologies, &multi_progress)?);
-        }
+        // 5. Framework-specific Security (skipped - not implemented yet)
+        // TODO: Implement framework-specific security analysis
+        // Currently all framework analysis methods return empty results
         
         if let Some(ref pb) = main_pb {
             current_progress = 100;
@@ -350,12 +329,9 @@ impl SecurityAnalyzer {
         let overall_score = self.calculate_security_score(&findings);
         let risk_level = self.determine_risk_level(&findings);
         
-        // Generate compliance status
-        let compliance_status = if self.config.check_compliance {
-            self.assess_compliance(&findings, &analysis.technologies)
-        } else {
-            HashMap::new()
-        };
+        // Generate compliance status (disabled - not implemented yet)
+        // TODO: Implement compliance assessment
+        let compliance_status = HashMap::new();
         
         // Generate recommendations
         let recommendations = self.generate_recommendations(&findings, &analysis.technologies);
