@@ -33,6 +33,16 @@
 
 ## 📦 Installation
 
+### ⚡ Quick Install
+
+The fastest way to get started:
+
+```bash
+cargo install syncable-cli
+```
+
+Or see below for building from source.
+
 ### From Source (Recommended)
 
 ```bash
@@ -169,7 +179,6 @@ $ sync-ctl analyze ./fastapi-service --json
   ]
 }
 ```
-
 ### Example: Security Analysis
 
 ```bash
