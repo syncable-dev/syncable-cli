@@ -7,6 +7,11 @@ use syncable_cli::{
 };
 use std::process;
 use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
+use std::time::{SystemTime, Duration};
+use dirs::cache_dir;
+use reqwest::blocking::get;
 
 #[tokio::main]
 async fn main() {
@@ -17,6 +22,7 @@ async fn main() {
 }
 
 async fn run() -> syncable_cli::Result<()> {
+    check_for_update();
     let cli = Cli::parse();
     
     // Initialize logging
@@ -93,6 +99,39 @@ async fn run() -> syncable_cli::Result<()> {
     }
     
     Ok(())
+}
+
+fn check_for_update() {
+    let cache_file = cache_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("syncable-cli/last_update_check");
+    let now = SystemTime::now();
+
+    // Only check once per day
+    if let Ok(metadata) = fs::metadata(&cache_file) {
+        if let Ok(modified) = metadata.modified() {
+            if now.duration_since(modified).unwrap_or(Duration::ZERO) < Duration::from_secs(60 * 60 * 24) {
+                return;
+            }
+        }
+    }
+
+    // Query crates.io
+    let resp = get("https://crates.io/api/v1/crates/syncable-cli")
+        .and_then(|r| r.json::<serde_json::Value>());
+    if let Ok(json) = resp {
+        let latest = json["crate"]["max_version"].as_str().unwrap_or("");
+        let current = env!("CARGO_PKG_VERSION");
+        if latest != "" && latest != current {
+            println!(
+                "\x1b[33m🔔 A new version of sync-ctl is available: {latest} (current: {current})\nRun `cargo install syncable-cli --force` to update.\x1b[0m"
+            );
+        }
+    }
+
+    // Update cache file
+    let _ = fs::create_dir_all(cache_file.parent().unwrap());
+    let _ = fs::write(&cache_file, "");
 }
 
 fn handle_analyze(
