@@ -1,0 +1,13 @@
+[build]
+rustflags = ["-C", "target-cpu=native"]
+
+[alias]
+b = "build"
+br = "build --release"
+c = "check"
+t = "test"
+tr = "test --release"
+r = "run"
+rr = "run --release"
+fmt = "fmt --all"
+clippy = "clippy --all-targets --all-features" 

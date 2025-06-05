@@ -1,0 +1,297 @@
+{
+  "database": {
+    "advisory-count": 785,
+    "last-commit": "a1f651cba8bf224f52c5d55d8182b3bb0ebce49e",
+    "last-updated": "2025-06-03T13:30:36+02:00"
+  },
+  "lockfile": {
+    "dependency-count": 437
+  },
+  "settings": {
+    "target_arch": [],
+    "target_os": [],
+    "severity": null,
+    "ignore": [],
+    "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+    ]
+  },
+  "vulnerabilities": {
+    "found": true,
+    "count": 2,
+    "list": [
+      {
+        "advisory": {
+          "id": "RUSTSEC-2025-0021",
+          "package": "gix-features",
+          "title": "SHA-1 collision attacks are not detected",
+          "description": "### Summary\ngitoxide uses SHA-1 hash implementations without any collision detection, leaving it vulnerable to hash collision attacks.\n\n### Details\ngitoxide uses the `sha1_smol` or `sha1` crate, both of which implement standard SHA-1 without any mitigations for collision attacks. This means that two distinct Git objects with colliding SHA-1 hashes would break the Git object model and integrity checks when used with gitoxide.\n\nThe SHA-1 function is considered cryptographically insecure. However, in the wake of the SHAttered attacks, this issue was mitigated in Git 2.13.0 in 2017 by using the [sha1collisiondetection](https://github.com/crmarcstevens/sha1collisiondetection) algorithm by default and producing an error when known SHA-1 collisions are detected. Git is in the process of migrating to using SHA-256 for object hashes, but this has not been rolled out widely yet and gitoxide does not support SHA-256 object hashes.\n\n### PoC\nThe following program demonstrates the problem, using the two [SHAttered PDFs](https://shattered.io/):\n\n```rust\nuse sha1_checked::{CollisionResult, Digest};\n\nfn sha1_oid_of_file(filename: &str) -> gix::ObjectId {\n    let mut hasher = gix::features::hash::hasher(gix::hash::Kind::Sha1);\n    hasher.update(&std::fs::read(filename).unwrap());\n    gix::ObjectId::Sha1(hasher.digest())\n}\n\nfn sha1dc_oid_of_file(filename: &str) -> Result<gix::ObjectId, String> {\n    // Matches Git’s behaviour.\n    let mut hasher = sha1_checked::Builder::default().safe_hash(false).build();\n    hasher.update(&std::fs::read(filename).unwrap());\n    match hasher.try_finalize() {\n        CollisionResult::Ok(digest) => Ok(gix::ObjectId::Sha1(digest.into())),\n        CollisionResult::Mitigated(_) => unreachable!(),\n        CollisionResult::Collision(digest) => Err(format!(\n            \"Collision attack: {}\",\n            gix::ObjectId::Sha1(digest.into()).to_hex()\n        )),\n    }\n}\n\nfn main() {\n    dbg!(sha1_oid_of_file(\"shattered-1.pdf\"));\n    dbg!(sha1_oid_of_file(\"shattered-2.pdf\"));\n    dbg!(sha1dc_oid_of_file(\"shattered-1.pdf\"));\n    dbg!(sha1dc_oid_of_file(\"shattered-2.pdf\"));\n}\n```\n\nThe output is as follows:\n\n```\n[src/main.rs:24:5] sha1_oid_of_file(\"shattered-1.pdf\") = Sha1(38762cf7f55934b34d179ae6a4c80cadccbb7f0a)\n[src/main.rs:25:5] sha1_oid_of_file(\"shattered-2.pdf\") = Sha1(38762cf7f55934b34d179ae6a4c80cadccbb7f0a)\n[src/main.rs:26:5] sha1dc_oid_of_file(\"shattered-1.pdf\") = Err(\n    \"Collision attack: 38762cf7f55934b34d179ae6a4c80cadccbb7f0a\",\n)\n[src/main.rs:27:5] sha1dc_oid_of_file(\"shattered-2.pdf\") = Err(\n    \"Collision attack: 38762cf7f55934b34d179ae6a4c80cadccbb7f0a\",\n)\n```\n\nThe latter behaviour matches Git.\n\nSince the SHAttered PDFs are not in a valid format for Git objects, a direct proof‐of‐concept using higher‐level APIs cannot be immediately demonstrated without significant computational resources.\n\n### Impact\nAn attacker with the ability to mount a collision attack on SHA-1 like the [SHAttered](https://shattered.io/) or [SHA-1 is a Shambles](https://sha-mbles.github.io/) attacks could create two distinct Git objects with the same hash. This is becoming increasingly affordable for well‐resourced attackers, with the Shambles researchers in 2020 estimating $45k for a chosen‐prefix collision or $11k for a classical collision, and projecting less than $10k for a chosen‐prefix collision by 2025. The result could be used to disguise malicious repository contents, or potentially exploit assumptions in the logic of programs using gitoxide to cause further vulnerabilities.\n\nThis vulnerability affects any user of gitoxide, including `gix-*` library crates, that reads or writes Git objects.",
+          "date": "2025-04-03",
+          "aliases": [
+            "CVE-2025-31130",
+            "GHSA-2frx-2596-x5r6"
+          ],
+          "related": [],
+          "collection": "crates",
+          "categories": [
+            "crypto-failure"
+          ],
+          "keywords": [
+            "hash-collision",
+            "sha-1",
+            "weak-hash"
+          ],
+          "cvss": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:C/C:N/I:H/A:N",
+          "informational": null,
+          "references": [
+            "https://github.com/advisories/GHSA-2frx-2596-x5r6",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-31130"
+          ],
+          "source": null,
+          "url": "https://github.com/GitoxideLabs/gitoxide/security/advisories/GHSA-2frx-2596-x5r6",
+          "withdrawn": null,
+          "license": "CC0-1.0"
+        },
+        "versions": {
+          "patched": [
+            ">=0.41.0"
+          ],
+          "unaffected": []
+        },
+        "affected": {
+          "arch": [],
+          "os": [],
+          "functions": {
+            "gix_features::hash::Hasher::digest": [
+              "<0.41.0"
+            ],
+            "gix_features::hash::Hasher::update": [
+              "<0.41.0"
+            ],
+            "gix_features::hash::Write::flush": [
+              "<0.41.0"
+            ],
+            "gix_features::hash::Write::new": [
+              "<0.41.0"
+            ],
+            "gix_features::hash::Write::write": [
+              "<0.41.0"
+            ],
+            "gix_features::hash::bytes": [
+              "<0.41.0"
+            ],
+            "gix_features::hash::bytes_of_file": [
+              "<0.41.0"
+            ],
+            "gix_features::hash::bytes_with_hasher": [
+              "<0.41.0"
+            ],
+            "gix_features::hash::hasher": [
+              "<0.41.0"
+            ]
+          }
+        },
+        "package": {
+          "name": "gix-features",
+          "version": "0.38.2",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "ac7045ac9fe5f9c727f38799d002a7ed3583cd777e3322a7c4b43e3cf437dc69",
+          "dependencies": [
+            {
+              "name": "bytes",
+              "version": "1.10.1",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "crc32fast",
+              "version": "1.4.2",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "crossbeam-channel",
+              "version": "0.5.15",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "flate2",
+              "version": "1.1.1",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "gix-hash",
+              "version": "0.14.2",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "gix-trace",
+              "version": "0.1.12",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "gix-utils",
+              "version": "0.1.14",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "jwalk",
+              "version": "0.8.1",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "libc",
+              "version": "0.2.172",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "once_cell",
+              "version": "1.21.3",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "parking_lot",
+              "version": "0.12.4",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "prodash",
+              "version": "28.0.0",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "sha1_smol",
+              "version": "1.0.1",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "thiserror",
+              "version": "1.0.69",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "walkdir",
+              "version": "2.5.0",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            }
+          ],
+          "replace": null
+        }
+      },
+      {
+        "advisory": {
+          "id": "RUSTSEC-2025-0001",
+          "package": "gix-worktree-state",
+          "title": "gix-worktree-state nonexclusive checkout sets executable files world-writable",
+          "description": "### Summary\n\n`gix-worktree-state` specifies 0777 permissions when checking out executable files, intending that the umask will restrict them appropriately. But one of the strategies it uses to set permissions is not subject to the umask. This causes files in a repository to be world-writable in some situations.\n\n### Details\n\nGit repositories track executable bits for regular files. In tree objects and the index, regular file modes are stored as 0644 if not executable, or 0755 if executable. But this is independent of how the permissions are set in the filesystem (where supported).\n\n[`gix_worktree_state::checkout`](https://github.com/GitoxideLabs/gitoxide/blob/8d84818240d44e1f5fe78a231b5d9bffd0283918/gix-worktree-state/src/checkout/function.rs#L8-L35) has two strategies for checking out a file and marking it executable on a Unix-like operating system, one of which is vulnerable:\n\n- If the file is created by assuming it does not already exist, correct permissions are applied, because permissions specified when opening a file are subject to the umask.\n- If the file is considered possibly already to exist—even in a clean checkout if the application does not specify the option to treat the destination directory as empty—then permissions conferring unrestricted access to any user account on the system are wrongly applied, because permissions specified when calling chmod on an existing file are not subject to the umask. \n\nSpecifically, [`checkout::entry::checkout`](https://github.com/GitoxideLabs/gitoxide/blob/8d84818240d44e1f5fe78a231b5d9bffd0283918/gix-worktree-state/src/checkout/entry.rs#L56-L191) chooses the strategy for each file. The same strategy is usually chosen for each executable file, if no [process](https://github.com/git/git/blob/a60673e9252b08d4eca90543b3729f4798b9aafd/Documentation/RelNotes/2.11.0.txt#L149-L154) (i.e. [long running](https://github.com/GitoxideLabs/gitoxide/discussions/996)) smudge filter is in use. The strategy depends on the [`checkout::Options::destination_is_initially_empty`](https://github.com/GitoxideLabs/gitoxide/blob/8d84818240d44e1f5fe78a231b5d9bffd0283918/gix-worktree-state/src/checkout/mod.rs#L50-L53) value, which is passed along to [`checkout::entry::open_file`](https://github.com/GitoxideLabs/gitoxide/blob/8d84818240d44e1f5fe78a231b5d9bffd0283918/gix-worktree-state/src/checkout/entry.rs#L253-L277), whose return value includes a flag indicating whether permissions still need to be set:\n\n- With `destination_is_initially_empty: true`, executable permissions are specified when opening the file, via [`OpenOptionsEx::mode`](https://doc.rust-lang.org/std/os/unix/fs/trait.OpenOptionsExt.html#tymethod.mode), by its effect on the behavior of [`OpenOptions::open`](https://doc.rust-lang.org/std/fs/struct.OpenOptions.html#method.open). A mode of 0777 is safe here, for the same reason the default mode of 0666 is safe. When creating a file, the applied mode is the specified mode with any bits unset from it that are set in the umask.\n\n   <https://github.com/GitoxideLabs/gitoxide/blob/8d84818240d44e1f5fe78a231b5d9bffd0283918/gix-worktree-state/src/checkout/entry.rs#L265-L268>\n\n  The `set_executable_after_creation` flag in the `open_file` return value is then `false`.\n\n- With `destination_is_initially_empty: false`, executable permissions are set in a separate step, via [`PermissionsExt::set_mode`](https://doc.rust-lang.org/beta/std/os/unix/fs/trait.PermissionsExt.html#tymethod.set_mode) and [`set_permissions`](https://doc.rust-lang.org/beta/std/fs/fn.set_permissions.html). A mode of 0777 is not safe here, because the umask is not applied. The vulnerable code appears in [`checkout::entry::finalize_entry`](https://github.com/GitoxideLabs/gitoxide/blob/8d84818240d44e1f5fe78a231b5d9bffd0283918/gix-worktree-state/src/checkout/entry.rs#L279-L299), which receives the `set_executable_after_creation` flag originally from `open_file`:\n\n  <https://github.com/GitoxideLabs/gitoxide/blob/8d84818240d44e1f5fe78a231b5d9bffd0283918/gix-worktree-state/src/checkout/entry.rs#L288-L293>\n\n  The file has unrestricted permissions.\n\n`finalize_entry` is [likewise called](https://github.com/GitoxideLabs/gitoxide/blob/8d84818240d44e1f5fe78a231b5d9bffd0283918/gix-worktree-state/src/checkout/chunk.rs#L229-L236) from [`checkout::chunk::process_delayed_filter_results`](https://github.com/GitoxideLabs/gitoxide/blob/8d84818240d44e1f5fe78a231b5d9bffd0283918/gix-worktree-state/src/checkout/chunk.rs#L157-L259).\n\n### PoC\n\n1. On a Unix-like system such as GNU/Linux or macOS, create a new project and define its dependencies. While the vulnerability is in `gix-worktree-state`, this example will use vulnerable code through the `gix` crate, which exposes it. Run:\n\n   ```sh\n   cargo new checkout-index\n   cd checkout-index\n   cargo add gix gix-object\n   ```\n\n2. In the `checkout-index` directory, edit `src/main.rs` so that its entire contents are:\n\n   ```rust\n   fn main() -> Result<(), Box<dyn std::error::Error>> {\n       let repo = gix::discover(\"has-executable\")?;\n       let mut index = repo.open_index()?;\n       gix::worktree::state::checkout(\n           &mut index,\n           repo.work_dir().ok_or(\"need non-bare repo\")?,\n           gix_object::find::Never, // Can also use: repo.objects.clone()\n           &gix::progress::Discard,\n           &gix::progress::Discard,\n           &Default::default(),\n           Default::default(),\n       )?;\n       Ok(())\n   }\n   ```\n\n3. Create the test repository that the vulnerable program will operate on. Still in the `checkout-index` directory, run:\n\n   ```sh\n   git init has-executable\n   touch has-executable/a has-executable/b\n   chmod +x has-executable/b\n   git -C has-executable add .\n   ```\n\n   It is not necessary to commit the changes, only to stage them, since the test program will check  out the index.\n\n4. *Optionally*, run `rm has-executable/[ab]` to remove the staged files from disk.\n\n5. Run the program by issuing `cargo run`. The program uses `gix-worktree-state` to check out the index. It should terminate successfully and not issue any errors.\n\n6. Run `ls -l has-executable` to inspect the permissions of the checked out files. Observe that owner, group, and other all have read, write, and execute permissions on `b`.\n\n   ```text\n   -rw-r--r-- 1 ek ek 0 Jan  9 03:38 a\n   -rwxrwxrwx 1 ek ek 0 Jan  9 03:38 b\n   ```\n\n   With affected versions of `gix-worktree-state`, the output shows `-rwxrwxrwx` for `b`, whether the files were removed in step 4 or not.\n\n7. It was not necessary to set `destination_is_initially_empty` to `false` explicitly to trigger the bug, because that is its default value. If desired, modify the program to pass `true` and rerun the experiment to verify that `b` is no longer created with excessive permissions. The modified program would change the last `checkout` argument from `Default::default(),` to:\n\n   ```rust\n           gix::worktree::state::checkout::Options {\n               destination_is_initially_empty: true,\n               ..Default::default()\n           },\n   ```\n\n### Impact\n\nSetting unlimited file permissions is a problem on systems where a user account exists on the system that should not have the ability to access and modify the files. That applies to multi-user systems, or when an account is used to run software with reduced abilities. (Some programs may also treat broad write permissions to mean less validation is required.)\n\nThis bug affects Unix-like systems but not Windows. The `gix clone` command is not believed to be affected, due to [`checkout_exclusive`](https://github.com/GitoxideLabs/gitoxide/blob/af704f57bb9480c47cdd393465264d586f1d4562/gitoxide-core/src/index/checkout.rs#L14-L172)'s [use](https://github.com/GitoxideLabs/gitoxide/blob/af704f57bb9480c47cdd393465264d586f1d4562/gitoxide-core/src/index/checkout.rs#L61) of `destination_is_initially_empty: true`. Specialized uses in which repositories are known never to have any files marked executable are unaffected. Repositories that no untrusted users can access, due to not having the ability to traverse the directories to them or due to sufficiently restrictive ACLs, are likewise unaffected.\n\nThe default value of `destination_is_initially_empty` is `false`, so some applications may be affected even if they don't attempt checkouts in nonempty directories. The 0777 permissions are applied to files that are created earlier in the same checkout, as well as those that already existed, regardless of their prior permissions. On preexisting files, 0777 is set *even if [`overwrite_existing`](https://github.com/GitoxideLabs/gitoxide/blob/8d84818240d44e1f5fe78a231b5d9bffd0283918/gix-worktree-state/src/checkout/mod.rs#L54-L58) is `false`*, as that prevents the checkout from changing file contents but not permissions.\n\nFiles not tracked/staged as executable are not checked out with insecure permissions. Such a file that previously existed keeps its old permissions. However, this may include executable permissions that no longer match repository metadata, as well as undesired write permissions acquired from a previous vulnerable checkout. `set_mode(0o777)` clears other bits, so the bug is not exacerbated by the presence of setuid/setgid bits. In some applications, the vulnerable strategy may be used only for files rewritten by a [long running](https://git-scm.com/docs/gitattributes/2.40.0#_long_running_filter_process) smudge filter or only in the presence of [delays](https://git-scm.com/docs/gitattributes/2.40.0#_delay).",
+          "date": "2025-01-18",
+          "aliases": [
+            "CVE-2025-22620",
+            "GHSA-fqmf-w4xh-33rh"
+          ],
+          "related": [],
+          "collection": "crates",
+          "categories": [],
+          "keywords": [
+            "permissions"
+          ],
+          "cvss": "CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:U/C:N/I:H/A:N",
+          "informational": null,
+          "references": [
+            "https://github.com/advisories/GHSA-fqmf-w4xh-33rh",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-22620"
+          ],
+          "source": null,
+          "url": "https://github.com/GitoxideLabs/gitoxide/security/advisories/GHSA-fqmf-w4xh-33rh",
+          "withdrawn": null,
+          "license": "CC0-1.0"
+        },
+        "versions": {
+          "patched": [
+            ">=0.17.0"
+          ],
+          "unaffected": []
+        },
+        "affected": {
+          "arch": [],
+          "os": [],
+          "functions": {
+            "gix_worktree_state::checkout": [
+              "<0.17.0"
+            ]
+          }
+        },
+        "package": {
+          "name": "gix-worktree-state",
+          "version": "0.11.1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "39ed6205b5f51067a485b11843babcf3304c0799e265a06eb0dde7f69cd85cd8",
+          "dependencies": [
+            {
+              "name": "bstr",
+              "version": "1.12.0",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "gix-features",
+              "version": "0.38.2",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "gix-filter",
+              "version": "0.11.3",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "gix-fs",
+              "version": "0.11.3",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "gix-glob",
+              "version": "0.16.5",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "gix-hash",
+              "version": "0.14.2",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "gix-index",
+              "version": "0.33.1",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "gix-object",
+              "version": "0.42.3",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "gix-path",
+              "version": "0.10.18",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "gix-worktree",
+              "version": "0.34.1",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "io-close",
+              "version": "0.3.7",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "thiserror",
+              "version": "1.0.69",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            }
+          ],
+          "replace": null
+        }
+      }
+    ]
+  },
+  "warnings": {}
+}
