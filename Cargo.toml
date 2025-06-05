@@ -10,7 +10,7 @@ keywords = ["iac", "infrastructure", "docker", "terraform", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 
 [[bin]]
-name = "iac-gen"
+name = "sync-ctl"
 path = "src/main.rs"
 
 [dependencies]

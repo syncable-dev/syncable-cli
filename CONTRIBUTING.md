@@ -159,7 +159,7 @@ use assert_cmd::Command;
 
 #[test]
 fn test_cli_analyze() {
-    let mut cmd = Command::cargo_bin("iac-gen").unwrap();
+    let mut cmd = Command::cargo_bin("sync-ctl").unwrap();
     cmd.arg("analyze")
         .arg("tests/fixtures/sample_project")
         .assert()

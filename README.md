@@ -44,7 +44,7 @@ cd syncable-cli
 cargo install --path .
 
 # Verify installation
-iac-gen --version
+sync-ctl --version
 ```
 
 ### Pre-built Binaries
@@ -57,23 +57,23 @@ Coming soon! Check the [releases page](https://github.com/yourusername/syncable-
 
 ```bash
 # Analyze current directory
-iac-gen analyze
+sync-ctl analyze
 
 # Analyze specific project
-iac-gen analyze /path/to/your/project
+sync-ctl analyze /path/to/your/project
 
 # Get JSON output
-iac-gen analyze --json > analysis.json
+sync-ctl analyze --json > analysis.json
 ```
 
 ### Check for Vulnerabilities
 
 ```bash
 # Run vulnerability scan
-iac-gen vuln-check /path/to/project
+sync-ctl vuln-check /path/to/project
 
 # Check only high severity and above
-iac-gen vuln-check --severity high
+sync-ctl vuln-check --severity high
 ```
 
 ## 📖 Usage Examples
@@ -81,7 +81,7 @@ iac-gen vuln-check --severity high
 ### Example: Node.js Express Application
 
 ```bash
-$ iac-gen analyze ./my-express-app
+$ sync-ctl analyze ./my-express-app
 
 🔍 Analyzing project at: ./my-express-app
 ============================================================
@@ -113,7 +113,7 @@ $ iac-gen analyze ./my-express-app
 ### Example: Python FastAPI Service
 
 ```bash
-$ iac-gen analyze ./fastapi-service --json
+$ sync-ctl analyze ./fastapi-service --json
 ```
 
 ```json

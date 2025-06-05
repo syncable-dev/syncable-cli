@@ -70,7 +70,25 @@ fn detect_js_technologies(language: &DetectedLanguage) -> Vec<DetectedTechnology
         .cloned()
         .collect();
     
-    detect_technologies_by_dependencies(&rules, &all_deps, language.confidence)
+    let mut technologies = detect_technologies_by_dependencies(&rules, &all_deps, language.confidence);
+    
+    // Enhanced detection: analyze actual source files for usage patterns
+    if let Some(enhanced_techs) = detect_technologies_from_source_files(language, &rules) {
+        // Merge with dependency-based detection, preferring higher confidence scores
+        for enhanced_tech in enhanced_techs {
+            if let Some(existing) = technologies.iter_mut().find(|t| t.name == enhanced_tech.name) {
+                // Use higher confidence between dependency and source file analysis
+                if enhanced_tech.confidence > existing.confidence {
+                    existing.confidence = enhanced_tech.confidence;
+                }
+            } else {
+                // Add new technology found in source files
+                technologies.push(enhanced_tech);
+            }
+        }
+    }
+    
+    technologies
 }
 
 /// Detect Python technologies with proper classification
@@ -231,6 +249,227 @@ fn matches_pattern(dependency: &str, pattern: &str) -> bool {
         }
     } else {
         dependency == pattern || dependency.contains(pattern)
+    }
+}
+
+/// Enhanced detection that analyzes actual source files for technology usage patterns
+fn detect_technologies_from_source_files(language: &DetectedLanguage, rules: &[TechnologyRule]) -> Option<Vec<DetectedTechnology>> {
+    use std::fs;
+    
+    let mut detected = Vec::new();
+    
+    // Analyze files for usage patterns
+    for file_path in &language.files {
+        if let Ok(content) = fs::read_to_string(file_path) {
+            // Analyze Drizzle ORM usage patterns
+            if let Some(drizzle_confidence) = analyze_drizzle_usage(&content, file_path) {
+                detected.push(DetectedTechnology {
+                    name: "Drizzle ORM".to_string(),
+                    version: None,
+                    category: TechnologyCategory::Database,
+                    confidence: drizzle_confidence,
+                    requires: vec![],
+                    conflicts_with: vec![],
+                    is_primary: false,
+                });
+            }
+            
+            // Analyze Prisma usage patterns
+            if let Some(prisma_confidence) = analyze_prisma_usage(&content, file_path) {
+                detected.push(DetectedTechnology {
+                    name: "Prisma".to_string(),
+                    version: None,
+                    category: TechnologyCategory::Database,
+                    confidence: prisma_confidence,
+                    requires: vec![],
+                    conflicts_with: vec![],
+                    is_primary: false,
+                });
+            }
+            
+            // Analyze Encore usage patterns
+            if let Some(encore_confidence) = analyze_encore_usage(&content, file_path) {
+                detected.push(DetectedTechnology {
+                    name: "Encore".to_string(),
+                    version: None,
+                    category: TechnologyCategory::BackendFramework,
+                    confidence: encore_confidence,
+                    requires: vec![],
+                    conflicts_with: vec![],
+                    is_primary: true,
+                });
+            }
+        }
+    }
+    
+    if detected.is_empty() {
+        None
+    } else {
+        Some(detected)
+    }
+}
+
+/// Analyzes Drizzle ORM usage patterns in source files
+fn analyze_drizzle_usage(content: &str, file_path: &std::path::Path) -> Option<f32> {
+    let file_name = file_path.file_name()?.to_string_lossy();
+    let mut confidence: f32 = 0.0;
+    
+    // High confidence indicators
+    if content.contains("drizzle-orm") {
+        confidence += 0.3;
+    }
+    
+    // Schema file patterns (very high confidence)
+    if file_name.contains("schema") || file_name.contains("db.ts") || file_name.contains("database") {
+        if content.contains("pgTable") || content.contains("mysqlTable") || content.contains("sqliteTable") {
+            confidence += 0.4;
+        }
+        if content.contains("pgEnum") || content.contains("relations") {
+            confidence += 0.3;
+        }
+    }
+    
+    // Drizzle-specific imports
+    if content.contains("from 'drizzle-orm/pg-core'") || 
+       content.contains("from 'drizzle-orm/mysql-core'") ||
+       content.contains("from 'drizzle-orm/sqlite-core'") {
+        confidence += 0.3;
+    }
+    
+    // Drizzle query patterns
+    if content.contains("db.select()") || content.contains("db.insert()") || 
+       content.contains("db.update()") || content.contains("db.delete()") {
+        confidence += 0.2;
+    }
+    
+    // Configuration patterns
+    if content.contains("drizzle(") && (content.contains("connectionString") || content.contains("postgres(")) {
+        confidence += 0.2;
+    }
+    
+    // Migration patterns
+    if content.contains("drizzle.config") || file_name.contains("migrate") {
+        confidence += 0.2;
+    }
+    
+    // Prepared statements
+    if content.contains(".prepare()") && content.contains("drizzle") {
+        confidence += 0.1;
+    }
+    
+    if confidence > 0.0 {
+        Some(confidence.min(1.0_f32))
+    } else {
+        None
+    }
+}
+
+/// Analyzes Prisma usage patterns in source files
+fn analyze_prisma_usage(content: &str, file_path: &std::path::Path) -> Option<f32> {
+    let file_name = file_path.file_name()?.to_string_lossy();
+    let mut confidence: f32 = 0.0;
+    let mut has_prisma_import = false;
+    
+    // Only detect Prisma if there are actual Prisma-specific imports
+    if content.contains("@prisma/client") || content.contains("from '@prisma/client'") {
+        confidence += 0.4;
+        has_prisma_import = true;
+    }
+    
+    // Prisma schema files (very specific)
+    if file_name == "schema.prisma" {
+        if content.contains("model ") || content.contains("generator ") || content.contains("datasource ") {
+            confidence += 0.6;
+            has_prisma_import = true;
+        }
+    }
+    
+    // Only check for client usage if we have confirmed Prisma imports
+    if has_prisma_import {
+        // Prisma client instantiation (very specific)
+        if content.contains("new PrismaClient") || content.contains("PrismaClient()") {
+            confidence += 0.3;
+        }
+        
+        // Prisma-specific query patterns (only if we know it's Prisma)
+        if content.contains("prisma.") && (
+            content.contains(".findUnique(") || 
+            content.contains(".findFirst(") || 
+            content.contains(".upsert(") ||
+            content.contains(".$connect()") ||
+            content.contains(".$disconnect()")
+        ) {
+            confidence += 0.2;
+        }
+    }
+    
+    // Only return confidence if we have actual Prisma indicators
+    if confidence > 0.0 && has_prisma_import {
+        Some(confidence.min(1.0_f32))
+    } else {
+        None
+    }
+}
+
+/// Analyzes Encore usage patterns in source files
+fn analyze_encore_usage(content: &str, file_path: &std::path::Path) -> Option<f32> {
+    let file_name = file_path.file_name()?.to_string_lossy();
+    let mut confidence: f32 = 0.0;
+    
+    // Skip generated files (like Encore client code)
+    if content.contains("// Code generated by the Encore") || content.contains("DO NOT EDIT") {
+        return None;
+    }
+    
+    // Skip client-only files (generated or consumption only)
+    if file_name.contains("client.ts") || file_name.contains("client.js") {
+        return None;
+    }
+    
+    // Only detect Encore when there are actual service development patterns
+    let mut has_service_patterns = false;
+    
+    // Service definition files (high confidence for actual Encore development)
+    if file_name.contains("encore.service") || file_name.contains("service.ts") {
+        confidence += 0.4;
+        has_service_patterns = true;
+    }
+    
+    // API endpoint definitions (indicates actual Encore service development)
+    if content.contains("encore.dev/api") && (content.contains("export") || content.contains("api.")) {
+        confidence += 0.4;
+        has_service_patterns = true;
+    }
+    
+    // Database service patterns (actual Encore service code)
+    if content.contains("SQLDatabase") && content.contains("encore.dev") {
+        confidence += 0.3;
+        has_service_patterns = true;
+    }
+    
+    // Secret configuration (actual Encore service code)
+    if content.contains("secret(") && content.contains("encore.dev/config") {
+        confidence += 0.3;
+        has_service_patterns = true;
+    }
+    
+    // PubSub service patterns (actual Encore service code)
+    if content.contains("Topic") && content.contains("encore.dev/pubsub") {
+        confidence += 0.3;
+        has_service_patterns = true;
+    }
+    
+    // Cron job patterns (actual Encore service code)
+    if content.contains("cron") && content.contains("encore.dev") {
+        confidence += 0.2;
+        has_service_patterns = true;
+    }
+    
+    // Only return confidence if we have actual service development patterns
+    if confidence > 0.0 && has_service_patterns {
+        Some(confidence.min(1.0_f32))
+    } else {
+        None
     }
 }
 
@@ -460,7 +699,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
         },
         
-        // DATABASE/ORM (Keep only major ones that affect Docker/infrastructure setup)
+        // DATABASE/ORM (Important for Docker/infrastructure setup, migrations, etc.)
         TechnologyRule {
             name: "Prisma".to_string(),
             category: TechnologyCategory::Database,
@@ -470,6 +709,16 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+        },
+        TechnologyRule {
+            name: "Drizzle ORM".to_string(),
+            category: TechnologyCategory::Database,
+            confidence: 0.90,
+            dependency_patterns: vec!["drizzle-orm".to_string(), "drizzle-kit".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec!["drizzle".to_string()],
         },
         
         // RUNTIMES (Important for IaC - determines base images, package managers)

@@ -646,7 +646,7 @@ use predicates::prelude::*;
 
 #[test]
 fn test_analyze_node_project() {
-    let mut cmd = Command::cargo_bin("iac-generator").unwrap();
+    let mut cmd = Command::cargo_bin("sync-ctl").unwrap();
     cmd.arg("analyze")
         .arg("tests/fixtures/node_express_app")
         .assert()
@@ -789,7 +789,7 @@ Include output values
 rustCopyuse clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "iac-gen")]
+#[command(name = "sync-ctl")]
 #[command(about = "Generate Infrastructure as Code from your codebase")]
 struct Cli {
     #[command(subcommand)]

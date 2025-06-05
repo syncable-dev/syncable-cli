@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 use crate::analyzer::{AnalysisConfig, DetectedTechnology, DetectedLanguage, EntryPoint, EnvVar, Port, Protocol, ProjectType, BuildScript, TechnologyCategory, LibraryType};
 use crate::error::{Result, AnalysisError};
 use crate::common::file_utils::{read_file_safe, is_readable_file};
@@ -67,9 +68,18 @@ pub fn analyze_context(
         analyze_technology_specifics(technology, project_root, &mut entry_points, &mut ports)?;
     }
     
+    // Detect microservices structure
+    let microservices = detect_microservices_structure(project_root)?;
+    
     // Determine project type
     let ports_vec: Vec<Port> = ports.iter().cloned().collect();
-    let project_type = determine_project_type(languages, technologies, &entry_points, &ports_vec);
+    let project_type = determine_project_type_with_structure(
+        languages, 
+        technologies, 
+        &entry_points, 
+        &ports_vec, 
+        &microservices
+    );
     
     // Convert collections to vectors
     let ports: Vec<Port> = ports.into_iter().collect();
@@ -89,6 +99,88 @@ pub fn analyze_context(
         project_type,
         build_scripts,
     })
+}
+
+/// Represents a detected microservice within the project
+#[derive(Debug)]
+struct MicroserviceInfo {
+    name: String,
+    has_db: bool,
+    has_api: bool,
+}
+
+/// Detects microservice structure based on directory patterns
+fn detect_microservices_structure(project_root: &Path) -> Result<Vec<MicroserviceInfo>> {
+    let mut microservices = Vec::new();
+    
+    // Common patterns for microservice directories
+    let service_indicators = ["api", "service", "encore.service.ts", "main.ts", "main.go", "main.py"];
+    let db_indicators = ["db", "database", "migrations", "schema", "models"];
+    
+    // Check root-level directories
+    if let Ok(entries) = std::fs::read_dir(project_root) {
+        for entry in entries.flatten() {
+            if entry.file_type()?.is_dir() {
+                let dir_name = entry.file_name().to_string_lossy().to_string();
+                let dir_path = entry.path();
+                
+                // Skip common non-service directories
+                if dir_name.starts_with('.') || 
+                   ["node_modules", "target", "dist", "build", "__pycache__", "vendor"].contains(&dir_name.as_str()) {
+                    continue;
+                }
+                
+                // Check if this directory looks like a service
+                let mut has_api = false;
+                let mut has_db = false;
+                
+                if let Ok(sub_entries) = std::fs::read_dir(&dir_path) {
+                    for sub_entry in sub_entries.flatten() {
+                        let sub_name = sub_entry.file_name().to_string_lossy().to_string();
+                        
+                        // Check for API indicators
+                        if service_indicators.iter().any(|&ind| sub_name.contains(ind)) {
+                            has_api = true;
+                        }
+                        
+                        // Check for DB indicators
+                        if db_indicators.iter().any(|&ind| sub_name.contains(ind)) {
+                            has_db = true;
+                        }
+                    }
+                }
+                
+                // If it has service characteristics, add it as a microservice
+                if has_api || has_db {
+                    microservices.push(MicroserviceInfo {
+                        name: dir_name,
+                        has_db,
+                        has_api,
+                    });
+                }
+            }
+        }
+    }
+    
+    Ok(microservices)
+}
+
+/// Enhanced project type determination including microservice structure analysis
+fn determine_project_type_with_structure(
+    languages: &[DetectedLanguage],
+    technologies: &[DetectedTechnology],
+    entry_points: &[EntryPoint],
+    ports: &[Port],
+    microservices: &[MicroserviceInfo],
+) -> ProjectType {
+    // If we have multiple services with databases, it's likely a microservice architecture
+    let services_with_db = microservices.iter().filter(|s| s.has_db).count();
+    if services_with_db >= 2 || microservices.len() >= 3 {
+        return ProjectType::Microservice;
+    }
+    
+    // Fall back to original determination logic
+    determine_project_type(languages, technologies, entry_points, ports)
 }
 
 /// Analyzes Node.js/JavaScript/TypeScript projects
@@ -208,9 +300,32 @@ fn scan_js_file_for_context(
         }
     }
     
+    // Look for Encore.dev imports and patterns
+    if content.contains("encore.dev") {
+        // Encore uses specific patterns for config and database
+        let encore_patterns = [
+            (r#"secret\s*\(\s*['"]([A-Z_][A-Z0-9_]*)['"]"#, "Encore secret configuration"),
+            (r#"SQLDatabase\s*\(\s*['"](\w+)['"]"#, "Encore database"),
+        ];
+        
+        for (pattern, description) in &encore_patterns {
+            let regex = Regex::new(pattern).unwrap_or_else(|_| Regex::new(r"").unwrap());
+            for cap in regex.captures_iter(&content) {
+                if let Some(match_str) = cap.get(1) {
+                    let name = match_str.as_str();
+                    if pattern.contains("secret") {
+                        env_vars.entry(name.to_string())
+                            .or_insert((None, true, Some(description.to_string())));
+                    }
+                }
+            }
+        }
+    }
+    
     // Check if this is a main entry point
     if content.contains("createServer") || content.contains(".listen(") || 
-       content.contains("app.listen") || content.contains("server.listen") {
+       content.contains("app.listen") || content.contains("server.listen") ||
+       content.contains("encore.dev") && content.contains("api.") {
         entry_points.push(EntryPoint {
             file: path.to_path_buf(),
             function: Some("main".to_string()),
@@ -802,7 +917,12 @@ fn analyze_docker_compose(
     let value: serde_yaml::Value = serde_yaml::from_str(&content).map_err(|e| AnalysisError::InvalidStructure(format!("Invalid YAML: {}", e)))?;
     
     if let Some(services) = value.get("services").and_then(|s| s.as_mapping()) {
-        for (_name, service) in services {
+        for (service_name, service) in services {
+            let service_name_str = service_name.as_str().unwrap_or("unknown");
+            
+            // Determine service type based on image, name, and other indicators
+            let service_type = determine_service_type(service_name_str, service);
+            
             // Extract ports
             if let Some(service_ports) = service.get("ports").and_then(|p| p.as_sequence()) {
                 for port_entry in service_ports {
@@ -810,34 +930,52 @@ fn analyze_docker_compose(
                         // Parse port mappings like "8080:80" or just "80"
                         let parts: Vec<&str> = port_str.split(':').collect();
                         
-                        let (external_port, internal_port) = if parts.len() >= 2 {
-                            // Format: "external:internal" - use external port for IaC
-                            (parts[0].trim(), parts[1].trim())
+                        let (external_port, internal_port, protocol_suffix) = if parts.len() >= 2 {
+                            // Format: "external:internal" or "external:internal/protocol"
+                            let external = parts[0].trim();
+                            let internal_parts: Vec<&str> = parts[1].split('/').collect();
+                            let internal = internal_parts[0].trim();
+                            let protocol = internal_parts.get(1).map(|p| p.trim());
+                            (external, internal, protocol)
                         } else {
-                            // Format: just "port" - same for both
-                            let port = parts[0].trim();
-                            (port, port)
+                            // Format: just "port" or "port/protocol"
+                            let port_parts: Vec<&str> = parts[0].split('/').collect();
+                            let port = port_parts[0].trim();
+                            let protocol = port_parts.get(1).map(|p| p.trim());
+                            (port, port, protocol)
                         };
                         
-                        // For IaC purposes, we primarily care about external ports (what's exposed to infrastructure)
+                        // Determine protocol
+                        let protocol = match protocol_suffix {
+                            Some("udp") => Protocol::Udp,
+                            _ => Protocol::Tcp,
+                        };
+                        
+                        // Create descriptive port entry
                         if let Ok(port) = external_port.parse::<u16>() {
+                            let description = create_port_description(&service_type, service_name_str, external_port, internal_port);
+                            
                             ports.insert(Port {
                                 number: port,
-                                protocol: Protocol::Tcp,
-                                description: Some(format!("Docker Compose service (external port, internal: {})", internal_port)),
+                                protocol,
+                                description: Some(description),
                             });
                         }
                     }
                 }
             }
             
-            // Extract environment variables
+            // Extract environment variables with context
             if let Some(env) = service.get("environment") {
+                let env_context = format!(" ({})", service_type.as_str());
+                
                 if let Some(env_map) = env.as_mapping() {
                     for (key, value) in env_map {
                         if let Some(key_str) = key.as_str() {
                             let val_str = value.as_str().map(|s| s.to_string());
-                            env_vars.entry(key_str.to_string()).or_insert((val_str, false, None));
+                            let description = get_env_var_description(key_str, &service_type);
+                            env_vars.entry(key_str.to_string())
+                                .or_insert((val_str, false, description.or_else(|| Some(env_context.clone()))));
                         }
                     }
                 } else if let Some(env_list) = env.as_sequence() {
@@ -846,7 +984,9 @@ fn analyze_docker_compose(
                             if let Some(eq_pos) = env_str.find('=') {
                                 let (key, value) = env_str.split_at(eq_pos);
                                 let value = &value[1..]; // Skip the '='
-                                env_vars.entry(key.to_string()).or_insert((Some(value.to_string()), false, None));
+                                let description = get_env_var_description(key, &service_type);
+                                env_vars.entry(key.to_string())
+                                    .or_insert((Some(value.to_string()), false, description.or_else(|| Some(env_context.clone()))));
                             }
                         }
                     }
@@ -856,6 +996,150 @@ fn analyze_docker_compose(
     }
     
     Ok(())
+}
+
+/// Service types found in Docker Compose
+#[derive(Debug, Clone)]
+enum ServiceType {
+    PostgreSQL,
+    MySQL,
+    MongoDB,
+    Redis,
+    RabbitMQ,
+    Kafka,
+    Elasticsearch,
+    Application,
+    Nginx,
+    Unknown,
+}
+
+impl ServiceType {
+    fn as_str(&self) -> &'static str {
+        match self {
+            ServiceType::PostgreSQL => "PostgreSQL database",
+            ServiceType::MySQL => "MySQL database",
+            ServiceType::MongoDB => "MongoDB database",
+            ServiceType::Redis => "Redis cache",
+            ServiceType::RabbitMQ => "RabbitMQ message broker",
+            ServiceType::Kafka => "Kafka message broker",
+            ServiceType::Elasticsearch => "Elasticsearch search engine",
+            ServiceType::Application => "Application service",
+            ServiceType::Nginx => "Nginx web server",
+            ServiceType::Unknown => "Service",
+        }
+    }
+}
+
+/// Determines the type of service based on various indicators
+fn determine_service_type(name: &str, service: &serde_yaml::Value) -> ServiceType {
+    let name_lower = name.to_lowercase();
+    
+    // Check service name
+    if name_lower.contains("postgres") || name_lower.contains("pg") || name_lower.contains("psql") {
+        return ServiceType::PostgreSQL;
+    } else if name_lower.contains("mysql") || name_lower.contains("mariadb") {
+        return ServiceType::MySQL;
+    } else if name_lower.contains("mongo") {
+        return ServiceType::MongoDB;
+    } else if name_lower.contains("redis") {
+        return ServiceType::Redis;
+    } else if name_lower.contains("rabbit") || name_lower.contains("amqp") {
+        return ServiceType::RabbitMQ;
+    } else if name_lower.contains("kafka") {
+        return ServiceType::Kafka;
+    } else if name_lower.contains("elastic") || name_lower.contains("es") {
+        return ServiceType::Elasticsearch;
+    } else if name_lower.contains("nginx") || name_lower.contains("proxy") {
+        return ServiceType::Nginx;
+    }
+    
+    // Check image name
+    if let Some(image) = service.get("image").and_then(|i| i.as_str()) {
+        let image_lower = image.to_lowercase();
+        if image_lower.contains("postgres") {
+            return ServiceType::PostgreSQL;
+        } else if image_lower.contains("mysql") || image_lower.contains("mariadb") {
+            return ServiceType::MySQL;
+        } else if image_lower.contains("mongo") {
+            return ServiceType::MongoDB;
+        } else if image_lower.contains("redis") {
+            return ServiceType::Redis;
+        } else if image_lower.contains("rabbitmq") {
+            return ServiceType::RabbitMQ;
+        } else if image_lower.contains("kafka") {
+            return ServiceType::Kafka;
+        } else if image_lower.contains("elastic") {
+            return ServiceType::Elasticsearch;
+        } else if image_lower.contains("nginx") {
+            return ServiceType::Nginx;
+        }
+    }
+    
+    // Check environment variables for clues
+    if let Some(env) = service.get("environment") {
+        if let Some(env_map) = env.as_mapping() {
+            for (key, _) in env_map {
+                if let Some(key_str) = key.as_str() {
+                    if key_str.contains("POSTGRES") || key_str.contains("PGPASSWORD") {
+                        return ServiceType::PostgreSQL;
+                    } else if key_str.contains("MYSQL") {
+                        return ServiceType::MySQL;
+                    } else if key_str.contains("MONGO") {
+                        return ServiceType::MongoDB;
+                    }
+                }
+            }
+        }
+    }
+    
+    // Check if it has a build context (likely application)
+    if service.get("build").is_some() {
+        return ServiceType::Application;
+    }
+    
+    ServiceType::Unknown
+}
+
+/// Creates a descriptive port description based on service type
+fn create_port_description(service_type: &ServiceType, service_name: &str, external: &str, internal: &str) -> String {
+    let base_desc = match service_type {
+        ServiceType::PostgreSQL => format!("PostgreSQL database ({})", service_name),
+        ServiceType::MySQL => format!("MySQL database ({})", service_name),
+        ServiceType::MongoDB => format!("MongoDB database ({})", service_name),
+        ServiceType::Redis => format!("Redis cache ({})", service_name),
+        ServiceType::RabbitMQ => format!("RabbitMQ message broker ({})", service_name),
+        ServiceType::Kafka => format!("Kafka message broker ({})", service_name),
+        ServiceType::Elasticsearch => format!("Elasticsearch ({})", service_name),
+        ServiceType::Nginx => format!("Nginx proxy ({})", service_name),
+        ServiceType::Application => format!("Application service ({})", service_name),
+        ServiceType::Unknown => format!("Docker service ({})", service_name),
+    };
+    
+    if external != internal {
+        format!("{} - external:{}, internal:{}", base_desc, external, internal)
+    } else {
+        format!("{} - port {}", base_desc, external)
+    }
+}
+
+/// Gets a descriptive context for environment variables based on service type
+fn get_env_var_description(var_name: &str, service_type: &ServiceType) -> Option<String> {
+    match var_name {
+        "POSTGRES_PASSWORD" | "POSTGRES_USER" | "POSTGRES_DB" => 
+            Some("PostgreSQL configuration".to_string()),
+        "MYSQL_ROOT_PASSWORD" | "MYSQL_PASSWORD" | "MYSQL_USER" | "MYSQL_DATABASE" => 
+            Some("MySQL configuration".to_string()),
+        "MONGO_INITDB_ROOT_USERNAME" | "MONGO_INITDB_ROOT_PASSWORD" => 
+            Some("MongoDB configuration".to_string()),
+        "REDIS_PASSWORD" => Some("Redis configuration".to_string()),
+        "RABBITMQ_DEFAULT_USER" | "RABBITMQ_DEFAULT_PASS" => 
+            Some("RabbitMQ configuration".to_string()),
+        "DATABASE_URL" | "DB_CONNECTION_STRING" => 
+            Some("Database connection string".to_string()),
+        "GOOGLE_APPLICATION_CREDENTIALS" => 
+            Some("Google Cloud service account credentials".to_string()),
+        _ => None,
+    }
 }
 
 /// Analyzes .env files
@@ -1118,6 +1402,28 @@ fn determine_project_type(
     entry_points: &[EntryPoint],
     ports: &[Port],
 ) -> ProjectType {
+    // Check for microservice architecture indicators
+    let has_database_ports = ports.iter().any(|p| {
+        if let Some(desc) = &p.description {
+            let desc_lower = desc.to_lowercase();
+            desc_lower.contains("postgres") || desc_lower.contains("mysql") || 
+            desc_lower.contains("mongodb") || desc_lower.contains("database")
+        } else {
+            false
+        }
+    });
+    
+    let has_multiple_services = ports.iter()
+        .filter_map(|p| p.description.as_ref())
+        .filter(|desc| {
+            let desc_lower = desc.to_lowercase();
+            desc_lower.contains("service") || desc_lower.contains("application")
+        })
+        .count() > 1;
+    
+    let has_orchestration_framework = technologies.iter()
+        .any(|t| t.name == "Encore" || t.name == "Dapr" || t.name == "Temporal");
+    
     // Check for web frameworks
     let web_frameworks = ["Express", "Fastify", "Koa", "Next.js", "React", "Vue", "Angular",
                          "Django", "Flask", "FastAPI", "Spring Boot", "Actix Web", "Rocket",
@@ -1145,7 +1451,9 @@ fn determine_project_type(
         .any(|t| static_generators.contains(&t.name.as_str()));
     
     // Determine type based on indicators
-    if has_static_generator {
+    if (has_database_ports || has_multiple_services) && (has_orchestration_framework || has_api_framework) {
+        ProjectType::Microservice
+    } else if has_static_generator {
         ProjectType::StaticSite
     } else if has_api_framework && !has_web_framework {
         ProjectType::ApiService
@@ -1169,8 +1477,6 @@ fn determine_project_type(
         } else {
             ProjectType::Unknown
         }
-    } else if !ports.is_empty() && technologies.len() > 1 {
-        ProjectType::Microservice
     } else {
         ProjectType::Unknown
     }
@@ -1179,7 +1485,7 @@ fn determine_project_type(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::TechnologyCategory;
+    use crate::analyzer::{TechnologyCategory, LibraryType};
     use std::fs;
     use tempfile::TempDir;
     

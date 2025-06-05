@@ -28,7 +28,7 @@ Welcome to the Syncable Infrastructure-as-Code CLI! This tool analyzes your code
    # Build the project
    cargo build --release
 
-   # The binary will be at ./target/release/iac-gen
+   # The binary will be at ./target/release/sync-ctl
    ```
 
 3. **Install Globally**
@@ -36,25 +36,25 @@ Welcome to the Syncable Infrastructure-as-Code CLI! This tool analyzes your code
    # Install to your system
    cargo install --path .
 
-   # Now you can use 'iac-gen' from anywhere
-   iac-gen --version
+   # Now you can use 'sync-ctl' from anywhere
+   sync-ctl --version
    ```
 
 ### Option 2: Download Pre-built Binary (Coming Soon)
 
 ```bash
 # macOS
-curl -L https://github.com/yourusername/syncable-cli/releases/latest/download/iac-gen-macos -o iac-gen
-chmod +x iac-gen
-sudo mv iac-gen /usr/local/bin/
+curl -L https://github.com/yourusername/syncable-cli/releases/latest/download/sync-ctl-macos -o sync-ctl
+chmod +x sync-ctl
+sudo mv sync-ctl /usr/local/bin/
 
 # Linux
-curl -L https://github.com/yourusername/syncable-cli/releases/latest/download/iac-gen-linux -o iac-gen
-chmod +x iac-gen
-sudo mv iac-gen /usr/local/bin/
+curl -L https://github.com/yourusername/syncable-cli/releases/latest/download/sync-ctl-linux -o sync-ctl
+chmod +x sync-ctl
+sudo mv sync-ctl /usr/local/bin/
 
 # Windows
-# Download iac-gen-windows.exe from releases page
+# Download sync-ctl-windows.exe from releases page
 ```
 
 ## 🏁 Quick Start
@@ -63,23 +63,23 @@ sudo mv iac-gen /usr/local/bin/
 
 ```bash
 # Analyze the current directory
-iac-gen analyze
+sync-ctl analyze
 
 # Analyze a specific project
-iac-gen analyze /path/to/your/project
+sync-ctl analyze /path/to/your/project
 
 # Get JSON output for scripting
-iac-gen analyze --json
+sync-ctl analyze --json
 ```
 
 ### Vulnerability Scanning
 
 ```bash
 # Check for vulnerabilities in dependencies
-iac-gen vuln-check /path/to/project
+sync-ctl vuln-check /path/to/project
 
 # Check with specific severity threshold
-iac-gen vuln-check --severity high /path/to/project
+sync-ctl vuln-check --severity high /path/to/project
 ```
 
 ## 🎯 Core Features
@@ -118,7 +118,7 @@ The CLI automatically detects:
 ### Example 1: Analyzing a Node.js Express App
 
 ```bash
-$ iac-gen analyze ~/projects/my-express-app
+$ sync-ctl analyze ~/projects/my-express-app
 
 🔍 Analyzing project at: /Users/john/projects/my-express-app
 ============================================================
@@ -167,7 +167,7 @@ $ iac-gen analyze ~/projects/my-express-app
 ### Example 2: Vulnerability Check
 
 ```bash
-$ iac-gen vuln-check ~/projects/my-express-app
+$ sync-ctl vuln-check ~/projects/my-express-app
 
 🔍 Checking vulnerabilities for: /Users/john/projects/my-express-app
 ============================================================
@@ -204,7 +204,7 @@ Run 'npm update' to fix most issues.
 ### Example 3: Analyzing a Python FastAPI Project
 
 ```bash
-$ iac-gen analyze ~/projects/fastapi-app --json
+$ sync-ctl analyze ~/projects/fastapi-app --json
 ```
 
 ```json
@@ -314,16 +314,16 @@ jobs:
       
       - name: Install Syncable CLI
         run: |
-          curl -L https://github.com/yourusername/syncable-cli/releases/latest/download/iac-gen-linux -o iac-gen
-          chmod +x iac-gen
-          sudo mv iac-gen /usr/local/bin/
+          curl -L https://github.com/yourusername/syncable-cli/releases/latest/download/sync-ctl-linux -o sync-ctl
+          chmod +x sync-ctl
+          sudo mv sync-ctl /usr/local/bin/
       
       - name: Run Analysis
-        run: iac-gen analyze --json > analysis.json
+        run: sync-ctl analyze --json > analysis.json
         
       - name: Check Vulnerabilities
         run: |
-          iac-gen vuln-check --severity high
+          sync-ctl vuln-check --severity high
           if [ $? -ne 0 ]; then
             echo "High severity vulnerabilities found!"
             exit 1
@@ -356,10 +356,10 @@ jobs:
 Run with verbose logging:
 ```bash
 # Show debug information
-RUST_LOG=debug iac-gen analyze /path/to/project
+RUST_LOG=debug sync-ctl analyze /path/to/project
 
 # Show only warnings and errors
-RUST_LOG=warn iac-gen analyze /path/to/project
+RUST_LOG=warn sync-ctl analyze /path/to/project
 ```
 
 ## 🚧 Upcoming Features (Phase 2)

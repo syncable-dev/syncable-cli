@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 use std::fs;
+use log::debug;
 
 /// Detailed dependency information
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -382,81 +383,339 @@ impl DependencyParser {
     fn parse_java_deps(&self, project_root: &Path) -> Result<Vec<DependencyInfo>> {
         let mut deps = Vec::new();
         
+        debug!("Parsing Java dependencies in: {}", project_root.display());
+        
         // Check for Maven pom.xml
         let pom_xml = project_root.join("pom.xml");
         if pom_xml.exists() {
+            debug!("Found pom.xml, parsing Maven dependencies");
             let content = fs::read_to_string(&pom_xml)?;
-            let mut in_dependencies = false;
-            let mut current_dep: Option<(String, String)> = None;
             
-            for line in content.lines() {
-                let trimmed = line.trim();
+            // Try to use the dependency:list Maven command first for accurate results
+            if let Ok(maven_deps) = self.parse_maven_dependencies_with_command(project_root) {
+                if !maven_deps.is_empty() {
+                    debug!("Successfully parsed {} Maven dependencies using mvn command", maven_deps.len());
+                    deps.extend(maven_deps);
+                }
+            }
+            
+            // If no deps from command, fall back to XML parsing
+            if deps.is_empty() {
+                debug!("Falling back to XML parsing for Maven dependencies");
+                let xml_deps = self.parse_pom_xml(&content)?;
+                debug!("Parsed {} dependencies from pom.xml", xml_deps.len());
+                deps.extend(xml_deps);
+            }
+        }
+        
+        // Check for Gradle build.gradle or build.gradle.kts
+        let build_gradle = project_root.join("build.gradle");
+        let build_gradle_kts = project_root.join("build.gradle.kts");
+        
+        if (build_gradle.exists() || build_gradle_kts.exists()) && deps.is_empty() {
+            debug!("Found Gradle build file, parsing Gradle dependencies");
+            
+                         // Try to use the dependencies Gradle command first
+             if let Ok(gradle_deps) = self.parse_gradle_dependencies_with_command(project_root) {
+                if !gradle_deps.is_empty() {
+                    debug!("Successfully parsed {} Gradle dependencies using gradle command", gradle_deps.len());
+                    deps.extend(gradle_deps);
+                }
+            }
+            
+            // If no deps from command, fall back to build file parsing
+            if deps.is_empty() {
+                if build_gradle.exists() {
+                    debug!("Falling back to build.gradle parsing");
+                    let content = fs::read_to_string(&build_gradle)?;
+                    let gradle_deps = self.parse_gradle_build(&content)?;
+                    debug!("Parsed {} dependencies from build.gradle", gradle_deps.len());
+                    deps.extend(gradle_deps);
+                }
                 
-                if trimmed.contains("<dependencies>") {
-                    in_dependencies = true;
+                if build_gradle_kts.exists() && deps.is_empty() {
+                    debug!("Falling back to build.gradle.kts parsing");
+                    let content = fs::read_to_string(&build_gradle_kts)?;
+                    let gradle_deps = self.parse_gradle_build(&content)?; // Same logic works for .kts
+                    debug!("Parsed {} dependencies from build.gradle.kts", gradle_deps.len());
+                    deps.extend(gradle_deps);
+                }
+            }
+        }
+        
+        debug!("Total Java dependencies found: {}", deps.len());
+        if !deps.is_empty() {
+            debug!("Sample dependencies:");
+            for dep in deps.iter().take(5) {
+                debug!("  - {} v{}", dep.name, dep.version);
+            }
+        }
+        
+        Ok(deps)
+    }
+    
+    /// Parse Maven dependencies using mvn dependency:list command
+    fn parse_maven_dependencies_with_command(&self, project_root: &Path) -> Result<Vec<DependencyInfo>> {
+        use std::process::Command;
+        
+        let output = Command::new("mvn")
+            .args(&["dependency:list", "-DoutputFile=deps.txt", "-DappendOutput=false", "-DincludeScope=compile"])
+            .current_dir(project_root)
+            .output();
+            
+        match output {
+            Ok(result) if result.status.success() => {
+                // Read the generated deps.txt file
+                let deps_file = project_root.join("deps.txt");
+                if deps_file.exists() {
+                    let content = fs::read_to_string(&deps_file)?;
+                    let deps = self.parse_maven_dependency_list(&content)?;
+                    
+                    // Clean up
+                    let _ = fs::remove_file(&deps_file);
+                    
+                    return Ok(deps);
+                }
+            }
+            _ => {
+                debug!("Maven command failed or not available, falling back to XML parsing");
+            }
+        }
+        
+        Ok(vec![])
+    }
+    
+    /// Parse Gradle dependencies using gradle dependencies command
+    fn parse_gradle_dependencies_with_command(&self, project_root: &Path) -> Result<Vec<DependencyInfo>> {
+        use std::process::Command;
+        
+        // Try gradle first, then gradlew
+        let gradle_cmds = vec!["gradle", "./gradlew"];
+        
+        for gradle_cmd in gradle_cmds {
+            let output = Command::new(gradle_cmd)
+                .args(&["dependencies", "--configuration=runtimeClasspath", "--console=plain"])
+                .current_dir(project_root)
+                .output();
+                
+            match output {
+                Ok(result) if result.status.success() => {
+                    let output_str = String::from_utf8_lossy(&result.stdout);
+                    let deps = self.parse_gradle_dependency_tree(&output_str)?;
+                    if !deps.is_empty() {
+                        return Ok(deps);
+                    }
+                }
+                _ => {
+                    debug!("Gradle command '{}' failed, trying next", gradle_cmd);
+                    continue;
+                }
+            }
+        }
+        
+        debug!("All Gradle commands failed, falling back to build file parsing");
+        Ok(vec![])
+    }
+    
+    /// Parse Maven dependency list output
+    fn parse_maven_dependency_list(&self, content: &str) -> Result<Vec<DependencyInfo>> {
+        let mut deps = Vec::new();
+        
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with("The following") || trimmed.starts_with("---") {
+                continue;
+            }
+            
+            // Format: groupId:artifactId:type:version:scope
+            let parts: Vec<&str> = trimmed.split(':').collect();
+            if parts.len() >= 4 {
+                let group_id = parts[0];
+                let artifact_id = parts[1];
+                let version = parts[3];
+                let scope = if parts.len() > 4 { parts[4] } else { "compile" };
+                
+                let name = format!("{}:{}", group_id, artifact_id);
+                let dep_type = match scope {
+                    "test" | "provided" => DependencyType::Dev,
+                    _ => DependencyType::Production,
+                };
+                
+                deps.push(DependencyInfo {
+                    name,
+                    version: version.to_string(),
+                    dep_type,
+                    license: "Unknown".to_string(),
+                    source: Some("maven".to_string()),
+                    language: Language::Java,
+                });
+            }
+        }
+        
+        Ok(deps)
+    }
+    
+    /// Parse Gradle dependency tree output
+    fn parse_gradle_dependency_tree(&self, content: &str) -> Result<Vec<DependencyInfo>> {
+        let mut deps = Vec::new();
+        
+        for line in content.lines() {
+            let trimmed = line.trim();
+            
+            // Look for dependency lines that match pattern: +--- group:artifact:version
+            if (trimmed.starts_with("+---") || trimmed.starts_with("\\---") || trimmed.starts_with("|")) 
+                && trimmed.contains(':') {
+                
+                // Extract the dependency part
+                let dep_part = if let Some(pos) = trimmed.find(' ') {
+                    &trimmed[pos + 1..]
+                } else {
+                    trimmed
+                };
+                
+                // Remove additional markers and get clean dependency string
+                let clean_dep = dep_part
+                    .replace(" (*)", "")
+                    .replace(" (c)", "")
+                    .replace(" (n)", "")
+                    .replace("(*)", "")
+                    .trim()
+                    .to_string();
+                
+                let parts: Vec<&str> = clean_dep.split(':').collect();
+                if parts.len() >= 3 {
+                    let group_id = parts[0];
+                    let artifact_id = parts[1];
+                    let version = parts[2];
+                    
+                    let name = format!("{}:{}", group_id, artifact_id);
+                    
+                    deps.push(DependencyInfo {
+                        name,
+                        version: version.to_string(),
+                        dep_type: DependencyType::Production,
+                        license: "Unknown".to_string(),
+                        source: Some("gradle".to_string()),
+                        language: Language::Java,
+                    });
+                }
+            }
+        }
+        
+        Ok(deps)
+    }
+    
+    /// Parse pom.xml file directly (fallback method)
+    fn parse_pom_xml(&self, content: &str) -> Result<Vec<DependencyInfo>> {
+        let mut deps = Vec::new();
+        let mut in_dependencies = false;
+        let mut in_dependency = false;
+        let mut current_group_id = String::new();
+        let mut current_artifact_id = String::new();
+        let mut current_version = String::new();
+        let mut current_scope = String::new();
+        
+        for line in content.lines() {
+            let trimmed = line.trim();
+            
+            if trimmed.contains("<dependencies>") {
+                in_dependencies = true;
+                continue;
+            }
+            
+            if trimmed.contains("</dependencies>") {
+                in_dependencies = false;
+                continue;
+            }
+            
+            if in_dependencies {
+                if trimmed.contains("<dependency>") {
+                    in_dependency = true;
+                    current_group_id.clear();
+                    current_artifact_id.clear();
+                    current_version.clear();
+                    current_scope.clear();
                     continue;
                 }
                 
-                if trimmed.contains("</dependencies>") {
-                    in_dependencies = false;
+                if trimmed.contains("</dependency>") && in_dependency {
+                    in_dependency = false;
+                    
+                    if !current_group_id.is_empty() && !current_artifact_id.is_empty() {
+                        let name = format!("{}:{}", current_group_id, current_artifact_id);
+                        let version = if current_version.is_empty() { 
+                            "unknown".to_string() 
+                        } else { 
+                            current_version.clone() 
+                        };
+                        
+                        let dep_type = match current_scope.as_str() {
+                            "test" | "provided" => DependencyType::Dev,
+                            _ => DependencyType::Production,
+                        };
+                        
+                        deps.push(DependencyInfo {
+                            name,
+                            version,
+                            dep_type,
+                            license: "Unknown".to_string(),
+                            source: Some("maven".to_string()),
+                            language: Language::Java,
+                        });
+                    }
                     continue;
                 }
                 
-                if in_dependencies {
+                if in_dependency {
                     if trimmed.contains("<groupId>") {
-                        let group_id = extract_xml_value(trimmed, "groupId");
-                        if let Some((ref mut name, _)) = current_dep {
-                            *name = format!("{}:{}", group_id, name.split(':').last().unwrap_or(""));
-                        } else {
-                            current_dep = Some((group_id.to_string(), String::new()));
-                        }
+                        current_group_id = extract_xml_value(trimmed, "groupId").to_string();
                     } else if trimmed.contains("<artifactId>") {
-                        let artifact_id = extract_xml_value(trimmed, "artifactId");
-                        if let Some((ref mut name, _)) = current_dep {
-                            if name.contains(':') {
-                                *name = format!("{}:{}", name.split(':').next().unwrap_or(""), artifact_id);
-                            } else {
-                                *name = artifact_id.to_string();
-                            }
-                        } else {
-                            current_dep = Some((artifact_id.to_string(), String::new()));
-                        }
+                        current_artifact_id = extract_xml_value(trimmed, "artifactId").to_string();
                     } else if trimmed.contains("<version>") {
-                        let version = extract_xml_value(trimmed, "version");
-                        if let Some((_, ref mut ver)) = current_dep {
-                            *ver = version.to_string();
-                        }
-                    } else if trimmed.contains("</dependency>") {
-                        if let Some((name, version)) = current_dep.take() {
-                            deps.push(DependencyInfo {
-                                name,
-                                version,
-                                dep_type: DependencyType::Production,
-                                license: "Unknown".to_string(),
-                                source: Some("maven".to_string()),
-                                language: Language::Java,
-                            });
-                        }
+                        current_version = extract_xml_value(trimmed, "version").to_string();
+                    } else if trimmed.contains("<scope>") {
+                        current_scope = extract_xml_value(trimmed, "scope").to_string();
                     }
                 }
             }
         }
         
-        // Check for Gradle build.gradle
-        let build_gradle = project_root.join("build.gradle");
-        if build_gradle.exists() && deps.is_empty() {
-            let content = fs::read_to_string(&build_gradle)?;
-            for line in content.lines() {
-                let trimmed = line.trim();
-                if let Some(dep) = extract_gradle_dependency(trimmed) {
-                    let parts: Vec<&str> = dep.split(':').collect();
+        Ok(deps)
+    }
+    
+    /// Parse Gradle build file directly (fallback method)
+    fn parse_gradle_build(&self, content: &str) -> Result<Vec<DependencyInfo>> {
+        let mut deps = Vec::new();
+        
+        for line in content.lines() {
+            let trimmed = line.trim();
+            
+            // Look for dependency declarations
+            if (trimmed.starts_with("implementation ") || 
+                trimmed.starts_with("compile ") ||
+                trimmed.starts_with("api ") ||
+                trimmed.starts_with("runtimeOnly ") ||
+                trimmed.starts_with("testImplementation ") ||
+                trimmed.starts_with("testCompile ")) {
+                
+                if let Some(dep_str) = extract_gradle_dependency(trimmed) {
+                    let parts: Vec<&str> = dep_str.split(':').collect();
                     if parts.len() >= 3 {
-                        let name = format!("{}:{}", parts[0], parts[1]);
-                        let version = parts[2].trim_matches('"').trim_matches('\'').to_string();
+                        let group_id = parts[0];
+                        let artifact_id = parts[1];
+                        let version = parts[2].trim_matches('"').trim_matches('\'');
+                        
+                        let name = format!("{}:{}", group_id, artifact_id);
+                        let dep_type = if trimmed.starts_with("test") {
+                            DependencyType::Dev
+                        } else {
+                            DependencyType::Production
+                        };
+                        
                         deps.push(DependencyInfo {
                             name,
-                            version,
-                            dep_type: DependencyType::Production,
+                            version: version.to_string(),
+                            dep_type,
                             license: "Unknown".to_string(),
                             source: Some("gradle".to_string()),
                             language: Language::Java,
