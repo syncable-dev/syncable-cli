@@ -217,13 +217,6 @@ max_file_size = 2097152  # 2MB
 format = "json"  # or "yaml", "toml"
 ```
 
-## 📚 Documentation
-
-- [**Tutorial**](TUTORIAL.md) - Comprehensive usage guide
-- [**Roadmap**](ROADMAP.md) - Development phases and upcoming features
-- [**Architecture**](docs/architecture/README.md) - Technical design decisions
-- [**API Reference**](docs/api/README.md) - Library usage documentation
-
 ## 🧪 Supported Technologies
 
 ### Languages & Runtimes

@@ -8,8 +8,9 @@ use std::env;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Enable debug logging
-    env::set_var("RUST_LOG", "debug");
-    env_logger::init();
+    env_logger::Builder::from_default_env()
+        .filter_level(log::LevelFilter::Debug)
+        .init();
     
     // Get project path from command line args or use current directory
     let args: Vec<String> = env::args().collect();
