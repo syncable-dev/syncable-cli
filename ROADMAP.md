@@ -31,7 +31,7 @@ Build an AI-powered CLI that analyzes codebases and generates production-ready I
     - [x] Go: 10 frameworks (Gin, Echo, Fiber, etc.)
     - [x] Java/Kotlin: 8 frameworks (Spring Boot, Micronaut, etc.)
 
-#### Week 3-4: Dependency/Vulnerability Analysis & Context Extraction ✅
+### Dependency/Vulnerability Analysis & Context Extraction ✅
 - [x] **Dependency Parser** ✅
   - [x] Parse package manifests (package.json, Cargo.toml, requirements.txt, go.mod, pom.xml)
   - [x] Extract version constraints and dependency trees
