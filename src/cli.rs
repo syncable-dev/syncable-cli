@@ -25,6 +25,10 @@ pub struct Cli {
     /// Output in JSON format where applicable
     #[arg(long, global = true)]
     pub json: bool,
+
+    /// Clear the update check cache and force a new check
+    #[arg(long, global = true)]
+    pub clear_update_cache: bool,
 }
 
 #[derive(Subcommand)]

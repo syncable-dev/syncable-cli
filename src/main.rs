@@ -25,8 +25,15 @@ async fn main() {
 }
 
 async fn run() -> syncable_cli::Result<()> {
-    check_for_update();
     let cli = Cli::parse();
+    
+    // Handle update cache clearing
+    if cli.clear_update_cache {
+        clear_update_cache();
+        println!("✅ Update cache cleared. Checking for updates now...");
+    }
+    
+    check_for_update();
     
     // Initialize logging
     cli.init_logging();
@@ -107,6 +114,25 @@ async fn run() -> syncable_cli::Result<()> {
     Ok(())
 }
 
+fn clear_update_cache() {
+    let cache_file = cache_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("syncable-cli/last_update_check");
+    
+    if cache_file.exists() {
+        match fs::remove_file(&cache_file) {
+            Ok(_) => {
+                if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+                    eprintln!("🗑️  Removed update cache file: {}", cache_file.display());
+                }
+            }
+            Err(e) => {
+                eprintln!("⚠️  Failed to remove update cache: {}", e);
+            }
+        }
+    }
+}
+
 fn check_for_update() {
     let cache_file = cache_dir()
         .unwrap_or_else(|| PathBuf::from("."))
@@ -117,30 +143,79 @@ fn check_for_update() {
     if let Ok(metadata) = fs::metadata(&cache_file) {
         if let Ok(modified) = metadata.modified() {
             if now.duration_since(modified).unwrap_or(Duration::ZERO) < Duration::from_secs(60 * 60 * 24) {
+                // Debug logging to understand cache behavior
+                if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+                    eprintln!("🔍 Update check skipped - checked within last 24 hours");
+                }
                 return;
             }
         }
     }
 
-    // Query GitHub releases API instead of crates.io
+    // Debug logging
+    if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+        eprintln!("🔍 Checking for updates...");
+    }
+
+    // Query GitHub releases API
     let client = reqwest::blocking::Client::builder()
-        .user_agent(format!("syncable-cli/{} ({})", env!("CARGO_PKG_VERSION"), env!("CARGO_PKG_REPOSITORY")))
+        .user_agent(format!("syncable-cli/{}", env!("CARGO_PKG_VERSION")))
+        .timeout(std::time::Duration::from_secs(5)) // Add timeout
         .build();
     
-    if let Ok(client) = client {
-        let resp = client
-            .get("https://api.github.com/repos/syncable-dev/syncable-cli/releases/latest")
-            .send()
-            .and_then(|r| r.json::<serde_json::Value>());
-            
-        if let Ok(json) = resp {
-            let latest = json["tag_name"].as_str().unwrap_or("")
-                .trim_start_matches('v'); // Remove 'v' prefix if present
-            let current = env!("CARGO_PKG_VERSION");
-            if latest != "" && latest != current {
-                println!(
-                    "\x1b[33m🔔 A new version of sync-ctl is available: {latest} (current: {current})\nRun `cargo install --git https://github.com/syncable-dev/syncable-cli --tag v{latest}` to update.\x1b[0m"
-                );
+    match client {
+        Ok(client) => {
+            let result = client
+                .get("https://api.github.com/repos/syncable-dev/syncable-cli/releases/latest")
+                .send();
+                
+            match result {
+                Ok(response) => {
+                    if !response.status().is_success() {
+                        if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+                            eprintln!("⚠️  GitHub API returned status: {}", response.status());
+                        }
+                        return;
+                    }
+                    
+                    match response.json::<serde_json::Value>() {
+                        Ok(json) => {
+                            let latest = json["tag_name"].as_str().unwrap_or("")
+                                .trim_start_matches('v'); // Remove 'v' prefix if present
+                            let current = env!("CARGO_PKG_VERSION");
+                            
+                            if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+                                eprintln!("📦 Current version: {}, Latest version: {}", current, latest);
+                            }
+                            
+                            // Parse and compare versions properly
+                            if latest != "" && latest != current {
+                                // Only show update message if latest is actually newer
+                                if is_version_newer(current, latest) {
+                                    println!(
+                                        "\x1b[33m🔔 A new version of sync-ctl is available: {} (current: {})\nRun `cargo install syncable-cli` or download from https://github.com/syncable-dev/syncable-cli/releases/tag/v{}\x1b[0m",
+                                        latest, current, latest
+                                    );
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+                                eprintln!("⚠️  Failed to parse GitHub API response: {}", e);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+                        eprintln!("⚠️  Failed to check for updates: {}", e);
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+                eprintln!("⚠️  Failed to create HTTP client: {}", e);
             }
         }
     }
@@ -148,6 +223,29 @@ fn check_for_update() {
     // Update cache file
     let _ = fs::create_dir_all(cache_file.parent().unwrap());
     let _ = fs::write(&cache_file, "");
+}
+
+// Helper function to compare semantic versions
+fn is_version_newer(current: &str, latest: &str) -> bool {
+    let current_parts: Vec<u32> = current.split('.')
+        .filter_map(|s| s.parse().ok())
+        .collect();
+    let latest_parts: Vec<u32> = latest.split('.')
+        .filter_map(|s| s.parse().ok())
+        .collect();
+    
+    for i in 0..3 {
+        let current_part = current_parts.get(i).unwrap_or(&0);
+        let latest_part = latest_parts.get(i).unwrap_or(&0);
+        
+        if latest_part > current_part {
+            return true;
+        } else if latest_part < current_part {
+            return false;
+        }
+    }
+    
+    false
 }
 
 fn handle_analyze(
@@ -935,13 +1033,15 @@ fn handle_security(
             ".next".to_string(),
             "dist".to_string(),
         ],
+        skip_gitignored_files: true,
+        downgrade_gitignored_severity: false,
     };
     thread::sleep(Duration::from_millis(300));
     
     // Step 3: Security Scanner Initialization
     progress.set_message("Initializing security analyzer...");
     progress.set_position(30);
-    let security_analyzer = SecurityAnalyzer::with_config(config)
+    let mut security_analyzer = SecurityAnalyzer::with_config(config)
         .map_err(|e| syncable_cli::error::IaCGeneratorError::Analysis(
             syncable_cli::error::AnalysisError::InvalidStructure(
                 format!("Failed to create security analyzer: {}", e)
