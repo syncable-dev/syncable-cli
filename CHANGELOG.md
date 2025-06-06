@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/syncable-dev/syncable-cli/compare/v0.2.1...v0.3.0) - 2025-06-06
+
+### Added
+
+- Added tool install verifier with cli calls ([#14](https://github.com/syncable-dev/syncable-cli/pull/14))
+
+### Other
+
+- Feature/extendsive docker compose and docker scan ([#25](https://github.com/syncable-dev/syncable-cli/pull/25))
+- Feature/add automatic cli update ([#22](https://github.com/syncable-dev/syncable-cli/pull/22))
+- Feature/update dependabot ([#11](https://github.com/syncable-dev/syncable-cli/pull/11))
+
 ## [0.2.1](https://github.com/syncable-dev/syncable-cli/compare/v0.2.0...v0.2.1) - 2025-06-06
 
 ### Other
