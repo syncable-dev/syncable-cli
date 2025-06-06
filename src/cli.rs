@@ -201,6 +201,67 @@ pub enum Commands {
         #[arg(long)]
         fail_on_findings: bool,
     },
+
+    /// Manage vulnerability scanning tools
+    Tools {
+        #[command(subcommand)]
+        command: ToolsCommand,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ToolsCommand {
+    /// Check which vulnerability scanning tools are installed
+    Status {
+        /// Output format
+        #[arg(long, value_enum, default_value = "table")]
+        format: OutputFormat,
+
+        /// Check tools for specific languages only
+        #[arg(long, value_delimiter = ',')]
+        languages: Option<Vec<String>>,
+    },
+
+    /// Install missing vulnerability scanning tools
+    Install {
+        /// Install tools for specific languages only
+        #[arg(long, value_delimiter = ',')]
+        languages: Option<Vec<String>>,
+
+        /// Also install OWASP Dependency Check (large download)
+        #[arg(long)]
+        include_owasp: bool,
+
+        /// Perform a dry run to show what would be installed
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Skip confirmation prompts
+        #[arg(short, long)]
+        yes: bool,
+    },
+
+    /// Verify that installed tools are working correctly
+    Verify {
+        /// Test tools for specific languages only
+        #[arg(long, value_delimiter = ',')]
+        languages: Option<Vec<String>>,
+
+        /// Show detailed verification output
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Show tool installation guides for manual setup
+    Guide {
+        /// Show guide for specific languages only
+        #[arg(long, value_delimiter = ',')]
+        languages: Option<Vec<String>>,
+
+        /// Show platform-specific instructions
+        #[arg(long)]
+        platform: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
