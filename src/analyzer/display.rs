@@ -234,40 +234,40 @@ impl BoxDrawer {
             
             if total_needed <= available_space {
                 // Everything fits - right-align the value
-                let padding_needed = available_space - label_width - value_width;
+                let padding_needed = available_space.saturating_sub(label_width).saturating_sub(value_width);
                 format!("{}{}{}", formatted_label, " ".repeat(padding_needed), formatted_value)
             } else {
                 // Need to truncate value
                 let max_value_width = available_space.saturating_sub(label_width + min_space_between);
                 let truncated_value = truncate_to_width(&formatted_value, max_value_width);
                 let truncated_value_width = visual_width(&truncated_value);
-                let padding_needed = available_space - label_width - truncated_value_width;
+                let padding_needed = available_space.saturating_sub(label_width).saturating_sub(truncated_value_width);
                 format!("{}{}{}", formatted_label, " ".repeat(padding_needed), truncated_value)
             }
         } else if !line.value.is_empty() {
             // Value only - left-align it (for descriptions, etc.)
             let value_width = visual_width(&formatted_value);
             if value_width <= content_width {
-                let padding_needed = content_width - value_width;
+                let padding_needed = content_width.saturating_sub(value_width);
                 format!("{}{}", formatted_value, " ".repeat(padding_needed))
             } else {
                 // Truncate and ensure it fills exactly content_width
                 let truncated = truncate_to_width(&formatted_value, content_width);
                 let actual_width = visual_width(&truncated);
-                let padding_needed = content_width - actual_width;
+                let padding_needed = content_width.saturating_sub(actual_width);
                 format!("{}{}", truncated, " ".repeat(padding_needed))
             }
         } else if !line.label.is_empty() {
             // Label only - left-align it
             let label_width = visual_width(&formatted_label);
             if label_width <= content_width {
-                let padding_needed = content_width - label_width;
+                let padding_needed = content_width.saturating_sub(label_width);
                 format!("{}{}", formatted_label, " ".repeat(padding_needed))
             } else {
                 // Truncate and ensure it fills exactly content_width
                 let truncated = truncate_to_width(&formatted_label, content_width);
                 let actual_width = visual_width(&truncated);
-                let padding_needed = content_width - actual_width;
+                let padding_needed = content_width.saturating_sub(actual_width);
                 format!("{}{}", truncated, " ".repeat(padding_needed))
             }
         } else {
@@ -285,7 +285,7 @@ impl BoxDrawer {
                 content
             } else {
                 // Add padding to reach exact width for non-table content
-                let padding_needed = content_width - actual_content_width;
+                let padding_needed = content_width.saturating_sub(actual_content_width);
                 format!("{}{}", content, " ".repeat(padding_needed))
             }
         } else {
@@ -624,10 +624,10 @@ fn display_single_project_matrix(analysis: &MonorepoAnalysis) {
         box_drawer.add_line("Name:", &project.name.yellow(), true);
         box_drawer.add_line("Type:", &format_project_category(&project.project_category).green(), true);
         
-        // Languages with confidence
+        // Languages 
         if !project.analysis.languages.is_empty() {
             let lang_info = project.analysis.languages.iter()
-                .map(|l| format!("{} ({:.0}%)", l.name, l.confidence * 100.0))
+                .map(|l| l.name.clone())
                 .collect::<Vec<_>>()
                 .join(", ");
             box_drawer.add_line("Languages:", &lang_info.blue(), true);
@@ -669,10 +669,7 @@ fn add_technologies_to_drawer(technologies: &[DetectedTechnology], box_drawer: &
     
     // Display primary technology first
     if let Some(primary) = technologies.iter().find(|t| t.is_primary) {
-        let primary_info = format!("{} {}", 
-            primary.name.bright_yellow().bold(),
-            format!("({:.0}%)", primary.confidence * 100.0).dimmed()
-        );
+        let primary_info = primary.name.bright_yellow().bold().to_string();
         box_drawer.add_line("Primary Stack:", &primary_info, true);
     }
     
@@ -687,7 +684,7 @@ fn add_technologies_to_drawer(technologies: &[DetectedTechnology], box_drawer: &
     for (category, label) in &categories {
         if let Some(techs) = by_category.get(category) {
             let tech_names = techs.iter()
-                .map(|t| format!("{} ({:.0}%)", t.name, t.confidence * 100.0))
+                .map(|t| t.name.clone())
                 .collect::<Vec<_>>()
                 .join(", ");
             
@@ -698,16 +695,40 @@ fn add_technologies_to_drawer(technologies: &[DetectedTechnology], box_drawer: &
         }
     }
     
-    // Handle Library category separately since it's parameterized
+    // Handle Library category separately since it's parameterized - use vertical layout for many items
+    let mut all_libraries: Vec<&DetectedTechnology> = Vec::new();
     for (cat, techs) in &by_category {
         if matches!(cat, TechnologyCategory::Library(_)) {
-            let tech_names = techs.iter()
-                .map(|t| format!("{} ({:.0}%)", t.name, t.confidence * 100.0))
+            all_libraries.extend(techs.iter().copied());
+        }
+    }
+    
+    if !all_libraries.is_empty() {
+        // Sort libraries by confidence for better display
+        all_libraries.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal));
+        
+        if all_libraries.len() <= 3 {
+            // For few libraries, keep horizontal layout
+            let tech_names = all_libraries.iter()
+                .map(|t| t.name.clone())
                 .collect::<Vec<_>>()
                 .join(", ");
+            box_drawer.add_line("Libraries:", &tech_names.magenta(), true);
+        } else {
+            // For many libraries, use vertical layout with multiple rows
+            box_drawer.add_line("Libraries:", "", true);
             
-            if !tech_names.is_empty() {
-                box_drawer.add_line("Libraries:", &tech_names.magenta(), true);
+            // Group libraries into rows of 3-4 items each
+            let items_per_row = 3;
+            for chunk in all_libraries.chunks(items_per_row) {
+                let row_items = chunk.iter()
+                    .map(|t| t.name.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                
+                // Add indented row
+                let indented_row = format!("  {}", row_items);
+                box_drawer.add_value_only(&indented_row.magenta());
             }
         }
     }
