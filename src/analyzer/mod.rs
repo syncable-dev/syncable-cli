@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 
 pub mod dependency_parser;
 pub mod framework_detector;
+pub mod frameworks;
 pub mod language_detector;
 pub mod project_context;
 pub mod vulnerability_checker;
