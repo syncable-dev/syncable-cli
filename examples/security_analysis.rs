@@ -37,9 +37,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ".git".to_string(),
             "target".to_string(),
         ],
+        skip_gitignored_files: true,
+        downgrade_gitignored_severity: false,
     };
     
-    let security_analyzer = SecurityAnalyzer::with_config(security_config)?;
+    let mut security_analyzer = SecurityAnalyzer::with_config(security_config)?;
     
     // Perform security analysis
     println!("\n🛡️  Running comprehensive security analysis...");
