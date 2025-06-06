@@ -6,12 +6,29 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 ![Crates.io Downloads](https://img.shields.io/crates/d/syncable-cli)
 
+## 🎯 **260+ Technologies Supported**
+**The most comprehensive project analyzer supporting 5 major languages and their complete ecosystems:**
+- ☕ **Java/JVM**: 98 technologies (13 Spring components + enterprise stack)
+- 🐍 **Python**: 76 technologies (Django, FastAPI, ML/Data Science)  
+- 🟨 **JavaScript/TypeScript**: 46 technologies (React, Next.js, Node.js)
+- 🐹 **Go**: 21 technologies (cloud-native & microservices)
+- 🦀 **Rust**: 20 technologies (high-performance web & systems)
+
+## 🌟 Help Other Developers Discover This Tool
+
+**If this tool saves you time, please consider giving it a ⭐ on GitHub!** 
+
+Stars help other developers find Syncable CLI, and the more builders who discover it early, the better we can make it for everyone. Every star helps us reach developers who could benefit from automated infrastructure analysis and generation.
+
+[⭐ **Star on GitHub**](https://github.com/syncable-dev/syncable-cli)
+
+
 ## ✨ Features
 
 ### 🔍 Comprehensive Project Analysis
-- **Language Detection**: Automatically detects JavaScript/TypeScript, Python, Rust, Go, Java/Kotlin
-- **Framework Recognition**: Identifies 70+ frameworks including Express, React, Django, FastAPI, Spring Boot
-- **Dependency Analysis**: Parses all package managers and extracts version constraints
+- **Language Detection**: Automatically detects JavaScript/TypeScript, Python, Rust, Go, Java/Kotlin with precise version detection
+- **Framework Recognition**: Identifies **260+ technologies** across all major ecosystems including complete Spring, Django, React, and Express families
+- **Dependency Analysis**: Parses all package managers (npm/yarn/pnpm, pip/poetry, cargo, go mod, maven/gradle) and extracts version constraints
 - **Vulnerability Scanning**: Integrates with security databases for each language ecosystem
 - **Security Analysis**: Basic secret detection and environment variable security checks
 - **Context Extraction**: Discovers entry points, ports, environment variables, and build scripts
@@ -277,28 +294,74 @@ max_file_size = 2097152  # 2MB
 format = "json"  # or "yaml", "toml"
 ```
 
-## 🧪 Supported Technologies
+## 🧪 Comprehensive Technology Support (260+ Technologies)
 
-### Languages & Runtimes
-- JavaScript/TypeScript (Node.js)
-- Python (3.7+)
-- Rust
-- Go
-- Java/Kotlin
+### 📊 Coverage by Language
+- **☕ Java/JVM**: **98 technologies** - The most comprehensive JVM ecosystem coverage
+- **🐍 Python**: **76 technologies** - Complete Python web, data, and ML stack
+- **🟨 JavaScript/TypeScript**: **46 technologies** - Full-stack web development ecosystem  
+- **🐹 Go**: **21 technologies** - Modern cloud-native and microservices tools
+- **🦀 Rust**: **20 technologies** - High-performance systems and web frameworks
 
-### Frameworks (70+ supported)
-- **JavaScript**: Express, Next.js, React, Vue, Angular, Nest.js
-- **Python**: Django, Flask, FastAPI, Pyramid
-- **Rust**: Actix-web, Rocket, Axum, Warp
-- **Go**: Gin, Echo, Fiber, Chi
-- **Java**: Spring Boot, Micronaut, Quarkus
+### 🌟 Major Ecosystem Coverage
 
-### Package Managers
-- npm, yarn, pnpm
-- pip, poetry, pipenv
-- cargo
-- go mod
-- maven, gradle
+#### ☕ **Java/JVM Ecosystem** (98 technologies)
+**Spring Family** (13 technologies):
+- Spring Boot, Spring Framework, Spring Security, Spring Data
+- Spring Cloud (Gateway, Config, Netflix), Spring WebFlux, Spring MVC
+- Spring Batch, Spring Integration, Spring AOP, and more
+
+**Enterprise & Microservices**: Quarkus, Micronaut, Dropwizard, Jakarta EE  
+**Database & ORM**: Hibernate, MyBatis, JPA, JDBI, MongoDB Driver, Redis Jedis  
+**Message Brokers**: Apache Kafka, RabbitMQ, ActiveMQ, Apache Pulsar  
+**Search & Big Data**: Elasticsearch, Apache Solr, Apache Spark, Apache Flink  
+**Security**: Apache Shiro, Keycloak, Bouncy Castle, JWT, OAuth2  
+**Build Tools**: Maven, Gradle, Ant  
+**Testing**: JUnit, TestNG, Mockito, Selenium, Cucumber, Testcontainers  
+**Web Servers**: Tomcat, Jetty, Undertow, Netty  
+
+#### 🐍 **Python Ecosystem** (76 technologies)  
+**Web Frameworks**: Django, Flask, FastAPI, Pyramid, CherryPy, Tornado, Falcon  
+**Django Family**: Django REST Framework, Django ORM, Django-allauth  
+**Data & ML**: NumPy, Pandas, Scikit-learn, TensorFlow, PyTorch, Keras  
+**Database & ORM**: SQLAlchemy, Alembic, psycopg2, PyMongo, Redis-py  
+**Async & Messaging**: Celery, asyncio, aiohttp, Dramatiq  
+**Scientific**: Matplotlib, Seaborn, Jupyter, SciPy  
+**WSGI/ASGI Servers**: Gunicorn, Uvicorn, Hypercorn, Daphne, Waitress  
+**Testing**: pytest, unittest, nose2, behave, Robot Framework  
+
+#### 🟨 **JavaScript/TypeScript Ecosystem** (46 technologies)
+**Meta-Frameworks**: Next.js, Nuxt.js, SvelteKit, Astro, SolidStart, Tanstack Start  
+**Frontend**: React, Vue.js, Angular, Svelte, SolidJS  
+**Mobile**: React Native, Expo  
+**Backend**: Express.js, Nest.js, Fastify, Hono, Elysia  
+**Database/ORM**: Prisma, Drizzle ORM, TypeORM, Mongoose, Sequelize  
+**Build Tools**: Vite, Webpack, Rollup, Parcel  
+**Runtimes**: Node.js, Bun, Deno, Cloudflare Workers, Vercel Edge  
+**Testing**: Jest, Vitest, Cypress, Playwright  
+
+#### 🐹 **Go Ecosystem** (21 technologies)
+**Web Frameworks**: Gin, Echo, Fiber, Chi, Gorilla Mux, Beego  
+**Microservices**: gRPC, go-kit, go-micro  
+**Database**: GORM, sqlx, pgx  
+**Cloud Native**: Kubernetes client, Docker, Consul  
+**Testing**: Testify, Ginkgo, GoConvey  
+
+#### 🦀 **Rust Ecosystem** (20 technologies)  
+**Web Frameworks**: Actix-web, Axum, Rocket, Warp, Tide  
+**Async Runtimes**: Tokio, async-std  
+**Database/ORM**: SeaORM, Diesel, SQLx  
+**Serialization**: Serde  
+**Testing**: Built-in test framework, criterion (benchmarking)
+
+### 📦 **Package Manager Support**
+- **JavaScript**: npm, yarn, pnpm, bun
+- **Python**: pip, poetry, pipenv, conda, pdm  
+- **Java**: Maven, Gradle
+- **Rust**: Cargo
+- **Go**: go mod
+- **PHP**: Composer
+- **Ruby**: Bundler
 
 ## 🤝 Contributing
 
