@@ -32,6 +32,39 @@
 - 🔒 **Advanced security analysis** (infrastructure, framework-specific, compliance)
 - 📊 Performance optimization suggestions
 
+### 🐳 Docker Infrastructure Analysis
+**NEW**: Comprehensive Docker infrastructure analysis and understanding:
+
+- **Dockerfile Analysis**: 
+  - Supports all Dockerfile variants (`Dockerfile`, `dockerfile.dev`, `dockerfile.prod`, etc.)
+  - Extracts base images, exposed ports, environment variables, and build stages
+  - Detects multi-stage builds and complexity metrics
+  - Environment-specific configuration detection
+
+- **Docker Compose Analysis**:
+  - Supports all compose file variants (`docker-compose.yml`, `docker-compose.dev.yaml`, etc.)
+  - Service dependency mapping and network topology analysis
+  - Port mapping analysis (external/internal, host/container)
+  - Volume mount analysis and data persistence patterns
+
+- **Service Discovery & Networking**:
+  - Internal DNS and service communication patterns
+  - Custom network analysis and service isolation
+  - Load balancer detection (nginx, traefik, haproxy, kong)
+  - API gateway identification and ingress patterns
+
+- **Orchestration Pattern Detection**:
+  - Single Container applications
+  - Docker Compose multi-service setups
+  - Microservices architecture patterns
+  - Event-driven architecture (with message queues)
+  - Service mesh detection (Istio, Linkerd, Envoy)
+
+- **Monorepo Docker Support**:
+  - Analyzes Docker configurations across multiple projects
+  - Maps services to their respective project contexts
+  - Handles compose files at repository root with project-specific Dockerfiles
+
 ## 📦 Installation
 
 ### ⚡ Quick Install
