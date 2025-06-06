@@ -50,19 +50,6 @@ impl Language {
             Language::Unknown => "Unknown",
         }
     }
-
-    pub fn from_string(s: &str) -> Option<Language> {
-        match s.to_lowercase().as_str() {
-            "rust" => Some(Language::Rust),
-            "javascript" | "js" => Some(Language::JavaScript),
-            "typescript" | "ts" => Some(Language::TypeScript),
-            "python" | "py" => Some(Language::Python),
-            "go" | "golang" => Some(Language::Go),
-            "java" => Some(Language::Java),
-            "kotlin" => Some(Language::Kotlin),
-            _ => None,
-        }
-    }
 }
 
 /// Vulnerability information
