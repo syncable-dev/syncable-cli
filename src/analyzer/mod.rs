@@ -21,6 +21,7 @@ pub mod security_analyzer;
 pub mod tool_installer;
 pub mod monorepo_detector;
 pub mod docker_analyzer;
+pub mod display;
 
 // Re-export dependency analysis types
 pub use dependency_parser::{
@@ -59,7 +60,7 @@ pub struct DetectedLanguage {
 }
 
 /// Categories of detected technologies with proper classification
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum TechnologyCategory {
     /// Full-stack meta-frameworks that provide complete application structure
     MetaFramework,
@@ -82,7 +83,7 @@ pub enum TechnologyCategory {
 }
 
 /// Specific types of libraries for better classification
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum LibraryType {
     /// UI libraries (React, Vue, Preact)
     UI,
