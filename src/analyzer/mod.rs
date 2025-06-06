@@ -20,6 +20,7 @@ pub mod vulnerability_checker;
 pub mod security_analyzer;
 pub mod tool_installer;
 pub mod monorepo_detector;
+pub mod docker_analyzer;
 
 // Re-export dependency analysis types
 pub use dependency_parser::{
@@ -36,6 +37,13 @@ pub use security_analyzer::{
 // Re-export monorepo analysis types
 pub use monorepo_detector::{
     MonorepoDetectionConfig, analyze_monorepo, analyze_monorepo_with_config
+};
+
+// Re-export Docker analysis types
+pub use docker_analyzer::{
+    DockerAnalysis, DockerfileInfo, ComposeFileInfo, DockerService, 
+    OrchestrationPattern, NetworkingConfig, DockerEnvironment,
+    analyze_docker_infrastructure
 };
 
 /// Represents a detected programming language
@@ -219,6 +227,8 @@ pub struct ProjectAnalysis {
     pub services: Vec<ServiceAnalysis>,
     /// Whether this is a monolithic project or microservice architecture
     pub architecture_type: ArchitectureType,
+    /// Docker infrastructure analysis
+    pub docker_analysis: Option<DockerAnalysis>,
     pub analysis_metadata: AnalysisMetadata,
 }
 
@@ -370,6 +380,9 @@ pub fn analyze_project_with_config(path: &Path, config: &AnalysisConfig) -> Resu
     let dependencies = dependency_parser::parse_dependencies(&project_root, &languages, config)?;
     let context = project_context::analyze_context(&project_root, &languages, &frameworks, config)?;
     
+    // Analyze Docker infrastructure
+    let docker_analysis = analyze_docker_infrastructure(&project_root).ok();
+    
     let duration = start_time.elapsed();
     let confidence = calculate_confidence_score(&languages, &frameworks);
     
@@ -387,6 +400,7 @@ pub fn analyze_project_with_config(path: &Path, config: &AnalysisConfig) -> Resu
         build_scripts: context.build_scripts,
         services: vec![], // TODO: Implement microservice detection
         architecture_type: ArchitectureType::Monolithic, // TODO: Detect architecture type
+        docker_analysis,
         analysis_metadata: AnalysisMetadata {
             timestamp: Utc::now().to_rfc3339(),
             analyzer_version: env!("CARGO_PKG_VERSION").to_string(),

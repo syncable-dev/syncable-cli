@@ -1,6 +1,11 @@
 use clap::Parser;
 use syncable_cli::{
-    analyzer::{self, vulnerability_checker::VulnerabilitySeverity, DetectedTechnology, TechnologyCategory, LibraryType, analyze_monorepo, MonorepoAnalysis, ProjectCategory, ArchitecturePattern},
+    analyzer::{
+        self, vulnerability_checker::VulnerabilitySeverity, DetectedTechnology, TechnologyCategory, LibraryType, 
+        analyze_monorepo, MonorepoAnalysis, ProjectCategory, ArchitecturePattern,
+        DockerAnalysis, DockerfileInfo, ComposeFileInfo, DockerService, OrchestrationPattern,
+        NetworkingConfig, DockerEnvironment
+    },
     cli::{Cli, Commands, ToolsCommand, OutputFormat, SeverityThreshold},
     config,
     generator,
@@ -334,6 +339,11 @@ fn display_detailed_monorepo_analysis(analysis: &MonorepoAnalysis) {
             }
         }
         
+        // Docker Infrastructure Analysis
+        if let Some(docker_analysis) = &project.analysis.docker_analysis {
+            display_docker_analysis_detailed(docker_analysis);
+        }
+        
         // Project type
         println!("   🎯 Project Type: {:?}", project.analysis.project_type);
         
@@ -368,6 +378,181 @@ fn display_detailed_monorepo_analysis(analysis: &MonorepoAnalysis) {
     println!("   • Files analyzed: {}", analysis.metadata.files_analyzed);
     println!("   • Confidence score: {:.1}%", analysis.metadata.confidence_score * 100.0);
     println!("   • Analyzer version: {}", analysis.metadata.analyzer_version);
+}
+
+fn display_docker_analysis_detailed(docker_analysis: &DockerAnalysis) {
+    println!("\n   🐳 Docker Infrastructure Analysis:");
+    
+    // Dockerfiles
+    if !docker_analysis.dockerfiles.is_empty() {
+        println!("      📄 Dockerfiles ({}):", docker_analysis.dockerfiles.len());
+        for dockerfile in &docker_analysis.dockerfiles {
+            println!("         • {}", dockerfile.path.display());
+            if let Some(env) = &dockerfile.environment {
+                println!("           Environment: {}", env);
+            }
+            if let Some(base_image) = &dockerfile.base_image {
+                println!("           Base image: {}", base_image);
+            }
+            if !dockerfile.exposed_ports.is_empty() {
+                println!("           Exposed ports: {}", 
+                    dockerfile.exposed_ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", "));
+            }
+            if dockerfile.is_multistage {
+                println!("           Multi-stage build: {} stages", dockerfile.build_stages.len());
+            }
+            println!("           Instructions: {}", dockerfile.instruction_count);
+        }
+    }
+    
+    // Compose files
+    if !docker_analysis.compose_files.is_empty() {
+        println!("      📋 Compose Files ({}):", docker_analysis.compose_files.len());
+        for compose_file in &docker_analysis.compose_files {
+            println!("         • {}", compose_file.path.display());
+            if let Some(env) = &compose_file.environment {
+                println!("           Environment: {}", env);
+            }
+            if let Some(version) = &compose_file.version {
+                println!("           Version: {}", version);
+            }
+            if !compose_file.service_names.is_empty() {
+                println!("           Services: {}", compose_file.service_names.join(", "));
+            }
+            if !compose_file.networks.is_empty() {
+                println!("           Networks: {}", compose_file.networks.join(", "));
+            }
+            if !compose_file.volumes.is_empty() {
+                println!("           Volumes: {}", compose_file.volumes.join(", "));
+            }
+        }
+    }
+    
+    // Services
+    if !docker_analysis.services.is_empty() {
+        println!("      🚀 Services ({}):", docker_analysis.services.len());
+        for service in &docker_analysis.services {
+            println!("         • {} ({})", service.name, 
+                match &service.image_or_build {
+                    syncable_cli::analyzer::docker_analyzer::ImageOrBuild::Image(img) => format!("image: {}", img),
+                    syncable_cli::analyzer::docker_analyzer::ImageOrBuild::Build { context, .. } => format!("build: {}", context),
+                }
+            );
+            
+            // Port mappings
+            if !service.ports.is_empty() {
+                println!("           Ports:");
+                for port in &service.ports {
+                    if let Some(host_port) = port.host_port {
+                        println!("             - {}:{} ({})", host_port, port.container_port, port.protocol);
+                    } else {
+                        println!("             - {} ({})", port.container_port, port.protocol);
+                    }
+                }
+            }
+            
+            // Dependencies
+            if !service.depends_on.is_empty() {
+                println!("           Depends on: {}", service.depends_on.join(", "));
+            }
+            
+            // Networks
+            if !service.networks.is_empty() {
+                println!("           Networks: {}", service.networks.join(", "));
+            }
+            
+            // Environment variables (show count if many)
+            if !service.environment.is_empty() {
+                if service.environment.len() <= 3 {
+                    println!("           Environment:");
+                    for (key, value) in &service.environment {
+                        let display_value = if value.is_empty() { "(set)" } else { value };
+                        println!("             - {}={}", key, display_value);
+                    }
+                } else {
+                    println!("           Environment variables: {} defined", service.environment.len());
+                }
+            }
+        }
+    }
+    
+    // Networking configuration
+    println!("      🌐 Networking:");
+    if docker_analysis.networking.service_discovery.internal_dns {
+        println!("         • Internal DNS enabled");
+    }
+    if !docker_analysis.networking.service_discovery.external_tools.is_empty() {
+        println!("         • Service discovery tools: {}", 
+            docker_analysis.networking.service_discovery.external_tools.join(", "));
+    }
+    if docker_analysis.networking.service_discovery.service_mesh {
+        println!("         • Service mesh detected");
+    }
+    
+    // Load balancing
+    if !docker_analysis.networking.load_balancing.is_empty() {
+        println!("         • Load balancers:");
+        for lb in &docker_analysis.networking.load_balancing {
+            println!("           - {} ({}): {} backends", 
+                lb.service, lb.lb_type, lb.backends.len());
+        }
+    }
+    
+    // External connectivity
+    if !docker_analysis.networking.external_connectivity.exposed_services.is_empty() {
+        println!("         • External services:");
+        for exposed in &docker_analysis.networking.external_connectivity.exposed_services {
+            let ssl_indicator = if exposed.ssl_enabled { " (SSL)" } else { "" };
+            println!("           - {}: ports {}{}", 
+                exposed.service, 
+                exposed.external_ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", "),
+                ssl_indicator
+            );
+        }
+    }
+    
+    if !docker_analysis.networking.external_connectivity.ingress_patterns.is_empty() {
+        println!("         • Ingress patterns: {}", 
+            docker_analysis.networking.external_connectivity.ingress_patterns.join(", "));
+    }
+    
+    if !docker_analysis.networking.external_connectivity.api_gateways.is_empty() {
+        println!("         • API gateways: {}", 
+            docker_analysis.networking.external_connectivity.api_gateways.join(", "));
+    }
+    
+    // Orchestration pattern
+    println!("      🏗️  Orchestration Pattern: {:?}", docker_analysis.orchestration_pattern);
+    
+    match docker_analysis.orchestration_pattern {
+        OrchestrationPattern::SingleContainer => {
+            println!("         Simple containerized application");
+        }
+        OrchestrationPattern::DockerCompose => {
+            println!("         Multi-service Docker Compose setup");
+        }
+        OrchestrationPattern::Microservices => {
+            println!("         Microservices architecture with service discovery");
+        }
+        OrchestrationPattern::EventDriven => {
+            println!("         Event-driven architecture with message queues");
+        }
+        OrchestrationPattern::ServiceMesh => {
+            println!("         Service mesh for advanced service communication");
+        }
+        OrchestrationPattern::Mixed => {
+            println!("         Mixed/complex orchestration pattern");
+        }
+    }
+    
+    // Environments
+    if !docker_analysis.environments.is_empty() {
+        println!("      🔄 Environments ({}):", docker_analysis.environments.len());
+        for env in &docker_analysis.environments {
+            println!("         • {}: {} Dockerfiles, {} Compose files", 
+                env.name, env.dockerfiles.len(), env.compose_files.len());
+        }
+    }
 }
 
 fn display_summary_monorepo_analysis(analysis: &MonorepoAnalysis) {
