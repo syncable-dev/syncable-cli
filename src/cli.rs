@@ -39,9 +39,13 @@ pub enum Commands {
         #[arg(short, long)]
         json: bool,
 
-        /// Show detailed analysis information
-        #[arg(short, long)]
+        /// Show detailed analysis information (legacy format)
+        #[arg(short, long, conflicts_with = "display")]
         detailed: bool,
+
+        /// Display format for analysis results
+        #[arg(long, value_enum, default_value = "matrix")]
+        display: Option<DisplayFormat>,
 
         /// Only analyze specific aspects (languages, frameworks, dependencies)
         #[arg(long, value_delimiter = ',')]
@@ -268,6 +272,16 @@ pub enum ToolsCommand {
 pub enum OutputFormat {
     Table,
     Json,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum DisplayFormat {
+    /// Compact matrix/dashboard view (modern, easy to scan)
+    Matrix,
+    /// Detailed vertical view (legacy format with all details)
+    Detailed,  
+    /// Brief summary only
+    Summary,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
