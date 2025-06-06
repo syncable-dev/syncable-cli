@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.2.0](https://github.com/syncable-dev/syncable-cli/compare/v0.1.5...v0.2.0) - 2025-06-06
+
+### Added
+
+- Added tool install verifier with cli calls ([#14](https://github.com/syncable-dev/syncable-cli/pull/14))
+
 ## [0.1.5](https://github.com/syncable-dev/syncable-cli/compare/v0.1.4...v0.1.5) - 2025-06-06
 
 ### Added
