@@ -76,7 +76,7 @@ pub struct ComposeFileInfo {
 }
 
 /// Container orchestration patterns
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum OrchestrationPattern {
     /// Single container application
     SingleContainer,

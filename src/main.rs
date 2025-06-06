@@ -2,14 +2,18 @@ use clap::Parser;
 use syncable_cli::{
     analyzer::{
         self, vulnerability_checker::VulnerabilitySeverity, DetectedTechnology, TechnologyCategory, LibraryType, 
-        analyze_monorepo, MonorepoAnalysis, ProjectCategory, ArchitecturePattern,
+        analyze_monorepo, analyze_monorepo_with_config, MonorepoAnalysis, ProjectCategory, ArchitecturePattern,
         DockerAnalysis, DockerfileInfo, ComposeFileInfo, DockerService, OrchestrationPattern,
-        NetworkingConfig, DockerEnvironment
+        NetworkingConfig, DockerEnvironment,
+        SecurityAnalyzer, SecurityAnalysisConfig, SecuritySeverity,
+        DependencyAnalysis, VulnerabilitySeverity as VulnSeverity,
+        vulnerability_checker::VulnerabilityChecker
     },
-    cli::{Cli, Commands, ToolsCommand, OutputFormat, SeverityThreshold},
+    cli::{Cli, Commands, ToolsCommand, OutputFormat, SeverityThreshold, DisplayFormat},
     config,
     generator,
 };
+use syncable_cli::analyzer::display::{display_analysis, DisplayMode};
 use std::process;
 use std::collections::HashMap;
 use std::fs;
@@ -43,8 +47,8 @@ async fn run() -> syncable_cli::Result<()> {
     
     // Execute command
     let result = match cli.command {
-        Commands::Analyze { path, json, detailed, only } => {
-            handle_analyze(path, json, detailed, only)
+        Commands::Analyze { path, json, detailed, display, only } => {
+            handle_analyze(path, json, detailed, display, only)
         }
         Commands::Generate { 
             path, 
@@ -154,6 +158,7 @@ fn handle_analyze(
     path: std::path::PathBuf,
     json: bool,
     detailed: bool,
+    display: Option<DisplayFormat>,
     _only: Option<Vec<String>>,
 ) -> syncable_cli::Result<()> {
     println!("🔍 Analyzing project: {}", path.display());
@@ -161,499 +166,24 @@ fn handle_analyze(
     let monorepo_analysis = analyze_monorepo(&path)?;
     
     if json {
-        println!("{}", serde_json::to_string_pretty(&monorepo_analysis)?);
-    } else if detailed {
-        display_detailed_monorepo_analysis(&monorepo_analysis);
+        display_analysis(&monorepo_analysis, DisplayMode::Json);
     } else {
-        display_summary_monorepo_analysis(&monorepo_analysis);
+        // Determine display mode
+        let mode = if detailed {
+            // Legacy flag for backward compatibility
+            DisplayMode::Detailed
+        } else {
+            match display {
+                Some(DisplayFormat::Matrix) | None => DisplayMode::Matrix,
+                Some(DisplayFormat::Detailed) => DisplayMode::Detailed,
+                Some(DisplayFormat::Summary) => DisplayMode::Summary,
+            }
+        };
+        
+        display_analysis(&monorepo_analysis, mode);
     }
     
     Ok(())
-}
-
-fn display_detailed_monorepo_analysis(analysis: &MonorepoAnalysis) {
-    println!("{}", "=".repeat(80));
-    println!("\n📊 PROJECT ANALYSIS RESULTS");
-    println!("{}", "=".repeat(80));
-    
-    // Overall project information
-    if analysis.is_monorepo {
-        println!("\n🏗️  Architecture: Monorepo with {} projects", analysis.projects.len());
-        println!("   Pattern: {:?}", analysis.technology_summary.architecture_pattern);
-        
-        display_architecture_description(&analysis.technology_summary.architecture_pattern);
-    } else {
-        println!("\n🏗️  Architecture: Single Project");
-    }
-    
-    // Technology Summary
-    println!("\n🌐 Technology Summary:");
-    if !analysis.technology_summary.languages.is_empty() {
-        println!("   Languages: {}", analysis.technology_summary.languages.join(", "));
-    }
-    if !analysis.technology_summary.frameworks.is_empty() {
-        println!("   Frameworks: {}", analysis.technology_summary.frameworks.join(", "));
-    }
-    if !analysis.technology_summary.databases.is_empty() {
-        println!("   Databases: {}", analysis.technology_summary.databases.join(", "));
-    }
-    
-    // Individual project details
-    println!("\n📁 Project Details:");
-    println!("{}", "=".repeat(80));
-    
-    for (i, project) in analysis.projects.iter().enumerate() {
-        println!("\n{} {}. {} ({})", 
-            get_category_emoji(&project.project_category),
-            i + 1, 
-            project.name,
-            format_project_category(&project.project_category)
-        );
-        
-        if analysis.is_monorepo {
-            println!("   📂 Path: {}", project.path.display());
-        }
-        
-        // Languages for this project
-        if !project.analysis.languages.is_empty() {
-            println!("   🌐 Languages:");
-            for lang in &project.analysis.languages {
-                print!("      • {} (confidence: {:.1}%)", lang.name, lang.confidence * 100.0);
-                if let Some(version) = &lang.version {
-                    print!(" - Version: {}", version);
-                }
-                println!();
-            }
-        }
-        
-        // Technologies for this project
-        if !project.analysis.technologies.is_empty() {
-            println!("   🚀 Technologies:");
-            display_technologies_detailed(&project.analysis.technologies);
-        }
-        
-        // Entry Points
-        if !project.analysis.entry_points.is_empty() {
-            println!("   📍 Entry Points ({}):", project.analysis.entry_points.len());
-            for (j, entry) in project.analysis.entry_points.iter().enumerate() {
-                println!("      {}. File: {}", j + 1, entry.file.display());
-                if let Some(func) = &entry.function {
-                    println!("         Function: {}", func);
-                }
-                if let Some(cmd) = &entry.command {
-                    println!("         Command: {}", cmd);
-                }
-            }
-        }
-        
-        // Ports
-        if !project.analysis.ports.is_empty() {
-            println!("   🔌 Exposed Ports ({}):", project.analysis.ports.len());
-            for port in &project.analysis.ports {
-                println!("      • Port {}: {:?}", port.number, port.protocol);
-                if let Some(desc) = &port.description {
-                    println!("        {}", desc);
-                }
-            }
-        }
-        
-        // Environment Variables
-        if !project.analysis.environment_variables.is_empty() {
-            println!("   🔐 Environment Variables ({}):", project.analysis.environment_variables.len());
-            let required_vars: Vec<_> = project.analysis.environment_variables.iter()
-                .filter(|ev| ev.required)
-                .collect();
-            let optional_vars: Vec<_> = project.analysis.environment_variables.iter()
-                .filter(|ev| !ev.required)
-                .collect();
-            
-            if !required_vars.is_empty() {
-                println!("      Required:");
-                for var in required_vars {
-                    println!("        • {} {}", 
-                        var.name,
-                        if let Some(desc) = &var.description { 
-                            format!("({})", desc) 
-                        } else { 
-                            String::new() 
-                        }
-                    );
-                }
-            }
-            
-            if !optional_vars.is_empty() {
-                println!("      Optional:");
-                for var in optional_vars {
-                    println!("        • {} = {:?}", 
-                        var.name, 
-                        var.default_value.as_deref().unwrap_or("no default")
-                    );
-                }
-            }
-        }
-        
-        // Build Scripts
-        if !project.analysis.build_scripts.is_empty() {
-            println!("   🔨 Build Scripts ({}):", project.analysis.build_scripts.len());
-            let default_scripts: Vec<_> = project.analysis.build_scripts.iter()
-                .filter(|bs| bs.is_default)
-                .collect();
-            let other_scripts: Vec<_> = project.analysis.build_scripts.iter()
-                .filter(|bs| !bs.is_default)
-                .collect();
-            
-            if !default_scripts.is_empty() {
-                println!("      Default scripts:");
-                for script in default_scripts {
-                    println!("        • {}: {}", script.name, script.command);
-                    if let Some(desc) = &script.description {
-                        println!("          {}", desc);
-                    }
-                }
-            }
-            
-            if !other_scripts.is_empty() {
-                println!("      Other scripts:");
-                for script in other_scripts {
-                    println!("        • {}: {}", script.name, script.command);
-                    if let Some(desc) = &script.description {
-                        println!("          {}", desc);
-                    }
-                }
-            }
-        }
-        
-        // Dependencies (sample)
-        if !project.analysis.dependencies.is_empty() {
-            println!("   📦 Dependencies ({}):", project.analysis.dependencies.len());
-            if project.analysis.dependencies.len() <= 5 {
-                for (name, version) in &project.analysis.dependencies {
-                    println!("      • {} v{}", name, version);
-                }
-            } else {
-                // Show first 5
-                for (name, version) in project.analysis.dependencies.iter().take(5) {
-                    println!("      • {} v{}", name, version);
-                }
-                println!("      ... and {} more", project.analysis.dependencies.len() - 5);
-            }
-        }
-        
-        // Docker Infrastructure Analysis
-        if let Some(docker_analysis) = &project.analysis.docker_analysis {
-            display_docker_analysis_detailed(docker_analysis);
-        }
-        
-        // Project type
-        println!("   🎯 Project Type: {:?}", project.analysis.project_type);
-        
-        if i < analysis.projects.len() - 1 {
-            println!("{}", "-".repeat(40));
-        }
-    }
-    
-    // Summary
-    println!("\n📋 ANALYSIS SUMMARY");
-    println!("{}", "=".repeat(80));
-    println!("✅ Project Analysis Complete!");
-    
-    if analysis.is_monorepo {
-        println!("\n🏗️  Monorepo Architecture:");
-        println!("   • Total projects: {}", analysis.projects.len());
-        println!("   • Architecture pattern: {:?}", analysis.technology_summary.architecture_pattern);
-        
-        let frontend_count = analysis.projects.iter().filter(|p| p.project_category == ProjectCategory::Frontend).count();
-        let backend_count = analysis.projects.iter().filter(|p| matches!(p.project_category, ProjectCategory::Backend | ProjectCategory::Api)).count();
-        let service_count = analysis.projects.iter().filter(|p| p.project_category == ProjectCategory::Service).count();
-        let lib_count = analysis.projects.iter().filter(|p| p.project_category == ProjectCategory::Library).count();
-        
-        if frontend_count > 0 { println!("   • Frontend projects: {}", frontend_count); }
-        if backend_count > 0 { println!("   • Backend/API projects: {}", backend_count); }
-        if service_count > 0 { println!("   • Service projects: {}", service_count); }
-        if lib_count > 0 { println!("   • Library projects: {}", lib_count); }
-    }
-    
-    println!("\n📈 Analysis Metadata:");
-    println!("   • Duration: {}ms", analysis.metadata.analysis_duration_ms);
-    println!("   • Files analyzed: {}", analysis.metadata.files_analyzed);
-    println!("   • Confidence score: {:.1}%", analysis.metadata.confidence_score * 100.0);
-    println!("   • Analyzer version: {}", analysis.metadata.analyzer_version);
-}
-
-fn display_docker_analysis_detailed(docker_analysis: &DockerAnalysis) {
-    println!("\n   🐳 Docker Infrastructure Analysis:");
-    
-    // Dockerfiles
-    if !docker_analysis.dockerfiles.is_empty() {
-        println!("      📄 Dockerfiles ({}):", docker_analysis.dockerfiles.len());
-        for dockerfile in &docker_analysis.dockerfiles {
-            println!("         • {}", dockerfile.path.display());
-            if let Some(env) = &dockerfile.environment {
-                println!("           Environment: {}", env);
-            }
-            if let Some(base_image) = &dockerfile.base_image {
-                println!("           Base image: {}", base_image);
-            }
-            if !dockerfile.exposed_ports.is_empty() {
-                println!("           Exposed ports: {}", 
-                    dockerfile.exposed_ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", "));
-            }
-            if dockerfile.is_multistage {
-                println!("           Multi-stage build: {} stages", dockerfile.build_stages.len());
-            }
-            println!("           Instructions: {}", dockerfile.instruction_count);
-        }
-    }
-    
-    // Compose files
-    if !docker_analysis.compose_files.is_empty() {
-        println!("      📋 Compose Files ({}):", docker_analysis.compose_files.len());
-        for compose_file in &docker_analysis.compose_files {
-            println!("         • {}", compose_file.path.display());
-            if let Some(env) = &compose_file.environment {
-                println!("           Environment: {}", env);
-            }
-            if let Some(version) = &compose_file.version {
-                println!("           Version: {}", version);
-            }
-            if !compose_file.service_names.is_empty() {
-                println!("           Services: {}", compose_file.service_names.join(", "));
-            }
-            if !compose_file.networks.is_empty() {
-                println!("           Networks: {}", compose_file.networks.join(", "));
-            }
-            if !compose_file.volumes.is_empty() {
-                println!("           Volumes: {}", compose_file.volumes.join(", "));
-            }
-        }
-    }
-    
-    // Services
-    if !docker_analysis.services.is_empty() {
-        println!("      🚀 Services ({}):", docker_analysis.services.len());
-        for service in &docker_analysis.services {
-            println!("         • {} ({})", service.name, 
-                match &service.image_or_build {
-                    syncable_cli::analyzer::docker_analyzer::ImageOrBuild::Image(img) => format!("image: {}", img),
-                    syncable_cli::analyzer::docker_analyzer::ImageOrBuild::Build { context, .. } => format!("build: {}", context),
-                }
-            );
-            
-            // Port mappings
-            if !service.ports.is_empty() {
-                println!("           Ports:");
-                for port in &service.ports {
-                    if let Some(host_port) = port.host_port {
-                        println!("             - {}:{} ({})", host_port, port.container_port, port.protocol);
-                    } else {
-                        println!("             - {} ({})", port.container_port, port.protocol);
-                    }
-                }
-            }
-            
-            // Dependencies
-            if !service.depends_on.is_empty() {
-                println!("           Depends on: {}", service.depends_on.join(", "));
-            }
-            
-            // Networks
-            if !service.networks.is_empty() {
-                println!("           Networks: {}", service.networks.join(", "));
-            }
-            
-            // Environment variables (show count if many)
-            if !service.environment.is_empty() {
-                if service.environment.len() <= 3 {
-                    println!("           Environment:");
-                    for (key, value) in &service.environment {
-                        let display_value = if value.is_empty() { "(set)" } else { value };
-                        println!("             - {}={}", key, display_value);
-                    }
-                } else {
-                    println!("           Environment variables: {} defined", service.environment.len());
-                }
-            }
-        }
-    }
-    
-    // Networking configuration
-    println!("      🌐 Networking:");
-    if docker_analysis.networking.service_discovery.internal_dns {
-        println!("         • Internal DNS enabled");
-    }
-    if !docker_analysis.networking.service_discovery.external_tools.is_empty() {
-        println!("         • Service discovery tools: {}", 
-            docker_analysis.networking.service_discovery.external_tools.join(", "));
-    }
-    if docker_analysis.networking.service_discovery.service_mesh {
-        println!("         • Service mesh detected");
-    }
-    
-    // Load balancing
-    if !docker_analysis.networking.load_balancing.is_empty() {
-        println!("         • Load balancers:");
-        for lb in &docker_analysis.networking.load_balancing {
-            println!("           - {} ({}): {} backends", 
-                lb.service, lb.lb_type, lb.backends.len());
-        }
-    }
-    
-    // External connectivity
-    if !docker_analysis.networking.external_connectivity.exposed_services.is_empty() {
-        println!("         • External services:");
-        for exposed in &docker_analysis.networking.external_connectivity.exposed_services {
-            let ssl_indicator = if exposed.ssl_enabled { " (SSL)" } else { "" };
-            println!("           - {}: ports {}{}", 
-                exposed.service, 
-                exposed.external_ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", "),
-                ssl_indicator
-            );
-        }
-    }
-    
-    if !docker_analysis.networking.external_connectivity.ingress_patterns.is_empty() {
-        println!("         • Ingress patterns: {}", 
-            docker_analysis.networking.external_connectivity.ingress_patterns.join(", "));
-    }
-    
-    if !docker_analysis.networking.external_connectivity.api_gateways.is_empty() {
-        println!("         • API gateways: {}", 
-            docker_analysis.networking.external_connectivity.api_gateways.join(", "));
-    }
-    
-    // Orchestration pattern
-    println!("      🏗️  Orchestration Pattern: {:?}", docker_analysis.orchestration_pattern);
-    
-    match docker_analysis.orchestration_pattern {
-        OrchestrationPattern::SingleContainer => {
-            println!("         Simple containerized application");
-        }
-        OrchestrationPattern::DockerCompose => {
-            println!("         Multi-service Docker Compose setup");
-        }
-        OrchestrationPattern::Microservices => {
-            println!("         Microservices architecture with service discovery");
-        }
-        OrchestrationPattern::EventDriven => {
-            println!("         Event-driven architecture with message queues");
-        }
-        OrchestrationPattern::ServiceMesh => {
-            println!("         Service mesh for advanced service communication");
-        }
-        OrchestrationPattern::Mixed => {
-            println!("         Mixed/complex orchestration pattern");
-        }
-    }
-    
-    // Environments
-    if !docker_analysis.environments.is_empty() {
-        println!("      🔄 Environments ({}):", docker_analysis.environments.len());
-        for env in &docker_analysis.environments {
-            println!("         • {}: {} Dockerfiles, {} Compose files", 
-                env.name, env.dockerfiles.len(), env.compose_files.len());
-        }
-    }
-}
-
-fn display_summary_monorepo_analysis(analysis: &MonorepoAnalysis) {
-    println!("\n📊 Analysis Results:");
-    println!("├── Root: {}", analysis.root_path.display());
-    
-    if analysis.is_monorepo {
-        println!("├── Architecture: Monorepo ({} projects)", analysis.projects.len());
-        println!("├── Pattern: {:?}", analysis.technology_summary.architecture_pattern);
-    } else {
-        println!("├── Architecture: Single Project");
-    }
-    
-    println!("├── Languages: {}", analysis.technology_summary.languages.join(", "));
-    if !analysis.technology_summary.frameworks.is_empty() {
-        println!("├── Frameworks: {}", analysis.technology_summary.frameworks.join(", "));
-    }
-    if !analysis.technology_summary.databases.is_empty() {
-        println!("├── Databases: {}", analysis.technology_summary.databases.join(", "));
-    }
-    
-    println!("└── Projects:");
-    
-    for (i, project) in analysis.projects.iter().enumerate() {
-        let connector = if i == analysis.projects.len() - 1 { "└──" } else { "├──" };
-        
-        println!("    {} {} {} ({})", 
-            connector,
-            get_category_emoji(&project.project_category),
-            project.name, 
-            format_project_category(&project.project_category)
-        );
-        
-        if analysis.is_monorepo {
-            let sub_connector = if i == analysis.projects.len() - 1 { "   " } else { "│  " };
-            println!("    {}    📂 Path: {}", sub_connector, project.path.display());
-            println!("    {}    🌐 Languages: {}", sub_connector, 
-                project.analysis.languages.iter().map(|l| l.name.clone()).collect::<Vec<_>>().join(", "));
-            
-            if project.analysis.ports.len() > 0 {
-                println!("    {}    🔌 Ports: {}", sub_connector, 
-                    project.analysis.ports.iter().map(|p| p.number.to_string()).collect::<Vec<_>>().join(", "));
-            }
-        }
-    }
-    
-    println!("\n📈 Analysis metadata:");
-    println!("├── Duration: {}ms", analysis.metadata.analysis_duration_ms);
-    println!("├── Files analyzed: {}", analysis.metadata.files_analyzed);
-    println!("└── Confidence score: {:.1}%", analysis.metadata.confidence_score * 100.0);
-}
-
-fn get_category_emoji(category: &ProjectCategory) -> &'static str {
-    match category {
-        ProjectCategory::Frontend => "🌐",
-        ProjectCategory::Backend => "⚙️",
-        ProjectCategory::Api => "🔌",
-        ProjectCategory::Service => "🚀",
-        ProjectCategory::Library => "📚",
-        ProjectCategory::Tool => "🔧",
-        ProjectCategory::Documentation => "📖",
-        ProjectCategory::Infrastructure => "🏗️",
-        ProjectCategory::Unknown => "❓",
-    }
-}
-
-fn format_project_category(category: &ProjectCategory) -> &'static str {
-    match category {
-        ProjectCategory::Frontend => "Frontend",
-        ProjectCategory::Backend => "Backend",
-        ProjectCategory::Api => "API",
-        ProjectCategory::Service => "Service",
-        ProjectCategory::Library => "Library",
-        ProjectCategory::Tool => "Tool",
-        ProjectCategory::Documentation => "Documentation",
-        ProjectCategory::Infrastructure => "Infrastructure",
-        ProjectCategory::Unknown => "Unknown",
-    }
-}
-
-fn display_architecture_description(pattern: &ArchitecturePattern) {
-    match pattern {
-        ArchitecturePattern::Monolithic => {
-            println!("   📦 This is a single, self-contained application");
-        }
-        ArchitecturePattern::Fullstack => {
-            println!("   🌐 This is a full-stack application with separate frontend and backend");
-        }
-        ArchitecturePattern::Microservices => {
-            println!("   🔗 This is a microservices architecture with multiple independent services");
-        }
-        ArchitecturePattern::ApiFirst => {
-            println!("   🔌 This is an API-first architecture focused on service interfaces");
-        }
-        ArchitecturePattern::EventDriven => {
-            println!("   📡 This is an event-driven architecture with decoupled components");
-        }
-        ArchitecturePattern::Mixed => {
-            println!("   🔀 This is a mixed architecture combining multiple patterns");
-        }
-    }
 }
 
 fn handle_generate(
@@ -1977,4 +1507,19 @@ async fn handle_tools(command: ToolsCommand) -> syncable_cli::Result<()> {
     }
     
     Ok(())
+}
+
+/// Format project category for display
+fn format_project_category(category: &ProjectCategory) -> &'static str {
+    match category {
+        ProjectCategory::Frontend => "Frontend",
+        ProjectCategory::Backend => "Backend",
+        ProjectCategory::Api => "API",
+        ProjectCategory::Service => "Service",
+        ProjectCategory::Library => "Library",
+        ProjectCategory::Tool => "Tool",
+        ProjectCategory::Documentation => "Documentation",
+        ProjectCategory::Infrastructure => "Infrastructure",
+        ProjectCategory::Unknown => "Unknown",
+    }
 }
