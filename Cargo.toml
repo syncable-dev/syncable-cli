@@ -1,6 +1,6 @@
 [package]
 name = "syncable-cli"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 authors = ["Syncable Team"]
 description = "A Rust-based CLI that analyzes code repositories and generates Infrastructure as Code configurations"
@@ -31,6 +31,8 @@ once_cell = "1"
 rayon = "1.7"
 termcolor = "1"
 chrono = { version = "0.4", features = ["serde"] }
+colored = "2"
+prettytable = "0.10"
 
 # Vulnerability checking dependencies
 rustsec = "0.29"
