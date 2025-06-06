@@ -2,12 +2,7 @@ use clap::Parser;
 use syncable_cli::{
     analyzer::{
         self, vulnerability_checker::VulnerabilitySeverity, DetectedTechnology, TechnologyCategory, LibraryType, 
-        analyze_monorepo, analyze_monorepo_with_config, MonorepoAnalysis, ProjectCategory, ArchitecturePattern,
-        DockerAnalysis, DockerfileInfo, ComposeFileInfo, DockerService, OrchestrationPattern,
-        NetworkingConfig, DockerEnvironment,
-        SecurityAnalyzer, SecurityAnalysisConfig, SecuritySeverity,
-        DependencyAnalysis, VulnerabilitySeverity as VulnSeverity,
-        vulnerability_checker::VulnerabilityChecker
+        analyze_monorepo, ProjectCategory,
     },
     cli::{Cli, Commands, ToolsCommand, OutputFormat, SeverityThreshold, DisplayFormat},
     config,
@@ -127,23 +122,24 @@ fn check_for_update() {
         }
     }
 
-    // Query crates.io with proper User-Agent header
+    // Query GitHub releases API instead of crates.io
     let client = reqwest::blocking::Client::builder()
         .user_agent(format!("syncable-cli/{} ({})", env!("CARGO_PKG_VERSION"), env!("CARGO_PKG_REPOSITORY")))
         .build();
     
     if let Ok(client) = client {
         let resp = client
-            .get("https://crates.io/api/v1/crates/syncable-cli")
+            .get("https://api.github.com/repos/syncable-dev/syncable-cli/releases/latest")
             .send()
             .and_then(|r| r.json::<serde_json::Value>());
             
         if let Ok(json) = resp {
-            let latest = json["crate"]["max_version"].as_str().unwrap_or("");
+            let latest = json["tag_name"].as_str().unwrap_or("")
+                .trim_start_matches('v'); // Remove 'v' prefix if present
             let current = env!("CARGO_PKG_VERSION");
             if latest != "" && latest != current {
                 println!(
-                    "\x1b[33m🔔 A new version of sync-ctl is available: {latest} (current: {current})\nRun `cargo install syncable-cli --force` to update.\x1b[0m"
+                    "\x1b[33m🔔 A new version of sync-ctl is available: {latest} (current: {current})\nRun `cargo install --git https://github.com/syncable-dev/syncable-cli --tag v{latest}` to update.\x1b[0m"
                 );
             }
         }
