@@ -11,10 +11,11 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::fs;
 use std::time::Instant;
+use std::process::Command;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use log::{info, debug};
+use log::{info, debug, warn};
 use rayon::prelude::*;
 use indicatif::{ProgressBar, ProgressStyle, MultiProgress};
 
@@ -123,6 +124,10 @@ pub struct SecurityAnalysisConfig {
     pub check_compliance: bool,
     pub frameworks_to_check: Vec<String>,
     pub ignore_patterns: Vec<String>,
+    /// Whether to skip scanning files that are gitignored
+    pub skip_gitignored_files: bool,
+    /// Whether to downgrade severity for gitignored files instead of skipping
+    pub downgrade_gitignored_severity: bool,
 }
 
 impl Default for SecurityAnalysisConfig {
@@ -152,6 +157,8 @@ impl Default for SecurityAnalysisConfig {
                 "*_sample.*".to_string(), // Exclude sample files
                 "*audit*".to_string(), // Exclude audit reports
             ],
+            skip_gitignored_files: true, // Default to skipping gitignored files
+            downgrade_gitignored_severity: false, // Skip entirely by default
         }
     }
 }
@@ -160,6 +167,8 @@ pub struct SecurityAnalyzer {
     config: SecurityAnalysisConfig,
     secret_patterns: Vec<SecretPattern>,
     security_rules: HashMap<Language, Vec<SecurityRule>>,
+    git_ignore_cache: std::sync::Mutex<HashMap<PathBuf, bool>>,
+    project_root: Option<PathBuf>,
 }
 
 /// Pattern for detecting secrets and sensitive data
@@ -195,13 +204,18 @@ impl SecurityAnalyzer {
             config,
             secret_patterns,
             security_rules,
+            git_ignore_cache: std::sync::Mutex::new(HashMap::new()),
+            project_root: None,
         })
     }
     
     /// Perform comprehensive security analysis with appropriate progress for verbosity level
-    pub fn analyze_security(&self, analysis: &ProjectAnalysis) -> Result<SecurityReport, SecurityError> {
+    pub fn analyze_security(&mut self, analysis: &ProjectAnalysis) -> Result<SecurityReport, SecurityError> {
         let start_time = Instant::now();
         info!("Starting comprehensive security analysis");
+        
+        // Set project root for gitignore checking
+        self.project_root = Some(analysis.project_root.clone());
         
         // Check if we're in verbose mode by checking log level
         let is_verbose = log::max_level() >= log::LevelFilter::Info;
@@ -360,6 +374,217 @@ impl SecurityAnalyzer {
             recommendations,
             compliance_status,
         })
+    }
+    
+    /// Check if a file is gitignored using git check-ignore command
+    fn is_file_gitignored(&self, file_path: &Path) -> bool {
+        // Return false if we don't have project root set
+        let project_root = match &self.project_root {
+            Some(root) => root,
+            None => return false,
+        };
+        
+        // Use cache to avoid repeated git calls
+        if let Ok(cache) = self.git_ignore_cache.lock() {
+            if let Some(&cached_result) = cache.get(file_path) {
+                return cached_result;
+            }
+        }
+        
+        // Check if this is a git repository
+        if !project_root.join(".git").exists() {
+            debug!("Not a git repository, treating all files as tracked");
+            return false;
+        }
+        
+        // First, try git check-ignore for the most accurate result
+        let git_result = Command::new("git")
+            .args(&["check-ignore", "--quiet"])
+            .arg(file_path)
+            .current_dir(project_root)
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false);
+        
+        // If git check-ignore says it's ignored, trust it
+        if git_result {
+            if let Ok(mut cache) = self.git_ignore_cache.lock() {
+                cache.insert(file_path.to_path_buf(), true);
+            }
+            return true;
+        }
+        
+        // Fallback: Parse .gitignore files manually for common patterns
+        // This helps when git check-ignore might not work perfectly in all scenarios
+        let manual_result = self.check_gitignore_patterns(file_path, project_root);
+        
+        // Cache the result (prefer git result, fallback to manual)
+        let final_result = git_result || manual_result;
+        if let Ok(mut cache) = self.git_ignore_cache.lock() {
+            cache.insert(file_path.to_path_buf(), final_result);
+        }
+        
+        final_result
+    }
+    
+    /// Manually check gitignore patterns as a fallback
+    fn check_gitignore_patterns(&self, file_path: &Path, project_root: &Path) -> bool {
+        // Get relative path from project root
+        let relative_path = match file_path.strip_prefix(project_root) {
+            Ok(rel) => rel,
+            Err(_) => return false,
+        };
+        
+        let path_str = relative_path.to_string_lossy();
+        let file_name = relative_path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+        
+        // Read .gitignore file
+        let gitignore_path = project_root.join(".gitignore");
+        if let Ok(gitignore_content) = fs::read_to_string(&gitignore_path) {
+            for line in gitignore_content.lines() {
+                let pattern = line.trim();
+                if pattern.is_empty() || pattern.starts_with('#') {
+                    continue;
+                }
+                
+                // Check if this pattern matches our file
+                if self.matches_gitignore_pattern(pattern, &path_str, file_name) {
+                    debug!("File {} matches gitignore pattern: {}", path_str, pattern);
+                    return true;
+                }
+            }
+        }
+        
+        // Also check global gitignore patterns for common .env patterns
+        self.matches_common_env_patterns(file_name)
+    }
+    
+    /// Check if a file matches a specific gitignore pattern
+    fn matches_gitignore_pattern(&self, pattern: &str, path_str: &str, file_name: &str) -> bool {
+        // Handle different types of patterns
+        if pattern.contains('*') {
+            // Wildcard patterns
+            if let Ok(glob_pattern) = glob::Pattern::new(pattern) {
+                // Try matching both full path and just filename
+                if glob_pattern.matches(path_str) || glob_pattern.matches(file_name) {
+                    return true;
+                }
+            }
+        } else if pattern.starts_with('/') {
+            // Absolute path from repo root
+            let abs_pattern = &pattern[1..];
+            if path_str == abs_pattern {
+                return true;
+            }
+        } else {
+            // Simple pattern - could match anywhere in path
+            if path_str == pattern || 
+               file_name == pattern || 
+               path_str.ends_with(&format!("/{}", pattern)) {
+                return true;
+            }
+        }
+        
+        false
+    }
+    
+    /// Check against common .env file patterns that should typically be ignored
+    fn matches_common_env_patterns(&self, file_name: &str) -> bool {
+        let common_env_patterns = [
+            ".env",
+            ".env.local",
+            ".env.development", 
+            ".env.production",
+            ".env.staging",
+            ".env.test",
+            ".env.example", // Usually committed but should be treated carefully
+        ];
+        
+        // Exact matches
+        if common_env_patterns.contains(&file_name) {
+            return file_name != ".env.example"; // .env.example is usually committed
+        }
+        
+        // Pattern matches
+        if file_name.starts_with(".env.") || 
+           file_name.ends_with(".env") ||
+           (file_name.starts_with(".") && file_name.contains("env")) {
+            // Be conservative - only ignore if it's clearly a local/environment specific file
+            return !file_name.contains("example") && 
+                   !file_name.contains("sample") && 
+                   !file_name.contains("template");
+        }
+        
+        false
+    }
+    
+    /// Check if a file is actually tracked by git
+    fn is_file_tracked(&self, file_path: &Path) -> bool {
+        let project_root = match &self.project_root {
+            Some(root) => root,
+            None => return true, // Assume tracked if no project root
+        };
+        
+        // Check if this is a git repository
+        if !project_root.join(".git").exists() {
+            return true; // Not a git repo, treat as tracked
+        }
+        
+        // Use git ls-files to check if file is tracked
+        Command::new("git")
+            .args(&["ls-files", "--error-unmatch"])
+            .arg(file_path)
+            .current_dir(project_root)
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(true) // Default to tracked if git command fails
+    }
+    
+    /// Determine the appropriate severity for a secret finding based on git status
+    fn determine_secret_severity(&self, file_path: &Path, original_severity: SecuritySeverity) -> (SecuritySeverity, Vec<String>) {
+        let mut additional_remediation = Vec::new();
+        
+        // Check if file is gitignored
+        if self.is_file_gitignored(file_path) {
+            if self.config.skip_gitignored_files {
+                // Return Info level to indicate this should be skipped
+                return (SecuritySeverity::Info, vec!["File is properly gitignored".to_string()]);
+            } else if self.config.downgrade_gitignored_severity {
+                // Downgrade severity for gitignored files
+                let downgraded = match original_severity {
+                    SecuritySeverity::Critical => SecuritySeverity::Medium,
+                    SecuritySeverity::High => SecuritySeverity::Low,
+                    SecuritySeverity::Medium => SecuritySeverity::Low,
+                    SecuritySeverity::Low => SecuritySeverity::Info,
+                    SecuritySeverity::Info => SecuritySeverity::Info,
+                };
+                additional_remediation.push("Note: File is gitignored, reducing severity".to_string());
+                return (downgraded, additional_remediation);
+            }
+        }
+        
+        // Check if file is tracked by git
+        if !self.is_file_tracked(file_path) {
+            additional_remediation.push("Ensure this file is added to .gitignore to prevent accidental commits".to_string());
+        } else {
+            // File is tracked - this is a serious issue
+            additional_remediation.push("⚠️  CRITICAL: This file is tracked by git! Secrets may be in version history.".to_string());
+            additional_remediation.push("Consider using git-filter-branch or BFG Repo-Cleaner to remove from history".to_string());
+            additional_remediation.push("Rotate any exposed secrets immediately".to_string());
+            
+            // Upgrade severity for tracked files
+            let upgraded = match original_severity {
+                SecuritySeverity::High => SecuritySeverity::Critical,
+                SecuritySeverity::Medium => SecuritySeverity::High,
+                SecuritySeverity::Low => SecuritySeverity::Medium,
+                other => other,
+            };
+            return (upgraded, additional_remediation);
+        }
+        
+        (original_severity, additional_remediation)
     }
     
     /// Initialize secret detection patterns
@@ -970,27 +1195,54 @@ impl SecurityAnalyzer {
         
         for (line_num, line) in content.lines().enumerate() {
             for pattern in &self.secret_patterns {
-                if let Some(captures) = pattern.pattern.find(line) {
+                if let Some(_captures) = pattern.pattern.find(line) {
                     // Skip if it looks like a placeholder or example
                     if self.is_likely_placeholder(line) {
                         continue;
                     }
                     
+                    // Determine severity based on git status
+                    let (severity, additional_remediation) = self.determine_secret_severity(file_path, pattern.severity.clone());
+                    
+                    // Skip if severity is Info (indicates gitignored and should be skipped)
+                    if self.config.skip_gitignored_files && severity == SecuritySeverity::Info {
+                        debug!("Skipping secret in gitignored file: {}", file_path.display());
+                        continue;
+                    }
+                    
+                    // Build base remediation steps
+                    let mut remediation = vec![
+                        "Remove sensitive data from source code".to_string(),
+                        "Use environment variables for secrets".to_string(),
+                        "Consider using a secure secret management service".to_string(),
+                    ];
+                    
+                    // Add git-specific remediation based on file status
+                    remediation.extend(additional_remediation);
+                    
+                    // Add generic gitignore advice if not already covered
+                    if !self.is_file_gitignored(file_path) && !self.is_file_tracked(file_path) {
+                        remediation.push("Add this file to .gitignore to prevent accidental commits".to_string());
+                    }
+                    
+                    // Create enhanced finding with git-aware severity and remediation
+                    let mut description = pattern.description.clone();
+                    if self.is_file_tracked(file_path) {
+                        description.push_str(" (⚠️  WARNING: File is tracked by git - secrets may be in version history!)");
+                    } else if self.is_file_gitignored(file_path) {
+                        description.push_str(" (ℹ️  Note: File is gitignored)");
+                    }
+                    
                     findings.push(SecurityFinding {
                         id: format!("secret-{}-{}", pattern.name.to_lowercase().replace(' ', "-"), line_num),
                         title: format!("Potential {} Exposure", pattern.name),
-                        description: pattern.description.clone(),
-                        severity: pattern.severity.clone(),
+                        description,
+                        severity,
                         category: SecurityCategory::SecretsExposure,
                         file_path: Some(file_path.to_path_buf()),
                         line_number: Some(line_num + 1),
                         evidence: Some(format!("Line: {}", line.trim())),
-                        remediation: vec![
-                            "Remove sensitive data from source code".to_string(),
-                            "Use environment variables for secrets".to_string(),
-                            "Consider using a secure secret management service".to_string(),
-                            "Add this file to .gitignore if it contains secrets".to_string(),
-                        ],
+                        remediation,
                         references: vec![
                             "https://owasp.org/www-project-top-ten/2021/A05_2021-Security_Misconfiguration/".to_string(),
                         ],
@@ -1361,5 +1613,123 @@ mod tests {
         assert!(analyzer.is_sensitive_env_var("JWT_SECRET"));
         assert!(!analyzer.is_sensitive_env_var("PORT"));
         assert!(!analyzer.is_sensitive_env_var("NODE_ENV"));
+    }
+    
+    #[test]
+    fn test_gitignore_aware_severity() {
+        use tempfile::TempDir;
+        use std::fs;
+        use std::process::Command;
+        
+        let temp_dir = TempDir::new().unwrap();
+        let project_root = temp_dir.path();
+        
+        // Initialize a real git repo
+        let git_init = Command::new("git")
+            .args(&["init"])
+            .current_dir(project_root)
+            .output();
+        
+        // Skip test if git is not available
+        if git_init.is_err() {
+            println!("Skipping gitignore test - git not available");
+            return;
+        }
+        
+        // Create .gitignore file
+        fs::write(project_root.join(".gitignore"), ".env\n.env.local\n").unwrap();
+        
+        // Stage and commit .gitignore to make it effective
+        let _ = Command::new("git")
+            .args(&["add", ".gitignore"])
+            .current_dir(project_root)
+            .output();
+        let _ = Command::new("git")
+            .args(&["config", "user.email", "test@example.com"])
+            .current_dir(project_root)
+            .output();
+        let _ = Command::new("git")
+            .args(&["config", "user.name", "Test User"])
+            .current_dir(project_root)
+            .output();
+        let _ = Command::new("git")
+            .args(&["commit", "-m", "Add gitignore"])
+            .current_dir(project_root)
+            .output();
+        
+        let mut analyzer = SecurityAnalyzer::new().unwrap();
+        analyzer.project_root = Some(project_root.to_path_buf());
+        
+        // Test file that would be gitignored
+        let env_file = project_root.join(".env");
+        fs::write(&env_file, "API_KEY=sk-1234567890abcdef").unwrap();
+        
+        // Test severity determination for gitignored file
+        let (severity, remediation) = analyzer.determine_secret_severity(&env_file, SecuritySeverity::High);
+        
+        // With default config, gitignored files should be marked as Info (skipped)
+        assert_eq!(severity, SecuritySeverity::Info);
+        assert!(remediation.iter().any(|r| r.contains("gitignored")));
+    }
+    
+    #[test]
+    fn test_gitignore_config_options() {
+        let mut config = SecurityAnalysisConfig::default();
+        
+        // Test default configuration
+        assert!(config.skip_gitignored_files);
+        assert!(!config.downgrade_gitignored_severity);
+        
+        // Test downgrade mode
+        config.skip_gitignored_files = false;
+        config.downgrade_gitignored_severity = true;
+        
+        let analyzer = SecurityAnalyzer::with_config(config).unwrap();
+        // Additional test logic could be added here for downgrade behavior
+    }
+    
+    #[test]
+    fn test_gitignore_pattern_matching() {
+        let analyzer = SecurityAnalyzer::new().unwrap();
+        
+        // Test wildcard patterns - *.env matches files ending with .env
+        assert!(!analyzer.matches_gitignore_pattern("*.env", ".env.local", ".env.local")); // Doesn't end with .env
+        assert!(analyzer.matches_gitignore_pattern("*.env", "production.env", "production.env")); // Ends with .env
+        assert!(analyzer.matches_gitignore_pattern(".env*", ".env.production", ".env.production")); // Starts with .env
+        assert!(analyzer.matches_gitignore_pattern("*.log", "app.log", "app.log"));
+        
+        // Test exact patterns
+        assert!(analyzer.matches_gitignore_pattern(".env", ".env", ".env"));
+        assert!(!analyzer.matches_gitignore_pattern(".env", ".env.local", ".env.local"));
+        
+        // Test directory patterns
+        assert!(analyzer.matches_gitignore_pattern("/config.json", "config.json", "config.json"));
+        assert!(!analyzer.matches_gitignore_pattern("/config.json", "src/config.json", "config.json"));
+        
+        // Test common .env patterns that should work
+        assert!(analyzer.matches_gitignore_pattern(".env*", ".env", ".env"));
+        assert!(analyzer.matches_gitignore_pattern(".env*", ".env.local", ".env.local"));
+        assert!(analyzer.matches_gitignore_pattern(".env.*", ".env.production", ".env.production"));
+    }
+    
+    #[test]
+    fn test_common_env_patterns() {
+        let analyzer = SecurityAnalyzer::new().unwrap();
+        
+        // Should match common .env files
+        assert!(analyzer.matches_common_env_patterns(".env"));
+        assert!(analyzer.matches_common_env_patterns(".env.local"));
+        assert!(analyzer.matches_common_env_patterns(".env.production"));
+        assert!(analyzer.matches_common_env_patterns(".env.development"));
+        assert!(analyzer.matches_common_env_patterns(".env.test"));
+        
+        // Should NOT match example/template files (usually committed)
+        assert!(!analyzer.matches_common_env_patterns(".env.example"));
+        assert!(!analyzer.matches_common_env_patterns(".env.sample"));
+        assert!(!analyzer.matches_common_env_patterns(".env.template"));
+        
+        // Should not match non-env files
+        assert!(!analyzer.matches_common_env_patterns("config.json"));
+        assert!(!analyzer.matches_common_env_patterns("package.json"));
     }
 } 
