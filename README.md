@@ -247,6 +247,7 @@ $ sync-ctl analyze ./fastapi-service --json
   ]
 }
 ```
+
 ### Example: Security Analysis
 
 ```bash
@@ -293,6 +294,35 @@ max_file_size = 2097152  # 2MB
 [output]
 format = "json"  # or "yaml", "toml"
 ```
+
+## 🔄 Automatic Update Checks
+
+Syncable CLI automatically checks for updates once per day when you run any command. When a new version is available, you'll see a notification:
+
+```
+🔔 A new version of sync-ctl is available: 0.5.0 (current: 0.4.1)
+Run `cargo install syncable-cli` or download from https://github.com/syncable-dev/syncable-cli/releases/tag/v0.5.0
+```
+
+### Troubleshooting Update Checks
+
+If you're not seeing update notifications:
+
+```bash
+# Force an update check by clearing the cache
+sync-ctl --clear-update-cache analyze .
+
+# Enable debug logging to see what's happening
+SYNC_CTL_DEBUG=1 sync-ctl analyze .
+```
+
+The update check:
+- Only runs once per day (cached in `~/.cache/syncable-cli/`)
+- Queries GitHub releases API to find the latest version
+- Works behind corporate proxies (uses system proxy settings)
+- Has a 5-second timeout to avoid slowing down commands
+
+To disable update checks, you can set the `SYNC_CTL_NO_UPDATE_CHECK` environment variable (coming in next release).
 
 ## 🧪 Comprehensive Technology Support (260+ Technologies)
 
