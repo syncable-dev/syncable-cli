@@ -11,7 +11,6 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, Duration};
 use dirs::cache_dir;
-use reqwest::blocking::get;
 
 #[tokio::main]
 async fn main() {
@@ -119,16 +118,25 @@ fn check_for_update() {
         }
     }
 
-    // Query crates.io
-    let resp = get("https://crates.io/api/v1/crates/syncable-cli")
-        .and_then(|r| r.json::<serde_json::Value>());
-    if let Ok(json) = resp {
-        let latest = json["crate"]["max_version"].as_str().unwrap_or("");
-        let current = env!("CARGO_PKG_VERSION");
-        if latest != "" && latest != current {
-            println!(
-                "\x1b[33m🔔 A new version of sync-ctl is available: {latest} (current: {current})\nRun `cargo install syncable-cli --force` to update.\x1b[0m"
-            );
+    // Query crates.io with proper User-Agent header
+    let client = reqwest::blocking::Client::builder()
+        .user_agent(format!("syncable-cli/{} ({})", env!("CARGO_PKG_VERSION"), env!("CARGO_PKG_REPOSITORY")))
+        .build();
+    
+    if let Ok(client) = client {
+        let resp = client
+            .get("https://crates.io/api/v1/crates/syncable-cli")
+            .send()
+            .and_then(|r| r.json::<serde_json::Value>());
+            
+        if let Ok(json) = resp {
+            let latest = json["crate"]["max_version"].as_str().unwrap_or("");
+            let current = env!("CARGO_PKG_VERSION");
+            if latest != "" && latest != current {
+                println!(
+                    "\x1b[33m🔔 A new version of sync-ctl is available: {latest} (current: {current})\nRun `cargo install syncable-cli --force` to update.\x1b[0m"
+                );
+            }
         }
     }
 
