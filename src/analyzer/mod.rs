@@ -19,6 +19,8 @@ pub mod project_context;
 pub mod vulnerability_checker;
 pub mod security_analyzer;
 pub mod tool_installer;
+pub mod monorepo_detector;
+pub mod docker_analyzer;
 
 // Re-export dependency analysis types
 pub use dependency_parser::{
@@ -30,6 +32,18 @@ pub use dependency_parser::{
 pub use security_analyzer::{
     SecurityAnalyzer, SecurityReport, SecurityFinding, SecuritySeverity,
     SecurityCategory, ComplianceStatus, SecurityAnalysisConfig
+};
+
+// Re-export monorepo analysis types
+pub use monorepo_detector::{
+    MonorepoDetectionConfig, analyze_monorepo, analyze_monorepo_with_config
+};
+
+// Re-export Docker analysis types
+pub use docker_analyzer::{
+    DockerAnalysis, DockerfileInfo, ComposeFileInfo, DockerService, 
+    OrchestrationPattern, NetworkingConfig, DockerEnvironment,
+    analyze_docker_infrastructure
 };
 
 /// Represents a detected programming language
@@ -213,6 +227,8 @@ pub struct ProjectAnalysis {
     pub services: Vec<ServiceAnalysis>,
     /// Whether this is a monolithic project or microservice architecture
     pub architecture_type: ArchitectureType,
+    /// Docker infrastructure analysis
+    pub docker_analysis: Option<DockerAnalysis>,
     pub analysis_metadata: AnalysisMetadata,
 }
 
@@ -251,6 +267,75 @@ impl Default for AnalysisConfig {
             max_file_size: 1024 * 1024, // 1MB
         }
     }
+}
+
+/// Represents an individual project within a monorepo
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ProjectInfo {
+    /// Relative path from the monorepo root
+    pub path: PathBuf,
+    /// Display name for the project (derived from directory name or package name)
+    pub name: String,
+    /// Type of project (frontend, backend, service, etc.)
+    pub project_category: ProjectCategory,
+    /// Full analysis of this specific project
+    pub analysis: ProjectAnalysis,
+}
+
+/// Category of project within a monorepo
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ProjectCategory {
+    Frontend,
+    Backend,
+    Api,
+    Service,
+    Library,
+    Tool,
+    Documentation,
+    Infrastructure,
+    Unknown,
+}
+
+/// Represents the overall analysis of a monorepo or single project
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct MonorepoAnalysis {
+    /// Root path of the analysis
+    pub root_path: PathBuf,
+    /// Whether this is a monorepo (multiple projects) or single project
+    pub is_monorepo: bool,
+    /// List of detected projects (will have 1 item for single projects)
+    pub projects: Vec<ProjectInfo>,
+    /// Overall metadata for the entire analysis
+    pub metadata: AnalysisMetadata,
+    /// Summary of all technologies found across projects
+    pub technology_summary: TechnologySummary,
+}
+
+/// Summary of technologies across all projects
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TechnologySummary {
+    pub languages: Vec<String>,
+    pub frameworks: Vec<String>,
+    pub databases: Vec<String>,
+    pub total_projects: usize,
+    pub architecture_pattern: ArchitecturePattern,
+}
+
+/// Detected architecture patterns
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ArchitecturePattern {
+    /// Single application
+    Monolithic,
+    /// Frontend + Backend separation
+    Fullstack,
+    /// Multiple independent services
+    Microservices,
+    /// API-first architecture
+    ApiFirst,
+    /// Event-driven architecture
+    EventDriven,
+    /// Unknown or mixed pattern
+    Mixed,
 }
 
 /// Analyzes a project directory to detect languages, frameworks, and dependencies.
@@ -295,6 +380,9 @@ pub fn analyze_project_with_config(path: &Path, config: &AnalysisConfig) -> Resu
     let dependencies = dependency_parser::parse_dependencies(&project_root, &languages, config)?;
     let context = project_context::analyze_context(&project_root, &languages, &frameworks, config)?;
     
+    // Analyze Docker infrastructure
+    let docker_analysis = analyze_docker_infrastructure(&project_root).ok();
+    
     let duration = start_time.elapsed();
     let confidence = calculate_confidence_score(&languages, &frameworks);
     
@@ -312,6 +400,7 @@ pub fn analyze_project_with_config(path: &Path, config: &AnalysisConfig) -> Resu
         build_scripts: context.build_scripts,
         services: vec![], // TODO: Implement microservice detection
         architecture_type: ArchitectureType::Monolithic, // TODO: Detect architecture type
+        docker_analysis,
         analysis_metadata: AnalysisMetadata {
             timestamp: Utc::now().to_rfc3339(),
             analyzer_version: env!("CARGO_PKG_VERSION").to_string(),
