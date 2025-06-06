@@ -9,4 +9,4 @@ updates:
     directory: "/" # Location of Cargo.toml and Cargo.lock
     schedule:
       interval: "weekly"
-
+    target-branch: "develop"
