@@ -110,7 +110,24 @@ sync-ctl analyze /path/to/your/project
 
 # Get JSON output
 sync-ctl analyze --json > analysis.json
+
+# Use different display modes (NEW!)
+sync-ctl analyze --display matrix    # Modern dashboard view (default)
+sync-ctl analyze --display summary   # Brief summary only
+sync-ctl analyze --display detailed  # Legacy verbose output
+sync-ctl analyze -d                   # Shorthand for detailed
 ```
+
+### 📊 Display Modes (NEW!)
+
+The analyze command now offers multiple display formats:
+
+- **Matrix View** (default): A modern, compact dashboard with side-by-side project comparison
+- **Summary View**: Brief overview perfect for CI/CD pipelines
+- **Detailed View**: Traditional verbose output with all project details
+- **JSON**: Machine-readable format for integration with other tools
+
+See the [Display Modes Documentation](docs/cli-display-modes.md) for visual examples and more details.
 
 ### Check for Vulnerabilities
 
