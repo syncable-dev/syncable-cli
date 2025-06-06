@@ -398,7 +398,7 @@ impl ToolInstaller {
     }
     
     /// Test if a tool is available by running --version
-    pub fn test_tool_availability(&self, tool: &str) -> bool {
+    fn test_tool_availability(&self, tool: &str) -> bool {
         let test_commands = match tool {
             "cargo-audit" => vec!["cargo", "audit", "--version"],
             "npm" => vec!["npm", "--version"],

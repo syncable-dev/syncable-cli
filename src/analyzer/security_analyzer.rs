@@ -601,12 +601,10 @@ impl SecurityAnalyzer {
         let mut language_files = Vec::new();
         
         for language in languages {
-            if let Some(lang) = Language::from_string(&language.name) {
-                if let Some(_rules) = self.security_rules.get(&lang) {
-                    let source_files = self.collect_source_files(project_root, &language.name)?;
-                    total_files += source_files.len();
-                    language_files.push((language, source_files));
-                }
+            if let Some(_rules) = self.security_rules.get(&Language::from_string(&language.name)) {
+                let source_files = self.collect_source_files(project_root, &language.name)?;
+                total_files += source_files.len();
+                language_files.push((language, source_files));
             }
         }
         
@@ -635,7 +633,6 @@ impl SecurityAnalyzer {
             pb.set_message("Scanning source code...");
             Some(pb)
         };
-    
         
         // Use atomic counter for progress if needed
         use std::sync::atomic::{AtomicUsize, Ordering};
@@ -644,8 +641,7 @@ impl SecurityAnalyzer {
         
         // Process all languages
         for (language, source_files) in language_files {
-            if let Some(lang) = Language::from_string(&language.name) {
-                if let Some(rules) = self.security_rules.get(&lang) {
+            if let Some(rules) = self.security_rules.get(&Language::from_string(&language.name)) {
                 let file_findings: Vec<Vec<SecurityFinding>> = source_files
                     .par_iter()
                     .map(|file_path| {
@@ -673,7 +669,6 @@ impl SecurityAnalyzer {
                 for mut file_findings in file_findings {
                     findings.append(&mut file_findings);
                 }
-                }
             }
         }
         
@@ -696,12 +691,10 @@ impl SecurityAnalyzer {
         let mut language_files = Vec::new();
         
         for language in languages {
-            if let Some(lang) = Language::from_string(&language.name) {
-                if let Some(_rules) = self.security_rules.get(&lang) {
-                    let source_files = self.collect_source_files(project_root, &language.name)?;
-                    total_files += source_files.len();
-                    language_files.push((language, source_files));
-                }
+            if let Some(_rules) = self.security_rules.get(&Language::from_string(&language.name)) {
+                let source_files = self.collect_source_files(project_root, &language.name)?;
+                total_files += source_files.len();
+                language_files.push((language, source_files));
             }
         }
         
@@ -714,8 +707,7 @@ impl SecurityAnalyzer {
         
         // Process all languages without progress tracking
         for (language, source_files) in language_files {
-            if let Some(lang) = Language::from_string(&language.name) {
-                if let Some(rules) = self.security_rules.get(&lang) {
+            if let Some(rules) = self.security_rules.get(&Language::from_string(&language.name)) {
                 let file_findings: Vec<Vec<SecurityFinding>> = source_files
                     .par_iter()
                     .map(|file_path| self.analyze_file_with_rules(file_path, rules))
@@ -725,10 +717,9 @@ impl SecurityAnalyzer {
                 for mut file_findings in file_findings {
                     findings.append(&mut file_findings);
                 }
-                }
             }
         }
-
+        
         info!("🔍 Found {} code security findings", findings.len());
         Ok(findings)
     }
@@ -1313,7 +1304,20 @@ impl SecurityAnalyzer {
     }
 }
 
-
+impl Language {
+    fn from_string(name: &str) -> Self {
+        match name.to_lowercase().as_str() {
+            "rust" => Language::Rust,
+            "javascript" | "js" => Language::JavaScript,
+            "typescript" | "ts" => Language::TypeScript,
+            "python" | "py" => Language::Python,
+            "go" | "golang" => Language::Go,
+            "java" => Language::Java,
+            "kotlin" => Language::Kotlin,
+            _ => Language::Unknown,
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
