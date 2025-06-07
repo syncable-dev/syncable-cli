@@ -8,7 +8,7 @@ use syncable_cli::{
     config,
     generator,
 };
-use syncable_cli::analyzer::display::{display_analysis, DisplayMode};
+use syncable_cli::analyzer::display::{display_analysis, DisplayMode, BoxDrawer};
 use std::process;
 use std::collections::HashMap;
 use std::fs;
@@ -33,7 +33,7 @@ async fn run() -> syncable_cli::Result<()> {
         println!("✅ Update cache cleared. Checking for updates now...");
     }
     
-    check_for_update();
+    check_for_update().await;
     
     // Initialize logging
     cli.init_logging();
@@ -115,9 +115,10 @@ async fn run() -> syncable_cli::Result<()> {
 }
 
 fn clear_update_cache() {
-    let cache_file = cache_dir()
+    let cache_dir_path = cache_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("syncable-cli/last_update_check");
+        .join("syncable-cli");
+    let cache_file = cache_dir_path.join("version_cache.json");
     
     if cache_file.exists() {
         match fs::remove_file(&cache_file) {
@@ -130,26 +131,61 @@ fn clear_update_cache() {
                 eprintln!("⚠️  Failed to remove update cache: {}", e);
             }
         }
+    } else {
+        if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+            eprintln!("🗑️  No update cache file found at: {}", cache_file.display());
+        }
     }
 }
 
-fn check_for_update() {
-    let cache_file = cache_dir()
+async fn check_for_update() {
+    let cache_dir_path = cache_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("syncable-cli/last_update_check");
+        .join("syncable-cli");
+    let cache_file = cache_dir_path.join("version_cache.json");
     let now = SystemTime::now();
 
-    // Only check once per day
-    if let Ok(metadata) = fs::metadata(&cache_file) {
+    // Smart cache system: only cache when no update is available
+    // Check every 2 hours when no update was found, immediately when an update might be available
+    let should_check = if let Ok(metadata) = fs::metadata(&cache_file) {
         if let Ok(modified) = metadata.modified() {
-            if now.duration_since(modified).unwrap_or(Duration::ZERO) < Duration::from_secs(60 * 60 * 24) {
-                // Debug logging to understand cache behavior
-                if std::env::var("SYNC_CTL_DEBUG").is_ok() {
-                    eprintln!("🔍 Update check skipped - checked within last 24 hours");
+            let cache_duration = now.duration_since(modified).unwrap_or(Duration::ZERO);
+            
+            // Read cached data to determine cache strategy
+            if let Ok(cache_content) = fs::read_to_string(&cache_file) {
+                if let Ok(cache_data) = serde_json::from_str::<serde_json::Value>(&cache_content) {
+                    let cached_latest = cache_data["latest_version"].as_str().unwrap_or("");
+                    let current = env!("CARGO_PKG_VERSION");
+                    
+                    // If cached version is newer than current, check immediately
+                    if !cached_latest.is_empty() && is_version_newer(current, cached_latest) {
+                        if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+                            eprintln!("🔍 Update available in cache, showing immediately");
+                        }
+                        show_update_notification(current, cached_latest);
+                        return;
+                    }
+                    
+                    // If no update in cache, check every 2 hours
+                    cache_duration >= Duration::from_secs(60 * 60 * 2)
+                } else {
+                    true // Invalid cache, check now
                 }
-                return;
+            } else {
+                true // Can't read cache, check now
             }
+        } else {
+            true // Can't get modified time, check now
         }
+    } else {
+        true // No cache file, check now
+    };
+
+    if !should_check {
+        if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+            eprintln!("🔍 Update check skipped - checked recently and no update available");
+        }
+        return;
     }
 
     // Debug logging
@@ -158,16 +194,17 @@ fn check_for_update() {
     }
 
     // Query GitHub releases API
-    let client = reqwest::blocking::Client::builder()
+    let client = reqwest::Client::builder()
         .user_agent(format!("syncable-cli/{}", env!("CARGO_PKG_VERSION")))
-        .timeout(std::time::Duration::from_secs(5)) // Add timeout
+        .timeout(std::time::Duration::from_secs(5))
         .build();
     
     match client {
         Ok(client) => {
             let result = client
                 .get("https://api.github.com/repos/syncable-dev/syncable-cli/releases/latest")
-                .send();
+                .send()
+                .await;
                 
             match result {
                 Ok(response) => {
@@ -178,7 +215,7 @@ fn check_for_update() {
                         return;
                     }
                     
-                    match response.json::<serde_json::Value>() {
+                    match response.json::<serde_json::Value>().await {
                         Ok(json) => {
                             let latest = json["tag_name"].as_str().unwrap_or("")
                                 .trim_start_matches('v'); // Remove 'v' prefix if present
@@ -188,15 +225,20 @@ fn check_for_update() {
                                 eprintln!("📦 Current version: {}, Latest version: {}", current, latest);
                             }
                             
-                            // Parse and compare versions properly
-                            if latest != "" && latest != current {
-                                // Only show update message if latest is actually newer
-                                if is_version_newer(current, latest) {
-                                    println!(
-                                        "\x1b[33m🔔 A new version of sync-ctl is available: {} (current: {})\nRun `cargo install syncable-cli` or download from https://github.com/syncable-dev/syncable-cli/releases/tag/v{}\x1b[0m",
-                                        latest, current, latest
-                                    );
-                                }
+                            // Update cache with latest version info
+                            let cache_data = serde_json::json!({
+                                "latest_version": latest,
+                                "current_version": current,
+                                "checked_at": now.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs(),
+                                "update_available": is_version_newer(current, latest)
+                            });
+                            
+                            let _ = fs::create_dir_all(&cache_dir_path);
+                            let _ = fs::write(&cache_file, serde_json::to_string_pretty(&cache_data).unwrap_or_default());
+                            
+                            // Show update notification if newer version is available
+                            if !latest.is_empty() && latest != current && is_version_newer(current, latest) {
+                                show_update_notification(current, latest);
                             }
                         }
                         Err(e) => {
@@ -219,10 +261,49 @@ fn check_for_update() {
             }
         }
     }
+}
 
-    // Update cache file
-    let _ = fs::create_dir_all(cache_file.parent().unwrap());
-    let _ = fs::write(&cache_file, "");
+fn show_update_notification(current: &str, latest: &str) {
+    use colored::*;
+    
+    let mut box_drawer = BoxDrawer::new(&"UPDATE AVAILABLE".bright_red().bold().to_string());
+    
+    // Version info line with prominent colors
+    let version_info = format!("New version: {} | Current: {}", 
+                              latest.bright_green().bold(), 
+                              current.bright_red());
+    box_drawer.add_value_only(&version_info);
+    
+    // Empty line for spacing
+    box_drawer.add_value_only("");
+    
+    // Instructions header with emphasis
+    box_drawer.add_value_only(&"To update, run one of these commands:".bright_cyan().bold().to_string());
+    box_drawer.add_value_only("");
+    
+    // Recommended method - highlighted as primary option
+    box_drawer.add_line(&"RECOMMENDED".bright_green().bold().to_string(), &"(via Cargo)".green().to_string(), false);
+    let cargo_cmd = "cargo install syncable-cli".bright_white().on_blue().bold().to_string();
+    box_drawer.add_value_only(&format!("  {}", cargo_cmd));
+    box_drawer.add_value_only("");
+    
+    // Alternative method - neutral coloring
+    box_drawer.add_line(&"ALTERNATIVE".yellow().bold().to_string(), &"(direct download)".yellow().to_string(), false);
+    let github_url = format!("  Visit: {}", 
+                            format!("github.com/syncable-dev/syncable-cli/releases/v{}", latest).bright_blue().underline());
+    box_drawer.add_value_only(&github_url);
+    box_drawer.add_value_only("");
+    
+    // Install script method - secondary option
+    box_drawer.add_line(&"SCRIPT".magenta().bold().to_string(), &"(automated installer)".magenta().to_string(), false);
+    let script_cmd = "curl -sSL install.syncable.dev | sh".bright_white().on_magenta().bold().to_string();
+    box_drawer.add_value_only(&format!("  {}", script_cmd));
+    
+    // Add a helpful note
+    box_drawer.add_value_only("");
+    box_drawer.add_value_only(&"Tip: The Cargo method is fastest for existing Rust users".dimmed().italic().to_string());
+    
+    println!("\n{}", box_drawer.draw());
 }
 
 // Helper function to compare semantic versions
