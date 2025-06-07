@@ -236,6 +236,4 @@ Built with Rust 🦀 and powered by the open-source community.
 **Need help?** Check our [documentation](https://github.com/syncable-dev/syncable-cli/wiki) or [open an issue](https://github.com/syncable-dev/syncable-cli/issues).
 
 [![Star on GitHub](https://img.shields.io/github/stars/syncable-dev/syncable-cli?style=social)](https://github.com/syncable-dev/syncable-cli)
-**Need help?** Check our [documentation](https://github.com/syncable-dev/syncable-cli/wiki) or [open an issue](https://github.com/syncable-dev/syncable-cli/issues).
 
-[![Star on GitHub](https://img.shields.io/github/stars/syncable-dev/syncable-cli?style=social)](https://github.com/syncable-dev/syncable-cli)
