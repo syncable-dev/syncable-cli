@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/syncable-dev/syncable-cli/compare/v0.4.2...v0.5.0) - 2025-06-06
+
+### Other
+
+- HOTFIX - hoping auto update becomes available
+
+## [0.4.2](https://github.com/syncable-dev/syncable-cli/compare/v0.4.1...v0.4.2) - 2025-06-06
+
+### Other
+
+- Feature/improve framework and language tool detection ([#37](https://github.com/syncable-dev/syncable-cli/pull/37))
+
 ## [0.4.1](https://github.com/syncable-dev/syncable-cli/compare/v0.4.0...v0.4.1) - 2025-06-06
 
 ### Other
