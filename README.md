@@ -1,444 +1,202 @@
 # 🚀 Syncable IaC CLI
 
-> AI-powered Infrastructure-as-Code generator that analyzes your codebase and automatically creates optimized Docker, Docker Compose, and Terraform configurations.
+> Automatically generate optimized Docker, Kubernetes, and cloud infrastructure configurations by analyzing your codebase.
 
 [![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-![Crates.io Downloads](https://img.shields.io/crates/d/syncable-cli)
+[![Crates.io Downloads](https://img.shields.io/crates/d/syncable-cli)](https://crates.io/crates/syncable-cli)
 
-## 🎯 **260+ Technologies Supported**
-**The most comprehensive project analyzer supporting 5 major languages and their complete ecosystems:**
-- ☕ **Java/JVM**: 98 technologies (13 Spring components + enterprise stack)
-- 🐍 **Python**: 76 technologies (Django, FastAPI, ML/Data Science)  
-- 🟨 **JavaScript/TypeScript**: 46 technologies (React, Next.js, Node.js)
-- 🐹 **Go**: 21 technologies (cloud-native & microservices)
-- 🦀 **Rust**: 20 technologies (high-performance web & systems)
+**Syncable IaC CLI** analyzes your project and automatically generates production-ready infrastructure configurations. Supporting **260+ technologies** across 5 major language ecosystems, it understands your stack and creates optimized IaC files tailored to your specific needs.
 
-## 🌟 Help Other Developers Discover This Tool
-
-**If this tool saves you time, please consider giving it a ⭐ on GitHub!** 
-
-Stars help other developers find Syncable CLI, and the more builders who discover it early, the better we can make it for everyone. Every star helps us reach developers who could benefit from automated infrastructure analysis and generation.
-
-[⭐ **Star on GitHub**](https://github.com/syncable-dev/syncable-cli)
-
-
-## ✨ Features
-
-### 🔍 Comprehensive Project Analysis
-- **Language Detection**: Automatically detects JavaScript/TypeScript, Python, Rust, Go, Java/Kotlin with precise version detection
-- **Framework Recognition**: Identifies **260+ technologies** across all major ecosystems including complete Spring, Django, React, and Express families
-- **Dependency Analysis**: Parses all package managers (npm/yarn/pnpm, pip/poetry, cargo, go mod, maven/gradle) and extracts version constraints
-- **Vulnerability Scanning**: Integrates with security databases for each language ecosystem
-- **Security Analysis**: Basic secret detection and environment variable security checks
-- **Context Extraction**: Discovers entry points, ports, environment variables, and build scripts
-
-### 🎯 Current Capabilities (Phase 1 Complete ✅)
-- ✅ Multi-language project analysis
-- ✅ Framework and library detection with confidence scoring
-- ✅ Comprehensive dependency parsing
-- ✅ Security vulnerability checking
-- ✅ **Basic security analysis with secret detection**
-- ✅ Project context analysis (ports, env vars, build scripts)
-- ✅ Project type classification
-
-### 🚧 Coming Soon (Phase 2+)
-- 🤖 AI-powered Dockerfile generation
-- 🐳 Intelligent Docker Compose creation
-- ☁️ Cloud-ready Terraform configurations
-- 🔒 **Advanced security analysis** (infrastructure, framework-specific, compliance)
-- 📊 Performance optimization suggestions
-
-### 🐳 Docker Infrastructure Analysis
-**NEW**: Comprehensive Docker infrastructure analysis and understanding:
-
-- **Dockerfile Analysis**: 
-  - Supports all Dockerfile variants (`Dockerfile`, `dockerfile.dev`, `dockerfile.prod`, etc.)
-  - Extracts base images, exposed ports, environment variables, and build stages
-  - Detects multi-stage builds and complexity metrics
-  - Environment-specific configuration detection
-
-- **Docker Compose Analysis**:
-  - Supports all compose file variants (`docker-compose.yml`, `docker-compose.dev.yaml`, etc.)
-  - Service dependency mapping and network topology analysis
-  - Port mapping analysis (external/internal, host/container)
-  - Volume mount analysis and data persistence patterns
-
-- **Service Discovery & Networking**:
-  - Internal DNS and service communication patterns
-  - Custom network analysis and service isolation
-  - Load balancer detection (nginx, traefik, haproxy, kong)
-  - API gateway identification and ingress patterns
-
-- **Orchestration Pattern Detection**:
-  - Single Container applications
-  - Docker Compose multi-service setups
-  - Microservices architecture patterns
-  - Event-driven architecture (with message queues)
-  - Service mesh detection (Istio, Linkerd, Envoy)
-
-- **Monorepo Docker Support**:
-  - Analyzes Docker configurations across multiple projects
-  - Maps services to their respective project contexts
-  - Handles compose files at repository root with project-specific Dockerfiles
-
-## 📦 Installation
-
-### ⚡ Quick Install
-
-The fastest way to get started:
+## ⚡ Quick Start
 
 ```bash
+# Install
 cargo install syncable-cli
-```
 
-Or see below for building from source.
-
-### From Source (Recommended)
-
-```bash
-# Prerequisites: Rust 1.70+ and Git
-
-# Clone the repository
-git clone https://github.com/syncable-dev/syncable-cli.git
-cd syncable-cli
-
-# Build and install
-cargo install --path .
-
-# Verify installation
-sync-ctl --version
-```
-
-### Pre-built Binaries
-
-Coming soon! Check the [releases page](https://github.com/syncable-dev/syncable-cli/releases).
-
-## 🚀 Quick Start
-
-### Analyze a Project
-
-```bash
-# Analyze current directory
-sync-ctl analyze
-
-# Analyze specific project
+# Analyze any project
 sync-ctl analyze /path/to/your/project
 
-# Get JSON output
-sync-ctl analyze --json > analysis.json
+# Check for vulnerabilities
+sync-ctl vulnerabilities
 
-# Use different display modes (NEW!)
-sync-ctl analyze --display matrix    # Modern dashboard view (default)
-sync-ctl analyze --display summary   # Brief summary only
-sync-ctl analyze --display detailed  # Legacy verbose output
-sync-ctl analyze -d                   # Shorthand for detailed
+# Run security analysis
+sync-ctl security
 ```
 
-### 📊 Display Modes (NEW!)
+That's it! The CLI will detect your languages, frameworks, dependencies, and provide detailed insights about your project structure.
 
-The analyze command now offers multiple display formats:
+## 🎯 What It Does
 
-- **Matrix View** (default): A modern, compact dashboard with side-by-side project comparison
-- **Summary View**: Brief overview perfect for CI/CD pipelines
-- **Detailed View**: Traditional verbose output with all project details
-- **JSON**: Machine-readable format for integration with other tools
+Syncable IaC CLI is like having a DevOps expert analyze your codebase:
 
-See the [Display Modes Documentation](docs/cli-display-modes.md) for visual examples and more details.
+1. **📊 Analyzes** - Detects languages, frameworks, dependencies, ports, and architecture patterns
+2. **🔍 Audits** - Checks for security vulnerabilities and configuration issues  
+3. **🚀 Generates** - Creates optimized Dockerfiles, Compose files, and Terraform configs (coming soon)
 
-### Check for Vulnerabilities
-
-```bash
-# Run vulnerability scan
-sync-ctl vulnerabilities /path/to/project
-
-# Check only high severity and above
-sync-ctl vulnerabilities --severity high
-
-# Export vulnerability report
-sync-ctl vulnerabilities --format json --output vuln-report.json
-```
-
-### Security Analysis
-
-```bash
-# Basic security analysis with secret detection
-sync-ctl security /path/to/project
-
-# Include low severity findings
-sync-ctl security --include-low
-
-# Skip specific analysis types
-sync-ctl security --no-secrets --no-code-patterns
-
-# Generate security report
-sync-ctl security --format json --output security-report.json
-
-# Fail CI/CD pipeline on security findings
-sync-ctl security --fail-on-findings
-```
-
-**Current Security Features:**
-- ✅ Secret detection (API keys, tokens, passwords)
-- ✅ Environment variable security analysis
-- ✅ Basic code pattern analysis (limited rules)
-- ✅ Security scoring and risk assessment
-- 🚧 Infrastructure security analysis (coming soon)
-- 🚧 Framework-specific security checks (coming soon)
-- 🚧 Compliance framework validation (coming soon)
-
-## 📖 Usage Examples
-
-### Example: Node.js Express Application
+### Example Output
 
 ```bash
 $ sync-ctl analyze ./my-express-app
 
-🔍 Analyzing project at: ./my-express-app
-============================================================
+═══════════════════════════════════════════════════════════════════════════════════════════════════
+📊 PROJECT ANALYSIS DASHBOARD
+═══════════════════════════════════════════════════════════════════════════════════════════════════
 
-📊 PROJECT ANALYSIS RESULTS
-============================================================
+┌─ Architecture Overview ──────────────────────────────────────────────────────┐
+│ Type:                                                         Single Project │
+│ Pattern:                                                           Fullstack │
+│ Full-stack app with frontend/backend  separation                             │
+└──────────────────────────────────────────────────────────────────────────────┘
 
-🎯 Languages: JavaScript (Node.js 18)
-🔧 Frameworks: Express, React
-📦 Dependencies: 23 production, 15 development
-
-🔌 Exposed Ports:
-   - 3000 (Express server)
-   - 9090 (Metrics endpoint)
-
-🔐 Environment Variables:
-   Required: DATABASE_URL, SECRET_KEY
-   Optional: PORT, NODE_ENV, LOG_LEVEL
-
-🔨 Build Scripts:
-   - npm start
-   - npm run dev
-   - npm test
-   - npm run build
-
-✅ Project Type: Web Application
+┌─ Technology Stack ───────────────────────────────────────────────────────────┐
+│ Languages:                                           JavaScript, TypeScript  │
+│ Frameworks:                                    Express, React, Tailwind CSS  │
+│ Databases:                                                PostgreSQL, Redis  │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Example: Python FastAPI Service
+## 📋 Key Features
+
+### 🔍 Comprehensive Analysis
+- **Multi-language support** - JavaScript/TypeScript, Python, Rust, Go, Java/Kotlin
+- **260+ technologies** - From React to Spring Boot, Django to Actix-web
+- **Architecture detection** - Monolithic, microservices, serverless, and more
+- **Monorepo support** - Analyzes complex multi-project repositories
+
+### 🛡️ Security & Compliance
+- **Vulnerability scanning** - Integrated security checks for all dependencies
+- **Secret detection** - Finds exposed API keys and credentials
+- **Security scoring** - Get actionable security recommendations
+- **Compliance checks** - SOC2, GDPR, HIPAA support (coming soon)
+
+### 🐳 Docker Intelligence
+- **Dockerfile analysis** - Understand existing Docker configurations
+- **Multi-stage detection** - Identifies build optimization patterns
+- **Service mapping** - Traces dependencies between containers
+- **Network topology** - Visualizes service communication
+
+## 🛠️ Installation
+
+### Via Cargo (Recommended)
+```bash
+cargo install syncable-cli
+```
+
+### From Source
+```bash
+git clone https://github.com/syncable-dev/syncable-cli.git
+cd syncable-cli
+cargo install --path .
+```
+
+## 📖 Usage Guide
+
+### Basic Commands
 
 ```bash
-$ sync-ctl analyze ./fastapi-service --json
+# Analyze with different display formats
+sync-ctl analyze                    # Matrix view (default)
+sync-ctl analyze --display detailed  # Detailed view
+sync-ctl analyze --json             # JSON output
+
+# Security & vulnerability checks
+sync-ctl security                   # Comprehensive security analysis
+sync-ctl vulnerabilities            # Dependency vulnerability scan
+
+# Dependency analysis
+sync-ctl dependencies --licenses    # Show license information
+sync-ctl dependencies --vulnerabilities  # Check for known CVEs
 ```
 
-```json
-{
-  "project_type": "ApiService",
-  "languages": [{
-    "name": "Python",
-    "version": "3.11",
-    "confidence": 0.95
-  }],
-  "frameworks": [{
-    "name": "FastAPI",
-    "category": "Web",
-    "confidence": 0.92
-  }],
-  "ports": [{ "number": 8000, "protocol": "Http" }],
-  "environment_variables": [
-    { "name": "DATABASE_URL", "required": true },
-    { "name": "REDIS_URL", "required": false }
-  ]
-}
-```
+### Display Modes
 
-### Example: Security Analysis
+Choose the output format that works best for you:
 
-```bash
-$ sync-ctl security ./my-project
+- **Matrix** (default) - Compact dashboard view
+- **Detailed** - Comprehensive vertical layout  
+- **Summary** - Brief overview for CI/CD
+- **JSON** - Machine-readable format
 
-🛡️  Finalizing analysis... [00:00:01] ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰ 100/100 100%
+### Advanced Configuration
 
-🛡️  Security Analysis Results
-============================================================
-
-📊 SECURITY SUMMARY
-✅ Security Score: 100.0/100
-
-🔍 ANALYSIS SCOPE
-✅ Secret Detection         (5 files analyzed)
-✅ Environment Variables    (3 variables checked)
-ℹ️  Code Security Patterns   (no applicable files found)
-🚧 Infrastructure Security  (coming soon)
-🚧 Compliance Frameworks    (coming soon)
-
-🎯 FINDINGS BY CATEGORY
-🔐 Secret Detection: 0 findings
-🔒 Code Security: 0 findings
-🏗️ Infrastructure: 0 findings
-📋 Compliance: 0 findings
-
-💡 RECOMMENDATIONS
-• Enable dependency vulnerability scanning in CI/CD
-• Consider implementing rate limiting for API endpoints
-• Review environment variable security practices
-```
-
-## 🛠️ Advanced Configuration
-
-Create a `.syncable.toml` in your project:
+Create `.syncable.toml` in your project root:
 
 ```toml
 [analysis]
 include_dev_dependencies = true
-deep_analysis = true
 ignore_patterns = ["vendor", "node_modules", "target"]
-max_file_size = 2097152  # 2MB
 
-[output]
-format = "json"  # or "yaml", "toml"
+[security]
+fail_on_high_severity = true
+check_secrets = true
 ```
 
-## 🔄 Automatic Update Checks
+## 🌟 Technology Coverage
 
-Syncable CLI automatically checks for updates once per day when you run any command. When a new version is available, you'll see a notification:
+<details>
+<summary><b>View Supported Technologies (260+)</b></summary>
 
-```
-🔔 A new version of sync-ctl is available: 0.5.0 (current: 0.4.1)
-Run `cargo install syncable-cli` or download from https://github.com/syncable-dev/syncable-cli/releases/tag/v0.5.0
-```
+### By Language
 
-### Troubleshooting Update Checks
+- **JavaScript/TypeScript** (46) - React, Vue, Angular, Next.js, Express, Nest.js, and more
+- **Python** (76) - Django, Flask, FastAPI, NumPy, TensorFlow, PyTorch, and more
+- **Java/JVM** (98) - Spring Boot, Micronaut, Hibernate, Kafka, Elasticsearch, and more
+- **Go** (21) - Gin, Echo, Fiber, gRPC, Kubernetes client, and more
+- **Rust** (20) - Actix-web, Axum, Rocket, Tokio, SeaORM, and more
 
-If you're not seeing update notifications:
+### Package Managers
+- npm, yarn, pnpm, bun (JavaScript)
+- pip, poetry, pipenv, conda (Python)
+- Maven, Gradle (Java)
+- Cargo (Rust)
+- Go modules (Go)
 
-```bash
-# Force an update check by clearing the cache
-sync-ctl --clear-update-cache analyze .
+</details>
 
-# Enable debug logging to see what's happening
-SYNC_CTL_DEBUG=1 sync-ctl analyze .
-```
+## 🚀 Roadmap
 
-The update check:
-- Only runs once per day (cached in `~/.cache/syncable-cli/`)
-- Queries GitHub releases API to find the latest version
-- Works behind corporate proxies (uses system proxy settings)
-- Has a 5-second timeout to avoid slowing down commands
+### ✅ Phase 1: Analysis Engine (Complete)
+- Project analysis and technology detection
+- Vulnerability scanning
+- Basic security analysis
 
-To disable update checks, you can set the `SYNC_CTL_NO_UPDATE_CHECK` environment variable (coming in next release).
+### 🔄 Phase 2: AI-Powered Generation (In Progress)
+- Smart Dockerfile generation
+- Intelligent Docker Compose creation
+- Cloud-optimized configurations
 
-## 🧪 Comprehensive Technology Support (260+ Technologies)
-
-### 📊 Coverage by Language
-- **☕ Java/JVM**: **98 technologies** - The most comprehensive JVM ecosystem coverage
-- **🐍 Python**: **76 technologies** - Complete Python web, data, and ML stack
-- **🟨 JavaScript/TypeScript**: **46 technologies** - Full-stack web development ecosystem  
-- **🐹 Go**: **21 technologies** - Modern cloud-native and microservices tools
-- **🦀 Rust**: **20 technologies** - High-performance systems and web frameworks
-
-### 🌟 Major Ecosystem Coverage
-
-#### ☕ **Java/JVM Ecosystem** (98 technologies)
-**Spring Family** (13 technologies):
-- Spring Boot, Spring Framework, Spring Security, Spring Data
-- Spring Cloud (Gateway, Config, Netflix), Spring WebFlux, Spring MVC
-- Spring Batch, Spring Integration, Spring AOP, and more
-
-**Enterprise & Microservices**: Quarkus, Micronaut, Dropwizard, Jakarta EE  
-**Database & ORM**: Hibernate, MyBatis, JPA, JDBI, MongoDB Driver, Redis Jedis  
-**Message Brokers**: Apache Kafka, RabbitMQ, ActiveMQ, Apache Pulsar  
-**Search & Big Data**: Elasticsearch, Apache Solr, Apache Spark, Apache Flink  
-**Security**: Apache Shiro, Keycloak, Bouncy Castle, JWT, OAuth2  
-**Build Tools**: Maven, Gradle, Ant  
-**Testing**: JUnit, TestNG, Mockito, Selenium, Cucumber, Testcontainers  
-**Web Servers**: Tomcat, Jetty, Undertow, Netty  
-
-#### 🐍 **Python Ecosystem** (76 technologies)  
-**Web Frameworks**: Django, Flask, FastAPI, Pyramid, CherryPy, Tornado, Falcon  
-**Django Family**: Django REST Framework, Django ORM, Django-allauth  
-**Data & ML**: NumPy, Pandas, Scikit-learn, TensorFlow, PyTorch, Keras  
-**Database & ORM**: SQLAlchemy, Alembic, psycopg2, PyMongo, Redis-py  
-**Async & Messaging**: Celery, asyncio, aiohttp, Dramatiq  
-**Scientific**: Matplotlib, Seaborn, Jupyter, SciPy  
-**WSGI/ASGI Servers**: Gunicorn, Uvicorn, Hypercorn, Daphne, Waitress  
-**Testing**: pytest, unittest, nose2, behave, Robot Framework  
-
-#### 🟨 **JavaScript/TypeScript Ecosystem** (46 technologies)
-**Meta-Frameworks**: Next.js, Nuxt.js, SvelteKit, Astro, SolidStart, Tanstack Start  
-**Frontend**: React, Vue.js, Angular, Svelte, SolidJS  
-**Mobile**: React Native, Expo  
-**Backend**: Express.js, Nest.js, Fastify, Hono, Elysia  
-**Database/ORM**: Prisma, Drizzle ORM, TypeORM, Mongoose, Sequelize  
-**Build Tools**: Vite, Webpack, Rollup, Parcel  
-**Runtimes**: Node.js, Bun, Deno, Cloudflare Workers, Vercel Edge  
-**Testing**: Jest, Vitest, Cypress, Playwright  
-
-#### 🐹 **Go Ecosystem** (21 technologies)
-**Web Frameworks**: Gin, Echo, Fiber, Chi, Gorilla Mux, Beego  
-**Microservices**: gRPC, go-kit, go-micro  
-**Database**: GORM, sqlx, pgx  
-**Cloud Native**: Kubernetes client, Docker, Consul  
-**Testing**: Testify, Ginkgo, GoConvey  
-
-#### 🦀 **Rust Ecosystem** (20 technologies)  
-**Web Frameworks**: Actix-web, Axum, Rocket, Warp, Tide  
-**Async Runtimes**: Tokio, async-std  
-**Database/ORM**: SeaORM, Diesel, SQLx  
-**Serialization**: Serde  
-**Testing**: Built-in test framework, criterion (benchmarking)
-
-### 📦 **Package Manager Support**
-- **JavaScript**: npm, yarn, pnpm, bun
-- **Python**: pip, poetry, pipenv, conda, pdm  
-- **Java**: Maven, Gradle
-- **Rust**: Cargo
-- **Go**: go mod
-- **PHP**: Composer
-- **Ruby**: Bundler
+### 📅 Future Phases
+- Kubernetes manifests & Helm charts
+- Terraform modules for AWS/GCP/Azure
+- CI/CD pipeline generation
+- Real-time monitoring setup
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ```bash
 # Run tests
 cargo test
 
-# Run with debug logging
-RUST_LOG=debug cargo run -- analyze ./test-project
+# Check code quality
+cargo clippy
 
 # Format code
 cargo fmt
-
-# Run linter
-cargo clippy
 ```
-
-## 📊 Project Status
-
-### Phase 1: Core Analysis Engine ✅
-- [x] Language Detection
-- [x] Framework Detection  
-- [x] Dependency Parsing
-- [x] Vulnerability Checking
-- [x] **Basic Security Analysis** (secret detection, env vars)
-- [x] Project Context Analysis
-
-### Phase 2: AI Integration 🚧
-- [ ] AI Provider Integration
-- [ ] Smart Dockerfile Generation
-- [ ] Intelligent Docker Compose
-- [ ] Cloud-Ready Terraform
-
-See [ROADMAP.md](ROADMAP.md) for detailed progress.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) for details.
 
 ## 🙏 Acknowledgments
 
-- Built with [Rust](https://www.rust-lang.org/) 🦀
-- Uses [clap](https://github.com/clap-rs/clap) for CLI parsing
-- Integrates with various security databases
+Built with Rust 🦀 and powered by the open-source community.
 
 ---
 
-**Built with ❤️ by the Syncable team** 
+**Need help?** Check our [documentation](https://github.com/syncable-dev/syncable-cli/wiki) or [open an issue](https://github.com/syncable-dev/syncable-cli/issues).
+
+[![Star on GitHub](https://img.shields.io/github/stars/syncable-dev/syncable-cli?style=social)](https://github.com/syncable-dev/syncable-cli)
