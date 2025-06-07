@@ -48,7 +48,7 @@ impl ContentLine {
 }
 
 /// Box drawer that pre-calculates optimal dimensions
-struct BoxDrawer {
+pub struct BoxDrawer {
     title: String,
     lines: Vec<ContentLine>,
     min_width: usize,
@@ -56,7 +56,7 @@ struct BoxDrawer {
 }
 
 impl BoxDrawer {
-    fn new(title: &str) -> Self {
+    pub fn new(title: &str) -> Self {
         Self {
             title: title.to_string(),
             lines: Vec::new(),
@@ -65,15 +65,15 @@ impl BoxDrawer {
         }
     }
     
-    fn add_line(&mut self, label: &str, value: &str, label_colored: bool) {
+    pub fn add_line(&mut self, label: &str, value: &str, label_colored: bool) {
         self.lines.push(ContentLine::new(label, value, label_colored));
     }
     
-    fn add_value_only(&mut self, value: &str) {
+    pub fn add_value_only(&mut self, value: &str) {
         self.lines.push(ContentLine::new("", value, false));
     }
     
-    fn add_separator(&mut self) {
+    pub fn add_separator(&mut self) {
         self.lines.push(ContentLine::separator());
     }
     
@@ -130,7 +130,7 @@ impl BoxDrawer {
     }
     
     /// Draw the complete box
-    fn draw(&self) -> String {
+    pub fn draw(&self) -> String {
         let box_width = self.calculate_optimal_width();
         let content_width = box_width - 4; // Available space for content
         
