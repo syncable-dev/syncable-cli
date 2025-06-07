@@ -61,7 +61,7 @@ impl BoxDrawer {
             title: title.to_string(),
             lines: Vec::new(),
             min_width: 60,
-            max_width: 150, // Increased to accommodate longer content
+            max_width: 120, // Reduced from 150 for better terminal compatibility
         }
     }
     
@@ -96,49 +96,33 @@ impl BoxDrawer {
             max_content_width = max_content_width.max(rendered_width);
         }
         
-        // Use exact content width with minimal buffer for safety
-        let content_width_with_buffer = max_content_width + 2; // Minimal buffer for safety
+        // Add reasonable buffer for content
+        let content_width_with_buffer = max_content_width + 4; // More buffer for safety
         
         // Box needs padding: "│ " + content + " │" = content + 4
         let needed_width = content_width_with_buffer + 4;
         
-        // Use the maximum of title width and content width, with a reasonable minimum
-        let min_reasonable_width = 50;
-        let optimal_width = title_width.max(needed_width).max(min_reasonable_width);
-        optimal_width.clamp(self.min_width, self.max_width)
+        // Use the maximum of title width and content width
+        let optimal_width = title_width.max(needed_width).max(self.min_width);
+        optimal_width.min(self.max_width)
     }
     
     /// Calculate the actual rendered width of a line as it will appear
     fn calculate_rendered_line_width(&self, line: &ContentLine) -> usize {
-        // Calculate actual display widths without formatting
-        let label_display_width = visual_width(&line.label);
-        let mut value_display_width = visual_width(&line.value);
-        
-        // Be more conservative for values that could grow significantly
-        if !line.value.is_empty() {
-            // Add extra space for values that are likely numeric and could grow
-            if line.label.contains("Files") || line.label.contains("Duration") || 
-               line.label.contains("Dependencies") || line.label.contains("Ports") ||
-               line.label.contains("Services") || line.label.contains("Total") {
-                value_display_width = value_display_width.max(8); // Reserve space for larger numbers
-            }
-        }
+        let label_width = visual_width(&line.label);
+        let value_width = visual_width(&line.value);
         
         if !line.label.is_empty() && !line.value.is_empty() {
-            // Both label and value - they need space between them
-            // For colored labels, ensure minimum spacing but use actual width
-            let actual_label_width = if line.label_colored {
-                label_display_width.max(20) // At least 20, but can be longer
-            } else {
-                label_display_width
-            };
-            actual_label_width + 1 + value_display_width
+            // Label + value: need space between them
+            // For colored labels, ensure minimum spacing
+            let min_label_space = if line.label_colored { 25 } else { label_width };
+            min_label_space + 2 + value_width // 2 spaces minimum between label and value
         } else if !line.value.is_empty() {
             // Value only
-            value_display_width
+            value_width
         } else if !line.label.is_empty() {
             // Label only
-            label_display_width
+            label_width
         } else {
             // Empty line
             0
@@ -202,95 +186,71 @@ impl BoxDrawer {
     }
     
     fn draw_content_line(&self, line: &ContentLine, content_width: usize) -> String {
-        // Format the label with color if needed, but calculate width dynamically
+        // Format the label with color if needed
         let formatted_label = if line.label_colored && !line.label.is_empty() {
             line.label.bright_white().to_string()
         } else {
             line.label.clone()
         };
-        let formatted_value = line.value.clone();
         
-        // Calculate actual display widths
-        let label_display_width = visual_width(&line.label); // Use original label for width calculation
-        let value_display_width = visual_width(&formatted_value);
+        // Calculate actual display widths (use original label for width)
+        let label_display_width = visual_width(&line.label);
+        let value_display_width = visual_width(&line.value);
         
-        // For colored labels, ensure minimum spacing but allow longer labels
-        let effective_label_width = if line.label_colored && !line.label.is_empty() {
-            label_display_width.max(20) // At least 20, but can be longer if needed
-        } else {
-            label_display_width
-        };
-        
-        // Determine content layout
+        // Build the content
         let content = if !line.label.is_empty() && !line.value.is_empty() {
-            // Both label and value - right-align the value
-            let available_space = content_width;
-            let min_space_between = 1; // Minimum space between label and value
+            // Both label and value - ensure proper spacing
+            let min_label_space = if line.label_colored { 25 } else { label_display_width };
+            let label_padding = min_label_space.saturating_sub(label_display_width);
+            let remaining_space = content_width.saturating_sub(min_label_space + 2); // 2 for spacing
             
-            // Calculate how much space we need and have
-            let label_width = visual_width(&formatted_label);
-            let value_width = visual_width(&formatted_value);
-            let total_needed = label_width + min_space_between + value_width;
-            
-            if total_needed <= available_space {
-                // Everything fits - right-align the value
-                let padding_needed = available_space.saturating_sub(label_width).saturating_sub(value_width);
-                format!("{}{}{}", formatted_label, " ".repeat(padding_needed), formatted_value)
+            if value_display_width <= remaining_space {
+                // Value fits - right align it
+                let value_padding = remaining_space.saturating_sub(value_display_width);
+                format!("{}{:<width$}  {}{}", 
+                    formatted_label, 
+                    "",
+                    " ".repeat(value_padding),
+                    line.value,
+                    width = label_padding
+                )
             } else {
-                // Need to truncate value
-                let max_value_width = available_space.saturating_sub(label_width + min_space_between);
-                let truncated_value = truncate_to_width(&formatted_value, max_value_width);
-                let truncated_value_width = visual_width(&truncated_value);
-                let padding_needed = available_space.saturating_sub(label_width).saturating_sub(truncated_value_width);
-                format!("{}{}{}", formatted_label, " ".repeat(padding_needed), truncated_value)
+                // Value too long - truncate it
+                let truncated_value = truncate_to_width(&line.value, remaining_space.saturating_sub(3));
+                format!("{}{:<width$}  {}", 
+                    formatted_label, 
+                    "",
+                    truncated_value,
+                    width = label_padding
+                )
             }
         } else if !line.value.is_empty() {
-            // Value only - left-align it (for descriptions, etc.)
-            let value_width = visual_width(&formatted_value);
-            if value_width <= content_width {
-                let padding_needed = content_width.saturating_sub(value_width);
-                format!("{}{}", formatted_value, " ".repeat(padding_needed))
+            // Value only - left align
+            if value_display_width <= content_width {
+                format!("{:<width$}", line.value, width = content_width)
             } else {
-                // Truncate and ensure it fills exactly content_width
-                let truncated = truncate_to_width(&formatted_value, content_width);
-                let actual_width = visual_width(&truncated);
-                let padding_needed = content_width.saturating_sub(actual_width);
-                format!("{}{}", truncated, " ".repeat(padding_needed))
+                truncate_to_width(&line.value, content_width)
             }
         } else if !line.label.is_empty() {
-            // Label only - left-align it
-            let label_width = visual_width(&formatted_label);
-            if label_width <= content_width {
-                let padding_needed = content_width.saturating_sub(label_width);
-                format!("{}{}", formatted_label, " ".repeat(padding_needed))
+            // Label only - left align
+            if label_display_width <= content_width {
+                format!("{:<width$}", formatted_label, width = content_width)
             } else {
-                // Truncate and ensure it fills exactly content_width
-                let truncated = truncate_to_width(&formatted_label, content_width);
-                let actual_width = visual_width(&truncated);
-                let padding_needed = content_width.saturating_sub(actual_width);
-                format!("{}{}", truncated, " ".repeat(padding_needed))
+                truncate_to_width(&formatted_label, content_width)
             }
         } else {
             // Empty line
             " ".repeat(content_width)
         };
         
-        // Verify content is exactly the right width and fix if needed
-        let actual_content_width = visual_width(&content);
-        let final_content = if actual_content_width == content_width {
-            content
-        } else if actual_content_width < content_width {
-            // For table content (contains │ or ─), don't add padding as it's already properly formatted
-            if content.contains("│") || content.contains("─┼─") {
-                content
-            } else {
-                // Add padding to reach exact width for non-table content
-                let padding_needed = content_width.saturating_sub(actual_content_width);
-                format!("{}{}", content, " ".repeat(padding_needed))
-            }
-        } else {
-            // Truncate to exact width if somehow too long
+        // Ensure final content is exactly the right width
+        let actual_width = visual_width(&content);
+        let final_content = if actual_width < content_width {
+            format!("{}{}", content, " ".repeat(content_width - actual_width))
+        } else if actual_width > content_width {
             truncate_to_width(&content, content_width)
+        } else {
+            content
         };
         
         format!("│ {} │", final_content)
@@ -376,39 +336,71 @@ fn char_width(ch: char) -> usize {
     }
 }
 
-/// Truncate string to specified visual width, preserving color codes when possible
+/// Truncate string to specified visual width, preserving color codes
 fn truncate_to_width(s: &str, max_width: usize) -> String {
-    if visual_width(s) <= max_width {
+    let current_visual_width = visual_width(s);
+    if current_visual_width <= max_width {
         return s.to_string();
     }
     
+    // For strings with ANSI codes, we need to be more careful
+    if s.contains('\x1b') {
+        // Simple approach: strip ANSI codes, truncate, then re-apply if needed
+        let stripped = strip_ansi_codes(s);
+        if visual_width(&stripped) <= max_width {
+            return s.to_string();
+        }
+        
+        // Truncate the stripped version
+        let mut result = String::new();
+        let mut width = 0;
+        for ch in stripped.chars() {
+            let ch_width = char_width(ch);
+            if width + ch_width > max_width.saturating_sub(3) {
+                result.push_str("...");
+                break;
+            }
+            result.push(ch);
+            width += ch_width;
+        }
+        return result;
+    }
+    
+    // No ANSI codes - simple truncation
     let mut result = String::new();
-    let mut current_width = 0;
+    let mut width = 0;
+    
+    for ch in s.chars() {
+        let ch_width = char_width(ch);
+        if width + ch_width > max_width.saturating_sub(3) {
+            result.push_str("...");
+            break;
+        }
+        result.push(ch);
+        width += ch_width;
+    }
+    
+    result
+}
+
+/// Strip ANSI escape codes from a string
+fn strip_ansi_codes(s: &str) -> String {
+    let mut result = String::new();
     let mut chars = s.chars().peekable();
     
     while let Some(ch) = chars.next() {
         if ch == '\x1b' {
-            // Preserve ANSI escape sequence
-            result.push(ch);
+            // Skip ANSI escape sequence
             if chars.peek() == Some(&'[') {
-                result.push(chars.next().unwrap()); // consume '['
+                chars.next(); // consume '['
                 while let Some(c) = chars.next() {
-                    result.push(c);
                     if c.is_ascii_alphabetic() {
                         break; // End of escape sequence
                     }
                 }
             }
-                 } else {
-             let char_width = char_width(ch);
-             if current_width + char_width > max_width {
-                if max_width >= 3 {
-                    result.push_str("...");
-                }
-                break;
-            }
+        } else {
             result.push(ch);
-            current_width += char_width;
         }
     }
     
