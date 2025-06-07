@@ -1,39 +1,18 @@
 name: Release-plz
 
 on:
-  workflow_dispatch:  # Manual releases only
-    inputs:
-      release_type:
-        description: 'Type of release (patch, minor, auto) - NO MAJOR BUMPS'
-        required: false
-        default: 'auto'
-        type: choice
-        options:
-          - auto
-          - patch
-          - minor
-      dry_run:
-        description: 'Dry run (no actual release)'
-        required: false
-        default: false
-        type: boolean
+  push:
+    branches:
+      - main
 
 jobs:
   release-plz-release:
     name: Release-plz release
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'syncable-dev' && github.event.inputs.dry_run != 'true' }}
-
+    if: ${{ github.repository_owner == 'syncable-dev' }}
     permissions:
       contents: write
     steps:
-      - name: Show manual release inputs
-        run: |
-          echo "🚀 Manual Release Configuration:"
-          echo "Release Type: ${{ github.event.inputs.release_type || 'auto' }}"
-          echo "Dry Run: ${{ github.event.inputs.dry_run || 'false' }}"
-          echo "⚠️  Version Constraint: Will stay in 0.x.x range (no 1.0.0 bumps)"
-          
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -41,13 +20,6 @@ jobs:
           token: ${{ secrets.RELEASE_PLZ_TOKEN }}
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-      - name: Check current version and constraints
-        run: |
-          CURRENT_VERSION=$(grep '^version =' Cargo.toml | cut -d'"' -f2)
-          echo "📊 Current version: $CURRENT_VERSION"
-          echo "📋 Release type: ${{ github.event.inputs.release_type || 'auto' }}"
-          echo "🎯 Version constraint: Max 0.99.99 (stays in 0.x.x range)"
-          echo "✅ Safe from automatic 1.0.0 bumps"
       - name: Run release-plz
         uses: release-plz/action@v0.5
         with:
@@ -56,44 +28,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-  release-plz-dry-run:
-    name: Release-plz dry run
-    runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'syncable-dev' && github.event.inputs.dry_run == 'true' }}
-    permissions:
-      contents: read
-    steps:
-      - name: Show dry run information
-        run: |
-          echo "🧪 DRY RUN MODE - No actual release will be performed"
-          echo "Release Type: ${{ github.event.inputs.release_type || 'auto' }}"
-          echo "This would analyze the repository and show what changes would be released."
-          
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.RELEASE_PLZ_TOKEN }}
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-      - name: Analyze release changes (dry run)
-        run: |
-          CURRENT_VERSION=$(grep '^version =' Cargo.toml | cut -d'"' -f2)
-          echo "📊 Analyzing repository for potential release..."
-          echo "Current version: $CURRENT_VERSION"
-          echo "Release type: ${{ github.event.inputs.release_type || 'auto' }}"
-          echo "🎯 Version constraint: Max 0.99.99 (will NOT bump to 1.0.0)"
-          echo ""
-          echo "Recent commits:"
-          git log --oneline -10
-          echo ""
-          echo "✅ Dry run complete - no actual release performed"
-          echo "🛡️  Protected from major version bumps!"
-
   release-plz-pr:
     name: Release-plz PR
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'syncable-dev' && github.event.inputs.dry_run != 'true' }}
+    if: ${{ github.repository_owner == 'syncable-dev' }}
     permissions:
       pull-requests: write
       contents: write
@@ -101,11 +39,6 @@ jobs:
       group: release-plz-${{ github.ref }}
       cancel-in-progress: false
     steps:
-      - name: Show manual release inputs
-        run: |
-          echo "📝 Creating Release PR with configuration:"
-          echo "Release Type: ${{ github.event.inputs.release_type || 'auto' }}"
-          
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
