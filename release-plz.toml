@@ -1,7 +1,3 @@
-[workspace]
-# Only create releases for these packages
-packages = ["syncable-cli"]
-
 # Git configuration
 git_release_enable = true
 git_tag_enable = true
@@ -16,7 +12,9 @@ changelog_update = true
 changelog_path = "CHANGELOG.md"
 
 # Manual release configuration
-[package.syncable-cli]
+[[package]]
+name = "syncable-cli"
+
 # Manual control over version bumping
 # This will be overridden by workflow_dispatch inputs
 release = "auto"
