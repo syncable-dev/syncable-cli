@@ -480,7 +480,7 @@ impl DependencyParser {
                     .and_then(|d| d.as_table())
                 {
                     debug!("Found PDM dev dependencies in pyproject.toml");
-                    for (group_name, group_deps) in pdm_deps {
+                    for (_group_name, group_deps) in pdm_deps {
                         if let Some(deps_array) = group_deps.as_array() {
                             for dep in deps_array {
                                 if let Some(dep_str) = dep.as_str() {
