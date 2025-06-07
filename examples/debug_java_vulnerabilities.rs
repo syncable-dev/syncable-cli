@@ -1,5 +1,5 @@
 use env_logger;
-use log::{info, debug, error};
+use log::{info, error};
 use syncable_cli::analyzer::dependency_parser::{DependencyParser, Language};
 use syncable_cli::analyzer::vulnerability_checker::VulnerabilityChecker;
 use std::path::Path;
