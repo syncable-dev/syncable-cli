@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/syncable-dev/syncable-cli/compare/v0.5.4...v0.6.0) - 2025-06-07
+
+### Added
+
+- improved readme
+
+### Fixed
+
+- release-plz structure to avoid quick bump
+
+### Other
+
+- fix releaze-pls, proper section structure
+- wrong release-plz setting
+- small updates of unnused variables - cleanup
+- updated release cycles and rules
+
 ## [0.5.4](https://github.com/syncable-dev/syncable-cli/compare/v0.5.3...v0.5.4) - 2025-06-07
 
 ### Other
