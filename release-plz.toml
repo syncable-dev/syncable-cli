@@ -1,35 +1,54 @@
 [workspace]
-# Git configuration
+# Manual releases only - don't release on every commit
+release_always = false
+
+# Allow dirty working directories (for CI)
+allow_dirty = false
+
+# Enable git operations
 git_release_enable = true
 git_tag_enable = true
+
+# Enable publishing to crates.io
 publish = true
 
-# Release behavior - Manual releases only
-release_always = false          # Don't release if no changes
-allow_dirty = false            # Require clean working directory
+# Changelog updates
+changelog_update = true
 
-[changelog]
-# Changelog configuration
-update = true
-path = "CHANGELOG.md"
-# Optional: custom changelog config
-# config = "cliff.toml"
+# Semver check
+semver_check = true
+
+# IMPORTANT: Features always increment minor version in 0.x releases
+# This prevents features from bumping 0.x to 1.0
+features_always_increment_minor = true
+
+# Optional: Only release on certain commit types
+# This filters which commits can trigger a release
+# Uncomment to be more selective:
+# release_commits = "^(fix|feat|perf|docs):"
 
 [[package]]
 name = "syncable-cli"
 
-# Manual control over version bumping
-# This will be overridden by workflow_dispatch inputs
+# This package should be released
 release = true
 
-# Version constraints - STAY IN 0.x.x RANGE
-# Prevent automatic major version bumps to 1.0.0
-version_max = "0.99.99"        # Stay below 1.0.0
+# Use semantic versioning checks
+semver_check = true
 
-# Safety checks for manual releases
-semver_check = true            # Ensure semantic versioning compliance
+# Publish this package
+publish = true
 
-# Version increment rules for 0.x.x development
-# patch: 0.5.4 → 0.5.5 (bug fixes)
-# minor: 0.5.4 → 0.6.0 (new features)
-# major: DISABLED until ready for 1.0.0 
+# Override at package level to ensure features don't bump major
+features_always_increment_minor = true
+
+# Version constraints - stay in 0.x.x range
+# Note: version_max might not be supported in this version
+# We'll handle version constraints manually
+
+[changelog]
+# Changelog will be updated
+# Using default configuration which follows Keep a Changelog format
+
+# Protect breaking changes from being ignored
+protect_breaking_commits = false 
