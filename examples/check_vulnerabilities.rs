@@ -1,4 +1,4 @@
-use syncable_cli::analyzer::dependency_parser::{DependencyParser, Language};
+use syncable_cli::analyzer::dependency_parser::{DependencyParser};
 use syncable_cli::analyzer::vulnerability_checker::VulnerabilityChecker;
 use std::path::Path;
 

@@ -9,7 +9,6 @@ use crate::analyzer::{
     DockerAnalysis, OrchestrationPattern,
 };
 use colored::*;
-use prettytable::{Table, Cell, Row, format};
 
 /// Content line for measuring and drawing
 #[derive(Debug, Clone)]
@@ -28,13 +27,6 @@ impl ContentLine {
         }
     }
     
-    fn empty() -> Self {
-        Self {
-            label: String::new(),
-            value: String::new(),
-            label_colored: false,
-        }
-    }
     
     fn separator() -> Self {
         Self {
@@ -75,10 +67,6 @@ impl BoxDrawer {
     
     pub fn add_separator(&mut self) {
         self.lines.push(ContentLine::separator());
-    }
-    
-    fn add_empty(&mut self) {
-        self.lines.push(ContentLine::empty());
     }
     
     /// Calculate optimal box width based on content
