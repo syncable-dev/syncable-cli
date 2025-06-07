@@ -1,0 +1,40 @@
+[workspace]
+# Only create releases for these packages
+packages = ["syncable-cli"]
+
+# Git configuration
+git_release_enable = true
+git_tag_enable = true
+publish = true
+
+# Release behavior - Manual releases only
+release_always = false          # Don't release if no changes
+allow_dirty = false            # Require clean working directory
+
+# Changelog configuration
+changelog_update = true
+changelog_path = "CHANGELOG.md"
+
+# Manual release configuration
+[package.syncable-cli]
+# Manual control over version bumping
+# This will be overridden by workflow_dispatch inputs
+release = "auto"
+
+# Version constraints - STAY IN 0.x.x RANGE
+# Prevent automatic major version bumps to 1.0.0
+max_version = "0.99.99"        # Stay below 1.0.0
+allow_breaking_changes = false # Prevent BREAKING CHANGE commits from bumping to 1.0
+
+# Safety checks for manual releases
+ignore_merge_commits = false    # Allow merge commits in manual releases
+semver_check = true            # Ensure semantic versioning compliance
+pre_release = false            # Don't create pre-release versions automatically
+
+# Version increment rules for 0.x.x development
+# patch: 0.5.4 → 0.5.5 (bug fixes)
+# minor: 0.5.4 → 0.6.0 (new features)
+# major: DISABLED until ready for 1.0.0
+
+# Changelog customization for manual releases
+changelog_config = "cliff.toml" # Optional: custom changelog config 
