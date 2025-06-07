@@ -22,9 +22,12 @@ sync-ctl vulnerabilities
 
 # Run security analysis
 sync-ctl security
+
+# Force update check (clears cache)
+sync-ctl --clear-update-cache analyze .
 ```
 
-That's it! The CLI will detect your languages, frameworks, dependencies, and provide detailed insights about your project structure.
+That's it! The CLI will detect your languages, frameworks, dependencies, and provide detailed insights about your project structure. The tool includes smart update notifications to keep you on the latest version.
 
 ## 🎯 What It Does
 
@@ -75,6 +78,12 @@ $ sync-ctl analyze ./my-express-app
 - **Multi-stage detection** - Identifies build optimization patterns
 - **Service mapping** - Traces dependencies between containers
 - **Network topology** - Visualizes service communication
+
+### 🔄 Smart Update System
+- **Intelligent caching** - Checks every 2 hours when no update available
+- **Immediate notifications** - Shows updates instantly when available
+- **Clear instructions** - Provides multiple update methods with step-by-step guidance
+- **Zero-maintenance** - Automatically keeps you informed of new releases
 
 ## 🛠️ Installation
 
