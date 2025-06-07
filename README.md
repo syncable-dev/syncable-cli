@@ -1,13 +1,10 @@
 # 🚀 Syncable IaC CLI
 
 > Automatically generate optimized Docker, Kubernetes, and cloud infrastructure configurations by analyzing your codebase.
-> Automatically generate optimized Docker, Kubernetes, and cloud infrastructure configurations by analyzing your codebase.
 
 [![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Crates.io Downloads](https://img.shields.io/crates/d/syncable-cli)](https://crates.io/crates/syncable-cli)
 
-**Syncable IaC CLI** analyzes your project and automatically generates production-ready infrastructure configurations. Supporting **260+ technologies** across 5 major language ecosystems, it understands your stack and creates optimized IaC files tailored to your specific needs.
 
 ## ⚡ Quick Start
 [![Crates.io Downloads](https://img.shields.io/crates/d/syncable-cli)](https://crates.io/crates/syncable-cli)
@@ -111,19 +108,6 @@ cargo install --path .
 ## 📖 Usage Guide
 
 ### Basic Commands
-cargo install syncable-cli
-```
-
-### From Source
-```bash
-git clone https://github.com/syncable-dev/syncable-cli.git
-cd syncable-cli
-cargo install --path .
-```
-
-## 📖 Usage Guide
-
-### Basic Commands
 
 ```bash
 # Analyze with different display formats
@@ -162,20 +146,9 @@ sync-ctl vulnerabilities            # Dependency vulnerability scan
 # Dependency analysis
 sync-ctl dependencies --licenses    # Show license information
 sync-ctl dependencies --vulnerabilities  # Check for known CVEs
-```
-
-### Display Modes
-
-Choose the output format that works best for you:
-
-- **Matrix** (default) - Compact dashboard view
-- **Detailed** - Comprehensive vertical layout  
-- **Summary** - Brief overview for CI/CD
-- **JSON** - Machine-readable format
 
 ### Advanced Configuration
 
-Create `.syncable.toml` in your project root:
 Create `.syncable.toml` in your project root:
 
 ```toml
@@ -231,51 +204,9 @@ check_secrets = true
 [security]
 fail_on_high_severity = true
 check_secrets = true
-```
-
-## 🌟 Technology Coverage
-
-<details>
-<summary><b>View Supported Technologies (260+)</b></summary>
-
-### By Language
-
-- **JavaScript/TypeScript** (46) - React, Vue, Angular, Next.js, Express, Nest.js, and more
-- **Python** (76) - Django, Flask, FastAPI, NumPy, TensorFlow, PyTorch, and more
-- **Java/JVM** (98) - Spring Boot, Micronaut, Hibernate, Kafka, Elasticsearch, and more
-- **Go** (21) - Gin, Echo, Fiber, gRPC, Kubernetes client, and more
-- **Rust** (20) - Actix-web, Axum, Rocket, Tokio, SeaORM, and more
-
-### Package Managers
-- npm, yarn, pnpm, bun (JavaScript)
-- pip, poetry, pipenv, conda (Python)
-- Maven, Gradle (Java)
-- Cargo (Rust)
-- Go modules (Go)
-
-</details>
-
-## 🚀 Roadmap
-
-### ✅ Phase 1: Analysis Engine (Complete)
-- Project analysis and technology detection
-- Vulnerability scanning
-- Basic security analysis
-
-### 🔄 Phase 2: AI-Powered Generation (In Progress)
-- Smart Dockerfile generation
-- Intelligent Docker Compose creation
-- Cloud-optimized configurations
-
-### 📅 Future Phases
-- Kubernetes manifests & Helm charts
-- Terraform modules for AWS/GCP/Azure
-- CI/CD pipeline generation
-- Real-time monitoring setup
 
 ## 🤝 Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ```bash
