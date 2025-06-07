@@ -295,11 +295,9 @@ cargo fmt
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) for details.
-MIT License - see [LICENSE](LICENSE) for details.
 
 ## 🙏 Acknowledgments
 
-Built with Rust 🦀 and powered by the open-source community.
 Built with Rust 🦀 and powered by the open-source community.
 
 ---
