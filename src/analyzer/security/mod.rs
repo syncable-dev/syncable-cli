@@ -13,12 +13,14 @@ use thiserror::Error;
 
 pub mod core;
 pub mod javascript;
+pub mod python;
 pub mod patterns;
 pub mod config;
 pub mod gitignore;
 
 pub use core::{SecurityAnalyzer, SecurityReport, SecurityFinding, SecuritySeverity, SecurityCategory};
 pub use javascript::JavaScriptSecurityAnalyzer;
+pub use python::PythonSecurityAnalyzer;
 pub use patterns::SecretPatternManager;
 pub use config::SecurityAnalysisConfig;
 pub use gitignore::{GitIgnoreAnalyzer, GitIgnoreStatus, GitIgnoreRisk};
