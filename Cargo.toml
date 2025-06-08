@@ -33,6 +33,7 @@ termcolor = "1"
 chrono = { version = "0.4", features = ["serde"] }
 colored = "2"
 prettytable = "0.10"
+term_size = "0.3"
 
 # Vulnerability checking dependencies
 rustsec = "0.29"
