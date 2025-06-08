@@ -15,12 +15,16 @@ use std::process::Command;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use log::{info, debug, warn};
+use log::{info, debug};
 use rayon::prelude::*;
 use indicatif::{ProgressBar, ProgressStyle, MultiProgress};
 
 use crate::analyzer::{ProjectAnalysis, DetectedLanguage, DetectedTechnology, EnvVar};
 use crate::analyzer::dependency_parser::Language;
+use crate::analyzer::security::{
+    ModularSecurityAnalyzer, SecurityAnalysisConfig as NewSecurityAnalysisConfig
+};
+use crate::analyzer::security::core::SecurityReport as NewSecurityReport;
 
 #[derive(Debug, Error)]
 pub enum SecurityError {
@@ -84,6 +88,7 @@ pub struct SecurityFinding {
     pub category: SecurityCategory,
     pub file_path: Option<PathBuf>,
     pub line_number: Option<usize>,
+    pub column_number: Option<usize>,
     pub evidence: Option<String>,
     pub remediation: Vec<String>,
     pub references: Vec<String>,
@@ -207,6 +212,38 @@ impl SecurityAnalyzer {
             git_ignore_cache: std::sync::Mutex::new(HashMap::new()),
             project_root: None,
         })
+    }
+    
+    /// Enhanced security analysis using the new modular approach
+    pub fn analyze_security_enhanced(&mut self, analysis: &ProjectAnalysis) -> Result<NewSecurityReport, SecurityError> {
+        let start_time = Instant::now();
+        info!("Starting enhanced modular security analysis");
+        
+        // Create modular analyzer with JavaScript-specific configuration if JS/TS is detected
+        let has_javascript = analysis.languages.iter()
+            .any(|lang| matches!(lang.name.as_str(), "JavaScript" | "TypeScript" | "JSX" | "TSX"));
+        
+        let config = if has_javascript {
+            NewSecurityAnalysisConfig::for_javascript()
+        } else {
+            NewSecurityAnalysisConfig::default()
+        };
+        
+        let mut modular_analyzer = ModularSecurityAnalyzer::with_config(config)
+            .map_err(|e| SecurityError::AnalysisFailed(e.to_string()))?;
+        
+        // Use the modular analyzer
+        let enhanced_report = modular_analyzer.analyze_project(&analysis.project_root, &analysis.languages)
+            .map_err(|e| SecurityError::AnalysisFailed(e.to_string()))?;
+        
+        // For now, just return the enhanced report as-is
+        // TODO: Combine with existing findings if needed
+        
+        // Build final report
+        let duration = start_time.elapsed().as_secs_f32();
+        info!("Enhanced security analysis completed in {:.1}s - Found {} issues", duration, enhanced_report.total_findings);
+        
+        Ok(enhanced_report)
     }
     
     /// Perform comprehensive security analysis with appropriate progress for verbosity level
@@ -599,9 +636,9 @@ impl SecurityAnalyzer {
             ("Stripe API Key", r"sk_live_[0-9a-zA-Z]{24}", SecuritySeverity::Critical),
             ("Stripe Publishable Key", r"pk_live_[0-9a-zA-Z]{24}", SecuritySeverity::Medium),
             
-            // Database URLs and Passwords
-            ("Database URL", r#"(?i)(database_url|db_url)["']?\s*[:=]\s*["']?[^"'\s]+"#, SecuritySeverity::High),
-            ("Password", r#"(?i)(password|passwd|pwd)["']?\s*[:=]\s*["']?[^"']{6,}"#, SecuritySeverity::Medium),
+            // Database URLs and Passwords - Enhanced to avoid env var false positives
+            ("Hardcoded Database URL", r#"(?i)(database_url|db_url)["']?\s*[:=]\s*["']?(postgresql|mysql|mongodb)://[^"'\s]+"#, SecuritySeverity::Critical),
+            ("Hardcoded Password", r#"(?i)(password|passwd|pwd)["']?\s*[:=]\s*["']?[^"']{6,}["']?"#, SecuritySeverity::High),
             ("JWT Secret", r#"(?i)(jwt[_-]?secret)["']?\s*[:=]\s*["']?[A-Za-z0-9_\-+/=]{20,}"#, SecuritySeverity::High),
             
             // Private Keys
@@ -613,9 +650,14 @@ impl SecurityAnalyzer {
             ("Google Cloud Service Account", r#""type":\s*"service_account""#, SecuritySeverity::High),
             ("Azure Storage Key", r"DefaultEndpointsProtocol=https;AccountName=", SecuritySeverity::High),
             
-            // Generic patterns last (lowest priority)
-            ("Generic API Key", r#"(?i)(api[_-]?key|apikey)["']?\s*[:=]\s*["']?[A-Za-z0-9_\-]{20,}"#, SecuritySeverity::High),
-            ("Generic Secret", r#"(?i)(secret|token|key)["']?\s*[:=]\s*["']?[A-Za-z0-9_\-+/=]{24,}"#, SecuritySeverity::Medium),
+            // Client-side exposed environment variables (these are the real security issues)
+            ("Client-side Exposed Secret", r#"(?i)(REACT_APP_|NEXT_PUBLIC_|VUE_APP_|VITE_)[A-Z_]*(?:SECRET|KEY|TOKEN|PASSWORD|API)[A-Z_]*["']?\s*[:=]\s*["']?[A-Za-z0-9_\-+/=]{10,}"#, SecuritySeverity::High),
+            
+            // Hardcoded API keys (not environment variable access)
+            ("Hardcoded API Key", r#"(?i)(api[_-]?key|apikey)["']?\s*[:=]\s*["']?[A-Za-z0-9_\-]{20,}["']?"#, SecuritySeverity::High),
+            
+            // Generic secrets that are clearly hardcoded (not env var access)
+            ("Hardcoded Secret", r#"(?i)(secret|token)["']?\s*[:=]\s*["']?[A-Za-z0-9_\-+/=]{24,}["']?"#, SecuritySeverity::Medium),
         ];
         
         patterns.into_iter()
@@ -1035,6 +1077,7 @@ impl SecurityAnalyzer {
                     category: SecurityCategory::SecretsExposure,
                     file_path: None,
                     line_number: None,
+                    column_number: None,
                     evidence: Some(format!("Variable: {} = {:?}", env_var.name, env_var.default_value)),
                     remediation: vec![
                         "Remove default value for sensitive environment variables".to_string(),
@@ -1042,7 +1085,7 @@ impl SecurityAnalyzer {
                         "Document required environment variables separately".to_string(),
                     ],
                     references: vec![
-                        "https://owasp.org/www-project-top-ten/2017/A3_2017-Sensitive_Data_Exposure".to_string(),
+                        "https://owasp.org/www-project-top-ten/2021/A05_2021-Security_Misconfiguration/".to_string(),
                     ],
                     cwe_id: Some("CWE-200".to_string()),
                     compliance_frameworks: vec!["SOC2".to_string(), "GDPR".to_string()],
@@ -1195,9 +1238,15 @@ impl SecurityAnalyzer {
         
         for (line_num, line) in content.lines().enumerate() {
             for pattern in &self.secret_patterns {
-                if let Some(_captures) = pattern.pattern.find(line) {
+                if let Some(match_) = pattern.pattern.find(line) {
                     // Skip if it looks like a placeholder or example
                     if self.is_likely_placeholder(line) {
+                        continue;
+                    }
+                    
+                    // NEW: Skip if this is legitimate environment variable usage
+                    if self.is_legitimate_env_var_usage(line, file_path) {
+                        debug!("Skipping legitimate env var usage: {}", line.trim());
                         continue;
                     }
                     
@@ -1241,6 +1290,7 @@ impl SecurityAnalyzer {
                         category: SecurityCategory::SecretsExposure,
                         file_path: Some(file_path.to_path_buf()),
                         line_number: Some(line_num + 1),
+                        column_number: Some(match_.start() + 1), // 1-indexed column position
                         evidence: Some(format!("Line: {}", line.trim())),
                         remediation,
                         references: vec![
@@ -1254,6 +1304,180 @@ impl SecurityAnalyzer {
         }
         
         Ok(findings)
+    }
+    
+    /// Check if a line represents legitimate environment variable usage (not a security issue)
+    fn is_legitimate_env_var_usage(&self, line: &str, file_path: &Path) -> bool {
+        let line_trimmed = line.trim();
+        
+        // Check for common legitimate environment variable access patterns
+        let legitimate_env_patterns = [
+            // Node.js/JavaScript patterns
+            r"process\.env\.[A-Z_]+",
+            r#"process\.env\[['""][A-Z_]+['"]\]"#,
+            
+            // Vite/Modern JS patterns  
+            r"import\.meta\.env\.[A-Z_]+",
+            r#"import\.meta\.env\[['""][A-Z_]+['"]\]"#,
+            
+            // Python patterns
+            r#"os\.environ\.get\(["'][A-Z_]+["']\)"#,
+            r#"os\.environ\[["'][A-Z_]+["']\]"#,
+            r#"getenv\(["'][A-Z_]+["']\)"#,
+            
+            // Rust patterns
+            r#"env::var\("([A-Z_]+)"\)"#,
+            r#"std::env::var\("([A-Z_]+)"\)"#,
+            
+            // Go patterns
+            r#"os\.Getenv\(["'][A-Z_]+["']\)"#,
+            
+            // Java patterns
+            r#"System\.getenv\(["'][A-Z_]+["']\)"#,
+            
+            // Shell/Docker patterns
+            r"\$\{?[A-Z_]+\}?",
+            r"ENV [A-Z_]+",
+            
+            // Config file access patterns
+            r"config\.[a-z_]+\.[A-Z_]+",
+            r"settings\.[A-Z_]+",
+            r"env\.[A-Z_]+",
+        ];
+        
+        // Check if the line matches any legitimate environment variable access pattern
+        for pattern_str in &legitimate_env_patterns {
+            if let Ok(pattern) = Regex::new(pattern_str) {
+                if pattern.is_match(line_trimmed) {
+                    // Additional context checks to make sure this is really legitimate
+                    
+                    // Check if this is in a server-side context (not client-side)
+                    if self.is_server_side_file(file_path) {
+                        return true;
+                    }
+                    
+                    // Check if this is NOT a client-side exposed variable
+                    if !self.is_client_side_exposed_env_var(line_trimmed) {
+                        return true;
+                    }
+                }
+            }
+        }
+        
+        // Check for assignment vs access - assignments might be setting up environment variables
+        // which could be legitimate in certain contexts
+        if self.is_env_var_assignment_context(line_trimmed, file_path) {
+            return true;
+        }
+        
+        false
+    }
+    
+    /// Check if a file is likely server-side code (vs client-side)
+    fn is_server_side_file(&self, file_path: &Path) -> bool {
+        let path_str = file_path.to_string_lossy().to_lowercase();
+        let file_name = file_path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        
+        // Server-side indicators
+        let server_indicators = [
+            "/server/", "/api/", "/backend/", "/src/app/api/", "/pages/api/",
+            "/routes/", "/controllers/", "/middleware/", "/models/",
+            "/lib/", "/utils/", "/services/", "/config/",
+            "server.js", "index.js", "app.js", "main.js",
+            ".env", "dockerfile", "docker-compose",
+        ];
+        
+        // Client-side indicators (these should return false)
+        let client_indicators = [
+            "/public/", "/static/", "/assets/", "/components/", "/pages/",
+            "/src/components/", "/src/pages/", "/client/", "/frontend/",
+            "index.html", ".html", "/dist/", "/build/",
+            "dist/", "build/", "public/", "static/", "assets/",
+        ];
+        
+        // If it's clearly client-side, return false
+        if client_indicators.iter().any(|indicator| path_str.contains(indicator)) {
+            return false;
+        }
+        
+        // If it has server-side indicators, return true
+        if server_indicators.iter().any(|indicator| 
+            path_str.contains(indicator) || file_name.contains(indicator)
+        ) {
+            return true;
+        }
+        
+        // Default to true for ambiguous cases (be conservative about flagging env var usage)
+        true
+    }
+    
+    /// Check if an environment variable is exposed to client-side (security issue)
+    fn is_client_side_exposed_env_var(&self, line: &str) -> bool {
+        let client_prefixes = [
+            "REACT_APP_", "NEXT_PUBLIC_", "VUE_APP_", "VITE_", 
+            "GATSBY_", "PUBLIC_", "NUXT_PUBLIC_",
+        ];
+        
+        client_prefixes.iter().any(|prefix| line.contains(prefix))
+    }
+    
+    /// Check if this is a legitimate environment variable assignment context
+    fn is_env_var_assignment_context(&self, line: &str, file_path: &Path) -> bool {
+        let path_str = file_path.to_string_lossy().to_lowercase();
+        let file_name = file_path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        
+        // Only very specific configuration files where env var assignments are expected
+        // Be more restrictive to avoid false positives
+        let env_config_files = [
+            ".env", 
+            "docker-compose.yml", "docker-compose.yaml",
+            ".env.example", ".env.sample", ".env.template",
+            ".env.local", ".env.development", ".env.production", ".env.staging",
+        ];
+        
+        // Check for exact filename matches for .env files (most common legitimate case)
+        if env_config_files.iter().any(|pattern| file_name == *pattern) {
+            return true;
+        }
+        
+        // Docker files are also legitimate for environment variable assignment
+        if file_name.starts_with("dockerfile") || file_name == "dockerfile" {
+            return true;
+        }
+        
+        // Shell scripts or CI/CD files
+        if file_name.ends_with(".sh") || 
+           file_name.ends_with(".bash") ||
+           path_str.contains(".github/workflows/") ||
+           path_str.contains(".gitlab-ci") {
+            return true;
+        }
+        
+        // Lines that are clearly setting up environment variables for child processes
+        // Only match very specific patterns that indicate legitimate environment setup
+        let setup_patterns = [
+            r"export [A-Z_]+=",           // Shell export
+            r"ENV [A-Z_]+=",              // Dockerfile ENV
+            r"^\s*environment:\s*$",      // Docker Compose environment section header
+            r"^\s*env:\s*$",              // Kubernetes env section header
+            r"process\.env\.[A-Z_]+ =",   // Explicitly setting process.env (rare but legitimate)
+        ];
+        
+        for pattern_str in &setup_patterns {
+            if let Ok(pattern) = Regex::new(pattern_str) {
+                if pattern.is_match(line) {
+                    return true;
+                }
+            }
+        }
+        
+        false
     }
     
     fn is_likely_placeholder(&self, line: &str) -> bool {
@@ -1559,8 +1783,6 @@ impl SecurityAnalyzer {
             recommendations.push("Address critical security findings immediately".to_string());
         }
         
-        // Add more generic recommendations...
-        
         recommendations
     }
 }
@@ -1584,6 +1806,7 @@ mod tests {
                 category: SecurityCategory::SecretsExposure,
                 file_path: None,
                 line_number: None,
+                column_number: None,
                 evidence: None,
                 remediation: vec![],
                 references: vec![],
@@ -1731,5 +1954,150 @@ mod tests {
         // Should not match non-env files
         assert!(!analyzer.matches_common_env_patterns("config.json"));
         assert!(!analyzer.matches_common_env_patterns("package.json"));
+    }
+    
+    #[test]
+    fn test_legitimate_env_var_usage() {
+        let analyzer = SecurityAnalyzer::new().unwrap();
+        
+        // Create mock file paths
+        let server_file = Path::new("src/server/config.js");
+        let client_file = Path::new("src/components/MyComponent.js");
+        
+        // Test legitimate server-side environment variable usage (should NOT be flagged)
+        assert!(analyzer.is_legitimate_env_var_usage("const apiKey = process.env.RESEND_API_KEY;", server_file));
+        assert!(analyzer.is_legitimate_env_var_usage("const dbUrl = process.env.DATABASE_URL;", server_file));
+        assert!(analyzer.is_legitimate_env_var_usage("api_key = os.environ.get('API_KEY')", server_file));
+        assert!(analyzer.is_legitimate_env_var_usage("let secret = env::var(\"JWT_SECRET\")?;", server_file));
+        
+        // Test client-side environment variable usage (legitimate if not exposed)
+        assert!(analyzer.is_legitimate_env_var_usage("const apiUrl = process.env.API_URL;", client_file));
+        
+        // Test client-side exposed variables (these ARE client-side exposed - security issues)
+        assert!(analyzer.is_client_side_exposed_env_var("process.env.REACT_APP_SECRET_KEY"));
+        assert!(analyzer.is_client_side_exposed_env_var("process.env.NEXT_PUBLIC_API_SECRET"));
+        
+        // Test hardcoded secrets (should NOT be legitimate)
+        assert!(!analyzer.is_legitimate_env_var_usage("const apiKey = 'sk-1234567890abcdef';", server_file));
+        assert!(!analyzer.is_legitimate_env_var_usage("password = 'hardcoded123'", server_file));
+    }
+    
+    #[test]
+    fn test_server_vs_client_side_detection() {
+        let analyzer = SecurityAnalyzer::new().unwrap();
+        
+        // Server-side files
+        assert!(analyzer.is_server_side_file(Path::new("src/server/app.js")));
+        assert!(analyzer.is_server_side_file(Path::new("src/api/users.js")));
+        assert!(analyzer.is_server_side_file(Path::new("pages/api/auth.js")));
+        assert!(analyzer.is_server_side_file(Path::new("src/lib/database.js")));
+        assert!(analyzer.is_server_side_file(Path::new(".env")));
+        assert!(analyzer.is_server_side_file(Path::new("server.js")));
+        
+        // Client-side files
+        assert!(!analyzer.is_server_side_file(Path::new("src/components/Button.jsx")));
+        assert!(!analyzer.is_server_side_file(Path::new("public/index.html")));
+        assert!(!analyzer.is_server_side_file(Path::new("src/pages/home.js")));
+        assert!(!analyzer.is_server_side_file(Path::new("dist/bundle.js")));
+        
+        // Ambiguous files (default to server-side for conservative detection)
+        assert!(analyzer.is_server_side_file(Path::new("src/utils/helper.js")));
+        assert!(analyzer.is_server_side_file(Path::new("config/settings.js")));
+    }
+    
+    #[test]
+    fn test_client_side_exposed_env_vars() {
+        let analyzer = SecurityAnalyzer::new().unwrap();
+        
+        // These should be flagged as client-side exposed (security issues)
+        assert!(analyzer.is_client_side_exposed_env_var("process.env.REACT_APP_SECRET"));
+        assert!(analyzer.is_client_side_exposed_env_var("import.meta.env.VITE_API_KEY"));
+        assert!(analyzer.is_client_side_exposed_env_var("process.env.NEXT_PUBLIC_SECRET"));
+        assert!(analyzer.is_client_side_exposed_env_var("process.env.VUE_APP_TOKEN"));
+        
+        // These should NOT be flagged as client-side exposed
+        assert!(!analyzer.is_client_side_exposed_env_var("process.env.DATABASE_URL"));
+        assert!(!analyzer.is_client_side_exposed_env_var("process.env.JWT_SECRET"));
+        assert!(!analyzer.is_client_side_exposed_env_var("process.env.API_KEY"));
+    }
+    
+    #[test]
+    fn test_env_var_assignment_context() {
+        let analyzer = SecurityAnalyzer::new().unwrap();
+        
+        // Configuration files where assignments are legitimate
+        assert!(analyzer.is_env_var_assignment_context("API_KEY=sk-test123", Path::new(".env")));
+        assert!(analyzer.is_env_var_assignment_context("DATABASE_URL=postgres://", Path::new("docker-compose.yml")));
+        assert!(analyzer.is_env_var_assignment_context("export SECRET=test", Path::new("setup.sh")));
+        
+        // Regular source files where assignments might be suspicious
+        assert!(!analyzer.is_env_var_assignment_context("const secret = 'hardcoded'", Path::new("src/app.js")));
+    }
+    
+    #[test]
+    fn test_enhanced_secret_patterns() {
+        let analyzer = SecurityAnalyzer::new().unwrap();
+        
+        // Test that hardcoded secrets are still detected
+        let hardcoded_patterns = [
+            "apikey = 'sk-1234567890abcdef1234567890abcdef12345678'",
+            "const secret = 'my-super-secret-token-12345678901234567890'",
+            "password = 'hardcoded123456'",
+        ];
+        
+        for pattern in &hardcoded_patterns {
+            let has_secret = analyzer.secret_patterns.iter().any(|sp| sp.pattern.is_match(pattern));
+            assert!(has_secret, "Should detect hardcoded secret in: {}", pattern);
+        }
+        
+        // Test that legitimate env var usage is NOT detected as secret
+        let legitimate_patterns = [
+            "const apiKey = process.env.API_KEY;",
+            "const dbUrl = process.env.DATABASE_URL || 'fallback';",
+            "api_key = os.environ.get('API_KEY')",
+            "let secret = env::var(\"JWT_SECRET\")?;",
+        ];
+        
+        for pattern in &legitimate_patterns {
+            // These should either not match any secret pattern, or be filtered out by context detection
+            let matches_old_generic_pattern = pattern.to_lowercase().contains("secret") || 
+                                            pattern.to_lowercase().contains("key");
+            
+            // Our new patterns should be more specific and not match env var access
+            let matches_new_patterns = analyzer.secret_patterns.iter()
+                .filter(|sp| sp.name.contains("Hardcoded"))
+                .any(|sp| sp.pattern.is_match(pattern));
+            
+            assert!(!matches_new_patterns, "Should NOT detect legitimate env var usage as hardcoded secret: {}", pattern);
+        }
+    }
+    
+    #[test]
+    fn test_context_aware_false_positive_reduction() {
+        use tempfile::TempDir;
+        
+        let temp_dir = TempDir::new().unwrap();
+        let server_file = temp_dir.path().join("src/server/config.js");
+        
+        // Create directory structure
+        std::fs::create_dir_all(server_file.parent().unwrap()).unwrap();
+        
+        // Write a file with legitimate environment variable usage
+        let content = r#"
+const config = {
+    apiKey: process.env.RESEND_API_KEY,
+    databaseUrl: process.env.DATABASE_URL,
+    jwtSecret: process.env.JWT_SECRET,
+    port: process.env.PORT || 3000
+};
+"#;
+        
+        std::fs::write(&server_file, content).unwrap();
+        
+        let analyzer = SecurityAnalyzer::new().unwrap();
+        let findings = analyzer.analyze_file_for_secrets(&server_file).unwrap();
+        
+        // Should have zero findings because all are legitimate env var usage
+        assert_eq!(findings.len(), 0, "Should not flag legitimate environment variable usage as security issues");
     }
 } 
