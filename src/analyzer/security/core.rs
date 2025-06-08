@@ -35,6 +35,10 @@ pub enum SecurityCategory {
     NetworkSecurity,
     /// Compliance and regulatory requirements
     Compliance,
+    /// Code injection vulnerabilities (eval, exec, etc.)
+    CodeInjection,
+    /// Command injection vulnerabilities (subprocess, os.system, etc.)
+    CommandInjection,
 }
 
 /// A security finding with details and remediation
