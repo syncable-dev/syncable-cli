@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/syncable-dev/syncable-cli/compare/v0.6.0...v0.7.0) - 2025-06-08
+
+### Added
+
+- huge improvements towards security and secret variable detection.
+
+### Other
+
+- updated cli-display-modes.md file for better visualization
+
 ## [0.6.0](https://github.com/syncable-dev/syncable-cli/compare/v0.5.4...v0.6.0) - 2025-06-07
 
 ### Added
