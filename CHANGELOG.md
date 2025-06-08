@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/syncable-dev/syncable-cli/compare/v0.7.0...v0.8.0) - 2025-06-08
+
+### Added
+
+- feat added python security scanning catching generat exposure secrets similar to javascript version
+
 ## [0.7.0](https://github.com/syncable-dev/syncable-cli/compare/v0.6.0...v0.7.0) - 2025-06-08
 
 ### Added
