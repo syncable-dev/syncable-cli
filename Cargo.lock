@@ -3432,7 +3432,7 @@ dependencies = [
  "term_size",
  "termcolor",
  "textwrap",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
  "tokio",
  "toml 0.8.22",
  "walkdir",
