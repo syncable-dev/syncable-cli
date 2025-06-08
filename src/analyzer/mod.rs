@@ -19,6 +19,7 @@ pub mod language_detector;
 pub mod project_context;
 pub mod vulnerability_checker;
 pub mod security_analyzer;
+pub mod security;
 pub mod tool_installer;
 pub mod monorepo_detector;
 pub mod docker_analyzer;
@@ -35,6 +36,13 @@ pub use security_analyzer::{
     SecurityAnalyzer, SecurityReport, SecurityFinding, SecuritySeverity,
     SecurityCategory, ComplianceStatus, SecurityAnalysisConfig
 };
+
+// Re-export new modular security analysis types
+pub use security::{
+    ModularSecurityAnalyzer, JavaScriptSecurityAnalyzer, 
+    SecretPatternManager
+};
+pub use security::config::SecurityConfigPreset;
 
 // Re-export monorepo analysis types
 pub use monorepo_detector::{
@@ -102,6 +110,8 @@ pub enum LibraryType {
     HttpClient,
     /// Authentication (Auth0, Firebase Auth)
     Authentication,
+    /// CLI frameworks (clap, structopt, argh)
+    CLI,
     /// Other specific types
     Other(String),
 }
