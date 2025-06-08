@@ -232,12 +232,12 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
         // CLI FRAMEWORKS
         TechnologyRule {
             name: "Cobra".to_string(),
-            category: TechnologyCategory::Library(LibraryType::Utility),
+            category: TechnologyCategory::Library(LibraryType::CLI),
             confidence: 0.85,
             dependency_patterns: vec!["github.com/spf13/cobra".to_string(), "cobra".to_string()],
             requires: vec![],
             conflicts_with: vec![],
-            is_primary_indicator: false,
+            is_primary_indicator: true,
             alternative_names: vec!["spf13/cobra".to_string()],
         },
         

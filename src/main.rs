@@ -3,6 +3,8 @@ use syncable_cli::{
     analyzer::{
         self, vulnerability_checker::VulnerabilitySeverity, DetectedTechnology, TechnologyCategory, LibraryType, 
         analyze_monorepo, ProjectCategory,
+        // Import new modular security types
+        security::SecuritySeverity,
     },
     cli::{Cli, Commands, ToolsCommand, OutputFormat, SeverityThreshold, DisplayFormat},
     config,
@@ -1157,10 +1159,10 @@ fn handle_security(
     // Step 8: Generating Report
     progress.set_message("Generating security report...");
     progress.set_position(100);
-    let security_report = security_analyzer.analyze_security(&project_analysis)
+    let security_report = security_analyzer.analyze_security_enhanced(&project_analysis)
         .map_err(|e| syncable_cli::error::IaCGeneratorError::Analysis(
             syncable_cli::error::AnalysisError::InvalidStructure(
-                format!("Security analysis failed: {}", e)
+                format!("Enhanced security analysis failed: {}", e)
             )
         ))?;
     
@@ -1169,118 +1171,243 @@ fn handle_security(
     // Format output in the beautiful style requested
     let output_string = match format {
         OutputFormat::Table => {
+            use syncable_cli::analyzer::display::BoxDrawer;
+            use colored::*;
+            
             let mut output = String::new();
             
-            // Beautiful Header
-            output.push_str("\n🛡️  Security Analysis Results\n");
-            output.push_str(&format!("{}\n", "=".repeat(60)));
+            // Header
+            output.push_str(&format!("\n{}\n", "🛡️  Security Analysis Results".bright_white().bold()));
+            output.push_str(&format!("{}\n", "═".repeat(80).bright_blue()));
             
-            // Security Summary
-            output.push_str("\n📊 SECURITY SUMMARY\n");
-            output.push_str(&format!("✅ Security Score: {:.1}/100\n", security_report.overall_score));
+            // Security Score Box
+            let mut score_box = BoxDrawer::new("Security Summary");
+            score_box.add_line("Overall Score:", &format!("{:.0}/100", security_report.overall_score).bright_yellow(), true);
+            score_box.add_line("Risk Level:", &format!("{:?}", security_report.risk_level).color(match security_report.risk_level {
+                SecuritySeverity::Critical => "bright_red",
+                SecuritySeverity::High => "red", 
+                SecuritySeverity::Medium => "yellow",
+                SecuritySeverity::Low => "green",
+                SecuritySeverity::Info => "blue",
+            }), true);
+            score_box.add_line("Total Findings:", &security_report.total_findings.to_string().cyan(), true);
             
-            // Analysis Scope - only show what's actually implemented
-            output.push_str("\n🔍 ANALYSIS SCOPE\n");
+            // Analysis scope
             let config_files = security_report.findings.iter()
                 .filter_map(|f| f.file_path.as_ref())
                 .collect::<std::collections::HashSet<_>>()
                 .len();
-            let code_files = security_report.findings.iter()
-                .filter(|f| matches!(f.category, syncable_cli::analyzer::SecurityCategory::CodeSecurityPattern))
-                .filter_map(|f| f.file_path.as_ref())
-                .collect::<std::collections::HashSet<_>>()
-                .len();
+            score_box.add_line("Files Analyzed:", &config_files.max(1).to_string().green(), true);
+            score_box.add_line("Env Variables:", &project_analysis.environment_variables.len().to_string().green(), true);
             
-            output.push_str(&format!("✅ Secret Detection         ({} files analyzed)\n", config_files.max(1)));
-            output.push_str(&format!("✅ Environment Variables    ({} variables checked)\n", project_analysis.environment_variables.len()));
-            if code_files > 0 {
-                output.push_str(&format!("✅ Code Security Patterns   ({} files analyzed)\n", code_files));
-            } else {
-                output.push_str("ℹ️  Code Security Patterns   (no applicable files found)\n");
-            }
-            output.push_str("🚧 Infrastructure Security  (coming soon)\n");
-            output.push_str("🚧 Compliance Frameworks    (coming soon)\n");
+            output.push_str(&format!("\n{}\n", score_box.draw()));
             
-            // Findings by Category
-            output.push_str("\n🎯 FINDINGS BY CATEGORY\n");
-            
-            // Count findings by our categories
-            let mut secret_findings = 0;
-            let mut code_findings = 0;
-            let mut infrastructure_findings = 0;
-            let mut compliance_findings = 0;
-            
-            for finding in &security_report.findings {
-                match finding.category {
-                    syncable_cli::analyzer::SecurityCategory::SecretsExposure => secret_findings += 1,
-                    syncable_cli::analyzer::SecurityCategory::CodeSecurityPattern |
-                    syncable_cli::analyzer::SecurityCategory::AuthenticationSecurity |
-                    syncable_cli::analyzer::SecurityCategory::DataProtection => code_findings += 1,
-                    syncable_cli::analyzer::SecurityCategory::InfrastructureSecurity |
-                    syncable_cli::analyzer::SecurityCategory::NetworkSecurity |
-                    syncable_cli::analyzer::SecurityCategory::InsecureConfiguration => infrastructure_findings += 1,
-                    syncable_cli::analyzer::SecurityCategory::Compliance => compliance_findings += 1,
-                }
-            }
-            
-            output.push_str(&format!("🔐 Secret Detection: {} findings\n", secret_findings));
-            output.push_str(&format!("🔒 Code Security: {} finding{}\n", code_findings, if code_findings == 1 { "" } else { "s" }));
-            output.push_str(&format!("🏗️ Infrastructure: {} findings\n", infrastructure_findings));
-            output.push_str(&format!("📋 Compliance: {} finding{}\n", compliance_findings, if compliance_findings == 1 { "" } else { "s" }));
-            
-            // Recommendations
-            if !security_report.recommendations.is_empty() {
-                output.push_str("\n💡 RECOMMENDATIONS\n");
-                for recommendation in &security_report.recommendations {
-                    output.push_str(&format!("• {}\n", recommendation));
-                }
-            } else {
-                // Add some default recommendations based on the analysis
-                output.push_str("\n💡 RECOMMENDATIONS\n");
-                output.push_str("• Enable dependency vulnerability scanning in CI/CD\n");
-                output.push_str("• Consider implementing rate limiting for API endpoints\n");
-                output.push_str("• Review environment variable security practices\n");
-            }
-            
-            // If there are actual findings, show them in detail
+            // Findings in Card Format  
             if !security_report.findings.is_empty() {
-                output.push_str(&format!("\n{}\n", "=".repeat(60)));
-                output.push_str("🔍 DETAILED FINDINGS\n\n");
+                // Get terminal width to determine optimal display width
+                let terminal_width = if let Some((width, _)) = term_size::dimensions() {
+                    width.saturating_sub(10) // Leave some margin
+                } else {
+                    120 // Fallback width
+                };
+                
+                let mut findings_box = BoxDrawer::new("Security Findings");
                 
                 for (i, finding) in security_report.findings.iter().enumerate() {
-                    let severity_emoji = match finding.severity {
-                        syncable_cli::analyzer::SecuritySeverity::Critical => "🚨",
-                        syncable_cli::analyzer::SecuritySeverity::High => "⚠️ ",
-                        syncable_cli::analyzer::SecuritySeverity::Medium => "⚡",
-                        syncable_cli::analyzer::SecuritySeverity::Low => "ℹ️ ",
-                        syncable_cli::analyzer::SecuritySeverity::Info => "💡",
+                    let severity_color = match finding.severity {
+                        SecuritySeverity::Critical => "bright_red",
+                        SecuritySeverity::High => "red",
+                        SecuritySeverity::Medium => "yellow", 
+                        SecuritySeverity::Low => "blue",
+                        SecuritySeverity::Info => "green",
                     };
                     
-                    output.push_str(&format!("{}. {} [{}] {}\n", i + 1, severity_emoji, finding.id, finding.title));
-                    output.push_str(&format!("   📝 {}\n", finding.description));
-                    
-                    if let Some(file) = &finding.file_path {
-                        output.push_str(&format!("   📁 File: {}", file.display()));
-                        if let Some(line) = finding.line_number {
-                            output.push_str(&format!(" (line {})", line));
+                    // Extract relative file path from project root
+                    let file_display = if let Some(file_path) = &finding.file_path {
+                        // Canonicalize both paths to handle symlinks and resolve properly
+                        let canonical_file = file_path.canonicalize().unwrap_or_else(|_| file_path.clone());
+                        let canonical_project = path.canonicalize().unwrap_or_else(|_| path.clone());
+                        
+                        // Try to calculate relative path from project root
+                        if let Ok(relative_path) = canonical_file.strip_prefix(&canonical_project) {
+                            format!("./{}", relative_path.display())
+                        } else {
+                            // Fallback: try to find any common ancestor or use absolute path
+                            let path_str = file_path.to_string_lossy();
+                            if path_str.starts_with('/') {
+                                // For absolute paths, try to extract meaningful relative portion
+                                if let Some(project_name) = path.file_name().and_then(|n| n.to_str()) {
+                                    if let Some(project_idx) = path_str.rfind(project_name) {
+                                        let relative_part = &path_str[project_idx + project_name.len()..];
+                                        if relative_part.starts_with('/') {
+                                            format!(".{}", relative_part)
+                                        } else if !relative_part.is_empty() {
+                                            format!("./{}", relative_part)
+                                        } else {
+                                            format!("./{}", file_path.file_name().unwrap_or_default().to_string_lossy())
+                                        }
+                                    } else {
+                                        // Last resort: show the full path
+                                        path_str.to_string()
+                                    }
+                                } else {
+                                    // Show full path if we can't determine project context
+                                    path_str.to_string()
+                                }
+                            } else {
+                                // For relative paths that don't strip properly, use as-is
+                                if path_str.starts_with("./") {
+                                    path_str.to_string()
+                                } else {
+                                    format!("./{}", path_str)
+                                }
+                            }
                         }
-                        output.push_str("\n");
-                    }
+                    } else {
+                        "N/A".to_string()
+                    };
                     
-                    if let Some(evidence) = &finding.evidence {
-                        output.push_str(&format!("   🔍 Evidence: {}\n", evidence));
-                    }
+                    // Parse gitignore status from description (clean colored text)
+                    let gitignore_status = if finding.description.contains("is tracked by git") {
+                        "TRACKED".bright_red().bold()
+                    } else if finding.description.contains("is NOT in .gitignore") {
+                        "EXPOSED".yellow().bold()
+                    } else if finding.description.contains("is protected") || finding.description.contains("properly ignored") {
+                        "SAFE".bright_green().bold()
+                    } else if finding.description.contains("appears safe") {
+                        "OK".bright_blue().bold()
+                    } else {
+                        "UNKNOWN".dimmed()
+                    };
                     
-                    if !finding.remediation.is_empty() {
-                        output.push_str("   🔧 Fix:\n");
-                        for remediation in &finding.remediation {
-                            output.push_str(&format!("      • {}\n", remediation));
+                    // Determine finding type
+                    let finding_type = if finding.title.contains("Environment Variable") {
+                        "ENV VAR"
+                    } else if finding.title.contains("Secret File") {
+                        "SECRET FILE"
+                    } else if finding.title.contains("API Key") || finding.title.contains("Stripe") || finding.title.contains("Firebase") {
+                        "API KEY"
+                    } else if finding.title.contains("Configuration") {
+                        "CONFIG"
+                    } else {
+                        "OTHER"
+                    };
+                    
+                    // Format position as "line:column" or just "line" if no column info
+                    let position_display = match (finding.line_number, finding.column_number) {
+                        (Some(line), Some(col)) => format!("{}:{}", line, col),
+                        (Some(line), None) => format!("{}", line),
+                        _ => "—".to_string(),
+                    };
+                    
+                    // Card format: File path with intelligent display based on terminal width
+                    let box_margin = 6; // Account for box borders and padding
+                    let available_width = terminal_width.saturating_sub(box_margin);
+                    let max_path_width = available_width.saturating_sub(20); // Leave space for numbering and spacing
+                    
+                    if file_display.len() + 3 <= max_path_width {
+                        // Path fits on one line with numbering
+                        findings_box.add_value_only(&format!("{}. {}", 
+                            format!("{}", i + 1).bright_white().bold(),
+                            file_display.cyan().bold()
+                        ));
+                    } else if file_display.len() <= available_width.saturating_sub(4) {
+                        // Path fits on its own line with indentation
+                        findings_box.add_value_only(&format!("{}.", 
+                            format!("{}", i + 1).bright_white().bold()
+                        ));
+                        findings_box.add_value_only(&format!("   {}", 
+                            file_display.cyan().bold()
+                        ));
+                    } else {
+                        // Path is extremely long - use smart wrapping
+                        findings_box.add_value_only(&format!("{}.", 
+                            format!("{}", i + 1).bright_white().bold()
+                        ));
+                        
+                        // Smart path wrapping - prefer breaking at directory separators
+                        let wrap_width = available_width.saturating_sub(4);
+                        let mut remaining = file_display.as_str();
+                        let mut first_line = true;
+                        
+                        while !remaining.is_empty() {
+                            let prefix = if first_line { "   " } else { "     " };
+                            let line_width = wrap_width.saturating_sub(prefix.len());
+                            
+                            if remaining.len() <= line_width {
+                                // Last chunk fits entirely
+                                findings_box.add_value_only(&format!("{}{}", 
+                                    prefix, remaining.cyan().bold()
+                                ));
+                                break;
+                            } else {
+                                // Find a good break point (prefer directory separator)
+                                let chunk = &remaining[..line_width];
+                                let break_point = chunk.rfind('/').unwrap_or(line_width.saturating_sub(1));
+                                
+                                findings_box.add_value_only(&format!("{}{}", 
+                                    prefix, chunk[..break_point].cyan().bold()
+                                ));
+                                remaining = &remaining[break_point..];
+                                if remaining.starts_with('/') {
+                                    remaining = &remaining[1..]; // Skip the separator
+                                }
+                            }
+                            first_line = false;
                         }
                     }
                     
-                    output.push_str("\n");
+                    findings_box.add_value_only(&format!("   {} {} | {} {} | {} {} | {} {}", 
+                        "Type:".dimmed(),
+                        finding_type.yellow(),
+                        "Severity:".dimmed(),
+                        format!("{:?}", finding.severity).color(severity_color).bold(),
+                        "Position:".dimmed(),
+                        position_display.bright_cyan(),
+                        "Status:".dimmed(),
+                        gitignore_status
+                    ));
+                    
+                    // Add spacing between findings (except for the last one)
+                    if i < security_report.findings.len() - 1 {
+                        findings_box.add_value_only("");
+                    }
                 }
+                
+                output.push_str(&format!("\n{}\n", findings_box.draw()));
+                
+                // GitIgnore Status Legend  
+                let mut legend_box = BoxDrawer::new("Git Status Legend");
+                legend_box.add_line(&"TRACKED:".bright_red().bold().to_string(), "File is tracked by git - CRITICAL RISK", false);
+                legend_box.add_line(&"EXPOSED:".yellow().bold().to_string(), "File contains secrets but not in .gitignore", false);
+                legend_box.add_line(&"SAFE:".bright_green().bold().to_string(), "File is properly ignored by .gitignore", false);
+                legend_box.add_line(&"OK:".bright_blue().bold().to_string(), "File appears safe for version control", false);
+                output.push_str(&format!("\n{}\n", legend_box.draw()));
+            } else {
+                let mut no_findings_box = BoxDrawer::new("Security Status");
+                no_findings_box.add_value_only(&"✅ No security issues detected".green());
+                no_findings_box.add_value_only("💡 Regular security scanning recommended");
+                output.push_str(&format!("\n{}\n", no_findings_box.draw()));
             }
+            
+            // Recommendations Box
+            let mut rec_box = BoxDrawer::new("Key Recommendations");
+            if !security_report.recommendations.is_empty() {
+                for (i, rec) in security_report.recommendations.iter().take(5).enumerate() {
+                    // Clean up recommendation text
+                    let clean_rec = rec.replace("Add these patterns to your .gitignore:", "Add to .gitignore:");
+                    rec_box.add_value_only(&format!("{}. {}", i + 1, clean_rec));
+                }
+                if security_report.recommendations.len() > 5 {
+                    rec_box.add_value_only(&format!("... and {} more recommendations", 
+                        security_report.recommendations.len() - 5).dimmed());
+                }
+            } else {
+                rec_box.add_value_only("✅ No immediate security concerns detected");
+                rec_box.add_value_only("💡 Consider implementing dependency scanning");
+                rec_box.add_value_only("💡 Review environment variable security practices");
+            }
+            output.push_str(&format!("\n{}\n", rec_box.draw()));
             
             output
         }
@@ -1300,10 +1427,10 @@ fn handle_security(
     // Exit with error code if requested and findings exist
     if fail_on_findings && security_report.total_findings > 0 {
         let critical_count = security_report.findings_by_severity
-            .get(&syncable_cli::analyzer::SecuritySeverity::Critical)
+            .get(&SecuritySeverity::Critical)
             .unwrap_or(&0);
         let high_count = security_report.findings_by_severity
-            .get(&syncable_cli::analyzer::SecuritySeverity::High)
+            .get(&SecuritySeverity::High)
             .unwrap_or(&0);
         
         if *critical_count > 0 {
@@ -1328,7 +1455,7 @@ async fn handle_tools(command: ToolsCommand) -> syncable_cli::Result<()> {
     
     match command {
         ToolsCommand::Status { format, languages } => {
-            let mut installer = ToolInstaller::new();
+            let installer = ToolInstaller::new();
             
             // Determine which languages to check
             let langs_to_check = if let Some(lang_names) = languages {
@@ -1504,7 +1631,7 @@ async fn handle_tools(command: ToolsCommand) -> syncable_cli::Result<()> {
         }
         
         ToolsCommand::Verify { languages, verbose } => {
-            let mut installer = ToolInstaller::new();
+            let installer = ToolInstaller::new();
             
             // Determine which languages to verify
             let langs_to_verify = if let Some(lang_names) = languages {
