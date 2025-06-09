@@ -21,10 +21,7 @@ use indicatif::{ProgressBar, ProgressStyle, MultiProgress};
 
 use crate::analyzer::{ProjectAnalysis, DetectedLanguage, DetectedTechnology, EnvVar};
 use crate::analyzer::dependency_parser::Language;
-use crate::analyzer::security::{
-    ModularSecurityAnalyzer, SecurityAnalysisConfig as NewSecurityAnalysisConfig
-};
-use crate::analyzer::security::core::SecurityReport as NewSecurityReport;
+
 
 #[derive(Debug, Error)]
 pub enum SecurityError {
@@ -214,37 +211,7 @@ impl SecurityAnalyzer {
         })
     }
     
-    /// Enhanced security analysis using the new modular approach
-    pub fn analyze_security_enhanced(&mut self, analysis: &ProjectAnalysis) -> Result<NewSecurityReport, SecurityError> {
-        let start_time = Instant::now();
-        info!("Starting enhanced modular security analysis");
-        
-        // Create modular analyzer with JavaScript-specific configuration if JS/TS is detected
-        let has_javascript = analysis.languages.iter()
-            .any(|lang| matches!(lang.name.as_str(), "JavaScript" | "TypeScript" | "JSX" | "TSX"));
-        
-        let config = if has_javascript {
-            NewSecurityAnalysisConfig::for_javascript()
-        } else {
-            NewSecurityAnalysisConfig::default()
-        };
-        
-        let mut modular_analyzer = ModularSecurityAnalyzer::with_config(config)
-            .map_err(|e| SecurityError::AnalysisFailed(e.to_string()))?;
-        
-        // Use the modular analyzer
-        let enhanced_report = modular_analyzer.analyze_project(&analysis.project_root, &analysis.languages)
-            .map_err(|e| SecurityError::AnalysisFailed(e.to_string()))?;
-        
-        // For now, just return the enhanced report as-is
-        // TODO: Combine with existing findings if needed
-        
-        // Build final report
-        let duration = start_time.elapsed().as_secs_f32();
-        info!("Enhanced security analysis completed in {:.1}s - Found {} issues", duration, enhanced_report.total_findings);
-        
-        Ok(enhanced_report)
-    }
+
     
     /// Perform comprehensive security analysis with appropriate progress for verbosity level
     pub fn analyze_security(&mut self, analysis: &ProjectAnalysis) -> Result<SecurityReport, SecurityError> {
