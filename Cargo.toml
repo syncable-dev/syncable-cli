@@ -43,7 +43,7 @@ prettytable = "0.10"
 term_size = "0.3"
 
 # Vulnerability checking dependencies
-rustsec = "0.29"
+rustsec = "0.30"
 reqwest = { version = "0.12", features = ["json", "blocking"] }
 tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread"] }
 textwrap = "0.16"
