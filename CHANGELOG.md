@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.9.0](https://github.com/syncable-dev/syncable-cli/compare/v0.8.1...v0.9.0) - 2025-06-09
+
+### Added
+
+- huge improvements towards security scanning and performance
+- feat added python security scanning catching generat exposure secrets similar to javascript version
+
+### Other
+
+- Merge branch 'main' of github.com:syncable-dev/syncable-cli into develop
+- README.md duplicate phrases updated
+
 ## [0.8.1](https://github.com/syncable-dev/syncable-cli/compare/v0.8.0...v0.8.1) - 2025-06-09
 
 ### Other
