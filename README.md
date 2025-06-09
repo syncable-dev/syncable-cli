@@ -15,10 +15,7 @@
 
 ```bash
 # Install
-# Install
 cargo install syncable-cli
-
-# Analyze any project
 
 # Analyze any project
 sync-ctl analyze /path/to/your/project
@@ -213,8 +210,6 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 # Run tests
 cargo test
 
-# Check code quality
-cargo clippy
 # Check code quality
 cargo clippy
 
