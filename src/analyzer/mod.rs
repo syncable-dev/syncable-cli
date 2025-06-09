@@ -37,9 +37,8 @@ pub use security_analyzer::{
     SecurityCategory, ComplianceStatus, SecurityAnalysisConfig
 };
 
-// Re-export new modular security analysis types
+// Re-export security analysis types
 pub use security::{
-    ModularSecurityAnalyzer, JavaScriptSecurityAnalyzer, 
     SecretPatternManager
 };
 pub use security::config::SecurityConfigPreset;

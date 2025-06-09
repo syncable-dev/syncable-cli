@@ -8,60 +8,19 @@
 //! - Framework-specific detection
 //! - Context-aware severity assessment
 
-use std::path::Path;
 use thiserror::Error;
 
-pub mod core;
-pub mod javascript;
-pub mod python;
-pub mod patterns;
 pub mod config;
-pub mod gitignore;
+pub mod core;
+pub mod patterns;
+pub mod turbo;
 
 pub use core::{SecurityAnalyzer, SecurityReport, SecurityFinding, SecuritySeverity, SecurityCategory};
-pub use javascript::JavaScriptSecurityAnalyzer;
-pub use python::PythonSecurityAnalyzer;
+pub use turbo::{TurboSecurityAnalyzer, TurboConfig, ScanMode};
 pub use patterns::SecretPatternManager;
 pub use config::SecurityAnalysisConfig;
-pub use gitignore::{GitIgnoreAnalyzer, GitIgnoreStatus, GitIgnoreRisk};
 
-/// Modular security analyzer that delegates to language-specific analyzers
-pub struct ModularSecurityAnalyzer {
-    javascript_analyzer: JavaScriptSecurityAnalyzer,
-    // TODO: Add other language analyzers
-    // python_analyzer: PythonSecurityAnalyzer,
-    // rust_analyzer: RustSecurityAnalyzer,
-}
 
-impl ModularSecurityAnalyzer {
-    pub fn new() -> Result<Self, SecurityError> {
-        Ok(Self {
-            javascript_analyzer: JavaScriptSecurityAnalyzer::new()?,
-        })
-    }
-    
-    pub fn with_config(config: SecurityAnalysisConfig) -> Result<Self, SecurityError> {
-        Ok(Self {
-            javascript_analyzer: JavaScriptSecurityAnalyzer::with_config(config.clone())?,
-        })
-    }
-    
-    /// Analyze a project with appropriate language-specific analyzers
-    pub fn analyze_project(&mut self, project_root: &Path, languages: &[crate::analyzer::DetectedLanguage]) -> Result<SecurityReport, SecurityError> {
-        let mut all_findings = Vec::new();
-        
-        // Analyze JavaScript/TypeScript files
-        if languages.iter().any(|lang| matches!(lang.name.as_str(), "JavaScript" | "TypeScript" | "JSX" | "TSX")) {
-            let js_report = self.javascript_analyzer.analyze_project(project_root)?;
-            all_findings.extend(js_report.findings);
-        }
-        
-        // TODO: Add other language analyzers based on detected languages
-        
-        // Combine results into a comprehensive report
-        Ok(SecurityReport::from_findings(all_findings))
-    }
-}
 
 #[derive(Debug, Error)]
 pub enum SecurityError {
