@@ -173,6 +173,10 @@ pub enum Commands {
         #[arg(value_name = "PROJECT_PATH", default_value = ".")]
         path: PathBuf,
 
+        /// Security scan mode (lightning, fast, balanced, thorough, paranoid)
+        #[arg(long, value_enum, default_value = "thorough")]
+        mode: SecurityScanMode,
+
         /// Include low severity findings
         #[arg(long)]
         include_low: bool,
@@ -294,6 +298,20 @@ pub enum SeverityThreshold {
     Medium,
     High,
     Critical,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum SecurityScanMode {
+    /// Lightning fast scan - critical files only (.env, configs)
+    Lightning,
+    /// Fast scan - smart sampling with priority patterns
+    Fast,
+    /// Balanced scan - good coverage with performance optimizations (recommended)
+    Balanced,
+    /// Thorough scan - comprehensive analysis of all files
+    Thorough,
+    /// Paranoid scan - most comprehensive including low-severity findings
+    Paranoid,
 }
 
 impl Cli {

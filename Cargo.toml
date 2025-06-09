@@ -13,6 +13,8 @@ categories = ["command-line-utilities", "development-tools"]
 name = "sync-ctl"
 path = "src/main.rs"
 
+
+
 [dependencies]
 clap = { version = "4", features = ["derive", "env", "cargo"] }
 serde = { version = "1", features = ["derive"] }
@@ -42,6 +44,19 @@ tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread"] }
 textwrap = "0.16"
 tempfile = "3"
 dirs = "6"
+
+# Performance dependencies for turbo security analyzer
+aho-corasick = "1.1"              # Multi-pattern string matching
+memmap2 = "0.9"                   # Memory-mapped file I/O
+dashmap = "5"                     # Concurrent hashmap for caching
+crossbeam = { version = "0.8", features = ["crossbeam-channel"] }  # High-performance channels
+blake3 = "1.5"                    # Fast hashing for cache keys
+regex-automata = "0.4"            # Compiled regex sets
+num_cpus = "1.16"                 # CPU count detection
+parking_lot = "0.12"              # Faster mutex/rwlock
+ahash = "0.8"                     # Fast hash function
+bstr = "1.9"                      # Byte string utilities
+simdutf8 = "0.1"                  # SIMD UTF-8 validation
 
 [dev-dependencies]
 assert_cmd = "2"
