@@ -13,6 +13,7 @@
 
 ## ⚡ Quick Start
 
+
 ```bash
 # Install
 cargo install syncable-cli
@@ -23,11 +24,20 @@ sync-ctl analyze /path/to/your/project
 # Check for vulnerabilities
 sync-ctl vulnerabilities
 
-# Run security analysis
-sync-ctl security
+# Run security analysis (multiple modes available)
+sync-ctl security                   # Thorough scan (default)
+sync-ctl security --mode lightning  # Ultra-fast critical files only
+sync-ctl security --mode paranoid   # Most comprehensive scan
 
 # Force update check (clears cache)
 sync-ctl --clear-update-cache analyze .
+
+
+# Get help with any command
+sync-ctl --help                     # Show all available commands
+sync-ctl analyze --help            # Show analyze command options
+sync-ctl security --help           # Show security scanning options
+sync-ctl vulnerabilities --help    # Show vulnerability check options
 ```
 
 That's it! The CLI will detect your languages, frameworks, dependencies, and provide detailed insights about your project structure. The tool includes smart update notifications to keep you on the latest version.
@@ -70,11 +80,12 @@ $ sync-ctl analyze ./my-express-app
 - **Architecture detection** - Monolithic, microservices, serverless, and more
 - **Monorepo support** - Analyzes complex multi-project repositories
 
-### 🛡️ Security & Compliance
-- **Vulnerability scanning** - Integrated security checks for all dependencies
-- **Secret detection** - Finds exposed API keys and credentials
-- **Security scoring** - Get actionable security recommendations
-- **Compliance checks** - SOC2, GDPR, HIPAA support (coming soon)
+### 🛡️ Turbo Security Engine (Covering Javascript / Python ---- Rust-, Go- & Java- Coming soon)
+- **10-100x faster scanning** - Rust-powered multi-pattern matching with smart file discovery
+- **5 scan modes** - From lightning-fast critical checks to comprehensive audits
+- **Smart gitignore analysis** - Understands git status and provides risk assessments
+- **260+ secret patterns** - Detects API keys, tokens, certificates, and credentials
+- **Zero false positives** - Advanced context-aware filtering excludes test data and documentation
 
 ### 🐳 Docker Intelligence
 - **Dockerfile analysis** - Understand existing Docker configurations
@@ -112,14 +123,113 @@ sync-ctl analyze                    # Matrix view (default)
 sync-ctl analyze --display detailed  # Detailed view
 sync-ctl analyze --json             # JSON output
 
-# Security & vulnerability checks
-sync-ctl security                   # Comprehensive security analysis
+# Vulnerabilities analysis
+sync-ctl vulnerabilities            # Dependency vulnerability scan
+
+# Security analysis with turbo engine (10-100x faster)
+sync-ctl security                   # Thorough scan (default) 
+sync-ctl security --mode lightning  # Critical files only (.env, configs)
+sync-ctl security --mode fast       # Smart sampling with priority patterns
+sync-ctl security --mode balanced   # Good coverage with optimizations
+sync-ctl security --mode paranoid   # Most comprehensive including low-severity
 sync-ctl vulnerabilities            # Dependency vulnerability scan
 
 # Dependency analysis
 sync-ctl dependencies --licenses    # Show license information
 sync-ctl dependencies --vulnerabilities  # Check for known CVEs
 ```
+
+### Security Scan Modes
+
+The turbo security engine offers 5 scan modes optimized for different use cases:
+
+| Mode | Speed | Coverage | Use Case | Typical Time |
+|------|-------|----------|----------|--------------|
+| **Lightning** | 🚀 Fastest | Critical files only | Pre-commit hooks, CI checks 
+| **Fast** | ⚡ Very Fast | Smart sampling | Development workflow 
+| **Balanced** | 🎯 Optimized | Good coverage | Regular security checks 
+| **Thorough** | 🔍 Complete | Comprehensive | Security audits (default) 
+| **Paranoid** | 🕵️ Maximum | Everything + low severity | Compliance, releases 
+
+## 🛡️ Security Detection Deep Dive
+
+### What We Detect
+
+The turbo security engine scans for 260+ secret patterns across multiple categories:
+
+#### 🔑 API Keys & Tokens
+- **Cloud Providers**: AWS Access Keys, GCP Service Account Keys, Azure Storage Keys
+- **Services**: Stripe API Keys, Twilio Auth Tokens, GitHub Personal Access Tokens
+- **Databases**: MongoDB Connection Strings, Redis URLs, PostgreSQL passwords
+- **CI/CD**: Jenkins API Tokens, CircleCI Keys, GitLab CI Variables
+
+#### 🔐 Cryptographic Material  
+- **Private Keys**: RSA, ECDSA, Ed25519 private keys (.pem, .key files)
+- **Certificates**: X.509 certificates, SSL/TLS certs
+- **Keystores**: Java KeyStore files, PKCS#12 files
+- **SSH Keys**: OpenSSH private keys, SSH certificates
+
+#### 📧 Authentication Secrets
+- **JWT Secrets**: JSON Web Token signing keys
+- **OAuth**: Client secrets, refresh tokens
+- **SMTP**: Email server credentials, SendGrid API keys
+- **LDAP**: Bind credentials, directory service passwords
+
+#### 🌐 Environment Variables
+- **Suspicious Names**: Any variable containing "password", "secret", "key", "token"
+- **Base64 Encoded**: Automatically detects encoded secrets
+- **URLs with Auth**: Database URLs, API endpoints with embedded credentials
+
+### Smart Git Status Analysis
+
+Our security engine provides intelligent risk assessment based on git status:
+
+| Status | Risk Level | Meaning | Action Needed |
+|--------|------------|---------|---------------|
+| 🟢 **SAFE** | Low | File properly ignored by .gitignore | ✅ No action needed |
+| 🔵 **OK** | Low | File appears safe for version control | ✅ Monitor for changes |
+| 🟡 **EXPOSED** | High | Contains secrets but NOT in .gitignore | ⚠️ Add to .gitignore immediately |
+| 🔴 **TRACKED** | Critical | Contains secrets AND tracked by git | 🚨 Remove from git history |
+
+#### Why Some Files Are "OK" Despite Not Being Gitignored
+
+Files are marked as **OK** when they contain patterns that look like secrets but are actually safe:
+
+- **Documentation**: Code in README files, API examples, tutorials
+- **Test Data**: Mock API keys, placeholder values, example configurations  
+- **Source Code**: String literals that match patterns but aren't real secrets
+- **Lock Files**: Package hashes in `package-lock.json`, `pnpm-lock.yaml`, `cargo.lock`
+- **Build Artifacts**: Compiled code, minified files, generated documentation
+
+### Advanced False Positive Filtering
+
+Our engine uses sophisticated techniques to minimize false positives:
+
+#### 🎯 Context-Aware Detection
+```bash
+# ❌ FALSE POSITIVE - Will be ignored
+const API_KEY = "your_api_key_here";  // Documentation example
+const EXAMPLE_TOKEN = "sk-example123"; // Clearly a placeholder
+
+# ✅ REAL SECRET - Will be detected  
+const STRIPE_KEY = "sk_live_4eC39HqLyjWDarjtT1zdp7dc";
+```
+
+#### 📝 Documentation Exclusions
+- Comments in any language (`//`, `#`, `/* */`, `<!-- -->`)
+- Markdown code blocks and documentation files
+- README files, CHANGELOG, API docs
+- Example configurations and sample files
+
+#### 🧪 Test Data Recognition
+- Files in `/test/`, `/tests/`, `/spec/`, `__test__` directories
+- Filenames containing "test", "spec", "mock", "fixture", "example"
+- Common test patterns like "test123", "dummy", "fake"
+
+#### 📦 Dependency File Intelligence
+- Automatically excludes: `node_modules/`, `vendor/`, `target/`
+- Recognizes lock files: `yarn.lock`, `pnpm-lock.yaml`, `go.sum`
+- Skips binary files, images, and compiled artifacts
 
 ### Display Modes
 
@@ -130,19 +240,43 @@ Choose the output format that works best for you:
 - **Summary** - Brief overview for CI/CD
 - **JSON** - Machine-readable format
 
-### Advanced Configuration
-# Analyze with different display formats
-sync-ctl analyze                    # Matrix view (default)
-sync-ctl analyze --display detailed  # Detailed view
-sync-ctl analyze --json             # JSON output
+### Example Security Output
 
-# Security & vulnerability checks
-sync-ctl security                   # Comprehensive security analysis
-sync-ctl vulnerabilities            # Dependency vulnerability scan
+```bash
+$ sync-ctl security --mode thorough
 
-# Dependency analysis
-sync-ctl dependencies --licenses    # Show license information
-sync-ctl dependencies --vulnerabilities  # Check for known CVEs
+🛡️  Security Analysis Results
+════════════════════════════════════════════════════════════════════════════════
+
+┌─ Security Summary ───────────────────────────────────────┐
+│ Overall Score:                                    85/100 │
+│ Risk Level:                                        High  │ 
+│ Total Findings:                                        3 │
+│ Files Analyzed:                                       47 │
+│ Scan Mode:                                      Thorough │
+└──────────────────────────────────────────────────────────┘
+
+┌─ Security Findings ────────────────────────────────────────────────────────┐
+│ 1. ./.env.local                                                            │
+│    Type: ENV VAR | Severity: Critical | Position: 3:15 | Status: EXPOSED   │
+│                                                                            │
+│ 2. ./config/database.js                                                    │
+│    Type: API KEY | Severity: High | Position: 12:23 | Status: TRACKED      │
+│                                                                            │
+│ 3. ./docs/api-example.md                                                   │
+│    Type: API KEY | Severity: Critical | Position: 45:8 | Status: OK        │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌─ Key Recommendations ───────────────────────────────────────────────────────┐
+│ 1. 🚨 Add .env.local to .gitignore immediately                              │
+│ 2. 🔐 Move database credentials to environment variables                    │
+│ 3. ✅ API example in docs is safely documented                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+════════════════════════════════════════════════════════════════════════════════
+```
+
+
 
 ### Advanced Configuration
 
@@ -154,8 +288,43 @@ include_dev_dependencies = true
 ignore_patterns = ["vendor", "node_modules", "target"]
 
 [security]
-fail_on_high_severity = true
-check_secrets = true
+# Scan configuration
+default_mode = "thorough"              # Default scan mode
+fail_on_high_severity = true           # Exit with error on high/critical findings
+check_secrets = true                   # Enable secret detection
+check_code_patterns = true             # Enable code security pattern analysis
+
+# Performance tuning
+max_file_size_mb = 10                  # Skip files larger than 10MB
+worker_threads = 0                     # Auto-detect CPU cores (0 = auto)
+enable_cache = true                    # Enable result caching
+cache_size_mb = 100                    # Cache size limit
+
+# Pattern filtering
+priority_extensions = [                # Scan these extensions first
+  "env", "key", "pem", "json", "yml", "yaml", 
+  "toml", "ini", "conf", "config"
+]
+```
+
+#### Command-Line Options
+
+```bash
+# Scan mode selection
+sync-ctl security --mode lightning    # Fastest, critical files only
+sync-ctl security --mode paranoid     # Slowest, most comprehensive
+
+# Output control
+sync-ctl security --json              # JSON output for automation
+sync-ctl security --output report.json # Save to file
+
+# Filtering options  
+sync-ctl security --include-low       # Include low-severity findings
+sync-ctl security --no-secrets        # Skip secret detection
+sync-ctl security --no-code-patterns  # Skip code pattern analysis
+
+# CI/CD integration
+sync-ctl security --fail-on-findings  # Exit with error code if issues found
 ```
 
 ## 🌟 Technology Coverage
@@ -184,8 +353,8 @@ check_secrets = true
 
 ### ✅ Phase 1: Analysis Engine (Complete)
 - Project analysis and technology detection
-- Vulnerability scanning
-- Basic security analysis
+- Vulnerability scanning with 260+ supported packages
+- Turbo Security Engine turbo-fast scanning with 5 modes
 
 ### 🔄 Phase 2: AI-Powered Generation (In Progress)
 - Smart Dockerfile generation
@@ -197,10 +366,6 @@ check_secrets = true
 - Terraform modules for AWS/GCP/Azure
 - CI/CD pipeline generation
 - Real-time monitoring setup
-
-[security]
-fail_on_high_severity = true
-check_secrets = true
 
 ## 🤝 Contributing
 

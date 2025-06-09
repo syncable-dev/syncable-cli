@@ -4,12 +4,15 @@ use syncable_cli::{
         self, vulnerability_checker::VulnerabilitySeverity, DetectedTechnology, TechnologyCategory, LibraryType, 
         analyze_monorepo, ProjectCategory,
         // Import new modular security types
-        security::SecuritySeverity,
+        security::{TurboSecurityAnalyzer, TurboConfig, ScanMode},
     },
-    cli::{Cli, Commands, ToolsCommand, OutputFormat, SeverityThreshold, DisplayFormat},
+    cli::{Cli, Commands, ToolsCommand, OutputFormat, SeverityThreshold, DisplayFormat, SecurityScanMode},
     config,
     generator,
 };
+
+// Use alias for the turbo SecuritySeverity to avoid conflicts
+use syncable_cli::analyzer::security::SecuritySeverity as TurboSecuritySeverity;
 use syncable_cli::analyzer::display::{display_analysis, DisplayMode, BoxDrawer};
 use std::process;
 use std::collections::HashMap;
@@ -80,6 +83,7 @@ async fn run() -> syncable_cli::Result<()> {
         }
         Commands::Security { 
             path, 
+            mode,
             include_low, 
             no_secrets, 
             no_code_patterns, 
@@ -92,6 +96,7 @@ async fn run() -> syncable_cli::Result<()> {
         } => {
             handle_security(
                 path, 
+                mode,
                 include_low, 
                 no_secrets, 
                 no_code_patterns, 
@@ -1065,6 +1070,7 @@ fn display_technologies_summary(technologies: &[DetectedTechnology]) {
 
 fn handle_security(
     path: std::path::PathBuf,
+    mode: SecurityScanMode,
     include_low: bool,
     no_secrets: bool,
     no_code_patterns: bool,
@@ -1075,98 +1081,72 @@ fn handle_security(
     output: Option<std::path::PathBuf>,
     fail_on_findings: bool,
 ) -> syncable_cli::Result<()> {
-    use syncable_cli::analyzer::{SecurityAnalyzer, SecurityAnalysisConfig};
-    use indicatif::{ProgressBar, ProgressStyle};
-    use std::time::Duration;
-    use std::thread;
-    
     let project_path = path.canonicalize()
         .unwrap_or_else(|_| path.clone());
     
-    // Create beautiful progress indicator
-    let progress = ProgressBar::new(100);
-    progress.set_style(
-        ProgressStyle::default_bar()
-            .template("🛡️  {msg} [{elapsed_precise}] {bar:40.cyan/blue} {pos:>3}/{len:3} {percent}%")
-            .unwrap()
-            .progress_chars("▰▱")
-    );
+    println!("🛡️  Running security analysis on: {}", project_path.display());
     
-    // Step 1: Project Analysis
-    progress.set_message("Analyzing project structure...");
-    progress.set_position(10);
-    let project_analysis = analyzer::analyze_project(&project_path)?;
-    thread::sleep(Duration::from_millis(200));
-    
-    // Step 2: Security Configuration
-    progress.set_message("Configuring security scanners...");
-    progress.set_position(20);
-    let config = SecurityAnalysisConfig {
-        include_low_severity: include_low,
-        check_secrets: !no_secrets,
-        check_code_patterns: !no_code_patterns,
-        check_infrastructure: !no_infrastructure,
-        check_compliance: !no_compliance,
-        frameworks_to_check: frameworks.clone(),
-        ignore_patterns: vec![
-            "node_modules".to_string(),
-            ".git".to_string(),
-            "target".to_string(),
-            "build".to_string(),
-            ".next".to_string(),
-            "dist".to_string(),
-        ],
-        skip_gitignored_files: true,
-        downgrade_gitignored_severity: false,
+    // Convert CLI mode to internal ScanMode, with flag overrides
+    let scan_mode = if no_secrets && no_code_patterns {
+        // Override: if both secrets and code patterns are disabled, use lightning
+        ScanMode::Lightning
+    } else if include_low {
+        // Override: if including low findings, force paranoid mode
+        ScanMode::Paranoid
+    } else {
+        // Use the requested mode from CLI
+        match mode {
+            SecurityScanMode::Lightning => ScanMode::Lightning,
+            SecurityScanMode::Fast => ScanMode::Fast,
+            SecurityScanMode::Balanced => ScanMode::Balanced,
+            SecurityScanMode::Thorough => ScanMode::Thorough,
+            SecurityScanMode::Paranoid => ScanMode::Paranoid,
+        }
     };
-    thread::sleep(Duration::from_millis(300));
     
-    // Step 3: Security Scanner Initialization
-    progress.set_message("Initializing security analyzer...");
-    progress.set_position(30);
-    let mut security_analyzer = SecurityAnalyzer::with_config(config)
+    // Configure turbo analyzer
+    let config = TurboConfig {
+        scan_mode,
+        max_file_size: 10 * 1024 * 1024, // 10MB
+        worker_threads: 0, // Auto-detect
+        use_mmap: true,
+        enable_cache: true,
+        cache_size_mb: 100,
+        max_critical_findings: if fail_on_findings { Some(1) } else { None },
+        timeout_seconds: Some(60),
+        skip_gitignored: true,
+        priority_extensions: vec![
+            "env".to_string(), "key".to_string(), "pem".to_string(),
+            "json".to_string(), "yml".to_string(), "yaml".to_string(),
+            "toml".to_string(), "ini".to_string(), "conf".to_string(),
+            "config".to_string(), "js".to_string(), "ts".to_string(),
+            "py".to_string(), "rs".to_string(), "go".to_string(),
+        ],
+        pattern_sets: if no_secrets {
+            vec![]
+        } else {
+            vec!["default".to_string(), "aws".to_string(), "gcp".to_string()]
+        },
+    };
+    
+    // Initialize and run analyzer
+    let analyzer = TurboSecurityAnalyzer::new(config)
         .map_err(|e| syncable_cli::error::IaCGeneratorError::Analysis(
             syncable_cli::error::AnalysisError::InvalidStructure(
-                format!("Failed to create security analyzer: {}", e)
-            )
-        ))?;
-    thread::sleep(Duration::from_millis(200));
-    
-    // Step 4: Secret Detection
-    if !no_secrets {
-        progress.set_message("Scanning for exposed secrets...");
-        progress.set_position(50);
-        thread::sleep(Duration::from_millis(500));
-    }
-    
-    // Step 5: Code Pattern Analysis
-    if !no_code_patterns {
-        progress.set_message("Analyzing code security patterns...");
-        progress.set_position(70);
-        thread::sleep(Duration::from_millis(400));
-    }
-    
-            // Step 6: Environment Variables (always runs)
-        progress.set_message("Analyzing environment variables...");
-        progress.set_position(85);
-        thread::sleep(Duration::from_millis(200));
-        
-        // Step 7: Final processing
-        progress.set_message("Finalizing analysis...");
-        progress.set_position(95);
-        thread::sleep(Duration::from_millis(200));
-    
-    // Step 8: Generating Report
-    progress.set_message("Generating security report...");
-    progress.set_position(100);
-    let security_report = security_analyzer.analyze_security_enhanced(&project_analysis)
-        .map_err(|e| syncable_cli::error::IaCGeneratorError::Analysis(
-            syncable_cli::error::AnalysisError::InvalidStructure(
-                format!("Enhanced security analysis failed: {}", e)
+                format!("Failed to create turbo security analyzer: {}", e)
             )
         ))?;
     
-    progress.finish_and_clear();
+    let start_time = std::time::Instant::now();
+    let security_report = analyzer.analyze_project(&project_path)
+        .map_err(|e| syncable_cli::error::IaCGeneratorError::Analysis(
+            syncable_cli::error::AnalysisError::InvalidStructure(
+                format!("Turbo security analysis failed: {}", e)
+            )
+        ))?;
+    let scan_duration = start_time.elapsed();
+    
+    println!("⚡ Scan completed in {:.2}s", scan_duration.as_secs_f64());
     
     // Format output in the beautiful style requested
     let output_string = match format {
@@ -1184,11 +1164,11 @@ fn handle_security(
             let mut score_box = BoxDrawer::new("Security Summary");
             score_box.add_line("Overall Score:", &format!("{:.0}/100", security_report.overall_score).bright_yellow(), true);
             score_box.add_line("Risk Level:", &format!("{:?}", security_report.risk_level).color(match security_report.risk_level {
-                SecuritySeverity::Critical => "bright_red",
-                SecuritySeverity::High => "red", 
-                SecuritySeverity::Medium => "yellow",
-                SecuritySeverity::Low => "green",
-                SecuritySeverity::Info => "blue",
+                TurboSecuritySeverity::Critical => "bright_red",
+                TurboSecuritySeverity::High => "red", 
+                TurboSecuritySeverity::Medium => "yellow",
+                TurboSecuritySeverity::Low => "green",
+                TurboSecuritySeverity::Info => "blue",
             }), true);
             score_box.add_line("Total Findings:", &security_report.total_findings.to_string().cyan(), true);
             
@@ -1198,7 +1178,7 @@ fn handle_security(
                 .collect::<std::collections::HashSet<_>>()
                 .len();
             score_box.add_line("Files Analyzed:", &config_files.max(1).to_string().green(), true);
-            score_box.add_line("Env Variables:", &project_analysis.environment_variables.len().to_string().green(), true);
+            score_box.add_line("Scan Mode:", &format!("{:?}", scan_mode).green(), true);
             
             output.push_str(&format!("\n{}\n", score_box.draw()));
             
@@ -1215,11 +1195,11 @@ fn handle_security(
                 
                 for (i, finding) in security_report.findings.iter().enumerate() {
                     let severity_color = match finding.severity {
-                        SecuritySeverity::Critical => "bright_red",
-                        SecuritySeverity::High => "red",
-                        SecuritySeverity::Medium => "yellow", 
-                        SecuritySeverity::Low => "blue",
-                        SecuritySeverity::Info => "green",
+                        TurboSecuritySeverity::Critical => "bright_red",
+                        TurboSecuritySeverity::High => "red",
+                        TurboSecuritySeverity::Medium => "yellow", 
+                        TurboSecuritySeverity::Low => "blue",
+                        TurboSecuritySeverity::Info => "green",
                     };
                     
                     // Extract relative file path from project root
@@ -1427,10 +1407,10 @@ fn handle_security(
     // Exit with error code if requested and findings exist
     if fail_on_findings && security_report.total_findings > 0 {
         let critical_count = security_report.findings_by_severity
-            .get(&SecuritySeverity::Critical)
+            .get(&TurboSecuritySeverity::Critical)
             .unwrap_or(&0);
         let high_count = security_report.findings_by_severity
-            .get(&SecuritySeverity::High)
+            .get(&TurboSecuritySeverity::High)
             .unwrap_or(&0);
         
         if *critical_count > 0 {
