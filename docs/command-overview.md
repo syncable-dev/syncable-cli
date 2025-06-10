@@ -20,6 +20,9 @@ sync-ctl analyze . --display summary
 
 # JSON output for scripts
 sync-ctl analyze . --json
+
+# Analyze specific project path
+sync-ctl analyze /path/to/project
 ```
 
 ### 2. Display Mode Comparison
@@ -40,13 +43,25 @@ sync-ctl analyze . --json
   - Port mappings and volume configurations
 - **Usage**: Use this view when you need complete information about your project
 
+#### Summary View
+- **Best for**: CI/CD pipelines, quick status checks
+- **Features**: Brief overview with essential information only
+- **Usage**: Perfect for automated scripts and quick validation
+
 ## 🔍 Security & Vulnerability Commands
 
-### 3. Security Analysis
+### 3. Security Analysis (Turbo Engine - 10-100x Faster)
 
 ```bash
-# Comprehensive security scan
+# Comprehensive security scan (default: thorough mode)
 sync-ctl security .
+
+# Different scan modes for speed vs coverage
+sync-ctl security . --mode lightning    # Fastest - critical files only
+sync-ctl security . --mode fast        # Smart sampling
+sync-ctl security . --mode balanced    # Good coverage
+sync-ctl security . --mode thorough    # Comprehensive (default)
+sync-ctl security . --mode paranoid    # Maximum coverage
 
 # Include low-severity findings
 sync-ctl security . --include-low
@@ -61,6 +76,16 @@ sync-ctl security . --output security-report.json --format json
 sync-ctl security . --fail-on-findings
 ```
 
+#### Security Scan Modes
+
+| Mode | Speed | Coverage | Use Case |
+|------|-------|----------|----------|
+| **Lightning** | 🚀 Fastest | Critical files only | Pre-commit hooks, CI checks |
+| **Fast** | ⚡ Very Fast | Smart sampling | Development workflow |
+| **Balanced** | 🎯 Optimized | Good coverage | Regular security checks |
+| **Thorough** | 🔍 Complete | Comprehensive | Security audits (default) |
+| **Paranoid** | 🕵️ Maximum | Everything + low severity | Compliance, releases |
+
 ### 4. Vulnerability Scanning
 
 ```bash
@@ -69,9 +94,13 @@ sync-ctl vulnerabilities .
 
 # Filter by severity
 sync-ctl vulnerabilities . --severity high
+sync-ctl vulnerabilities . --severity critical
 
 # Export vulnerability report
 sync-ctl vulnerabilities . --format json --output vulns.json
+
+# Check specific project path
+sync-ctl vulnerabilities /path/to/project
 ```
 
 ### 5. Dependency Analysis
@@ -85,6 +114,9 @@ sync-ctl dependencies . --vulnerabilities
 
 # Production dependencies only
 sync-ctl dependencies . --prod-only
+
+# Development dependencies only  
+sync-ctl dependencies . --dev-only
 
 # JSON output
 sync-ctl dependencies . --format json
@@ -104,11 +136,17 @@ sync-ctl tools install
 # Install for specific languages
 sync-ctl tools install --languages rust,python
 
+# Include OWASP Dependency Check (large download)
+sync-ctl tools install --include-owasp
+
 # Verify tool functionality
 sync-ctl tools verify
 
 # Get installation guide
 sync-ctl tools guide
+
+# Platform-specific guides
+sync-ctl tools guide --platform linux
 ```
 
 ## 🏗️ Generation Commands
@@ -118,6 +156,7 @@ sync-ctl tools guide
 ```bash
 # Generate all IaC files
 sync-ctl generate .
+sync-ctl generate . --all
 
 # Generate specific types
 sync-ctl generate . --dockerfile --compose
@@ -128,20 +167,23 @@ sync-ctl generate . --dry-run
 
 # Custom output directory
 sync-ctl generate . --output ./infrastructure/
+
+# Overwrite existing files
+sync-ctl generate . --force
 ```
 
-## 🔄 Validation Commands
+## 🔄 Validation Commands (Coming Soon)
 
-### 8. IaC Validation (Coming Soon)
+### 8. IaC Validation
 
 ```bash
-# Validate generated IaC files
+# Validate generated IaC files (not yet implemented)
 sync-ctl validate .
 
-# Validate specific types
+# Validate specific types (planned)
 sync-ctl validate . --types dockerfile,compose
 
-# Auto-fix issues
+# Auto-fix issues (planned)
 sync-ctl validate . --fix
 ```
 
@@ -158,6 +200,9 @@ sync-ctl support --frameworks
 
 # Show all supported technologies
 sync-ctl support
+
+# Detailed support information
+sync-ctl support --detailed
 ```
 
 ## 🎯 Advanced Usage Examples
@@ -211,25 +256,38 @@ cd frontend && sync-ctl analyze . --display detailed
 cd ../backend && sync-ctl analyze . --display detailed
 ```
 
-## 🔧 Configuration Options
+## 🔧 Global Configuration Options
 
-### Global Options
+### Global Flags (Available for all commands)
 - `--config <file>` - Custom configuration file
-- `--verbose` / `-v` - Verbose output
-- `--json` - JSON output format
+- `--verbose` / `-v` - Verbose output (-v info, -vv debug, -vvv trace)
+- `--quiet` - Suppress all output except errors
+- `--json` - JSON output format where applicable
+- `--clear-update-cache` - Force update check
 
-### Analysis Options
+### Command-Specific Options
+
+#### Analysis Options
 - `--display <mode>` - matrix (default), detailed, summary
 - `--only <components>` - Analyze specific components only
+- `--json` - JSON output for the analyze command
 
-### Security Options
+#### Security Options
+- `--mode <scan-mode>` - lightning, fast, balanced, thorough, paranoid
 - `--include-low` - Include low-severity findings
 - `--no-secrets` - Skip secret detection
 - `--no-code-patterns` - Skip code pattern analysis
-- `--frameworks <list>` - Check specific frameworks
+- `--fail-on-findings` - Exit with error on security issues
 
-### Tool Options
+#### Generation Options
+- `--output <directory>` - Custom output directory
+- `--dry-run` - Preview without creating files
+- `--force` - Overwrite existing files
+- `--all` - Generate all IaC types
+
+#### Tool Options
 - `--languages <list>` - Target specific languages
+- `--include-owasp` - Include OWASP Dependency Check
 - `--dry-run` - Preview installation
 - `--yes` - Skip confirmation prompts
 
@@ -238,14 +296,42 @@ cd ../backend && sync-ctl analyze . --display detailed
 1. **For Development**: Use `--display detailed` to see complete Docker analysis
 2. **For CI/CD**: Use `--display summary` for quick checks
 3. **For Security**: Run `sync-ctl security . --fail-on-findings` in CI/CD
-4. **For Debugging**: Use `--verbose` for detailed logs
-5. **For Automation**: Use `--json` output with other tools
-6. **For Teams**: Share vulnerability reports with `--output` option
+4. **For Performance**: Use `--mode lightning` for fastest security scans
+5. **For Debugging**: Use `--verbose` for detailed logs
+6. **For Automation**: Use `--json` output with other tools
+7. **For Teams**: Share vulnerability reports with `--output` option
+8. **For Updates**: Use `--clear-update-cache` to force update checks
 
-## 🚀 What's Coming Next
+## 🚀 Implementation Status
 
-- **Validation Commands**: Validate generated IaC files
-- **Advanced Security**: Infrastructure security scanning
-- **Cloud Integration**: Deploy directly to cloud platforms
-- **Monitoring Setup**: Automated monitoring configuration
-- **Performance Analysis**: Resource optimization recommendations 
+### ✅ Fully Implemented
+- **analyze** - Project analysis with multiple display modes
+- **security** - Turbo security engine with 5 scan modes
+- **vulnerabilities** - Dependency vulnerability scanning
+- **dependencies** - Comprehensive dependency analysis
+- **support** - Technology support information
+- **tools** - Vulnerability tool management
+
+### 🚧 In Development
+- **validate** - IaC validation and best practices checking
+- **generate** - IaC file generation (Dockerfile, Compose, Terraform)
+- Enhanced monorepo generation with per-project IaC files
+- Advanced compliance framework checking
+
+### 🔮 Coming Soon
+- **Cloud Integration** - Deploy directly to cloud platforms
+- **Monitoring Setup** - Automated monitoring configuration
+- **Performance Analysis** - Resource optimization recommendations
+- **Interactive Mode** - Guided setup and configuration wizard
+
+## 📖 Getting Help
+
+```bash
+# Get help with any command
+sync-ctl --help                     # Show all available commands
+sync-ctl analyze --help            # Show analyze command options
+sync-ctl security --help           # Show security scanning options
+sync-ctl vulnerabilities --help    # Show vulnerability check options
+sync-ctl generate --help           # Show generation options
+sync-ctl tools --help              # Show tool management options
+``` 
