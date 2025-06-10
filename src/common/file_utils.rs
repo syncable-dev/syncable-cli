@@ -6,8 +6,21 @@ use walkdir::{WalkDir, DirEntry};
 
 /// Validates a project path and ensures security
 pub fn validate_project_path(path: &Path) -> Result<PathBuf, IaCGeneratorError> {
-    let canonical = path.canonicalize()
-        .map_err(|_| SecurityError::InvalidPath(path.display().to_string()))?;
+    // Try to canonicalize, but be more forgiving on Windows
+    let canonical = match path.canonicalize() {
+        Ok(p) => p,
+        Err(e) => {
+            // On Windows, canonicalize can fail for valid paths due to permissions
+            // Fall back to absolute path if the path exists
+            if path.exists() {
+                path.to_path_buf()
+            } else {
+                return Err(SecurityError::InvalidPath(
+                    format!("Invalid path '{}': {}", path.display(), e)
+                ).into());
+            }
+        }
+    };
     
     // Basic validation - path should exist and be a directory
     if !canonical.is_dir() {
@@ -176,6 +189,7 @@ pub fn find_files_by_patterns(root: &Path, patterns: &[&str]) -> Result<Vec<Path
     let mut files = Vec::new();
     
     for pattern in patterns {
+        // Use cross-platform path joining
         let full_pattern = root.join(pattern);
         let pattern_str = full_pattern.to_string_lossy();
         
@@ -191,10 +205,16 @@ pub fn find_files_by_patterns(root: &Path, patterns: &[&str]) -> Result<Vec<Path
         }
     }
     
-    // Also try recursive patterns
+    // Also try recursive patterns - use cross-platform glob patterns
     for pattern in patterns {
-        let recursive_pattern = root.join("**").join(pattern);
-        let pattern_str = recursive_pattern.to_string_lossy();
+        // Use proper cross-platform recursive pattern
+        let recursive_pattern = if cfg!(windows) {
+            // Windows uses backslashes but glob understands forward slashes
+            root.join("**").join(pattern)
+        } else {
+            root.join("**").join(pattern)
+        };
+        let pattern_str = recursive_pattern.to_string_lossy().replace('\\', "/");
         
         if let Ok(entries) = glob(&pattern_str) {
             for entry in entries {
