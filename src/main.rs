@@ -1204,13 +1204,15 @@ fn handle_security(
                     
                     // Extract relative file path from project root
                     let file_display = if let Some(file_path) = &finding.file_path {
-                        // Canonicalize both paths to handle symlinks and resolve properly
+                        // Cross-platform path normalization
                         let canonical_file = file_path.canonicalize().unwrap_or_else(|_| file_path.clone());
                         let canonical_project = path.canonicalize().unwrap_or_else(|_| path.clone());
                         
                         // Try to calculate relative path from project root
                         if let Ok(relative_path) = canonical_file.strip_prefix(&canonical_project) {
-                            format!("./{}", relative_path.display())
+                            // Use forward slashes for consistency across platforms
+                            let relative_str = relative_path.to_string_lossy().replace('\\', "/");
+                            format!("./{}", relative_str)
                         } else {
                             // Fallback: try to find any common ancestor or use absolute path
                             let path_str = file_path.to_string_lossy();

@@ -15,11 +15,15 @@
 
 
 ```bash
-# Install
+# Install (Cross-platform)
 cargo install syncable-cli
 
+# Windows users can also use:
+# powershell -c "iwr -useb https://raw.githubusercontent.com/syncable-dev/syncable-cli/main/install.ps1 | iex"
+
 # Analyze any project
-sync-ctl analyze /path/to/your/project
+sync-ctl analyze /path/to/your/project  # Unix/Linux/macOS
+sync-ctl analyze C:\path\to\your\project  # Windows
 
 # Check for vulnerabilities
 sync-ctl vulnerabilities
@@ -101,9 +105,26 @@ $ sync-ctl analyze ./my-express-app
 
 ## 🛠️ Installation
 
-### Via Cargo (Recommended)
+### Via Cargo (Recommended - Cross Platform)
 ```bash
 cargo install syncable-cli
+```
+
+### Quick Install Scripts
+
+#### Linux/macOS
+```bash
+curl -sSL https://install.syncable.dev | sh
+```
+
+#### Windows (PowerShell)
+```powershell
+# Download and run the PowerShell installer
+iwr -useb https://raw.githubusercontent.com/syncable-dev/syncable-cli/main/install.ps1 | iex
+
+# Or download first and run (safer)
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/syncable-dev/syncable-cli/main/install.ps1 -OutFile install.ps1
+powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
 ### From Source
@@ -112,6 +133,17 @@ git clone https://github.com/syncable-dev/syncable-cli.git
 cd syncable-cli
 cargo install --path .
 ```
+
+### Platform-Specific Notes
+
+**Windows Users:**
+- **Rust**: Install from [rustup.rs](https://rustup.rs/) if you don't have it
+- **PATH**: Cargo installs to `%USERPROFILE%\.cargo\bin` - add to PATH if needed
+- **Tools**: Some security tools may require manual installation or package managers like Scoop/Chocolatey
+
+**Linux/macOS Users:**
+- Most security tools can be auto-installed via the installer script
+- Tools are installed to `~/.local/bin` which may need to be added to your PATH
 
 ## 📖 Usage Guide
 

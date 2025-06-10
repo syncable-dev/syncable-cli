@@ -3,6 +3,7 @@ use crate::error::{AnalysisError, IaCGeneratorError, Result};
 use log::{info, warn, debug};
 use std::process::Command;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 /// Tool installer for vulnerability scanning dependencies
 pub struct ToolInstaller {
@@ -189,8 +190,19 @@ impl ToolInstaller {
         info!("📥 Downloading grype from GitHub releases...");
         
         let version = "v0.92.2"; // Latest stable version
-        let home_dir = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        let bin_dir = PathBuf::from(&home_dir).join(".local").join("bin");
+        
+        // Use platform-appropriate directories
+        let bin_dir = if cfg!(windows) {
+            // On Windows, use %USERPROFILE%\.local\bin or %APPDATA%\syncable-cli\bin
+            let home_dir = std::env::var("USERPROFILE")
+                .or_else(|_| std::env::var("APPDATA"))
+                .unwrap_or_else(|_| ".".to_string());
+            PathBuf::from(&home_dir).join(".local").join("bin")
+        } else {
+            // On Unix systems, use $HOME/.local/bin
+            let home_dir = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+            PathBuf::from(&home_dir).join(".local").join("bin")
+        };
         
         // Create bin directory
         fs::create_dir_all(&bin_dir).map_err(|e| {
@@ -201,65 +213,182 @@ impl ToolInstaller {
         })?;
         
         // Determine the correct binary name based on OS and architecture
-        let (os_name, arch_name) = match (os, arch) {
-            ("macos", "x86_64") => ("darwin", "amd64"),
-            ("macos", "aarch64") => ("darwin", "arm64"),
-            ("linux", "x86_64") => ("linux", "amd64"),
-            ("linux", "aarch64") => ("linux", "arm64"),
+        let (os_name, arch_name, file_extension) = match (os, arch) {
+            ("macos", "x86_64") => ("darwin", "amd64", ""),
+            ("macos", "aarch64") => ("darwin", "arm64", ""),
+            ("linux", "x86_64") => ("linux", "amd64", ""),
+            ("linux", "aarch64") => ("linux", "arm64", ""),
+            ("windows", "x86_64") => ("windows", "amd64", ".exe"),
+            ("windows", "aarch64") => ("windows", "arm64", ".exe"),
             _ => {
                 warn!("❌ Unsupported platform: {} {}", os, arch);
                 return Ok(());
             }
         };
         
-        let archive_name = format!("grype_{}_{}.tar.gz", os_name, arch_name);
-        let download_url = format!(
-            "https://github.com/anchore/grype/releases/download/{}/grype_{}_{}_{}.tar.gz",
-            version, version.trim_start_matches('v'), os_name, arch_name
-        );
+        // Windows uses zip files, Unix uses tar.gz
+        let (archive_name, download_url) = if cfg!(windows) {
+            let archive_name = format!("grype_{}_windows_{}.zip", version.trim_start_matches('v'), arch_name);
+            let download_url = format!(
+                "https://github.com/anchore/grype/releases/download/{}/{}",
+                version, archive_name
+            );
+            (archive_name, download_url)
+        } else {
+            let archive_name = format!("grype_{}_{}.tar.gz", os_name, arch_name);
+            let download_url = format!(
+                "https://github.com/anchore/grype/releases/download/{}/grype_{}_{}_{}.tar.gz",
+                version, version.trim_start_matches('v'), os_name, arch_name
+            );
+            (archive_name, download_url)
+        };
         
         let archive_path = bin_dir.join(&archive_name);
+        let grype_binary = bin_dir.join(format!("grype{}", file_extension));
         
         info!("📦 Downloading from: {}", download_url);
-        let output = Command::new("curl")
-            .args(&["-L", "-o", archive_path.to_str().unwrap(), &download_url])
-            .output();
+        
+        // Use platform-appropriate download method
+        let download_success = if cfg!(windows) {
+            // On Windows, try PowerShell first, then curl if available
+            self.download_file_windows(&download_url, &archive_path)
+        } else {
+            // On Unix, use curl
+            self.download_file_unix(&download_url, &archive_path)
+        };
+        
+        if download_success {
+            info!("✅ Download complete. Extracting...");
             
-        match output {
-            Ok(result) if result.status.success() => {
-                info!("✅ Download complete. Extracting...");
-                
-                // Extract the archive
-                let extract_output = Command::new("tar")
-                    .args(&["-xzf", archive_path.to_str().unwrap(), "-C", bin_dir.to_str().unwrap()])
-                    .output();
-                    
-                if extract_output.map(|o| o.status.success()).unwrap_or(false) {
-                    // Make it executable
-                    let grype_path = bin_dir.join("grype");
-                    Command::new("chmod")
-                        .args(&["+x", grype_path.to_str().unwrap()])
-                        .output()
-                        .ok();
-                    
-                    info!("✅ grype installed successfully to {}", bin_dir.display());
+            let extract_success = if cfg!(windows) {
+                self.extract_zip_windows(&archive_path, &bin_dir)
+            } else {
+                self.extract_tar_unix(&archive_path, &bin_dir)
+            };
+            
+            if extract_success {
+                info!("✅ grype installed successfully to {}", bin_dir.display());
+                if cfg!(windows) {
+                    info!("💡 Make sure {} is in your PATH", bin_dir.display());
+                } else {
                     info!("💡 Make sure ~/.local/bin is in your PATH");
-                    self.installed_tools.insert("grype".to_string(), true);
-                    
-                    // Clean up archive
-                    fs::remove_file(&archive_path).ok();
-                    
-                    return Ok(());
                 }
+                self.installed_tools.insert("grype".to_string(), true);
+                
+                // Clean up archive
+                fs::remove_file(&archive_path).ok();
+                
+                return Ok(());
             }
-            _ => {}
         }
         
         warn!("❌ Automatic installation failed. Please install manually:");
-        warn!("   • macOS: brew install grype");
-        warn!("   • Download: https://github.com/anchore/grype/releases");
+        if cfg!(windows) {
+            warn!("   • Download from: https://github.com/anchore/grype/releases");
+            warn!("   • Or use: scoop install grype (if you have Scoop)");
+        } else {
+            warn!("   • macOS: brew install grype");
+            warn!("   • Download: https://github.com/anchore/grype/releases");
+        }
         
         Ok(())
+    }
+    
+    /// Download file on Windows using PowerShell or curl
+    fn download_file_windows(&self, url: &str, output_path: &PathBuf) -> bool {
+        use std::process::Command;
+        
+        // Try PowerShell first (available on all modern Windows)
+        let powershell_result = Command::new("powershell")
+            .args(&[
+                "-Command",
+                &format!(
+                    "Invoke-WebRequest -Uri '{}' -OutFile '{}' -UseBasicParsing",
+                    url,
+                    output_path.to_string_lossy()
+                )
+            ])
+            .output();
+            
+        if let Ok(result) = powershell_result {
+            if result.status.success() {
+                return true;
+            }
+        }
+        
+        // Fallback to curl if available
+        let curl_result = Command::new("curl")
+            .args(&["-L", "-o", &output_path.to_string_lossy(), url])
+            .output();
+            
+        curl_result.map(|o| o.status.success()).unwrap_or(false)
+    }
+    
+    /// Download file on Unix using curl
+    fn download_file_unix(&self, url: &str, output_path: &PathBuf) -> bool {
+        use std::process::Command;
+        
+        let output = Command::new("curl")
+            .args(&["-L", "-o", &output_path.to_string_lossy(), url])
+            .output();
+            
+        output.map(|o| o.status.success()).unwrap_or(false)
+    }
+    
+    /// Extract ZIP file on Windows
+    fn extract_zip_windows(&self, archive_path: &PathBuf, extract_dir: &PathBuf) -> bool {
+        use std::process::Command;
+        
+        // Try PowerShell Expand-Archive first
+        let powershell_result = Command::new("powershell")
+            .args(&[
+                "-Command",
+                &format!(
+                    "Expand-Archive -Path '{}' -DestinationPath '{}' -Force",
+                    archive_path.to_string_lossy(),
+                    extract_dir.to_string_lossy()
+                )
+            ])
+            .output();
+            
+        if let Ok(result) = powershell_result {
+            if result.status.success() {
+                return true;
+            }
+        }
+        
+        // Fallback: try tar (available in newer Windows versions)
+        let tar_result = Command::new("tar")
+            .args(&["-xf", &archive_path.to_string_lossy(), "-C", &extract_dir.to_string_lossy()])
+            .output();
+            
+        tar_result.map(|o| o.status.success()).unwrap_or(false)
+    }
+    
+    /// Extract TAR file on Unix
+    fn extract_tar_unix(&self, archive_path: &PathBuf, extract_dir: &PathBuf) -> bool {
+        use std::process::Command;
+        
+        let extract_output = Command::new("tar")
+            .args(&["-xzf", &archive_path.to_string_lossy(), "-C", &extract_dir.to_string_lossy()])
+            .output();
+            
+        if let Ok(result) = extract_output {
+            if result.status.success() {
+                // Make it executable on Unix
+                #[cfg(unix)]
+                {
+                    let grype_path = extract_dir.join("grype");
+                    Command::new("chmod")
+                        .args(&["+x", &grype_path.to_string_lossy()])
+                        .output()
+                        .ok();
+                }
+                return true;
+            }
+        }
+        
+        false
     }
     
     /// Check if OWASP dependency-check is available, install if possible
@@ -317,9 +446,20 @@ impl ToolInstaller {
         
         info!("📥 Downloading dependency-check from GitHub releases...");
         
-        let version = "10.0.4"; // Latest stable version
-        let home_dir = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        let install_dir = PathBuf::from(&home_dir).join(".local").join("dependency-check");
+        let version = "11.1.0"; // Latest stable version
+        
+        // Use platform-appropriate directories
+        let (home_dir, install_dir) = if cfg!(windows) {
+            let home = std::env::var("USERPROFILE")
+                .or_else(|_| std::env::var("APPDATA"))
+                .unwrap_or_else(|_| ".".to_string());
+            let install = PathBuf::from(&home).join("dependency-check");
+            (home, install)
+        } else {
+            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+            let install = PathBuf::from(&home).join(".local").join("share").join("dependency-check");
+            (home, install)
+        };
         
         // Create installation directory
         fs::create_dir_all(&install_dir).map_err(|e| {
@@ -329,135 +469,212 @@ impl ToolInstaller {
             })
         })?;
         
-        let archive_name = format!("dependency-check-{}-release.zip", version);
+        let archive_name = "dependency-check-11.1.0-release.zip";
         let download_url = format!(
             "https://github.com/jeremylong/DependencyCheck/releases/download/v{}/{}",
             version, archive_name
         );
         
-        // Download the archive
-        let archive_path = install_dir.join(&archive_name);
+        let archive_path = install_dir.join(archive_name);
         
         info!("📦 Downloading from: {}", download_url);
-        let output = Command::new("curl")
-            .args(&["-L", "-o", archive_path.to_str().unwrap(), &download_url])
-            .output();
+        
+        // Use platform-appropriate download method
+        let download_success = if cfg!(windows) {
+            self.download_file_windows(&download_url, &archive_path)
+        } else {
+            self.download_file_unix(&download_url, &archive_path)
+        };
+        
+        if download_success {
+            info!("✅ Download complete. Extracting...");
             
-        match output {
-            Ok(result) if result.status.success() => {
-                info!("✅ Download complete. Extracting...");
-                
-                // Extract the archive
-                let extract_output = Command::new("unzip")
-                    .args(&["-o", archive_path.to_str().unwrap(), "-d", install_dir.to_str().unwrap()])
+            let extract_success = if cfg!(windows) {
+                self.extract_zip_windows(&archive_path, &install_dir)
+            } else {
+                // Use unzip on Unix for .zip files
+                let output = std::process::Command::new("unzip")
+                    .args(&["-o", &archive_path.to_string_lossy(), "-d", &install_dir.to_string_lossy()])
                     .output();
-                    
-                if extract_output.map(|o| o.status.success()).unwrap_or(false) {
-                    // Create symlink to make it available in PATH
-                    let bin_dir = PathBuf::from(&home_dir).join(".local").join("bin");
-                    fs::create_dir_all(&bin_dir).ok();
-                    
-                    let dc_script = install_dir.join("dependency-check").join("bin").join("dependency-check.sh");
-                    let symlink = bin_dir.join("dependency-check");
-                    
-                    // Remove old symlink if exists
-                    fs::remove_file(&symlink).ok();
-                    
-                    // Create new symlink
-                    if std::os::unix::fs::symlink(&dc_script, &symlink).is_ok() {
-                        info!("✅ dependency-check installed successfully to {}", install_dir.display());
-                        info!("💡 Added to ~/.local/bin/dependency-check");
-                        info!("💡 Make sure ~/.local/bin is in your PATH");
-                        self.installed_tools.insert("dependency-check".to_string(), true);
-                        return Ok(());
-                    }
+                output.map(|o| o.status.success()).unwrap_or(false)
+            };
+                
+            if extract_success {
+                // Create appropriate launcher
+                if cfg!(windows) {
+                    self.create_windows_launcher(&install_dir, &home_dir)?;
+                } else {
+                    self.create_unix_launcher(&install_dir, &home_dir)?;
                 }
+                
+                info!("✅ dependency-check installed successfully to {}", install_dir.display());
+                self.installed_tools.insert("dependency-check".to_string(), true);
+                
+                // Clean up archive
+                fs::remove_file(&archive_path).ok();
+                return Ok(());
             }
-            _ => {}
         }
         
         warn!("❌ Automatic installation failed. Please install manually:");
-        warn!("   • macOS: brew install dependency-check");
-        warn!("   • Download: https://github.com/jeremylong/DependencyCheck/releases");
-        warn!("   • Documentation: https://owasp.org/www-project-dependency-check/");
+        if cfg!(windows) {
+            warn!("   • Download: https://github.com/jeremylong/DependencyCheck/releases");
+            warn!("   • Or use: scoop install dependency-check (if you have Scoop)");
+        } else {
+            warn!("   • macOS: brew install dependency-check");
+            warn!("   • Download: https://github.com/jeremylong/DependencyCheck/releases");
+        }
         
         Ok(())
     }
     
-    /// Check if a command-line tool is available
-    fn is_tool_installed(&mut self, tool: &str) -> bool {
+    /// Create Windows launcher for dependency-check
+    fn create_windows_launcher(&self, install_dir: &PathBuf, home_dir: &str) -> Result<()> {
+        use std::fs;
+        
+        let bin_dir = PathBuf::from(home_dir).join(".local").join("bin");
+        fs::create_dir_all(&bin_dir).ok();
+        
+        let dc_script = install_dir.join("dependency-check").join("bin").join("dependency-check.bat");
+        let launcher_path = bin_dir.join("dependency-check.bat");
+        
+        // Create a batch file launcher
+        let launcher_content = format!(
+            "@echo off\n\"{}\" %*\n",
+            dc_script.to_string_lossy()
+        );
+        
+        fs::write(&launcher_path, launcher_content).map_err(|e| {
+            IaCGeneratorError::Analysis(AnalysisError::DependencyParsing {
+                file: "dependency-check launcher".to_string(),
+                reason: format!("Failed to create launcher: {}", e),
+            })
+        })?;
+        
+        info!("💡 Added to {}", launcher_path.display());
+        info!("💡 Make sure {} is in your PATH", bin_dir.display());
+        
+        Ok(())
+    }
+    
+    /// Create Unix launcher for dependency-check
+    fn create_unix_launcher(&self, install_dir: &PathBuf, home_dir: &str) -> Result<()> {
+        use std::fs;
+        
+        let bin_dir = PathBuf::from(home_dir).join(".local").join("bin");
+        fs::create_dir_all(&bin_dir).ok();
+        
+        let dc_script = install_dir.join("dependency-check").join("bin").join("dependency-check.sh");
+        let symlink = bin_dir.join("dependency-check");
+        
+        // Remove old symlink if exists
+        fs::remove_file(&symlink).ok();
+        
+        // Create new symlink (Unix only)
+        #[cfg(unix)]
+        {
+            if std::os::unix::fs::symlink(&dc_script, &symlink).is_ok() {
+                info!("💡 Added to ~/.local/bin/dependency-check");
+                info!("💡 Make sure ~/.local/bin is in your PATH");
+                return Ok(());
+            }
+        }
+        
+        // Fallback: create a shell script wrapper
+        let wrapper_content = format!(
+            "#!/bin/bash\nexec \"{}\" \"$@\"\n",
+            dc_script.to_string_lossy()
+        );
+        
+        fs::write(&symlink, wrapper_content).map_err(|e| {
+            IaCGeneratorError::Analysis(AnalysisError::DependencyParsing {
+                file: "dependency-check wrapper".to_string(),
+                reason: format!("Failed to create wrapper: {}", e),
+            })
+        })?;
+        
+        // Make executable
+        #[cfg(unix)]
+        {
+            use std::process::Command;
+            Command::new("chmod")
+                .args(&["+x", &symlink.to_string_lossy()])
+                .output()
+                .ok();
+        }
+        
+        Ok(())
+    }
+    
+    /// Check if a tool is installed and available
+    fn is_tool_installed(&self, tool: &str) -> bool {
+        use std::process::Command;
+        
         // Check cache first
         if let Some(&cached) = self.installed_tools.get(tool) {
             return cached;
         }
         
-        // Test if tool is available
-        let available = self.test_tool_availability(tool);
-        self.installed_tools.insert(tool.to_string(), available);
-        available
-    }
-    
-    /// Test if a tool is available by running --version
-    pub fn test_tool_availability(&self, tool: &str) -> bool {
-        let test_commands = match tool {
-            "cargo-audit" => vec!["cargo", "audit", "--version"],
-            "npm" => vec!["npm", "--version"],
-            "pip-audit" => vec!["pip-audit", "--version"],
-            "govulncheck" => vec!["govulncheck", "-version"],
-            "dependency-check" => vec!["dependency-check", "--version"],
-            "grype" => vec!["grype", "version"],
-            _ => return false,
+        // Different version check commands for different tools
+        let version_arg = match tool {
+            "grype" => "version",
+            "cargo-audit" => "--version",
+            "pip-audit" => "--version", 
+            "govulncheck" => "-version",
+            "dependency-check" => "--version",
+            _ => "--version",
         };
         
-        let result = Command::new(&test_commands[0])
-            .args(&test_commands[1..])
+        let result = Command::new(tool)
+            .arg(version_arg)
             .output();
             
         match result {
             Ok(output) => output.status.success(),
             Err(_) => {
-                // Try with ~/go/bin prefix for Go tools
-                if tool == "govulncheck" {
-                    let go_bin_path = std::env::var("HOME")
-                        .map(|home| format!("{}/go/bin/govulncheck", home))
-                        .unwrap_or_else(|_| "govulncheck".to_string());
-                        
-                    return Command::new(&go_bin_path)
-                        .arg("-version")
-                        .output()
-                        .map(|out| out.status.success())
-                        .unwrap_or(false);
-                }
-                
-                // Try with ~/.local/bin prefix for dependency-check
-                if tool == "dependency-check" {
-                    let dc_path = std::env::var("HOME")
-                        .map(|home| format!("{}/.local/bin/dependency-check", home))
-                        .unwrap_or_else(|_| "dependency-check".to_string());
-                        
-                    return Command::new(&dc_path)
-                        .arg("--version")
-                        .output()
-                        .map(|out| out.status.success())
-                        .unwrap_or(false);
-                }
-                
-                // Try with ~/.local/bin prefix for grype
-                if tool == "grype" {
-                    let grype_path = std::env::var("HOME")
-                        .map(|home| format!("{}/.local/bin/grype", home))
-                        .unwrap_or_else(|_| "grype".to_string());
-                        
-                    return Command::new(&grype_path)
-                        .arg("version")
-                        .output()
-                        .map(|out| out.status.success())
-                        .unwrap_or(false);
-                }
-                
-                false
+                // Try platform-specific paths
+                self.try_alternative_paths(tool, version_arg)
             }
         }
+    }
+    
+    /// Try alternative paths for tools
+    fn try_alternative_paths(&self, tool: &str, version_arg: &str) -> bool {
+        use std::process::Command;
+        
+        let alternative_paths = if cfg!(windows) {
+            // Windows-specific paths
+            let userprofile = std::env::var("USERPROFILE").unwrap_or_default();
+            let appdata = std::env::var("APPDATA").unwrap_or_default();
+            vec![
+                format!("{}/.local/bin/{}.exe", userprofile, tool),
+                format!("{}/syncable-cli/bin/{}.exe", appdata, tool),
+                format!("C:/Program Files/{}/{}.exe", tool, tool),
+            ]
+        } else {
+            // Unix-specific paths
+            let home = std::env::var("HOME").unwrap_or_default();
+            vec![
+                format!("{}/go/bin/{}", home, tool),
+                format!("{}/.local/bin/{}", home, tool),
+                format!("{}/.cargo/bin/{}", home, tool),
+            ]
+        };
+        
+        for path in alternative_paths {
+            if let Ok(output) = Command::new(&path).arg(version_arg).output() {
+                if output.status.success() {
+                    return true;
+                }
+            }
+        }
+        
+        false
+    }
+    
+    /// Test if a tool is available by running version command (public method for external use)
+    pub fn test_tool_availability(&self, tool: &str) -> bool {
+        self.is_tool_installed(tool)
     }
     
     /// Get installation status summary

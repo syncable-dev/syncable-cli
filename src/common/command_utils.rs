@@ -12,8 +12,24 @@ pub fn execute_command(cmd: &str, args: &[&str]) -> Result<Output> {
 
 /// Check if a command is available in PATH
 pub fn is_command_available(cmd: &str) -> bool {
-    Command::new(cmd)
+    // Try the command directly first
+    if Command::new(cmd)
         .arg("--version")
         .output()
-        .is_ok()
+        .map(|o| o.status.success())
+        .unwrap_or(false) {
+        return true;
+    }
+    
+    // On Windows, also try with .exe extension
+    if cfg!(windows) && !cmd.ends_with(".exe") {
+        let cmd_with_exe = format!("{}.exe", cmd);
+        return Command::new(&cmd_with_exe)
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+    }
+    
+    false
 } 
