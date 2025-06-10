@@ -8,6 +8,11 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/syncable-dev/syncable-cli"
 keywords = ["iac", "infrastructure", "docker", "terraform", "cli"]
 categories = ["command-line-utilities", "development-tools"]
+readme = "README.md"
+
+# Platform support
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "x86_64-apple-darwin"]
 
 [[bin]]
 name = "sync-ctl"
