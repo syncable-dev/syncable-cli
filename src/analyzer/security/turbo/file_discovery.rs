@@ -49,17 +49,26 @@ pub struct FileDiscovery {
     config: DiscoveryConfig,
     ignored_dirs: AHashSet<String>,
     secret_keywords: Vec<&'static str>,
+    binary_extensions: AHashSet<&'static str>,
+    excluded_filenames: AHashSet<&'static str>,
+    asset_extensions: AHashSet<&'static str>,
 }
 
 impl FileDiscovery {
     pub fn new(config: DiscoveryConfig) -> Self {
         let ignored_dirs = Self::get_ignored_dirs(&config.scan_mode);
         let secret_keywords = Self::get_secret_keywords();
+        let binary_extensions = Self::get_binary_extensions();
+        let excluded_filenames = Self::get_excluded_filenames();
+        let asset_extensions = Self::get_asset_extensions();
         
         Self {
             config,
             ignored_dirs,
             secret_keywords,
+            binary_extensions,
+            excluded_filenames,
+            asset_extensions,
         }
     }
     
@@ -250,12 +259,16 @@ impl FileDiscovery {
             return false;
         }
         
-        // Binary file detection (simple heuristic)
-        if let Some(ext) = &meta.extension {
-            let binary_extensions = ["exe", "dll", "so", "dylib", "jpg", "png", "gif", "mp4", "zip", "tar", "gz"];
-            if binary_extensions.contains(&ext.as_str()) {
-                return false;
-            }
+        // Enhanced binary file detection
+        if self.is_binary_file(meta) {
+            trace!("Skipping binary file: {}", meta.path.display());
+            return false;
+        }
+        
+        // Asset file detection (images, fonts, media)
+        if self.is_asset_file(meta) {
+            trace!("Skipping asset file: {}", meta.path.display());
+            return false;
         }
         
         // Exclude files that are unlikely to contain real secrets
@@ -283,12 +296,61 @@ impl FileDiscovery {
         }
     }
     
+    /// Enhanced binary file detection
+    fn is_binary_file(&self, meta: &FileMetadata) -> bool {
+        if let Some(ext) = &meta.extension {
+            if self.binary_extensions.contains(ext.as_str()) {
+                return true;
+            }
+        }
+        
+        // Check filename patterns
+        let filename = meta.path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        
+        if self.excluded_filenames.contains(filename.as_str()) {
+            return true;
+        }
+        
+        false
+    }
+    
+    /// Check if file is an asset (images, fonts, media)
+    fn is_asset_file(&self, meta: &FileMetadata) -> bool {
+        if let Some(ext) = &meta.extension {
+            if self.asset_extensions.contains(ext.as_str()) {
+                return true;
+            }
+        }
+        
+        // Check for asset directories
+        let path_str = meta.path.to_string_lossy().to_lowercase();
+        let asset_dirs = [
+            "/assets/", "/static/", "/public/", "/images/", "/img/", 
+            "/media/", "/fonts/", "/icons/", "/graphics/", "/pictures/"
+        ];
+        
+        asset_dirs.iter().any(|&dir| path_str.contains(dir))
+    }
+    
     /// Check if file should be excluded from security scanning
     fn should_exclude_from_security_scan(&self, meta: &FileMetadata) -> bool {
         let path_str = meta.path.to_string_lossy().to_lowercase();
         
         // DEPENDENCY LOCK FILES - These contain package hashes/metadata, not secrets
         if self.is_dependency_lock_file(meta) {
+            return true;
+        }
+        
+        // SVG files often contain base64 encoded graphics that trigger false positives
+        if meta.extension.as_deref() == Some("svg") {
+            return true;
+        }
+        
+        // Minified and bundled files
+        if self.is_minified_or_bundled_file(meta) {
             return true;
         }
         
@@ -305,8 +367,13 @@ impl FileDiscovery {
             "/docs/", "/doc/", "/documentation/",
             // Framework/library detection files (they contain patterns but not secrets)
             "frameworks/", "detector", "rules", "patterns",
-            // Build artifacts
+            // Build artifacts and generated files
             "target/", "build/", "dist/", ".next/", "coverage/",
+            ".nuxt/", ".output/", ".vercel/", ".netlify/",
+            // IDE and editor files
+            ".vscode/", ".idea/", ".vs/", "*.swp", "*.swo",
+            // OS files
+            ".ds_store", "thumbs.db", "desktop.ini",
         ];
         
         // Check patterns
@@ -316,13 +383,13 @@ impl FileDiscovery {
         
         // Documentation file extensions
         if let Some(ext) = &meta.extension {
-            let doc_extensions = ["md", "txt", "rst", "adoc", "asciidoc"];
+            let doc_extensions = ["md", "txt", "rst", "adoc", "asciidoc", "rtf"];
             if doc_extensions.contains(&ext.as_str()) {
                 return true;
             }
         }
         
-        // Check if filename suggests it's documentation or examples
+        // Check if filename suggests it's documentation, examples, or code generation
         let filename = meta.path.file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("")
@@ -330,7 +397,11 @@ impl FileDiscovery {
         
         let doc_filenames = [
             "readme", "changelog", "license", "authors", "contributing",
-            "roadmap", "todo", "examples", "demo", "sample",
+            "roadmap", "todo", "examples", "demo", "sample", "fixture",
+            // Code generation and API example files
+            "apicodedialog", "codedialog", "codeexample", "apiexample",
+            "codesnippet", "snippets", "templates", "codegenerator",
+            "apitool", "playground", "sandbox",
         ];
         
         if doc_filenames.iter().any(|&name| filename.contains(name)) {
@@ -338,6 +409,23 @@ impl FileDiscovery {
         }
         
         false
+    }
+    
+    /// Check if file is minified or bundled
+    fn is_minified_or_bundled_file(&self, meta: &FileMetadata) -> bool {
+        let filename = meta.path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        
+        // Minified file patterns
+        let minified_patterns = [
+            ".min.", ".bundle.", ".chunk.", ".vendor.",
+            "-min.", "-bundle.", "-chunk.", "-vendor.",
+            "_min.", "_bundle.", "_chunk.", "_vendor.",
+        ];
+        
+        minified_patterns.iter().any(|&pattern| filename.contains(pattern))
     }
     
     /// Get ignored directories based on scan mode
@@ -349,6 +437,7 @@ impl FileDiscovery {
             ".git", "node_modules", "target", "build", "dist", ".next",
             "coverage", "__pycache__", ".pytest_cache", ".mypy_cache",
             "vendor", "packages", ".bundle", "bower_components",
+            ".nuxt", ".output", ".vercel", ".netlify", ".vscode", ".idea",
         ];
         
         for dir in always_ignore {
@@ -364,6 +453,83 @@ impl FileDiscovery {
         }
         
         dirs
+    }
+    
+    /// Get comprehensive binary file extensions
+    fn get_binary_extensions() -> AHashSet<&'static str> {
+        let mut extensions = AHashSet::new();
+        
+        // Executables and libraries
+        let binary_exts = [
+            "exe", "dll", "so", "dylib", "lib", "a", "o", "obj",
+            "bin", "com", "scr", "msi", "deb", "rpm", "pkg",
+            // Archives
+            "zip", "tar", "gz", "bz2", "xz", "7z", "rar", "ace",
+            "cab", "dmg", "iso", "img",
+            // Media files
+            "mp3", "mp4", "avi", "mov", "wmv", "flv", "mkv", "webm",
+            "wav", "flac", "ogg", "aac", "m4a", "wma",
+            // Images (will be handled separately as assets)
+            "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tga", "webp",
+            "ico", "cur", "psd", "ai", "eps", "raw", "cr2", "nef",
+            // Fonts
+            "ttf", "otf", "woff", "woff2", "eot",
+            // Documents
+            "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+            "odt", "ods", "odp", "rtf",
+            // Databases
+            "db", "sqlite", "sqlite3", "mdb", "accdb",
+            // Other binary formats
+            "pyc", "pyo", "class", "jar", "war", "ear",
+        ];
+        
+        for ext in binary_exts {
+            extensions.insert(ext);
+        }
+        
+        extensions
+    }
+    
+    /// Get asset file extensions (images, media, fonts)
+    fn get_asset_extensions() -> AHashSet<&'static str> {
+        let mut extensions = AHashSet::new();
+        
+        let asset_exts = [
+            // Images
+            "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tga", "webp",
+            "ico", "cur", "psd", "ai", "eps", "raw", "cr2", "nef", "svg",
+            // Fonts
+            "ttf", "otf", "woff", "woff2", "eot",
+            // Media
+            "mp3", "mp4", "avi", "mov", "wmv", "flv", "mkv", "webm",
+            "wav", "flac", "ogg", "aac", "m4a", "wma",
+        ];
+        
+        for ext in asset_exts {
+            extensions.insert(ext);
+        }
+        
+        extensions
+    }
+    
+    /// Get filenames that should be excluded
+    fn get_excluded_filenames() -> AHashSet<&'static str> {
+        let mut filenames = AHashSet::new();
+        
+        let excluded = [
+            // OS files
+            ".ds_store", "thumbs.db", "desktop.ini", "folder.ico",
+            // Editor files
+            ".gitkeep", ".keep", ".placeholder",
+            // Temporary files
+            ".tmp", ".temp", ".swp", ".swo", ".bak", ".backup",
+        ];
+        
+        for filename in excluded {
+            filenames.insert(filename);
+        }
+        
+        filenames
     }
     
     /// Get secret keywords for detection
@@ -420,7 +586,7 @@ impl FileDiscovery {
         self.secret_keywords.iter().any(|&keyword| name.contains(keyword))
     }
     
-    /// Check if file is a dependency lock file (contains hashes/metadata, not secrets)
+    /// Enhanced dependency lock file detection
     fn is_dependency_lock_file(&self, meta: &FileMetadata) -> bool {
         let filename = meta.path.file_name()
             .and_then(|n| n.to_str())
@@ -432,13 +598,13 @@ impl FileDiscovery {
             // JavaScript/Node.js
             "package-lock.json",
             "yarn.lock", 
-            "pnpm-lock.yaml",  // <-- This was missing!
-            "shrinkwrap.yaml",
-            "npm-shrinkwrap.json",
+            "pnpm-lock.yaml",
+            "bun.lockb",  // Bun lock file (binary format)
             // Python
             "poetry.lock",
             "pipfile.lock",
             "pip-lock.txt",
+            "pdm.lock",
             // Rust
             "cargo.lock",
             // Go
@@ -457,6 +623,8 @@ impl FileDiscovery {
             // Others
             "mix.lock",  // Elixir
             "pubspec.lock",  // Dart
+            "swift.resolved", // Swift
+            "flake.lock", // Nix
         ];
         
         // Check if filename matches any lock file pattern
@@ -466,6 +634,7 @@ impl FileDiscovery {
         filename.ends_with("-lock.json") ||
         filename.ends_with("-lock.yaml") ||
         filename.ends_with("-lock.yml") ||
+        filename.ends_with(".lockb") ||  // Binary lock files
         filename.contains("shrinkwrap") ||
         filename.contains("lockfile")
     }
@@ -554,5 +723,60 @@ mod tests {
         assert_eq!(files.len(), 2);
         assert!(files.iter().any(|f| f.path.ends_with(".env")));
         assert!(files.iter().any(|f| f.path.ends_with("config.json")));
+    }
+    
+    #[test]
+    fn test_binary_file_detection() {
+        let config = DiscoveryConfig {
+            use_git: false,
+            max_file_size: 1024 * 1024,
+            priority_extensions: vec![],
+            scan_mode: ScanMode::Fast,
+        };
+        let discovery = FileDiscovery::new(config);
+        
+        let binary_meta = FileMetadata {
+            path: PathBuf::from("test.jpg"),
+            size: 100,
+            extension: Some("jpg".to_string()),
+            is_gitignored: false,
+            modified: SystemTime::now(),
+            priority_hints: PriorityHints::default(),
+        };
+        
+        assert!(discovery.is_binary_file(&binary_meta));
+    }
+    
+    #[test]
+    fn test_lock_file_detection() {
+        let config = DiscoveryConfig {
+            use_git: false,
+            max_file_size: 1024 * 1024,
+            priority_extensions: vec![],
+            scan_mode: ScanMode::Fast,
+        };
+        let discovery = FileDiscovery::new(config);
+        
+        let lock_files = [
+            "package-lock.json",
+            "yarn.lock",
+            "pnpm-lock.yaml",
+            "bun.lockb",
+            "cargo.lock",
+            "go.sum",
+        ];
+        
+        for lock_file in lock_files {
+            let meta = FileMetadata {
+                path: PathBuf::from(lock_file),
+                size: 100,
+                extension: None,
+                is_gitignored: false,
+                modified: SystemTime::now(),
+                priority_hints: PriorityHints::default(),
+            };
+            
+            assert!(discovery.is_dependency_lock_file(&meta), "Failed to detect {}", lock_file);
+        }
     }
 } 

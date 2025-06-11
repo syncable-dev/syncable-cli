@@ -197,12 +197,13 @@ impl SecretPatternManager {
             ToolPattern {
                 tool_name: "AWS".to_string(),
                 pattern_type: "access_key".to_string(),
-                pattern: Regex::new(r#"AKIA[0-9A-Z]{16}"#)?,
+                // More specific - must be in assignment context
+                pattern: Regex::new(r#"(?i)(?:aws[_-]?access[_-]?key|access[_-]?key[_-]?id)\s*[:=]\s*["']?(AKIA[0-9A-Z]{16})["']?"#)?,
                 severity: SecuritySeverity::Critical,
-                description: "AWS access key ID (CRITICAL)".to_string(),
+                description: "AWS access key ID in assignment (CRITICAL)".to_string(),
                 public_safe: false,
                 context_keywords: vec!["aws".to_string(), "access".to_string(), "key".to_string()],
-                false_positive_keywords: vec![],
+                false_positive_keywords: vec!["example".to_string(), "AKIAEXAMPLE".to_string()],
             },
             ToolPattern {
                 tool_name: "AWS".to_string(),
@@ -212,7 +213,7 @@ impl SecretPatternManager {
                 description: "AWS secret access key (CRITICAL)".to_string(),
                 public_safe: false,
                 context_keywords: vec!["aws".to_string(), "secret".to_string()],
-                false_positive_keywords: vec![],
+                false_positive_keywords: vec!["example".to_string(), "your_secret".to_string(), "placeholder".to_string()],
             },
         ]);
         
@@ -267,18 +268,20 @@ impl SecretPatternManager {
             GenericPattern {
                 id: "bearer-token".to_string(),
                 name: "Bearer Token".to_string(),
-                pattern: Regex::new(r#"(?i)(?:authorization|bearer)\s*[:=]\s*["'](?:bearer\s+)?([A-Za-z0-9_-]{20,})["']"#)?,
+                // More specific - exclude template literals and ensure it's a real assignment
+                pattern: Regex::new(r#"(?i)(?:authorization|bearer)\s*[:=]\s*["'](?:bearer\s+)?([A-Za-z0-9_-]{32,})["'](?!\s*\$\{)"#)?,
                 severity: SecuritySeverity::Critical,
                 category: SecurityCategory::SecretsExposure,
-                description: "Bearer token in authorization header".to_string(),
+                description: "Bearer token in authorization header (excluding templates)".to_string(),
             },
             GenericPattern {
                 id: "jwt-token".to_string(),
                 name: "JWT Token".to_string(),
-                pattern: Regex::new(r#"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"#)?,
+                // More specific JWT pattern - must be properly formatted and in assignment context
+                pattern: Regex::new(r#"(?i)(?:token|jwt|authorization|bearer)\s*[:=]\s*["']?eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}["']?"#)?,
                 severity: SecuritySeverity::Medium,
                 category: SecurityCategory::SecretsExposure,
-                description: "JSON Web Token detected".to_string(),
+                description: "JSON Web Token detected in assignment".to_string(),
             },
             GenericPattern {
                 id: "database-url".to_string(),
@@ -299,10 +302,11 @@ impl SecretPatternManager {
             GenericPattern {
                 id: "generic-api-key".to_string(),
                 name: "Generic API Key".to_string(),
-                pattern: Regex::new(r#"(?i)(?:api[_-]?key|apikey)\s*[:=]\s*["']([A-Za-z0-9_-]{20,})["']"#)?,
+                // More specific - require longer keys and exclude common false positives
+                pattern: Regex::new(r#"(?i)(?:api[_-]?key|apikey)\s*[:=]\s*["']([A-Za-z0-9_-]{32,})["']"#)?,
                 severity: SecuritySeverity::High,
                 category: SecurityCategory::SecretsExposure,
-                description: "Generic API key pattern".to_string(),
+                description: "Generic API key pattern (32+ characters)".to_string(),
             },
         ];
         

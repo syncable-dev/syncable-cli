@@ -85,8 +85,9 @@ impl Default for SecurityAnalysisConfig {
                 "Spring Boot".to_string(),
             ],
             
-            // File filtering
+            // File filtering - Enhanced patterns to reduce false positives
             ignore_patterns: vec![
+                // Dependencies and build artifacts
                 "node_modules".to_string(),
                 ".git".to_string(),
                 "target".to_string(),
@@ -94,16 +95,93 @@ impl Default for SecurityAnalysisConfig {
                 ".next".to_string(),
                 "coverage".to_string(),
                 "dist".to_string(),
+                ".nuxt".to_string(),
+                ".output".to_string(),
+                ".vercel".to_string(),
+                ".netlify".to_string(),
+                
+                // Minified and bundled files
                 "*.min.js".to_string(),
+                "*.min.css".to_string(),
                 "*.bundle.js".to_string(),
+                "*.bundle.css".to_string(),
+                "*.chunk.js".to_string(),
+                "*.vendor.js".to_string(),
                 "*.map".to_string(),
+                
+                // Lock files and package managers
                 "*.lock".to_string(),
+                "*.lockb".to_string(),
+                "yarn.lock".to_string(),
+                "package-lock.json".to_string(),
+                "pnpm-lock.yaml".to_string(),
+                "bun.lockb".to_string(),
+                "cargo.lock".to_string(),
+                "go.sum".to_string(),
+                "poetry.lock".to_string(),
+                "composer.lock".to_string(),
+                "gemfile.lock".to_string(),
+                
+                // Asset files
+                "*.jpg".to_string(),
+                "*.jpeg".to_string(),
+                "*.png".to_string(),
+                "*.gif".to_string(),
+                "*.bmp".to_string(),
+                "*.svg".to_string(),
+                "*.ico".to_string(),
+                "*.webp".to_string(),
+                "*.tiff".to_string(),
+                "*.mp3".to_string(),
+                "*.mp4".to_string(),
+                "*.avi".to_string(),
+                "*.mov".to_string(),
+                "*.pdf".to_string(),
+                "*.ttf".to_string(),
+                "*.otf".to_string(),
+                "*.woff".to_string(),
+                "*.woff2".to_string(),
+                "*.eot".to_string(),
+                
+                // Test and example files
                 "*_sample.*".to_string(),
                 "*example*".to_string(),
                 "*test*".to_string(),
                 "*spec*".to_string(),
                 "*mock*".to_string(),
-                "*.d.ts".to_string(), // TypeScript declaration files
+                "*fixture*".to_string(),
+                "test/*".to_string(),
+                "tests/*".to_string(),
+                "__test__/*".to_string(),
+                "__tests__/*".to_string(),
+                "spec/*".to_string(),
+                "specs/*".to_string(),
+                
+                // Documentation
+                "*.md".to_string(),
+                "*.txt".to_string(),
+                "*.rst".to_string(),
+                "docs/*".to_string(),
+                "documentation/*".to_string(),
+                
+                // IDE and editor files
+                ".vscode/*".to_string(),
+                ".idea/*".to_string(),
+                ".vs/*".to_string(),
+                "*.swp".to_string(),
+                "*.swo".to_string(),
+                ".DS_Store".to_string(),
+                "Thumbs.db".to_string(),
+                
+                // TypeScript and generated files
+                "*.d.ts".to_string(),
+                "*.generated.*".to_string(),
+                "*.auto.*".to_string(),
+                
+                // Framework-specific
+                ".angular/*".to_string(),
+                ".svelte-kit/*".to_string(),
+                "storybook-static/*".to_string(),
             ],
             include_patterns: vec![], // Empty means include all (subject to ignore patterns)
             
