@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.9.6](https://github.com/syncable-dev/syncable-cli/compare/v0.9.5...v0.9.6) - 2025-06-11
+
+### Other
+
+- *(deps)* bump rustsec from 0.29.3 to 0.30.2
+
 ## [0.9.5](https://github.com/syncable-dev/syncable-cli/compare/v0.9.4...v0.9.5) - 2025-06-10
 
 ### Other
