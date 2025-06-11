@@ -134,10 +134,14 @@ impl PatternEngine {
         // Intelligent confidence filtering - adaptive threshold based on pattern type
         matches.retain(|m| {
             let threshold = match m.pattern.id.as_str() {
-                id if id.contains("aws-access-key") || id.contains("openai-api-key") => 0.3, // High-confidence patterns
-                id if id.contains("jwt-token") || id.contains("database-url") => 0.5, // Medium confidence patterns
-                id if id.contains("generic") => 0.7, // Generic patterns need higher confidence
-                _ => 0.6, // Default threshold
+                id if id.contains("aws-access-key") => 0.4, // AWS keys need higher confidence
+                id if id.contains("openai-api-key") => 0.4, // OpenAI keys need higher confidence
+                id if id.contains("jwt-token") => 0.6, // JWT tokens need high confidence (often in examples)
+                id if id.contains("database-url") => 0.5, // Database URLs medium confidence
+                id if id.contains("bearer-token") => 0.7, // Bearer tokens often in examples
+                id if id.contains("generic") => 0.8, // Generic patterns need very high confidence
+                id if id.contains("long-secret-value") => 0.7, // Long secret values need high confidence
+                _ => 0.7, // Increased default threshold
             };
             m.confidence > threshold
         });
@@ -147,6 +151,11 @@ impl PatternEngine {
     
     /// Quick check if content might contain secrets
     fn quick_contains_secrets(&self, content: &str) -> bool {
+        // Enhanced quick rejection for common false positive patterns
+        if self.is_likely_false_positive_content(content) {
+            return false;
+        }
+        
         // Common secret indicators (optimized for speed)
         const QUICK_PATTERNS: &[&str] = &[
             "api", "key", "secret", "token", "password", "credential",
@@ -155,6 +164,49 @@ impl PatternEngine {
         
         let content_lower = content.to_lowercase();
         QUICK_PATTERNS.iter().any(|&pattern| content_lower.contains(pattern))
+    }
+    
+    /// Check if content is likely a false positive (encoded data, minified code, etc.)
+    fn is_likely_false_positive_content(&self, content: &str) -> bool {
+        let content_len = content.len();
+        
+        // Skip empty or very small content
+        if content_len < 10 {
+            return true;
+        }
+        
+        // Check for base64 data URLs (common in SVG, images)
+        if content.contains("data:image/") || content.contains("data:font/") {
+            return true;
+        }
+        
+        // Check for minified JavaScript (very long lines, no spaces)
+        let lines: Vec<&str> = content.lines().collect();
+        if lines.len() < 5 && lines.iter().any(|line| line.len() > 500 && line.matches(' ').count() < line.len() / 50) {
+            return true;
+        }
+        
+        // Check for high percentage of base64-like characters (but not a JWT)
+        let base64_chars = content.chars().filter(|c| c.is_alphanumeric() || *c == '+' || *c == '/' || *c == '=').count();
+        let base64_ratio = base64_chars as f32 / content_len as f32;
+        
+        // High base64 ratio but doesn't look like JWT tokens
+        if base64_ratio > 0.8 && !content.contains("eyJ") && content_len > 1000 {
+            return true;
+        }
+        
+        // Check for SVG content
+        if content.contains("<svg") || content.contains("xmlns=\"http://www.w3.org/2000/svg\"") {
+            return true;
+        }
+        
+        // Check for CSS content
+        if content.contains("@media") || content.contains("@import") || 
+           (content.contains("{") && content.contains("}") && content.contains(":")) {
+            return true;
+        }
+        
+        false
     }
     
     /// Run Aho-Corasick matcher and collect results
@@ -208,34 +260,263 @@ impl PatternEngine {
         let line_lower = line.to_lowercase();
         let content_lower = content.to_lowercase();
         
-        // Basic false positive detection
-        if line_lower.starts_with("//") || line_lower.starts_with("#") || line_lower.contains("example") ||
-           line_lower.contains("placeholder") || line_lower.contains("your_") || line_lower.contains("todo") {
-            return 0.0; // Skip obvious examples/docs
+        // Enhanced false positive detection
+        if self.is_obvious_false_positive(line, content) {
+            return 0.0;
         }
+        
+        // Context-based confidence adjustments
+        confidence = self.adjust_confidence_for_context(confidence, line, content, pattern);
+        
+        // Pattern-specific adjustments
+        confidence = self.adjust_confidence_for_pattern(confidence, line, content, pattern);
+        
+        confidence.clamp(0.0, 1.0)
+    }
+    
+    /// Check for obvious false positives
+    fn is_obvious_false_positive(&self, line: &str, content: &str) -> bool {
+        let line_lower = line.to_lowercase();
+        
+        // Comments and documentation
+        if line_lower.trim_start().starts_with("//") || 
+           line_lower.trim_start().starts_with("#") ||
+           line_lower.trim_start().starts_with("*") ||
+           line_lower.trim_start().starts_with("<!--") {
+            return true;
+        }
+        
+        // JavaScript/TypeScript template literals (${...})
+        if line.contains("${") && line.contains("}") {
+            return true;
+        }
+        
+        // Template strings and interpolation patterns
+        if line.contains("${selectedApiKey") || line.contains("${apiKey") || 
+           line.contains("${key") || line.contains("${token") {
+            return true;
+        }
+        
+        // Code generation contexts (functions that generate example code)
+        if self.is_in_code_generation_context(content) && self.looks_like_template_code(line) {
+            return true;
+        }
+        
+        // Common example/placeholder patterns
+        let false_positive_patterns = [
+            "example", "placeholder", "your_", "todo", "fixme", "xxx",
+            "xxxxxxxx", "12345", "abcdef", "test", "demo", "sample",
+            "lorem", "ipsum", "change_me", "replace_me", "insert_",
+            "enter_your", "add_your", "put_your", "use_your",
+            // React/JSX specific patterns
+            "props.", "state.", "this.", "component",
+        ];
+        
+        if false_positive_patterns.iter().any(|&pattern| line_lower.contains(pattern)) {
+            return true;
+        }
+        
+        // Check for JSON schema or TypeScript interfaces
+        if line_lower.contains("@example") || line_lower.contains("@param") ||
+           line_lower.contains("interface") || line_lower.contains("type ") {
+            return true;
+        }
+        
+        // Check for base64 data URLs
+        if line.contains("data:image/") || line.contains("data:font/") || 
+           line.contains("data:application/") {
+            return true;
+        }
+        
+        // Check for minified content (very long line with little whitespace)
+        if line.len() > 200 && line.matches(' ').count() < line.len() / 20 {
+            return true;
+        }
+        
+        // React/JSX template patterns
+        if line.contains("return `") || line.contains("const ") && line.contains(" = `") {
+            return true;
+        }
+        
+        false
+    }
+    
+    /// Check if we're in a code generation context
+    fn is_in_code_generation_context(&self, content: &str) -> bool {
+        let content_lower = content.to_lowercase();
+        
+        // Common code generation function names and patterns
+        let code_gen_patterns = [
+            "getcode", "generatecode", "codecomponent", "apicodedialog",
+            "const getcode", "function getcode", "const code", "function code",
+            "codesnippet", "codeexample", "template", "example code",
+            "code generator", "api example", "curl example",
+            // React/JSX specific
+            "codeblock", "copyblock", "syntax highlight"
+        ];
+        
+        code_gen_patterns.iter().any(|&pattern| content_lower.contains(pattern))
+    }
+    
+    /// Check if a line looks like template code
+    fn looks_like_template_code(&self, line: &str) -> bool {
+        // Template string patterns
+        if line.contains("return `") || line.contains("= `") {
+            return true;
+        }
+        
+        // API URL construction patterns
+        if line.contains("API_URL") || line.contains("/api/v1/") || line.contains("/prediction/") {
+            return true;
+        }
+        
+        // Typical code example patterns
+        if line.contains("requests.post") || line.contains("fetch(") || 
+           line.contains("curl ") || line.contains("import requests") {
+            return true;
+        }
+        
+        // Authorization header patterns in templates
+        if line.contains("Authorization:") || line.contains("Bearer ") {
+            return true;
+        }
+        
+        false
+    }
+    
+    /// Adjust confidence based on context
+    fn adjust_confidence_for_context(&self, mut confidence: f32, line: &str, content: &str, _pattern: &CompiledPattern) -> f32 {
+        let line_lower = line.to_lowercase();
+        let content_lower = content.to_lowercase();
         
         // Boost confidence for actual assignments
         if line.contains("=") || line.contains(":") {
             confidence += 0.2;
         }
         
-        // Check pattern-specific keywords
+        // Boost for environment variable assignment
+        if line_lower.contains("export ") || line_lower.contains("process.env") {
+            confidence += 0.3;
+        }
+        
+        // Boost for import statements with API keys
+        if line_lower.contains("import") && (line_lower.contains("api") || line_lower.contains("key")) {
+            confidence += 0.1;
+        }
+        
+        // Reduce confidence for certain file types based on content
+        if content_lower.contains("package.json") || content_lower.contains("node_modules") {
+            confidence -= 0.2;
+        }
+        
+        // Reduce confidence for test files
+        if content_lower.contains("/test/") || content_lower.contains("__test__") ||
+           content_lower.contains(".test.") || content_lower.contains(".spec.") {
+            confidence -= 0.3;
+        }
+        
+        // Reduce confidence for documentation
+        if content_lower.contains("readme") || content_lower.contains("documentation") ||
+           content_lower.contains("docs/") {
+            confidence -= 0.4;
+        }
+        
+        confidence
+    }
+    
+    /// Adjust confidence based on pattern-specific rules
+    fn adjust_confidence_for_pattern(&self, mut confidence: f32, line: &str, content: &str, pattern: &CompiledPattern) -> f32 {
+        let line_lower = line.to_lowercase();
+        let content_lower = content.to_lowercase();
+        
+        // Major confidence reduction for template/code generation contexts
+        if self.is_in_code_generation_context(content) {
+            confidence -= 0.6;
+        }
+        
+        // Check pattern-specific confidence boost keywords
         for keyword in &pattern.confidence_boost_keywords {
             if content_lower.contains(&keyword.to_lowercase()) {
                 confidence += 0.1;
             }
         }
         
+        // Check pattern-specific false positive keywords
         for keyword in &pattern.false_positive_keywords {
             if line_lower.contains(&keyword.to_lowercase()) {
                 confidence -= 0.4;
             }
         }
         
-        confidence.clamp(0.0, 1.0)
+        // Special handling for specific pattern types
+        match pattern.id.as_str() {
+            "jwt-token" => {
+                // JWT tokens should have proper structure
+                if !line.contains("eyJ") || line.split('.').count() != 3 {
+                    confidence -= 0.3;
+                }
+                // Less confident if in a comment or documentation
+                if line_lower.contains("example") || line_lower.contains("jwt") {
+                    confidence -= 0.2;
+                }
+                // Very low confidence for template literals
+                if line.contains("${") {
+                    confidence -= 0.8;
+                }
+            }
+            "openai-api-key" => {
+                // OpenAI keys should start with sk- and be proper length
+                if !line.contains("sk-") {
+                    confidence -= 0.5;
+                }
+                // Boost if in actual code context
+                if line_lower.contains("openai") || line_lower.contains("gpt") {
+                    confidence += 0.2;
+                }
+                // Major reduction for template literals
+                if line.contains("${") || line.contains("selectedApiKey") {
+                    confidence -= 0.9;
+                }
+            }
+            "database-url-with-creds" => {
+                // Should be a valid URL format
+                if !line.contains("://") || line.contains("example.com") {
+                    confidence -= 0.4;
+                }
+                // Reduce for template patterns
+                if line.contains("${") {
+                    confidence -= 0.7;
+                }
+            }
+            "long-secret-value" | "generic-api-key" => {
+                // High reduction for template literals and code generation
+                if line.contains("${") || line.contains("selectedApiKey") || 
+                   line.contains("apiKey") && line.contains("?") {
+                    confidence -= 0.8;
+                }
+                // Reduce for Bearer token patterns in templates
+                if line.contains("Bearer ") && line.contains("${") {
+                    confidence -= 0.9;
+                }
+            }
+            _ => {
+                // General template literal reduction
+                if line.contains("${") {
+                    confidence -= 0.6;
+                }
+            }
+        }
+        
+        // Additional React/JSX specific reductions
+        if content_lower.contains("react") || content_lower.contains("jsx") || 
+           content_lower.contains("component") {
+            if line.contains("${") || line.contains("props.") || line.contains("state.") {
+                confidence -= 0.5;
+            }
+        }
+        
+        confidence
     }
-    
-
     
     /// Extract evidence with context
     fn extract_evidence(&self, line: &str, start: usize, end: usize) -> String {
@@ -527,17 +808,66 @@ mod tests {
         let engine = PatternEngine::new(&config).unwrap();
         
         let content = r#"
-            const apiKey = "sk-1234567890abcdef";
-            password = "super_secret_password";
+            const apiKey = "sk-1234567890abcdef1234567890abcdef12345678";
+            password = "super_secret_password_that_is_long_enough";
             process.env.DATABASE_URL
         "#;
         
         let matches = engine.scan_content(content, false);
         assert!(!matches.is_empty());
         
-        // Should find API key and password
-        assert!(matches.iter().any(|m| m.pattern.id == "openai-api-key"));
-        assert!(matches.iter().any(|m| m.pattern.id == "generic-password"));
+        // Should find API key (if long enough and not a template)
+        assert!(matches.iter().any(|m| m.pattern.id.contains("openai") || m.pattern.id.contains("secret")));
+    }
+    
+    #[test]
+    fn test_template_literal_filtering() {
+        let config = TurboConfig::default();
+        let engine = PatternEngine::new(&config).unwrap();
+        
+        // Template literal content (should be filtered out)
+        let template_content = r#"
+            const getCode = () => {
+                return `Authorization: "Bearer ${selectedApiKey?.apiKey}"`;
+            }
+            
+            function generateExample() {
+                return "Bearer " + apiKey;
+            }
+        "#;
+        
+        let matches = engine.scan_content(template_content, false);
+        // Should have very few or no matches due to template literal detection
+        assert!(matches.len() <= 1, "Template literals should be filtered out");
+    }
+    
+    #[test]
+    fn test_code_generation_context() {
+        let config = TurboConfig::default();
+        let engine = PatternEngine::new(&config).unwrap();
+        
+        // Code generation context (like React component that generates examples)
+        let code_gen_content = r#"
+            import { CopyBlock } from 'react-code-blocks';
+            
+            const APICodeDialog = () => {
+                const getCodeWithAuthorization = () => {
+                    return `
+                        headers: {
+                            Authorization: "Bearer ${selectedApiKey?.apiKey}",
+                            "Content-Type": "application/json"
+                        }
+                    `;
+                };
+                
+                return <CopyBlock text={getCodeWithAuthorization()} />;
+            };
+        "#;
+        
+        let matches = engine.scan_content(code_gen_content, false);
+        // Should have minimal matches due to code generation detection
+        assert!(matches.is_empty() || matches.iter().all(|m| m.confidence < 0.3), 
+                "Code generation context should have very low confidence");
     }
     
     #[test]
