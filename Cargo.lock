@@ -3401,7 +3401,7 @@ dependencies = [
 
 [[package]]
 name = "syncable-cli"
-version = "0.9.6"
+version = "0.9.7"
 dependencies = [
  "ahash",
  "aho-corasick",
