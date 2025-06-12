@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.9.8](https://github.com/syncable-dev/syncable-cli/compare/v0.9.7...v0.9.8) - 2025-06-12
+
+### Other
+
+- *(deps)* bump env_logger from 0.10.2 to 0.11.8
+
 ## [0.9.7](https://github.com/syncable-dev/syncable-cli/compare/v0.9.6...v0.9.7) - 2025-06-11
 
 ### Fixed
