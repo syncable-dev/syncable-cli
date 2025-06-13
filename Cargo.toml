@@ -63,6 +63,13 @@ ahash = "0.8"                     # Fast hash function
 bstr = "1.9"                      # Byte string utilities
 simdutf8 = "0.1"                  # SIMD UTF-8 validation
 
+# OpenTelemetry dependencies for usage metrics
+opentelemetry = { version = "0.27", features = ["metrics"] }
+opentelemetry_sdk = { version = "0.27", features = ["metrics"] }
+opentelemetry-otlp = { version = "0.27", features = ["metrics", "http-proto", "reqwest-client"] }
+opentelemetry-semantic-conventions = "0.27"
+uuid = { version = "1.0", features = ["v4"] }
+
 [dev-dependencies]
 assert_cmd = "2"
 predicates = "3"

@@ -6,9 +6,10 @@ use syncable_cli::{
         // Import new modular security types
         security::{TurboSecurityAnalyzer, TurboConfig, ScanMode},
     },
-    cli::{Cli, Commands, ToolsCommand, OutputFormat, SeverityThreshold, DisplayFormat, SecurityScanMode},
+    cli::{Cli, Commands, ToolsCommand, TelemetryCommand, OutputFormat, SeverityThreshold, DisplayFormat, SecurityScanMode},
     config,
     generator,
+    monitoring,
 };
 
 // Use alias for the turbo SecuritySeverity to avoid conflicts
@@ -43,16 +44,25 @@ async fn run() -> syncable_cli::Result<()> {
     // Initialize logging
     cli.init_logging();
     
+    // Initialize telemetry (before other operations)
+    if let Err(e) = monitoring::init() {
+        log::warn!("Failed to initialize telemetry: {}", e);
+    }
+    
     // Load configuration
     let _config = match config::load_config(cli.config.as_deref()) {
         Ok(config) => config,
         Err(e) => {
             eprintln!("Failed to load configuration: {}", e);
+            monitoring::record_error("config_load_failed", "main");
             process::exit(1);
         }
     };
     
-    // Execute command
+    // Execute command with telemetry tracking
+    let start_time = std::time::Instant::now();
+    let command_name = get_command_name(&cli.command);
+    
     let result = match cli.command {
         Commands::Analyze { path, json, detailed, display, only } => {
             handle_analyze(path, json, detailed, display, only)
@@ -111,12 +121,25 @@ async fn run() -> syncable_cli::Result<()> {
         Commands::Tools { command } => {
             handle_tools(command).await
         }
+        Commands::Telemetry { command } => {
+            handle_telemetry(command)
+        }
     };
     
+    // Record command execution metrics
+    let duration = start_time.elapsed();
+    let success = result.is_ok();
+    monitoring::record_command_usage(&command_name, duration.as_millis() as u64, success);
+    
     if let Err(e) = result {
+        monitoring::record_error("command_execution_failed", &command_name);
         eprintln!("Error: {}", e);
+        monitoring::shutdown();
         process::exit(1);
     }
+    
+    // Graceful shutdown of telemetry
+    monitoring::shutdown();
     
     Ok(())
 }
@@ -343,9 +366,40 @@ fn handle_analyze(
     display: Option<DisplayFormat>,
     _only: Option<Vec<String>>,
 ) -> syncable_cli::Result<()> {
+    let start_time = std::time::Instant::now();
     println!("🔍 Analyzing project: {}", path.display());
     
     let monorepo_analysis = analyze_monorepo(&path)?;
+    
+    // Collect telemetry data about the analysis
+    let project_type = if monorepo_analysis.is_monorepo {
+        "monorepo"
+    } else {
+        "single_project"
+    };
+    
+    let total_files = monorepo_analysis.projects.iter()
+        .map(|p| p.analysis.analysis_metadata.files_analyzed as u64)
+        .sum::<u64>();
+    
+    let total_languages = monorepo_analysis.projects.iter()
+        .map(|p| p.analysis.languages.len() as u64)
+        .sum::<u64>();
+    
+    let total_frameworks = monorepo_analysis.projects.iter()
+        .map(|p| p.analysis.technologies.len() as u64)
+        .sum::<u64>();
+    
+    let analysis_duration = start_time.elapsed();
+    
+    // Record analysis telemetry
+    monitoring::record_project_analysis(
+        project_type,
+        total_files,
+        total_languages,
+        total_frameworks,
+        analysis_duration.as_millis() as u64,
+    );
     
     if json {
         display_analysis(&monorepo_analysis, DisplayMode::Json);
@@ -398,41 +452,71 @@ fn handle_generate(
     
     if generate_all || dockerfile {
         println!("\n🐳 Generating Dockerfile...");
+        let dockerfile_start = std::time::Instant::now();
         let dockerfile_content = generator::generate_dockerfile(&main_project.analysis)?;
+        let dockerfile_duration = dockerfile_start.elapsed();
         
         if dry_run {
             println!("--- Dockerfile (dry run) ---");
             println!("{}", dockerfile_content);
         } else {
-            std::fs::write("Dockerfile", dockerfile_content)?;
+            std::fs::write("Dockerfile", &dockerfile_content)?;
             println!("✅ Dockerfile generated successfully!");
         }
+        
+        // Record generation telemetry  
+        monitoring::record_generation(
+            "dockerfile",
+            dockerfile_content.len() as u64,
+            dockerfile_duration.as_millis() as u64,
+            true,
+        );
     }
     
     if generate_all || compose {
         println!("\n🐙 Generating Docker Compose file...");
+        let compose_start = std::time::Instant::now();
         let compose_content = generator::generate_compose(&main_project.analysis)?;
+        let compose_duration = compose_start.elapsed();
         
         if dry_run {
             println!("--- docker-compose.yml (dry run) ---");
             println!("{}", compose_content);
         } else {
-            std::fs::write("docker-compose.yml", compose_content)?;
+            std::fs::write("docker-compose.yml", &compose_content)?;
             println!("✅ Docker Compose file generated successfully!");
         }
+        
+        // Record generation telemetry
+        monitoring::record_generation(
+            "docker_compose",
+            compose_content.len() as u64,
+            compose_duration.as_millis() as u64,
+            true,
+        );
     }
     
     if generate_all || terraform {
         println!("\n🏗️  Generating Terraform configuration...");
+        let terraform_start = std::time::Instant::now();
         let terraform_content = generator::generate_terraform(&main_project.analysis)?;
+        let terraform_duration = terraform_start.elapsed();
         
         if dry_run {
             println!("--- main.tf (dry run) ---");
             println!("{}", terraform_content);
         } else {
-            std::fs::write("main.tf", terraform_content)?;
+            std::fs::write("main.tf", &terraform_content)?;
             println!("✅ Terraform configuration generated successfully!");
         }
+        
+        // Record generation telemetry
+        monitoring::record_generation(
+            "terraform",
+            terraform_content.len() as u64,
+            terraform_duration.as_millis() as u64,
+            true,
+        );
     }
     
     if !dry_run {
@@ -1807,5 +1891,203 @@ fn format_project_category(category: &ProjectCategory) -> &'static str {
         ProjectCategory::Documentation => "Documentation",
         ProjectCategory::Infrastructure => "Infrastructure",
         ProjectCategory::Unknown => "Unknown",
+    }
+}
+
+fn handle_telemetry(command: TelemetryCommand) -> syncable_cli::Result<()> {
+    use colored::*;
+    use std::io::{self, Write};
+    
+    match command {
+        TelemetryCommand::Status => {
+            println!("📊 Telemetry Status");
+            println!("{}", "=".repeat(50));
+            
+            let is_enabled = monitoring::is_enabled();
+            if is_enabled {
+                println!("  Status: {}", "✅ Enabled".green().bold());
+                println!("  Data collected is fully anonymized");
+                println!("  No personal information is ever transmitted");
+            } else {
+                println!("  Status: {}", "❌ Disabled".red().bold());
+                println!("  No usage data is being collected");
+            }
+            
+            println!("\n📋 Configuration:");
+            println!("  • Environment variable: SYNCABLE_TELEMETRY_ENABLED");
+            println!("  • Opt-out file: ~/.syncable-cli/telemetry-opt-out");
+            
+            if let Some(home_dir) = dirs::home_dir() {
+                let opt_out_file = home_dir.join(".syncable-cli").join("telemetry-opt-out");
+                if opt_out_file.exists() {
+                    println!("  • Opt-out file exists: {}", "YES".red().bold());
+                } else {
+                    println!("  • Opt-out file exists: {}", "NO".green().bold());
+                }
+            }
+            
+            println!("\n💡 Commands:");
+            println!("  • {} - View collected data types", "sync-ctl telemetry info".cyan());
+            println!("  • {} - Disable telemetry", "sync-ctl telemetry opt-out".cyan());
+            println!("  • {} - Enable telemetry", "sync-ctl telemetry opt-in".cyan());
+        }
+        
+        TelemetryCommand::OptOut { yes } => {
+            if !yes {
+                println!("🔒 Opt out of telemetry collection");
+                println!("This will disable all usage analytics for syncable-cli.");
+                println!("You can re-enable it later with 'sync-ctl telemetry opt-in'");
+                print!("\nProceed with opt-out? [y/N]: ");
+                io::stdout().flush()?;
+                
+                let mut input = String::new();
+                io::stdin().read_line(&mut input)?;
+                
+                if !input.trim().to_lowercase().starts_with('y') {
+                    println!("Opt-out cancelled.");
+                    return Ok(());
+                }
+            }
+            
+            // Create opt-out file
+            if let Some(home_dir) = dirs::home_dir() {
+                let config_dir = home_dir.join(".syncable-cli");
+                let opt_out_file = config_dir.join("telemetry-opt-out");
+                
+                if let Err(e) = std::fs::create_dir_all(&config_dir) {
+                    eprintln!("Warning: Failed to create config directory: {}", e);
+                }
+                
+                match std::fs::write(&opt_out_file, "opted-out") {
+                    Ok(_) => {
+                        println!("✅ Successfully opted out of telemetry.");
+                        println!("No usage data will be collected going forward.");
+                    }
+                    Err(e) => {
+                        eprintln!("❌ Failed to opt out: {}", e);
+                        eprintln!("You can also set SYNCABLE_TELEMETRY_ENABLED=false");
+                    }
+                }
+            } else {
+                eprintln!("❌ Could not determine home directory");
+                eprintln!("You can set SYNCABLE_TELEMETRY_ENABLED=false instead");
+            }
+        }
+        
+        TelemetryCommand::OptIn { yes } => {
+            if !yes {
+                println!("📊 Opt in to telemetry collection");
+                println!("This helps improve syncable-cli by collecting anonymized usage data.");
+                println!("View what's collected with 'sync-ctl telemetry info'");
+                print!("\nProceed with opt-in? [y/N]: ");
+                io::stdout().flush()?;
+                
+                let mut input = String::new();
+                io::stdin().read_line(&mut input)?;
+                
+                if !input.trim().to_lowercase().starts_with('y') {
+                    println!("Opt-in cancelled.");
+                    return Ok(());
+                }
+            }
+            
+            // Remove opt-out file
+            if let Some(home_dir) = dirs::home_dir() {
+                let opt_out_file = home_dir.join(".syncable-cli").join("telemetry-opt-out");
+                
+                if opt_out_file.exists() {
+                    match std::fs::remove_file(&opt_out_file) {
+                        Ok(_) => {
+                            println!("✅ Successfully opted in to telemetry.");
+                            println!("Anonymized usage data will help improve syncable-cli.");
+                        }
+                        Err(e) => {
+                            eprintln!("❌ Failed to opt in: {}", e);
+                        }
+                    }
+                } else {
+                    println!("✅ Telemetry is already enabled.");
+                    println!("Anonymized usage data will help improve syncable-cli.");
+                }
+            } else {
+                eprintln!("❌ Could not determine home directory");
+            }
+        }
+        
+        TelemetryCommand::Info => {
+            println!("📊 Syncable CLI Telemetry Information");
+            println!("{}", "=".repeat(50));
+            
+            println!("\n🔒 Privacy First:");
+            println!("  • All data is completely anonymized");
+            println!("  • No personal information is collected");
+            println!("  • No project code or file contents are transmitted");
+            println!("  • No file paths or sensitive data included");
+            
+            println!("\n📋 Data Collected:");
+            println!("  {} Command usage metrics", "•".blue());
+            println!("    - Command name (analyze, generate, etc.)");
+            println!("    - Execution duration");
+            println!("    - Success/failure status");
+            
+            println!("  {} Project analysis metrics", "•".blue());
+            println!("    - Project type (single project vs monorepo)");
+            println!("    - File count (bucketed: small/medium/large/xlarge)");
+            println!("    - Number of detected languages");
+            println!("    - Number of detected frameworks");
+            println!("    - Analysis duration");
+            
+            println!("  {} Generation metrics", "•".blue());
+            println!("    - Generation type (dockerfile, compose, terraform)");
+            println!("    - Generated file size");
+            println!("    - Generation duration");
+            println!("    - Success/failure status");
+            
+            println!("  {} Error metrics", "•".blue());
+            println!("    - Error type (anonymized)");
+            println!("    - Component where error occurred");
+            
+            println!("\n🔧 Technical Details:");
+            println!("  • Session ID: Random UUID per execution");
+            println!("  • Install ID: Random UUID per installation");
+            println!("  • CLI version: {}", env!("CARGO_PKG_VERSION"));
+            println!("  • Transport: OpenTelemetry over HTTPS");
+            
+            println!("\n❌ NOT Collected:");
+            println!("  • File contents or source code");
+            println!("  • File names or paths");
+            println!("  • Environment variables or secrets");
+            println!("  • Network information or IPs");
+            println!("  • Personal identifying information");
+            
+            println!("\n🎯 Purpose:");
+            println!("  • Understand which features are most used");
+            println!("  • Identify performance bottlenecks");
+            println!("  • Detect common error patterns");
+            println!("  • Guide development priorities");
+            
+            println!("\n🔧 Control:");
+            println!("  • {} - Disable telemetry", "sync-ctl telemetry opt-out".cyan());
+            println!("  • {} - Enable telemetry", "sync-ctl telemetry opt-in".cyan());
+            println!("  • {} - Check status", "sync-ctl telemetry status".cyan());
+            println!("  • Set SYNCABLE_TELEMETRY_ENABLED=false in environment");
+        }
+    }
+    
+    Ok(())
+}
+
+/// Extract command name for telemetry
+fn get_command_name(command: &Commands) -> String {
+    match command {
+        Commands::Analyze { .. } => "analyze".to_string(),
+        Commands::Generate { .. } => "generate".to_string(),
+        Commands::Validate { .. } => "validate".to_string(),
+        Commands::Support { .. } => "support".to_string(),
+        Commands::Dependencies { .. } => "dependencies".to_string(),
+        Commands::Vulnerabilities { .. } => "vulnerabilities".to_string(),
+        Commands::Security { .. } => "security".to_string(),
+        Commands::Tools { .. } => "tools".to_string(),
+        Commands::Telemetry { .. } => "telemetry".to_string(),
     }
 }

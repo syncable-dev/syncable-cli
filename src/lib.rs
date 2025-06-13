@@ -33,6 +33,7 @@ pub mod common;
 pub mod config;
 pub mod error;
 pub mod generator;
+pub mod monitoring;
 
 // Re-export commonly used types and functions
 pub use analyzer::{analyze_project, ProjectAnalysis};

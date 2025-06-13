@@ -219,6 +219,12 @@ pub enum Commands {
         #[command(subcommand)]
         command: ToolsCommand,
     },
+
+    /// Manage telemetry and usage analytics
+    Telemetry {
+        #[command(subcommand)]
+        command: TelemetryCommand,
+    },
 }
 
 #[derive(Subcommand)]
@@ -274,6 +280,29 @@ pub enum ToolsCommand {
         #[arg(long)]
         platform: Option<String>,
     },
+}
+
+#[derive(Subcommand)]
+pub enum TelemetryCommand {
+    /// Show current telemetry status and configuration
+    Status,
+
+    /// Opt out of telemetry collection
+    OptOut {
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
+    },
+
+    /// Opt in to telemetry collection
+    OptIn {
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
+    },
+
+    /// Show what data is collected and privacy policy
+    Info,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
