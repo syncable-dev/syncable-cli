@@ -53,7 +53,7 @@ dirs = "6"
 # Performance dependencies for turbo security analyzer
 aho-corasick = "1.1"              # Multi-pattern string matching
 memmap2 = "0.9"                   # Memory-mapped file I/O
-dashmap = "5"                     # Concurrent hashmap for caching
+dashmap = "6"                     # Concurrent hashmap for caching
 crossbeam = { version = "0.8", features = ["crossbeam-channel"] }  # High-performance channels
 blake3 = "1.5"                    # Fast hashing for cache keys
 regex-automata = "0.4"            # Compiled regex sets
