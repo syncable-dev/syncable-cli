@@ -336,7 +336,7 @@ fn is_version_newer(current: &str, latest: &str) -> bool {
     false
 }
 
-fn handle_analyze(
+pub fn handle_analyze(
     path: std::path::PathBuf,
     json: bool,
     detailed: bool,
@@ -483,7 +483,7 @@ fn handle_support(
     Ok(())
 }
 
-async fn handle_dependencies(
+pub async fn handle_dependencies(
     path: std::path::PathBuf,
     licenses: bool,
     vulnerabilities: bool,
@@ -735,7 +735,7 @@ async fn handle_dependencies(
     Ok(())
 }
 
-async fn handle_vulnerabilities(
+pub async fn handle_vulnerabilities(
     path: std::path::PathBuf,
     severity: Option<SeverityThreshold>,
     format: OutputFormat,
@@ -1068,7 +1068,7 @@ fn display_technologies_summary(technologies: &[DetectedTechnology]) {
     }
 }
 
-fn handle_security(
+pub fn handle_security(
     path: std::path::PathBuf,
     mode: SecurityScanMode,
     include_low: bool,
