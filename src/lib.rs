@@ -34,14 +34,11 @@ pub mod config;
 pub mod error;
 pub mod generator;
 pub mod handlers;
-pub mod handlers;
 
 // Re-export commonly used types and functions
 pub use analyzer::{analyze_project, ProjectAnalysis};
 pub use error::{IaCGeneratorError, Result};
 pub use generator::{generate_dockerfile, generate_compose, generate_terraform};
-pub use handlers::*;
-use cli::Commands;
 pub use handlers::*;
 use cli::Commands;
 
