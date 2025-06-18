@@ -8,10 +8,9 @@ use crate::{
     generator,
 };
 use crate::analyzer::security::SecuritySeverity as TurboSecuritySeverity;
-use crate::analyzer::display::{display_analysis, DisplayMode, BoxDrawer};
+use crate::analyzer::display::{display_analysis_with_return, DisplayMode};
 use std::process;
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 pub fn handle_analyze(
     path: std::path::PathBuf,
@@ -19,13 +18,13 @@ pub fn handle_analyze(
     detailed: bool,
     display: Option<DisplayFormat>,
     _only: Option<Vec<String>>,
-) -> crate::Result<()> {
+) -> crate::Result<String> {
     println!("🔍 Analyzing project: {}", path.display());
     
     let monorepo_analysis = analyze_monorepo(&path)?;
     
-    if json {
-        display_analysis(&monorepo_analysis, DisplayMode::Json);
+    let output = if json {
+        display_analysis_with_return(&monorepo_analysis, DisplayMode::Json)
     } else {
         // Determine display mode
         let mode = if detailed {
@@ -39,10 +38,10 @@ pub fn handle_analyze(
             }
         };
         
-        display_analysis(&monorepo_analysis, mode);
-    }
+        display_analysis_with_return(&monorepo_analysis, mode)
+    };
     
-    Ok(())
+    Ok(output)
 }
 
 pub fn handle_generate(

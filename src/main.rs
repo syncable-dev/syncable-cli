@@ -55,7 +55,10 @@ async fn run() -> syncable_cli::Result<()> {
     // Execute command
     let result = match cli.command {
         Commands::Analyze { path, json, detailed, display, only } => {
-            handle_analyze(path, json, detailed, display, only)
+            match handle_analyze(path, json, detailed, display, only) {
+                Ok(_output) => Ok(()), // The output was already printed by display_analysis_with_return
+                Err(e) => Err(e),
+            }
         }
         Commands::Generate { 
             path, 

@@ -48,7 +48,10 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub async fn run_command(command: Commands) -> Result<()> {
     match command {
         Commands::Analyze { path, json, detailed, display, only } => {
-            handlers::handle_analyze(path, json, detailed, display, only)
+            match handlers::handle_analyze(path, json, detailed, display, only) {
+                Ok(_output) => Ok(()), // The output was already printed by display_analysis_with_return
+                Err(e) => Err(e),
+            }
         }
         Commands::Generate {
             path,
