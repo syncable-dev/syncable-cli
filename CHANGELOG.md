@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.9.10](https://github.com/syncable-dev/syncable-cli/compare/v0.9.9...v0.9.10) - 2025-06-18
+
+### Added
+
+- exposing commands for lib
+
 ## [0.9.9](https://github.com/syncable-dev/syncable-cli/compare/v0.9.8...v0.9.9) - 2025-06-18
 
 ### Added
