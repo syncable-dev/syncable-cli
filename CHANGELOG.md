@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.9.9](https://github.com/syncable-dev/syncable-cli/compare/v0.9.8...v0.9.9) - 2025-06-18
+
+### Added
+
+- added public refferences to main methods for mcp access
+- feat added windows support
+- readme updates
+
+### Fixed
+
+- improved security cmd, for further false postitive in terms of:
+
+### Other
+
+- Merge pull request #88 from syncable-dev/develop
+- *(deps)* bump colored from 2.2.0 to 3.0.0 ([#87](https://github.com/syncable-dev/syncable-cli/pull/87))
+- Merge branch 'main' of github.com:syncable-dev/syncable-cli into develop
+- *(deps)* bump env_logger from 0.10.2 to 0.11.8
+- Merge branch 'main' of github.com:syncable-dev/syncable-cli into develop
+- *(deps)* bump rustsec from 0.29.3 to 0.30.2
+- Merge branch 'develop' of github.com:syncable-dev/syncable-cli into develop
+- *(deps)* bump clap from 4.5.39 to 4.5.40
+- *(deps)* bump thiserror from 1.0.69 to 2.0.12
+- *(deps)* bump proptest from 1.6.0 to 1.7.0
+
 ## [0.9.8](https://github.com/syncable-dev/syncable-cli/compare/v0.9.7...v0.9.8) - 2025-06-12
 
 ### Other
