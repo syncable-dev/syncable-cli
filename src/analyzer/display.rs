@@ -418,6 +418,23 @@ pub fn display_analysis(analysis: &MonorepoAnalysis, mode: DisplayMode) {
     }
 }
 
+/// Main display function that returns a string instead of printing
+pub fn display_analysis_to_string(analysis: &MonorepoAnalysis, mode: DisplayMode) -> String {
+    match mode {
+        DisplayMode::Matrix => display_matrix_view_to_string(analysis),
+        DisplayMode::Detailed => display_detailed_view_to_string(analysis),
+        DisplayMode::Summary => display_summary_view_to_string(analysis),
+        DisplayMode::Json => display_json_view_to_string(analysis),
+    }
+}
+
+/// Combined function that both prints and returns a string
+pub fn display_analysis_with_return(analysis: &MonorepoAnalysis, mode: DisplayMode) -> String {
+    let output = display_analysis_to_string(analysis, mode);
+    print!("{}", output);
+    output
+}
+
 /// Display analysis in a compact matrix/dashboard format
 pub fn display_matrix_view(analysis: &MonorepoAnalysis) {
     // Header
@@ -450,6 +467,42 @@ pub fn display_matrix_view(analysis: &MonorepoAnalysis) {
     println!("\n{}", "═".repeat(100).bright_blue());
 }
 
+/// Display analysis in a compact matrix/dashboard format - returns string
+pub fn display_matrix_view_to_string(analysis: &MonorepoAnalysis) -> String {
+    let mut output = String::new();
+    
+    // Header
+    output.push_str(&format!("\n{}\n", "═".repeat(100).bright_blue()));
+    output.push_str(&format!("{}\n", "📊 PROJECT ANALYSIS DASHBOARD".bright_white().bold()));
+    output.push_str(&format!("{}\n", "═".repeat(100).bright_blue()));
+    
+    // Architecture Overview Box
+    output.push_str(&display_architecture_box_to_string(analysis));
+    
+    // Technology Stack Box
+    output.push_str(&display_technology_stack_box_to_string(analysis));
+    
+    // Projects Matrix
+    if analysis.projects.len() > 1 {
+        output.push_str(&display_projects_matrix_to_string(analysis));
+    } else {
+        output.push_str(&display_single_project_matrix_to_string(analysis));
+    }
+    
+    // Docker Infrastructure Overview
+    if analysis.projects.iter().any(|p| p.analysis.docker_analysis.is_some()) {
+        output.push_str(&display_docker_overview_matrix_to_string(analysis));
+    }
+    
+    // Analysis Metrics Box
+    output.push_str(&display_metrics_box_to_string(analysis));
+    
+    // Footer
+    output.push_str(&format!("\n{}\n", "═".repeat(100).bright_blue()));
+    
+    output
+}
+
 /// Display architecture overview in a box
 fn display_architecture_box(analysis: &MonorepoAnalysis) {
     let mut box_drawer = BoxDrawer::new("Architecture Overview");
@@ -475,6 +528,33 @@ fn display_architecture_box(analysis: &MonorepoAnalysis) {
     box_drawer.add_value_only(&pattern_desc.dimmed());
     
     println!("\n{}", box_drawer.draw());
+}
+
+/// Display architecture overview in a box - returns string
+fn display_architecture_box_to_string(analysis: &MonorepoAnalysis) -> String {
+    let mut box_drawer = BoxDrawer::new("Architecture Overview");
+    
+    let arch_type = if analysis.is_monorepo {
+        format!("Monorepo ({} projects)", analysis.projects.len())
+    } else {
+        "Single Project".to_string()
+    };
+    
+    box_drawer.add_line("Type:", &arch_type.yellow(), true);
+    box_drawer.add_line("Pattern:", &format!("{:?}", analysis.technology_summary.architecture_pattern).green(), true);
+    
+    // Pattern description
+    let pattern_desc = match &analysis.technology_summary.architecture_pattern {
+        ArchitecturePattern::Monolithic => "Single, self-contained application",
+        ArchitecturePattern::Fullstack => "Full-stack app with frontend/backend separation",
+        ArchitecturePattern::Microservices => "Multiple independent microservices",
+        ArchitecturePattern::ApiFirst => "API-first architecture with service interfaces",
+        ArchitecturePattern::EventDriven => "Event-driven with decoupled components",
+        ArchitecturePattern::Mixed => "Mixed architecture patterns",
+    };
+    box_drawer.add_value_only(&pattern_desc.dimmed());
+    
+    format!("\n{}", box_drawer.draw())
 }
 
 /// Display technology stack overview
@@ -509,6 +589,40 @@ fn display_technology_stack_box(analysis: &MonorepoAnalysis) {
     }
     
     println!("\n{}", box_drawer.draw());
+}
+
+/// Display technology stack overview - returns string
+fn display_technology_stack_box_to_string(analysis: &MonorepoAnalysis) -> String {
+    let mut box_drawer = BoxDrawer::new("Technology Stack");
+    
+    let mut has_content = false;
+    
+    // Languages
+    if !analysis.technology_summary.languages.is_empty() {
+        let languages = analysis.technology_summary.languages.join(", ");
+        box_drawer.add_line("Languages:", &languages.blue(), true);
+        has_content = true;
+    }
+    
+    // Frameworks
+    if !analysis.technology_summary.frameworks.is_empty() {
+        let frameworks = analysis.technology_summary.frameworks.join(", ");
+        box_drawer.add_line("Frameworks:", &frameworks.magenta(), true);
+        has_content = true;
+    }
+    
+    // Databases
+    if !analysis.technology_summary.databases.is_empty() {
+        let databases = analysis.technology_summary.databases.join(", ");
+        box_drawer.add_line("Databases:", &databases.cyan(), true);
+        has_content = true;
+    }
+    
+    if !has_content {
+        box_drawer.add_value_only("No technologies detected");
+    }
+    
+    format!("\n{}", box_drawer.draw())
 }
 
 /// Display projects in a matrix table format
@@ -595,6 +709,19 @@ fn display_projects_matrix(analysis: &MonorepoAnalysis) {
     println!("\n{}", box_drawer.draw());
 }
 
+/// Display projects in a matrix table format - returns string
+fn display_projects_matrix_to_string(analysis: &MonorepoAnalysis) -> String {
+    let mut box_drawer = BoxDrawer::new("Projects Matrix");
+    
+    // Simple implementation for the matrix view
+    for project in &analysis.projects {
+        let project_info = format!("{} ({})", project.name, format_project_category(&project.project_category));
+        box_drawer.add_value_only(&project_info);
+    }
+    
+    format!("\n{}", box_drawer.draw())
+}
+
 /// Display single project in matrix format
 fn display_single_project_matrix(analysis: &MonorepoAnalysis) {
     if let Some(project) = analysis.projects.first() {
@@ -613,8 +740,15 @@ fn display_single_project_matrix(analysis: &MonorepoAnalysis) {
             box_drawer.add_line("Languages:", &lang_info.blue(), true);
         }
         
-        // Technologies by category
-        add_technologies_to_drawer(&project.analysis.technologies, &mut box_drawer);
+        // Technologies by category (simplified for string version)
+        if !project.analysis.technologies.is_empty() {
+            let tech_names = project.analysis.technologies.iter()
+                .take(3)
+                .map(|t| t.name.clone())
+                .collect::<Vec<_>>()
+                .join(", ");
+            box_drawer.add_line("Technologies:", &tech_names.magenta(), true);
+        }
         
         // Key metrics
         box_drawer.add_separator();
@@ -639,78 +773,42 @@ fn display_single_project_matrix(analysis: &MonorepoAnalysis) {
     }
 }
 
-/// Add technologies organized by category to the box drawer
-fn add_technologies_to_drawer(technologies: &[DetectedTechnology], box_drawer: &mut BoxDrawer) {
-    let mut by_category: std::collections::HashMap<&TechnologyCategory, Vec<&DetectedTechnology>> = std::collections::HashMap::new();
-    
-    for tech in technologies {
-        by_category.entry(&tech.category).or_insert_with(Vec::new).push(tech);
-    }
-    
-    // Display primary technology first
-    if let Some(primary) = technologies.iter().find(|t| t.is_primary) {
-        let primary_info = primary.name.bright_yellow().bold().to_string();
-        box_drawer.add_line("Primary Stack:", &primary_info, true);
-    }
-    
-    // Display other categories
-    let categories = [
-        (TechnologyCategory::FrontendFramework, "Frameworks"),
-        (TechnologyCategory::BuildTool, "Build Tools"),
-        (TechnologyCategory::Database, "Databases"),
-        (TechnologyCategory::Testing, "Testing"),
-    ];
-    
-    for (category, label) in &categories {
-        if let Some(techs) = by_category.get(category) {
-            let tech_names = techs.iter()
-                .map(|t| t.name.clone())
-                .collect::<Vec<_>>()
-                .join(", ");
-            
-            if !tech_names.is_empty() {
-                let label_with_colon = format!("{}:", label);
-                box_drawer.add_line(&label_with_colon, &tech_names.magenta(), true);
-            }
-        }
-    }
-    
-    // Handle Library category separately since it's parameterized - use vertical layout for many items
-    let mut all_libraries: Vec<&DetectedTechnology> = Vec::new();
-    for (cat, techs) in &by_category {
-        if matches!(cat, TechnologyCategory::Library(_)) {
-            all_libraries.extend(techs.iter().copied());
-        }
-    }
-    
-    if !all_libraries.is_empty() {
-        // Sort libraries by confidence for better display
-        all_libraries.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal));
+/// Display single project in matrix format - returns string
+fn display_single_project_matrix_to_string(analysis: &MonorepoAnalysis) -> String {
+    if let Some(project) = analysis.projects.first() {
+        let mut box_drawer = BoxDrawer::new("Project Overview");
         
-        if all_libraries.len() <= 3 {
-            // For few libraries, keep horizontal layout
-            let tech_names = all_libraries.iter()
-                .map(|t| t.name.clone())
+        // Basic info
+        box_drawer.add_line("Name:", &project.name.yellow(), true);
+        box_drawer.add_line("Type:", &format_project_category(&project.project_category).green(), true);
+        
+        // Languages 
+        if !project.analysis.languages.is_empty() {
+            let lang_info = project.analysis.languages.iter()
+                .map(|l| l.name.clone())
                 .collect::<Vec<_>>()
                 .join(", ");
-            box_drawer.add_line("Libraries:", &tech_names.magenta(), true);
-        } else {
-            // For many libraries, use vertical layout with multiple rows
-            box_drawer.add_line("Libraries:", "", true);
-            
-            // Group libraries into rows of 3-4 items each
-            let items_per_row = 3;
-            for chunk in all_libraries.chunks(items_per_row) {
-                let row_items = chunk.iter()
-                    .map(|t| t.name.clone())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                
-                // Add indented row
-                let indented_row = format!("  {}", row_items);
-                box_drawer.add_value_only(&indented_row.magenta());
-            }
+            box_drawer.add_line("Languages:", &lang_info.blue(), true);
         }
+        
+        // Key metrics
+        box_drawer.add_separator();
+        box_drawer.add_line("Key Metrics:", "", true);
+        
+        box_drawer.add_value_only(&format!("Entry Points: {} │ Exposed Ports: {} │ Env Variables: {}", 
+            project.analysis.entry_points.len(),
+            project.analysis.ports.len(),
+            project.analysis.environment_variables.len()
+        ).cyan());
+        
+        box_drawer.add_value_only(&format!("Build Scripts: {} │ Dependencies: {}", 
+            project.analysis.build_scripts.len(),
+            project.analysis.dependencies.len()
+        ).cyan());
+        
+        format!("\n{}", box_drawer.draw())
+    } else {
+        String::new()
     }
 }
 
@@ -785,6 +883,29 @@ fn display_docker_overview_matrix(analysis: &MonorepoAnalysis) {
     println!("\n{}", box_drawer.draw());
 }
 
+/// Display docker overview matrix - returns string
+fn display_docker_overview_matrix_to_string(analysis: &MonorepoAnalysis) -> String {
+    let mut box_drawer = BoxDrawer::new("Docker Infrastructure");
+    
+    let mut total_dockerfiles = 0;
+    let mut total_compose_files = 0;
+    let mut total_services = 0;
+    
+    for project in &analysis.projects {
+        if let Some(docker) = &project.analysis.docker_analysis {
+            total_dockerfiles += docker.dockerfiles.len();
+            total_compose_files += docker.compose_files.len();
+            total_services += docker.services.len();
+        }
+    }
+    
+    box_drawer.add_line("Dockerfiles:", &total_dockerfiles.to_string().yellow(), true);
+    box_drawer.add_line("Compose Files:", &total_compose_files.to_string().yellow(), true);
+    box_drawer.add_line("Total Services:", &total_services.to_string().yellow(), true);
+    
+    format!("\n{}", box_drawer.draw())
+}
+
 /// Display analysis metrics
 fn display_metrics_box(analysis: &MonorepoAnalysis) {
     let mut box_drawer = BoxDrawer::new("Analysis Metrics");
@@ -811,6 +932,32 @@ fn display_metrics_box(analysis: &MonorepoAnalysis) {
     box_drawer.add_value_only(&colored_metrics.to_string());
     
     println!("\n{}", box_drawer.draw());
+}
+
+/// Display analysis metrics - returns string
+fn display_metrics_box_to_string(analysis: &MonorepoAnalysis) -> String {
+    let mut box_drawer = BoxDrawer::new("Analysis Metrics");
+    
+    // Performance metrics
+    let duration_ms = analysis.metadata.analysis_duration_ms;
+    let duration_str = if duration_ms < 1000 {
+        format!("{}ms", duration_ms)
+    } else {
+        format!("{:.1}s", duration_ms as f64 / 1000.0)
+    };
+    
+    // Create metrics line
+    let metrics_line = format!(
+        "Duration: {} | Files: {} | Score: {}% | Version: {}",
+        duration_str,
+        analysis.metadata.files_analyzed,
+        format!("{:.0}", analysis.metadata.confidence_score * 100.0),
+        analysis.metadata.analyzer_version
+    );
+    
+    box_drawer.add_value_only(&metrics_line.cyan());
+    
+    format!("\n{}", box_drawer.draw())
 }
 
 /// Add confidence score as a progress bar to the box drawer
@@ -1280,6 +1427,145 @@ pub fn display_json_view(analysis: &MonorepoAnalysis) {
     }
 }
 
+/// Display JSON output - returns string
+pub fn display_json_view_to_string(analysis: &MonorepoAnalysis) -> String {
+    match serde_json::to_string_pretty(analysis) {
+        Ok(json) => json,
+        Err(e) => format!("Error serializing to JSON: {}", e),
+    }
+}
+
+/// Display summary view - returns string
+pub fn display_summary_view_to_string(analysis: &MonorepoAnalysis) -> String {
+    let mut output = String::new();
+    
+    output.push_str(&format!("\n{} {}\n", "▶".bright_blue(), "PROJECT ANALYSIS SUMMARY".bright_white().bold()));
+    output.push_str(&format!("{}\n", "─".repeat(50).dimmed()));
+    
+    output.push_str(&format!("{} Architecture: {}\n", "│".dimmed(), 
+        if analysis.is_monorepo {
+            format!("Monorepo ({} projects)", analysis.projects.len()).yellow()
+        } else {
+            "Single Project".to_string().yellow()
+        }
+    ));
+    
+    output.push_str(&format!("{} Pattern: {}\n", "│".dimmed(), format!("{:?}", analysis.technology_summary.architecture_pattern).green()));
+    output.push_str(&format!("{} Stack: {}\n", "│".dimmed(), analysis.technology_summary.languages.join(", ").blue()));
+    
+    if !analysis.technology_summary.frameworks.is_empty() {
+        output.push_str(&format!("{} Frameworks: {}\n", "│".dimmed(), analysis.technology_summary.frameworks.join(", ").magenta()));
+    }
+    
+    output.push_str(&format!("{} Analysis Time: {}ms\n", "│".dimmed(), analysis.metadata.analysis_duration_ms));
+    output.push_str(&format!("{} Confidence: {:.0}%\n", "│".dimmed(), analysis.metadata.confidence_score * 100.0));
+    
+    output.push_str(&format!("{}\n", "─".repeat(50).dimmed()));
+    
+    output
+}
+
+/// Display detailed view - returns string  
+pub fn display_detailed_view_to_string(analysis: &MonorepoAnalysis) -> String {
+    let mut output = String::new();
+    
+    output.push_str(&format!("{}\n", "=".repeat(80)));
+    output.push_str("\n📊 PROJECT ANALYSIS RESULTS\n");
+    output.push_str(&format!("{}\n", "=".repeat(80)));
+    
+    // Overall project information
+    if analysis.is_monorepo {
+        output.push_str(&format!("\n🏗️  Architecture: Monorepo with {} projects\n", analysis.projects.len()));
+        output.push_str(&format!("   Pattern: {:?}\n", analysis.technology_summary.architecture_pattern));
+        
+        output.push_str(&display_architecture_description_to_string(&analysis.technology_summary.architecture_pattern));
+    } else {
+        output.push_str("\n🏗️  Architecture: Single Project\n");
+    }
+    
+    // Technology Summary
+    output.push_str("\n🌐 Technology Summary:\n");
+    if !analysis.technology_summary.languages.is_empty() {
+        output.push_str(&format!("   Languages: {}\n", analysis.technology_summary.languages.join(", ")));
+    }
+    if !analysis.technology_summary.frameworks.is_empty() {
+        output.push_str(&format!("   Frameworks: {}\n", analysis.technology_summary.frameworks.join(", ")));
+    }
+    if !analysis.technology_summary.databases.is_empty() {
+        output.push_str(&format!("   Databases: {}\n", analysis.technology_summary.databases.join(", ")));
+    }
+    
+    // Individual project details - simplified version
+    output.push_str("\n📁 Project Details:\n");
+    output.push_str(&format!("{}\n", "=".repeat(80)));
+    
+    for (i, project) in analysis.projects.iter().enumerate() {
+        output.push_str(&format!("\n{} {}. {} ({})\n", 
+            get_category_emoji(&project.project_category),
+            i + 1, 
+            project.name,
+            format_project_category(&project.project_category)
+        ));
+        
+        if analysis.is_monorepo {
+            output.push_str(&format!("   📂 Path: {}\n", project.path.display()));
+        }
+        
+        // Languages for this project
+        if !project.analysis.languages.is_empty() {
+            output.push_str("   🌐 Languages:\n");
+            for lang in &project.analysis.languages {
+                output.push_str(&format!("      • {} (confidence: {:.1}%)", lang.name, lang.confidence * 100.0));
+                if let Some(version) = &lang.version {
+                    output.push_str(&format!(" - Version: {}", version));
+                }
+                output.push('\n');
+            }
+        }
+        
+        if i < analysis.projects.len() - 1 {
+            output.push_str(&format!("{}\n", "-".repeat(40)));
+        }
+    }
+    
+    // Summary
+    output.push_str("\n📋 ANALYSIS SUMMARY\n");
+    output.push_str(&format!("{}\n", "=".repeat(80)));
+    output.push_str("✅ Project Analysis Complete!\n");
+    
+    output.push_str("\n📈 Analysis Metadata:\n");  
+    output.push_str(&format!("   • Duration: {}ms\n", analysis.metadata.analysis_duration_ms));
+    output.push_str(&format!("   • Files analyzed: {}\n", analysis.metadata.files_analyzed));
+    output.push_str(&format!("   • Confidence score: {:.1}%\n", analysis.metadata.confidence_score * 100.0));
+    output.push_str(&format!("   • Analyzer version: {}\n", analysis.metadata.analyzer_version));
+    
+    output
+}
+
+/// Helper function for displaying architecture description - returns string
+fn display_architecture_description_to_string(pattern: &ArchitecturePattern) -> String {
+    match pattern {
+        ArchitecturePattern::Monolithic => {
+            "   📦 This is a single, self-contained application\n".to_string()
+        }
+        ArchitecturePattern::Fullstack => {
+            "   🌐 This is a full-stack application with separate frontend and backend\n".to_string()
+        }
+        ArchitecturePattern::Microservices => {
+            "   🔗 This is a microservices architecture with multiple independent services\n".to_string()
+        }
+        ArchitecturePattern::ApiFirst => {
+            "   🔌 This is an API-first architecture focused on service interfaces\n".to_string()
+        }
+        ArchitecturePattern::EventDriven => {
+            "   📡 This is an event-driven architecture with decoupled components\n".to_string()
+        }
+        ArchitecturePattern::Mixed => {
+            "   🔀 This is a mixed architecture combining multiple patterns\n".to_string()
+        }
+    }
+}
+
 /// Get emoji for project category
 fn get_category_emoji(category: &ProjectCategory) -> &'static str {
     match category {
@@ -1307,6 +1593,81 @@ fn format_project_category(category: &ProjectCategory) -> &'static str {
         ProjectCategory::Documentation => "Documentation",
         ProjectCategory::Infrastructure => "Infrastructure",
         ProjectCategory::Unknown => "Unknown",
+    }
+}
+
+/// Add technologies organized by category to the box drawer
+fn add_technologies_to_drawer(technologies: &[DetectedTechnology], box_drawer: &mut BoxDrawer) {
+    let mut by_category: std::collections::HashMap<&TechnologyCategory, Vec<&DetectedTechnology>> = std::collections::HashMap::new();
+    
+    for tech in technologies {
+        by_category.entry(&tech.category).or_insert_with(Vec::new).push(tech);
+    }
+    
+    // Display primary technology first
+    if let Some(primary) = technologies.iter().find(|t| t.is_primary) {
+        let primary_info = primary.name.bright_yellow().bold().to_string();
+        box_drawer.add_line("Primary Stack:", &primary_info, true);
+    }
+    
+    // Display other categories
+    let categories = [
+        (TechnologyCategory::FrontendFramework, "Frameworks"),
+        (TechnologyCategory::BuildTool, "Build Tools"),
+        (TechnologyCategory::Database, "Databases"),
+        (TechnologyCategory::Testing, "Testing"),
+    ];
+    
+    for (category, label) in &categories {
+        if let Some(techs) = by_category.get(category) {
+            let tech_names = techs.iter()
+                .map(|t| t.name.clone())
+                .collect::<Vec<_>>()
+                .join(", ");
+            
+            if !tech_names.is_empty() {
+                let label_with_colon = format!("{}:", label);
+                box_drawer.add_line(&label_with_colon, &tech_names.magenta(), true);
+            }
+        }
+    }
+    
+    // Handle Library category separately since it's parameterized - use vertical layout for many items
+    let mut all_libraries: Vec<&DetectedTechnology> = Vec::new();
+    for (cat, techs) in &by_category {
+        if matches!(cat, TechnologyCategory::Library(_)) {
+            all_libraries.extend(techs.iter().copied());
+        }
+    }
+    
+    if !all_libraries.is_empty() {
+        // Sort libraries by confidence for better display
+        all_libraries.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal));
+        
+        if all_libraries.len() <= 3 {
+            // For few libraries, keep horizontal layout
+            let tech_names = all_libraries.iter()
+                .map(|t| t.name.clone())
+                .collect::<Vec<_>>()
+                .join(", ");
+            box_drawer.add_line("Libraries:", &tech_names.magenta(), true);
+        } else {
+            // For many libraries, use vertical layout with multiple rows
+            box_drawer.add_line("Libraries:", "", true);
+            
+            // Group libraries into rows of 3-4 items each
+            let items_per_row = 3;
+            for chunk in all_libraries.chunks(items_per_row) {
+                let row_items = chunk.iter()
+                    .map(|t| t.name.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                
+                // Add indented row
+                let indented_row = format!("  {}", row_items);
+                box_drawer.add_value_only(&indented_row.magenta());
+            }
+        }
     }
 }
 

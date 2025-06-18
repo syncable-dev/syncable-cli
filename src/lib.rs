@@ -34,11 +34,14 @@ pub mod config;
 pub mod error;
 pub mod generator;
 pub mod handlers;
+pub mod handlers;
 
 // Re-export commonly used types and functions
 pub use analyzer::{analyze_project, ProjectAnalysis};
 pub use error::{IaCGeneratorError, Result};
 pub use generator::{generate_dockerfile, generate_compose, generate_terraform};
+pub use handlers::*;
+use cli::Commands;
 pub use handlers::*;
 use cli::Commands;
 
@@ -48,7 +51,10 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub async fn run_command(command: Commands) -> Result<()> {
     match command {
         Commands::Analyze { path, json, detailed, display, only } => {
-            handlers::handle_analyze(path, json, detailed, display, only)
+            match handlers::handle_analyze(path, json, detailed, display, only) {
+                Ok(_output) => Ok(()), // The output was already printed by display_analysis_with_return
+                Err(e) => Err(e),
+            }
         }
         Commands::Generate {
             path,
