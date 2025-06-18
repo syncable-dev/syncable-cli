@@ -38,7 +38,7 @@ once_cell = "1"
 rayon = "1.7"
 termcolor = "1"
 chrono = { version = "0.4", features = ["serde"] }
-colored = "2"
+colored = "3"
 prettytable = "0.10"
 term_size = "0.3"
 
