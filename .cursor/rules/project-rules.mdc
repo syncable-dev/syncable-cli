@@ -1,7 +1,7 @@
 ---
 description: 
 globs: 
-alwaysApply: true
+alwaysApply: false
 ---
 Syncable IaC CLI - Development Rules and Guidelines
 <llm_info>
