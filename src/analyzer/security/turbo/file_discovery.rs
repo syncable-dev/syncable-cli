@@ -438,6 +438,7 @@ impl FileDiscovery {
             "coverage", "__pycache__", ".pytest_cache", ".mypy_cache",
             "vendor", "packages", ".bundle", "bower_components",
             ".nuxt", ".output", ".vercel", ".netlify", ".vscode", ".idea",
+            ".venv", "venv", // Python virtual environments
         ];
         
         for dir in always_ignore {
@@ -478,9 +479,9 @@ impl FileDiscovery {
             "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
             "odt", "ods", "odp", "rtf",
             // Databases
-            "db", "sqlite", "sqlite3", "mdb", "accdb",
+            "db", "sqlite", "sqlite3", "mdb", "accdb", "wt",
             // Other binary formats
-            "pyc", "pyo", "class", "jar", "war", "ear",
+            "pyc", "pyo", "class", "jar", "war", "ear", "cer", "jks",
         ];
         
         for ext in binary_exts {
