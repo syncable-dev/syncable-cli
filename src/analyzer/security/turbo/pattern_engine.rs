@@ -91,7 +91,7 @@ impl PatternEngine {
     }
     
     /// Scan content for all patterns
-    pub fn scan_content(&self, content: &str, quick_reject: bool) -> Vec<PatternMatch> {
+    pub fn scan_content(&self, content: &str, quick_reject: bool, file_meta: &super::file_discovery::FileMetadata) -> Vec<PatternMatch> {
         // Quick reject using Boyer-Moore substring search
         if quick_reject && !self.quick_contains_secrets(content) {
             return Vec::new();
@@ -110,15 +110,15 @@ impl PatternEngine {
         }
         
         // Run multi-pattern matchers
-        matches.extend(self.run_matcher(&self.secret_matcher, content, &self.secret_patterns, &lines, &line_offsets));
-        matches.extend(self.run_matcher(&self.env_var_matcher, content, &self.env_var_patterns, &lines, &line_offsets));
-        matches.extend(self.run_matcher(&self.api_key_matcher, content, &self.api_key_patterns, &lines, &line_offsets));
+        matches.extend(self.run_matcher(&self.secret_matcher, content, &self.secret_patterns, &lines, &line_offsets, file_meta));
+        matches.extend(self.run_matcher(&self.env_var_matcher, content, &self.env_var_patterns, &lines, &line_offsets, file_meta));
+        matches.extend(self.run_matcher(&self.api_key_matcher, content, &self.api_key_patterns, &lines, &line_offsets, file_meta));
         
         // Run complex patterns (regex-based)
         for (line_num, line) in lines.iter().enumerate() {
             for (regex, pattern) in &self.complex_patterns {
                 if let Some(mat) = regex.find(line) {
-                    let confidence = self.calculate_confidence(line, content, &pattern);
+                    let confidence = self.calculate_confidence(line, content, &pattern, file_meta);
                     
                     matches.push(PatternMatch {
                         pattern: Arc::clone(pattern),
@@ -217,6 +217,7 @@ impl PatternEngine {
         patterns: &AHashMap<usize, Arc<CompiledPattern>>,
         lines: &[&str],
         line_offsets: &[usize],
+        file_meta: &super::file_discovery::FileMetadata,
     ) -> Vec<PatternMatch> {
         let mut matches = Vec::new();
         
@@ -227,7 +228,7 @@ impl PatternEngine {
                 let (line_num, col_num) = self.offset_to_line_col(mat.start(), line_offsets);
                 let line = lines.get(line_num.saturating_sub(1)).unwrap_or(&"");
                 
-                let confidence = self.calculate_confidence(line, content, pattern);
+                let confidence = self.calculate_confidence(line, content, pattern, file_meta);
                 
                 matches.push(PatternMatch {
                     pattern: Arc::clone(pattern),
@@ -254,14 +255,14 @@ impl PatternEngine {
     }
     
     /// Calculate confidence score for a match
-    fn calculate_confidence(&self, line: &str, content: &str, pattern: &CompiledPattern) -> f32 {
+    fn calculate_confidence(&self, line: &str, content: &str, pattern: &CompiledPattern, file_meta: &super::file_discovery::FileMetadata) -> f32 {
         let mut confidence: f32 = 0.6;
         
         let line_lower = line.to_lowercase();
         let content_lower = content.to_lowercase();
         
         // Enhanced false positive detection
-        if self.is_obvious_false_positive(line, content) {
+        if self.is_obvious_false_positive(line, content, file_meta) {
             return 0.0;
         }
         
@@ -275,7 +276,7 @@ impl PatternEngine {
     }
     
     /// Check for obvious false positives
-    fn is_obvious_false_positive(&self, line: &str, content: &str) -> bool {
+    fn is_obvious_false_positive(&self, line: &str, content: &str, file_meta: &super::file_discovery::FileMetadata) -> bool {
         let line_lower = line.to_lowercase();
         
         // Comments and documentation
@@ -283,6 +284,11 @@ impl PatternEngine {
            line_lower.trim_start().starts_with("#") ||
            line_lower.trim_start().starts_with("*") ||
            line_lower.trim_start().starts_with("<!--") {
+            return true;
+        }
+        
+        // Check for safe keys in common dependency management files
+        if self.is_safe_dependency_metadata(line, file_meta) {
             return true;
         }
         
@@ -328,6 +334,22 @@ impl PatternEngine {
             return true;
         }
         
+        // Check for URLs in an array context
+        if (line.contains("http://") || line.contains("https://")) && self.is_in_array_or_list(content) {
+            return true;
+        }
+        
+        // Check for command-line scripts which often contain high-entropy strings
+        // that are not secrets (e.g., project IDs, build hashes).
+        if self.is_command_line_script(line) {
+            return true;
+        }
+        
+        // Check for environment variable interpolations, which are secure.
+        if self.is_env_var_interpolation(line, file_meta) {
+            return true;
+        }
+        
         // Check for minified content (very long line with little whitespace)
         if line.len() > 200 && line.matches(' ').count() < line.len() / 20 {
             return true;
@@ -338,6 +360,69 @@ impl PatternEngine {
             return true;
         }
         
+        false
+    }
+    
+    /// Check if we're inside an array or list definition
+    fn is_in_array_or_list(&self, content: &str) -> bool {
+        let content_lower = content.to_lowercase();
+        // Language-agnostic checks for array/list definitions
+        let array_patterns = [
+            "const ", "let ", "var ", "export const ", "export let ",
+            "authorized_parties", "allowed_origins", "authorized_domains",
+            "hosts", "urls", "uris", "endpoints", "domains",
+            "redirect_uris", "allowed_hosts", "cors_origins",
+            "trusted_sources",
+        ];
+
+        array_patterns.iter().any(|p| content_lower.contains(p)) &&
+        (content.contains("[") && content.contains("]")) || // JS, Python, Rust arrays/lists
+        (content.contains("(") && content.contains(")")) || // Python tuples
+        (content.contains("{") && content.contains("}")) // Go slices
+    }
+    
+    /// Check if a line looks like a command-line script.
+    /// This is to avoid flagging project IDs, build hashes, or other identifiers
+    /// inside shell commands as secrets.
+    fn is_command_line_script(&self, line: &str) -> bool {
+        // Quick check for flags, which are a strong indicator of a shell command.
+        if !line.contains("--") {
+            return false;
+        }
+
+        let line_lower = line.to_lowercase();
+        
+        // Common script/command keywords.
+        // The presence of these alongside flags increases confidence that it's a script.
+        let command_keywords = [
+            // Verbs
+            "run", "exec", "build", "start", "test", "deploy", "gen", "generate",
+            "get", "set", "create", "delete", "update", "push", "pull", "watch",
+            "serve", "lint", "format",
+            
+            // Nouns/Context
+            "client", "server", "output", "input", "file", "env", "environment",
+            "config", "path", "dir", "port", "host", "watch", "prod", "dev",
+            
+            // Common tools
+            "npm", "yarn", "pnpm", "npx", "node", "python", "pip", "go", "cargo",
+            "docker", "aws", "gcloud", "az", "kubectl", "terraform", "encore", "bun", "bunx",
+            "maven", "gradle", "gradlew", "gradlew.bat", "gradlew.sh", "gradlew.jar", "gradlew.zip",
+            "mvn", "pipx", "pipenv", "poetry", "ruff", "black", "isort", "flake8", "mypy", "pytest",
+            "jest", "mocha", "jasmine", "cypress", "playwright", "selenium", "puppeteer", "webdriver",
+            "puppeteer-extra", "puppeteer-extra-plugin-stealth", "puppeteer-extra-plugin-recaptcha"
+        ];
+
+        // If we find a flag AND a common command keyword, it's very likely a script.
+        if command_keywords.iter().any(|&kw| line_lower.contains(kw)) {
+            return true;
+        }
+        
+        // Also consider it a script if it looks like a file path assignment after a flag
+        if line.contains("--") && (line.contains('/') || line.contains('\\') || line.contains('=')) {
+            return true;
+        }
+
         false
     }
     
@@ -483,6 +568,16 @@ impl PatternEngine {
                 if !line.contains("://") || line.contains("example.com") {
                     confidence -= 0.4;
                 }
+                
+                // Check for placeholder credentials
+                let placeholder_creds = [
+                    "user:pass", "user:password", "admin:admin", "admin:password",
+                    "username:password", "test:test", "root:root", "postgres:postgres",
+                ];
+                if placeholder_creds.iter().any(|p| line.contains(p)) {
+                    confidence -= 0.8; // Drastically reduce confidence for placeholders
+                }
+                
                 // Reduce for template patterns
                 if line.contains("${") {
                     confidence -= 0.7;
@@ -663,7 +758,7 @@ impl PatternEngine {
         
         // Database connection strings with embedded credentials
         complex_patterns.push((
-            Regex::new(r#"(?i)(?:postgres|mysql|mongodb)://[^:\s]+:[^@\s]+@[^/\s]+/[^\s]*"#)
+            Regex::new(r#"(?i)(?:postgres|postgresql|mysql|mongodb|redis|mariadb)://[^:\s]+:[^@\s]+@[^/\s]+/[^\s]*"#)
                 .map_err(|e| SecurityError::PatternEngine(format!("Regex error: {}", e)))?,
             Arc::new(CompiledPattern {
                 id: "database-url-with-creds".to_string(),
@@ -786,11 +881,111 @@ impl PatternEngine {
         
         Ok(())
     }
+
+    /// Checks if a line is a safe, non-secret key-value pair in a known dependency file.
+    fn is_safe_dependency_metadata(&self, line: &str, file_meta: &super::file_discovery::FileMetadata) -> bool {
+        let filename = file_meta.path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        let line_trimmed = line.trim();
+
+        match filename {
+            "package.json" => {
+                // Keys in JSON are quoted strings
+                let safe_keys = [
+                    "\"name\"", "\"version\"", "\"description\"", "\"main\"", "\"module\"",
+                    "\"type\"", "\"private\"", "\"license\"", "\"author\"", "\"homepage\"",
+                    "\"repository\"", "\"bugs\"", "\"keywords\"", "\"workspaces\"",
+                ];
+                safe_keys.iter().any(|key| line_trimmed.starts_with(key))
+            }
+            "Cargo.toml" | "pyproject.toml" => {
+                // Keys in TOML are typically not quoted
+                let safe_keys = [
+                    "name =", "version =", "description =", "edition =", "license =",
+                    "authors =", "homepage =", "repository =", "documentation =", "keywords =",
+                ];
+                safe_keys.iter().any(|key| line_trimmed.starts_with(key))
+            }
+            "go.mod" => {
+                line_trimmed.starts_with("module ") || line_trimmed.starts_with("go ")
+            }
+            "pom.xml" => {
+                // Keys in XML are tags
+                let safe_tags = ["<groupId>", "<artifactId>", "<version>", "<name>", "<description>", "<url>", "<license>"];
+                safe_tags.iter().any(|tag| line_trimmed.contains(tag))
+            }
+            "build.gradle" | "build.gradle.kts" => {
+                let safe_assignments = ["rootProject.name =", "group =", "version ="];
+                safe_assignments.iter().any(|s| line_trimmed.starts_with(s))
+            }
+            _ => false,
+        }
+    }
+
+    /// Checks if a line contains a reference to an environment variable, not a hardcoded secret.
+    fn is_env_var_interpolation(&self, line: &str, file_meta: &super::file_discovery::FileMetadata) -> bool {
+        let filename = file_meta.path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+
+        // Pattern 1: JSON-based `{"$env": "VAR"}`. This is a very specific and safe pattern.
+        if line.contains("\"$env\"") {
+            return true;
+        }
+
+        // Pattern 2: Shell/YAML/Dockerfile `${VAR}` or `$VAR`. This is more generic.
+        if line.contains('$') {
+            // Check for `${...}` or `$VAR` patterns
+            if line.contains("${") && line.contains("}") {
+                let is_config_file = matches!(
+                    filename,
+                    "docker-compose.yml"
+                        | "docker-compose.yaml"
+                        | "Dockerfile"
+                        | "Jenkinsfile"
+                        | "Makefile"
+                ) || filename.ends_with(".env")
+                    || filename.ends_with(".sh")
+                    || filename.ends_with(".yml")
+                    || filename.ends_with(".yaml");
+
+                if is_config_file {
+                    return true;
+                }
+
+                // Also check for context keywords in any file
+                let line_lower = line.to_lowercase();
+                let env_context_keywords = ["environment:", "command:", "entrypoint:", "value:", "args:"];
+                if env_context_keywords.iter().any(|kw| line_lower.contains(kw)) {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analyzer::security::turbo::file_discovery::{FileMetadata, PriorityHints};
+    use std::path::PathBuf;
+    use std::time::SystemTime;
+
+    fn dummy_metadata(path: &str) -> FileMetadata {
+        FileMetadata {
+            path: PathBuf::from(path),
+            size: 100,
+            extension: Some(
+                PathBuf::from(path)
+                    .extension()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("")
+                    .to_string(),
+            ),
+            is_gitignored: false,
+            modified: SystemTime::now(),
+            priority_hints: PriorityHints::default(),
+        }
+    }
     
     #[test]
     fn test_pattern_engine_creation() {
@@ -806,6 +1001,7 @@ mod tests {
     fn test_pattern_matching() {
         let config = TurboConfig::default();
         let engine = PatternEngine::new(&config).unwrap();
+        let meta = dummy_metadata("test.js");
         
         let content = r#"
             const apiKey = "sk-1234567890abcdef1234567890abcdef12345678";
@@ -813,7 +1009,7 @@ mod tests {
             process.env.DATABASE_URL
         "#;
         
-        let matches = engine.scan_content(content, false);
+        let matches = engine.scan_content(content, false, &meta);
         assert!(!matches.is_empty());
         
         // Should find API key (if long enough and not a template)
@@ -824,6 +1020,7 @@ mod tests {
     fn test_template_literal_filtering() {
         let config = TurboConfig::default();
         let engine = PatternEngine::new(&config).unwrap();
+        let meta = dummy_metadata("test.js");
         
         // Template literal content (should be filtered out)
         let template_content = r#"
@@ -836,7 +1033,7 @@ mod tests {
             }
         "#;
         
-        let matches = engine.scan_content(template_content, false);
+        let matches = engine.scan_content(template_content, false, &meta);
         // Should have very few or no matches due to template literal detection
         assert!(matches.len() <= 1, "Template literals should be filtered out");
     }
@@ -845,6 +1042,7 @@ mod tests {
     fn test_code_generation_context() {
         let config = TurboConfig::default();
         let engine = PatternEngine::new(&config).unwrap();
+        let meta = dummy_metadata("APICodeDialog.jsx");
         
         // Code generation context (like React component that generates examples)
         let code_gen_content = r#"
@@ -864,7 +1062,7 @@ mod tests {
             };
         "#;
         
-        let matches = engine.scan_content(code_gen_content, false);
+        let matches = engine.scan_content(code_gen_content, false, &meta);
         // Should have minimal matches due to code generation detection
         assert!(matches.is_empty() || matches.iter().all(|m| m.confidence < 0.3), 
                 "Code generation context should have very low confidence");
@@ -874,9 +1072,46 @@ mod tests {
     fn test_quick_reject() {
         let config = TurboConfig::default();
         let engine = PatternEngine::new(&config).unwrap();
+        let meta = dummy_metadata("main.rs");
         
         let safe_content = "fn main() { println!(\"Hello, world!\"); }";
-        let matches = engine.scan_content(safe_content, true);
+        let matches = engine.scan_content(safe_content, true, &meta);
         assert!(matches.is_empty());
+    }
+
+    #[test]
+    fn test_package_json_filtering() {
+        let config = TurboConfig::default();
+        let engine = PatternEngine::new(&config).unwrap();
+        let meta = dummy_metadata("package.json");
+
+        let content = r#"
+            {
+                "name": "my-cool-package-with-a-long-name-that-could-be-a-secret",
+                "version": "1.0.0-beta.this.is.a.very.long.version.string.that.is.not.a.key",
+                "description": "a string that is not a secret"
+            }
+        "#;
+
+        // Use a generic regex that would normally match these lines
+        let mut test_engine = engine;
+        test_engine.complex_patterns.push((
+            Regex::new(r#"[a-zA-Z0-9-]{20,}"#).unwrap(),
+            Arc::new(CompiledPattern {
+                id: "generic-long-string".to_string(),
+                name: "Generic Long String".to_string(),
+                severity: SecuritySeverity::High,
+                category: SecurityCategory::SecretsExposure,
+                description: "A generic long string.".to_string(),
+                remediation: vec![],
+                references: vec![],
+                cwe_id: None,
+                confidence_boost_keywords: vec![],
+                false_positive_keywords: vec![],
+            }),
+        ));
+
+        let matches = test_engine.scan_content(content, false, &meta);
+        assert!(matches.is_empty(), "Should not find secrets in safe package.json keys");
     }
 } 

@@ -100,6 +100,10 @@ impl Default for SecurityAnalysisConfig {
                 ".vercel".to_string(),
                 ".netlify".to_string(),
                 
+                // Python virtual environments
+                "venv/".to_string(),
+                ".venv/".to_string(),
+                
                 // Minified and bundled files
                 "*.min.js".to_string(),
                 "*.min.css".to_string(),
@@ -142,6 +146,11 @@ impl Default for SecurityAnalysisConfig {
                 "*.woff".to_string(),
                 "*.woff2".to_string(),
                 "*.eot".to_string(),
+                
+                // Database & Certificate files
+                "*.wt".to_string(),
+                "*.cer".to_string(),
+                "*.jks".to_string(),
                 
                 // Test and example files
                 "*_sample.*".to_string(),
