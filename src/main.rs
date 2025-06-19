@@ -3,17 +3,14 @@ use syncable_cli::{
     analyzer::{
         self, vulnerability_checker::VulnerabilitySeverity, DetectedTechnology, TechnologyCategory, LibraryType, 
         analyze_monorepo, ProjectCategory,
-        // Import new modular security types
-        security::{TurboSecurityAnalyzer, TurboConfig, ScanMode},
     },
     cli::{Cli, Commands, ToolsCommand, OutputFormat, SeverityThreshold, DisplayFormat, SecurityScanMode},
     config,
     generator,
 };
 
-// Use alias for the turbo SecuritySeverity to avoid conflicts
-use syncable_cli::analyzer::security::SecuritySeverity as TurboSecuritySeverity;
-use syncable_cli::analyzer::display::{display_analysis, DisplayMode, BoxDrawer};
+use syncable_cli::analyzer::display::BoxDrawer;
+use colored::Colorize;
 use std::process;
 use std::collections::HashMap;
 use std::fs;
@@ -344,29 +341,19 @@ pub fn handle_analyze(
     json: bool,
     detailed: bool,
     display: Option<DisplayFormat>,
-    _only: Option<Vec<String>>,
+    only: Option<Vec<String>>,
 ) -> syncable_cli::Result<()> {
-    println!("🔍 Analyzing project: {}", path.display());
+    // Call the handler from the handlers module which returns a string
+    let output = syncable_cli::handlers::analyze::handle_analyze(
+        path,
+        json,
+        detailed,
+        display,
+        only,
+    )?;
     
-    let monorepo_analysis = analyze_monorepo(&path)?;
-    
-    if json {
-        display_analysis(&monorepo_analysis, DisplayMode::Json);
-    } else {
-        // Determine display mode
-        let mode = if detailed {
-            // Legacy flag for backward compatibility
-            DisplayMode::Detailed
-        } else {
-            match display {
-                Some(DisplayFormat::Matrix) | None => DisplayMode::Matrix,
-                Some(DisplayFormat::Detailed) => DisplayMode::Detailed,
-                Some(DisplayFormat::Summary) => DisplayMode::Summary,
-            }
-        };
-        
-        display_analysis(&monorepo_analysis, mode);
-    }
+    // The handler returns the formatted output, so we print it
+    print!("{}", output);
     
     Ok(())
 }
@@ -827,7 +814,7 @@ pub async fn handle_vulnerabilities(
             let mut output = String::new();
             
             output.push_str(&format!("\n🛡️  Vulnerability Scan Report\n"));
-            output.push_str(&format!("{}\n", "=".repeat(80)));
+            output.push_str(&format!("{}\n", "=".repeat(80).bright_blue()));
             output.push_str(&format!("Scanned at: {}\n", filtered_report.checked_at.format("%Y-%m-%d %H:%M:%S UTC")));
             output.push_str(&format!("Path: {}\n", project_path.display()));
             
@@ -1084,352 +1071,23 @@ pub fn handle_security(
     output: Option<std::path::PathBuf>,
     fail_on_findings: bool,
 ) -> syncable_cli::Result<()> {
-    let project_path = path.canonicalize()
-        .unwrap_or_else(|_| path.clone());
+    // Call the handler from the handlers module which both prints and returns a string
+    let _result = syncable_cli::handlers::security::handle_security(
+        path,
+        mode,
+        include_low,
+        no_secrets,
+        no_code_patterns,
+        no_infrastructure,
+        no_compliance,
+        frameworks,
+        format,
+        output,
+        fail_on_findings,
+    )?;
     
-    println!("🛡️  Running security analysis on: {}", project_path.display());
-    
-    // Convert CLI mode to internal ScanMode, with flag overrides
-    let scan_mode = if no_secrets && no_code_patterns {
-        // Override: if both secrets and code patterns are disabled, use lightning
-        ScanMode::Lightning
-    } else if include_low {
-        // Override: if including low findings, force paranoid mode
-        ScanMode::Paranoid
-    } else {
-        // Use the requested mode from CLI
-        match mode {
-            SecurityScanMode::Lightning => ScanMode::Lightning,
-            SecurityScanMode::Fast => ScanMode::Fast,
-            SecurityScanMode::Balanced => ScanMode::Balanced,
-            SecurityScanMode::Thorough => ScanMode::Thorough,
-            SecurityScanMode::Paranoid => ScanMode::Paranoid,
-        }
-    };
-    
-    // Configure turbo analyzer
-    let config = TurboConfig {
-        scan_mode,
-        max_file_size: 10 * 1024 * 1024, // 10MB
-        worker_threads: 0, // Auto-detect
-        use_mmap: true,
-        enable_cache: true,
-        cache_size_mb: 100,
-        max_critical_findings: if fail_on_findings { Some(1) } else { None },
-        timeout_seconds: Some(60),
-        skip_gitignored: true,
-        priority_extensions: vec![
-            "env".to_string(), "key".to_string(), "pem".to_string(),
-            "json".to_string(), "yml".to_string(), "yaml".to_string(),
-            "toml".to_string(), "ini".to_string(), "conf".to_string(),
-            "config".to_string(), "js".to_string(), "ts".to_string(),
-            "py".to_string(), "rs".to_string(), "go".to_string(),
-        ],
-        pattern_sets: if no_secrets {
-            vec![]
-        } else {
-            vec!["default".to_string(), "aws".to_string(), "gcp".to_string()]
-        },
-    };
-    
-    // Initialize and run analyzer
-    let analyzer = TurboSecurityAnalyzer::new(config)
-        .map_err(|e| syncable_cli::error::IaCGeneratorError::Analysis(
-            syncable_cli::error::AnalysisError::InvalidStructure(
-                format!("Failed to create turbo security analyzer: {}", e)
-            )
-        ))?;
-    
-    let start_time = std::time::Instant::now();
-    let security_report = analyzer.analyze_project(&project_path)
-        .map_err(|e| syncable_cli::error::IaCGeneratorError::Analysis(
-            syncable_cli::error::AnalysisError::InvalidStructure(
-                format!("Turbo security analysis failed: {}", e)
-            )
-        ))?;
-    let scan_duration = start_time.elapsed();
-    
-    println!("⚡ Scan completed in {:.2}s", scan_duration.as_secs_f64());
-    
-    // Format output in the beautiful style requested
-    let output_string = match format {
-        OutputFormat::Table => {
-            use syncable_cli::analyzer::display::BoxDrawer;
-            use colored::*;
-            
-            let mut output = String::new();
-            
-            // Header
-            output.push_str(&format!("\n{}\n", "🛡️  Security Analysis Results".bright_white().bold()));
-            output.push_str(&format!("{}\n", "═".repeat(80).bright_blue()));
-            
-            // Security Score Box
-            let mut score_box = BoxDrawer::new("Security Summary");
-            score_box.add_line("Overall Score:", &format!("{:.0}/100", security_report.overall_score).bright_yellow(), true);
-            score_box.add_line("Risk Level:", &format!("{:?}", security_report.risk_level).color(match security_report.risk_level {
-                TurboSecuritySeverity::Critical => "bright_red",
-                TurboSecuritySeverity::High => "red", 
-                TurboSecuritySeverity::Medium => "yellow",
-                TurboSecuritySeverity::Low => "green",
-                TurboSecuritySeverity::Info => "blue",
-            }), true);
-            score_box.add_line("Total Findings:", &security_report.total_findings.to_string().cyan(), true);
-            
-            // Analysis scope
-            let config_files = security_report.findings.iter()
-                .filter_map(|f| f.file_path.as_ref())
-                .collect::<std::collections::HashSet<_>>()
-                .len();
-            score_box.add_line("Files Analyzed:", &config_files.max(1).to_string().green(), true);
-            score_box.add_line("Scan Mode:", &format!("{:?}", scan_mode).green(), true);
-            
-            output.push_str(&format!("\n{}\n", score_box.draw()));
-            
-            // Findings in Card Format  
-            if !security_report.findings.is_empty() {
-                // Get terminal width to determine optimal display width
-                let terminal_width = if let Some((width, _)) = term_size::dimensions() {
-                    width.saturating_sub(10) // Leave some margin
-                } else {
-                    120 // Fallback width
-                };
-                
-                let mut findings_box = BoxDrawer::new("Security Findings");
-                
-                for (i, finding) in security_report.findings.iter().enumerate() {
-                    let severity_color = match finding.severity {
-                        TurboSecuritySeverity::Critical => "bright_red",
-                        TurboSecuritySeverity::High => "red",
-                        TurboSecuritySeverity::Medium => "yellow", 
-                        TurboSecuritySeverity::Low => "blue",
-                        TurboSecuritySeverity::Info => "green",
-                    };
-                    
-                    // Extract relative file path from project root
-                    let file_display = if let Some(file_path) = &finding.file_path {
-                        // Cross-platform path normalization
-                        let canonical_file = file_path.canonicalize().unwrap_or_else(|_| file_path.clone());
-                        let canonical_project = path.canonicalize().unwrap_or_else(|_| path.clone());
-                        
-                        // Try to calculate relative path from project root
-                        if let Ok(relative_path) = canonical_file.strip_prefix(&canonical_project) {
-                            // Use forward slashes for consistency across platforms
-                            let relative_str = relative_path.to_string_lossy().replace('\\', "/");
-                            format!("./{}", relative_str)
-                        } else {
-                            // Fallback: try to find any common ancestor or use absolute path
-                            let path_str = file_path.to_string_lossy();
-                            if path_str.starts_with('/') {
-                                // For absolute paths, try to extract meaningful relative portion
-                                if let Some(project_name) = path.file_name().and_then(|n| n.to_str()) {
-                                    if let Some(project_idx) = path_str.rfind(project_name) {
-                                        let relative_part = &path_str[project_idx + project_name.len()..];
-                                        if relative_part.starts_with('/') {
-                                            format!(".{}", relative_part)
-                                        } else if !relative_part.is_empty() {
-                                            format!("./{}", relative_part)
-                                        } else {
-                                            format!("./{}", file_path.file_name().unwrap_or_default().to_string_lossy())
-                                        }
-                                    } else {
-                                        // Last resort: show the full path
-                                        path_str.to_string()
-                                    }
-                                } else {
-                                    // Show full path if we can't determine project context
-                                    path_str.to_string()
-                                }
-                            } else {
-                                // For relative paths that don't strip properly, use as-is
-                                if path_str.starts_with("./") {
-                                    path_str.to_string()
-                                } else {
-                                    format!("./{}", path_str)
-                                }
-                            }
-                        }
-                    } else {
-                        "N/A".to_string()
-                    };
-                    
-                    // Parse gitignore status from description (clean colored text)
-                    let gitignore_status = if finding.description.contains("is tracked by git") {
-                        "TRACKED".bright_red().bold()
-                    } else if finding.description.contains("is NOT in .gitignore") {
-                        "EXPOSED".yellow().bold()
-                    } else if finding.description.contains("is protected") || finding.description.contains("properly ignored") {
-                        "SAFE".bright_green().bold()
-                    } else if finding.description.contains("appears safe") {
-                        "OK".bright_blue().bold()
-                    } else {
-                        "UNKNOWN".dimmed()
-                    };
-                    
-                    // Determine finding type
-                    let finding_type = if finding.title.contains("Environment Variable") {
-                        "ENV VAR"
-                    } else if finding.title.contains("Secret File") {
-                        "SECRET FILE"
-                    } else if finding.title.contains("API Key") || finding.title.contains("Stripe") || finding.title.contains("Firebase") {
-                        "API KEY"
-                    } else if finding.title.contains("Configuration") {
-                        "CONFIG"
-                    } else {
-                        "OTHER"
-                    };
-                    
-                    // Format position as "line:column" or just "line" if no column info
-                    let position_display = match (finding.line_number, finding.column_number) {
-                        (Some(line), Some(col)) => format!("{}:{}", line, col),
-                        (Some(line), None) => format!("{}", line),
-                        _ => "—".to_string(),
-                    };
-                    
-                    // Card format: File path with intelligent display based on terminal width
-                    let box_margin = 6; // Account for box borders and padding
-                    let available_width = terminal_width.saturating_sub(box_margin);
-                    let max_path_width = available_width.saturating_sub(20); // Leave space for numbering and spacing
-                    
-                    if file_display.len() + 3 <= max_path_width {
-                        // Path fits on one line with numbering
-                        findings_box.add_value_only(&format!("{}. {}", 
-                            format!("{}", i + 1).bright_white().bold(),
-                            file_display.cyan().bold()
-                        ));
-                    } else if file_display.len() <= available_width.saturating_sub(4) {
-                        // Path fits on its own line with indentation
-                        findings_box.add_value_only(&format!("{}.", 
-                            format!("{}", i + 1).bright_white().bold()
-                        ));
-                        findings_box.add_value_only(&format!("   {}", 
-                            file_display.cyan().bold()
-                        ));
-                    } else {
-                        // Path is extremely long - use smart wrapping
-                        findings_box.add_value_only(&format!("{}.", 
-                            format!("{}", i + 1).bright_white().bold()
-                        ));
-                        
-                        // Smart path wrapping - prefer breaking at directory separators
-                        let wrap_width = available_width.saturating_sub(4);
-                        let mut remaining = file_display.as_str();
-                        let mut first_line = true;
-                        
-                        while !remaining.is_empty() {
-                            let prefix = if first_line { "   " } else { "     " };
-                            let line_width = wrap_width.saturating_sub(prefix.len());
-                            
-                            if remaining.len() <= line_width {
-                                // Last chunk fits entirely
-                                findings_box.add_value_only(&format!("{}{}", 
-                                    prefix, remaining.cyan().bold()
-                                ));
-                                break;
-                            } else {
-                                // Find a good break point (prefer directory separator)
-                                let chunk = &remaining[..line_width];
-                                let break_point = chunk.rfind('/').unwrap_or(line_width.saturating_sub(1));
-                                
-                                findings_box.add_value_only(&format!("{}{}", 
-                                    prefix, chunk[..break_point].cyan().bold()
-                                ));
-                                remaining = &remaining[break_point..];
-                                if remaining.starts_with('/') {
-                                    remaining = &remaining[1..]; // Skip the separator
-                                }
-                            }
-                            first_line = false;
-                        }
-                    }
-                    
-                    findings_box.add_value_only(&format!("   {} {} | {} {} | {} {} | {} {}", 
-                        "Type:".dimmed(),
-                        finding_type.yellow(),
-                        "Severity:".dimmed(),
-                        format!("{:?}", finding.severity).color(severity_color).bold(),
-                        "Position:".dimmed(),
-                        position_display.bright_cyan(),
-                        "Status:".dimmed(),
-                        gitignore_status
-                    ));
-                    
-                    // Add spacing between findings (except for the last one)
-                    if i < security_report.findings.len() - 1 {
-                        findings_box.add_value_only("");
-                    }
-                }
-                
-                output.push_str(&format!("\n{}\n", findings_box.draw()));
-                
-                // GitIgnore Status Legend  
-                let mut legend_box = BoxDrawer::new("Git Status Legend");
-                legend_box.add_line(&"TRACKED:".bright_red().bold().to_string(), "File is tracked by git - CRITICAL RISK", false);
-                legend_box.add_line(&"EXPOSED:".yellow().bold().to_string(), "File contains secrets but not in .gitignore", false);
-                legend_box.add_line(&"SAFE:".bright_green().bold().to_string(), "File is properly ignored by .gitignore", false);
-                legend_box.add_line(&"OK:".bright_blue().bold().to_string(), "File appears safe for version control", false);
-                output.push_str(&format!("\n{}\n", legend_box.draw()));
-            } else {
-                let mut no_findings_box = BoxDrawer::new("Security Status");
-                no_findings_box.add_value_only(&"✅ No security issues detected".green());
-                no_findings_box.add_value_only("💡 Regular security scanning recommended");
-                output.push_str(&format!("\n{}\n", no_findings_box.draw()));
-            }
-            
-            // Recommendations Box
-            let mut rec_box = BoxDrawer::new("Key Recommendations");
-            if !security_report.recommendations.is_empty() {
-                for (i, rec) in security_report.recommendations.iter().take(5).enumerate() {
-                    // Clean up recommendation text
-                    let clean_rec = rec.replace("Add these patterns to your .gitignore:", "Add to .gitignore:");
-                    rec_box.add_value_only(&format!("{}. {}", i + 1, clean_rec));
-                }
-                if security_report.recommendations.len() > 5 {
-                    rec_box.add_value_only(&format!("... and {} more recommendations", 
-                        security_report.recommendations.len() - 5).dimmed());
-                }
-            } else {
-                rec_box.add_value_only("✅ No immediate security concerns detected");
-                rec_box.add_value_only("💡 Consider implementing dependency scanning");
-                rec_box.add_value_only("💡 Review environment variable security practices");
-            }
-            output.push_str(&format!("\n{}\n", rec_box.draw()));
-            
-            output
-        }
-        OutputFormat::Json => {
-            serde_json::to_string_pretty(&security_report)?
-        }
-    };
-    
-    // Output results
-    if let Some(output_path) = output {
-        std::fs::write(&output_path, output_string)?;
-        println!("Security report saved to: {}", output_path.display());
-    } else {
-        print!("{}", output_string);
-    }
-    
-    // Exit with error code if requested and findings exist
-    if fail_on_findings && security_report.total_findings > 0 {
-        let critical_count = security_report.findings_by_severity
-            .get(&TurboSecuritySeverity::Critical)
-            .unwrap_or(&0);
-        let high_count = security_report.findings_by_severity
-            .get(&TurboSecuritySeverity::High)
-            .unwrap_or(&0);
-        
-        if *critical_count > 0 {
-            eprintln!("❌ Critical security issues found. Please address immediately.");
-            std::process::exit(1);
-        } else if *high_count > 0 {
-            eprintln!("⚠️  High severity security issues found. Review recommended.");
-            std::process::exit(2);
-        } else {
-            eprintln!("ℹ️  Security issues found but none are critical or high severity.");
-            std::process::exit(3);
-        }
-    }
-    
+    // The handler already prints everything, so we just return Ok
+    // The returned string is available if needed by other consumers (like AI agents)
     Ok(())
 }
 
