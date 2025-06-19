@@ -72,7 +72,7 @@ pub async fn run_command(command: Commands) -> Result<()> {
             handlers::handle_support(languages, frameworks, detailed)
         }
         Commands::Dependencies { path, licenses, vulnerabilities, prod_only, dev_only, format } => {
-            handlers::handle_dependencies(path, licenses, vulnerabilities, prod_only, dev_only, format).await
+            handlers::handle_dependencies(path, licenses, vulnerabilities, prod_only, dev_only, format).await.map(|_| ())
         }
         Commands::Vulnerabilities { path, severity, format, output } => {
             handlers::handle_vulnerabilities(path, severity, format, output).await
