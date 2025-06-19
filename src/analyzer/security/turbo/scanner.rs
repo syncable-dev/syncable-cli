@@ -130,7 +130,7 @@ impl FileScanner {
         }
         
         // Scan content for patterns
-        let matches = self.pattern_engine.scan_content(&content, task.quick_reject);
+        let matches = self.pattern_engine.scan_content(&content, task.quick_reject, &task.file);
         
         // Convert matches to findings
         let findings = self.convert_matches_to_findings(matches, &task.file);
@@ -475,6 +475,14 @@ impl FileScanner {
     /// Adjust severity based on context
     fn adjust_severity(&self, base_severity: &SecuritySeverity, file_meta: &FileMetadata, confidence: f32) -> SecuritySeverity {
         let mut severity = base_severity.clone();
+        let filename = file_meta.path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+
+        // Downgrade severity for known public/client-side keys in specific files.
+        if filename == "GoogleService-Info.plist" || filename.ends_with(".plist") {
+            if matches!(severity, SecuritySeverity::Critical | SecuritySeverity::High) {
+                return SecuritySeverity::Medium; // It's a client-side key, less critical.
+            }
+        }
         
         // Upgrade severity for unprotected files
         if !file_meta.is_gitignored && matches!(severity, SecuritySeverity::Medium | SecuritySeverity::High) {
