@@ -102,7 +102,7 @@ pub async fn run_command(command: Commands) -> Result<()> {
                 format,
                 output,
                 fail_on_findings
-            )
+            ).map(|_| ()) // Map Result<String> to Result<()>
         }
         Commands::Tools { command } => {
             handlers::handle_tools(command).await
