@@ -351,9 +351,6 @@ pub fn handle_analyze(
         only,
     )?;
     
-    // The handler returns the formatted output, so we print it
-    print!("{}", output);
-    
     Ok(())
 }
 
