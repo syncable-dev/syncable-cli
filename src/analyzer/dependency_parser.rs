@@ -1027,12 +1027,12 @@ impl DependencyParser {
             let trimmed = line.trim();
             
             // Look for dependency declarations
-            if (trimmed.starts_with("implementation ") || 
+            if trimmed.starts_with("implementation ") || 
                 trimmed.starts_with("compile ") ||
                 trimmed.starts_with("api ") ||
                 trimmed.starts_with("runtimeOnly ") ||
                 trimmed.starts_with("testImplementation ") ||
-                trimmed.starts_with("testCompile ")) {
+                trimmed.starts_with("testCompile ") {
                 
                 if let Some(dep_str) = extract_gradle_dependency(trimmed) {
                     let parts: Vec<&str> = dep_str.split(':').collect();
