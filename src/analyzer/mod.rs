@@ -16,12 +16,12 @@ pub mod dependency_parser;
 pub mod framework_detector;
 pub mod frameworks;
 pub mod language_detector;
-pub mod project_context;
+pub mod context;
 pub mod vulnerability_checker;
 pub mod security_analyzer;
 pub mod security;
 pub mod tool_installer;
-pub mod monorepo_detector;
+pub mod monorepo;
 pub mod docker_analyzer;
 pub mod display;
 
@@ -44,7 +44,7 @@ pub use security::{
 pub use security::config::SecurityConfigPreset;
 
 // Re-export monorepo analysis types
-pub use monorepo_detector::{
+pub use monorepo::{
     MonorepoDetectionConfig, analyze_monorepo, analyze_monorepo_with_config
 };
 
@@ -389,7 +389,7 @@ pub fn analyze_project_with_config(path: &Path, config: &AnalysisConfig) -> Resu
     let languages = language_detector::detect_languages(&files, config)?;
     let frameworks = framework_detector::detect_frameworks(&project_root, &languages, config)?;
     let dependencies = dependency_parser::parse_dependencies(&project_root, &languages, config)?;
-    let context = project_context::analyze_context(&project_root, &languages, &frameworks, config)?;
+    let context = context::analyze_context(&project_root, &languages, &frameworks, config)?;
     
     // Analyze Docker infrastructure
     let docker_analysis = analyze_docker_infrastructure(&project_root).ok();

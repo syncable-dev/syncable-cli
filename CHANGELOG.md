@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.11.1](https://github.com/syncable-dev/syncable-cli/compare/v0.11.0...v0.11.1) - 2025-06-20
+
+### Added
+
+- fixed double print
+
+## [0.11.0](https://github.com/syncable-dev/syncable-cli/compare/v0.10.2...v0.11.0) - 2025-06-19
+
+### Added
+
+- feat; improved security:scaning printout
+- returning dependencies as a string, for MCP server opportunity
+- refactored handler logic - on to huge simplification and code breakdown
+
 ## [0.10.2](https://github.com/syncable-dev/syncable-cli/compare/v0.10.1...v0.10.2) - 2025-06-19
 
 ### Added

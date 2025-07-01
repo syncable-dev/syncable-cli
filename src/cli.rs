@@ -5,7 +5,9 @@ use std::path::PathBuf;
 #[command(name = "sync-ctl")]
 #[command(version = env!("CARGO_PKG_VERSION"))]
 #[command(about = "Generate Infrastructure as Code from your codebase")]
-#[command(long_about = "A powerful CLI tool that analyzes your codebase and automatically generates optimized Infrastructure as Code configurations including Dockerfiles, Docker Compose files, and Terraform configurations.")]
+#[command(
+    long_about = "A powerful CLI tool that analyzes your codebase and automatically generates optimized Infrastructure as Code configurations including Dockerfiles, Docker Compose files, and Terraform configurations."
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -287,7 +289,7 @@ pub enum DisplayFormat {
     /// Compact matrix/dashboard view (modern, easy to scan)
     Matrix,
     /// Detailed vertical view (legacy format with all details)
-    Detailed,  
+    Detailed,
     /// Brief summary only
     Summary,
 }
@@ -332,4 +334,4 @@ impl Cli {
             .filter_level(level)
             .init();
     }
-} 
+}
