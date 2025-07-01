@@ -343,7 +343,7 @@ pub fn handle_analyze(
     only: Option<Vec<String>>,
 ) -> syncable_cli::Result<()> {
     // Call the handler from the handlers module which returns a string
-    let output = syncable_cli::handlers::analyze::handle_analyze(
+    syncable_cli::handlers::analyze::handle_analyze(
         path,
         json,
         detailed,
