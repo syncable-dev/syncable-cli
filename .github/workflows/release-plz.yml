@@ -30,7 +30,7 @@ jobs:
         uses: release-plz/action@v0.5
         with:
           command: release
-          manifest_path: syncable-cli/Cargo.toml
+          manifest_path: Cargo.toml
 
   release-plz-pr:
     if: ${{ github.repository_owner == 'syncable-dev' }}
@@ -56,4 +56,4 @@ jobs:
         uses: release-plz/action@v0.5
         with:
           command: release-pr
-          manifest_path: syncable-cli/Cargo.toml
+          manifest_path: Cargo.toml
