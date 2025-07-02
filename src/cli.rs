@@ -6,7 +6,7 @@ use std::path::PathBuf;
 #[command(version = env!("CARGO_PKG_VERSION"))]
 #[command(about = "Generate Infrastructure as Code from your codebase")]
 #[command(
-    long_about = "A powerful CLI tool that analyzes your codebase and automatically generates optimized Infrastructure as Code configurations including Dockerfiles, Docker Compose files, and Terraform configurations."
+    long_about = "A powerful CLI tool that analyzes your codebase and automatically generates optimized Infrastructure as Code configurations including Dockerfiles, Docker Compose files, and Terraform configurations"
 )]
 pub struct Cli {
     #[command(subcommand)]
