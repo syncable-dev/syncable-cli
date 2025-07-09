@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.12.1](https://github.com/syncable-dev/syncable-cli/compare/v0.12.0...v0.12.1) - 2025-07-09
+
+### Other
+
+- update Cargo.lock dependencies
+
 ## [0.12.0](https://github.com/syncable-dev/syncable-cli/compare/v0.11.1...v0.12.0) - 2025-07-02
 
 ### Added
