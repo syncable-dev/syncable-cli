@@ -1,21 +1,23 @@
 //! # Display Module
-//! 
+//!
 //! Provides improved CLI output formatting with matrix/dashboard views for better readability
 //! and easier parsing by both humans and LLMs.
 
 // Sub-modules
 mod box_drawer;
-mod utils;
-mod matrix_view;
+mod color_adapter;
 mod detailed_view;
-mod summary_view;
-mod json_view;
 mod helpers;
+mod json_view;
+mod matrix_view;
+mod summary_view;
+mod utils;
 
 // Re-export public items
 pub use box_drawer::BoxDrawer;
-pub use utils::{visual_width, truncate_to_width, strip_ansi_codes};
-pub use helpers::{get_category_emoji, format_project_category};
+pub use color_adapter::{ColorAdapter, ColorScheme, get_color_adapter, init_color_adapter};
+pub use helpers::{format_project_category, get_category_emoji};
+pub use utils::{strip_ansi_codes, truncate_to_width, visual_width};
 
 use crate::analyzer::MonorepoAnalysis;
 
@@ -62,11 +64,11 @@ pub fn display_analysis_with_return(analysis: &MonorepoAnalysis, mode: DisplayMo
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_display_modes() {
         // Test that display modes are properly defined
         assert_eq!(DisplayMode::Matrix, DisplayMode::Matrix);
         assert_ne!(DisplayMode::Matrix, DisplayMode::Detailed);
     }
-} 
+}
