@@ -56,6 +56,10 @@ pub enum Commands {
         /// Only analyze specific aspects (languages, frameworks, dependencies)
         #[arg(long, value_delimiter = ',')]
         only: Option<Vec<String>>,
+
+        /// Color scheme for terminal output (auto-detect, dark, light)
+        #[arg(long, value_enum, default_value = "auto")]
+        color_scheme: Option<ColorScheme>,
     },
 
     /// Generate IaC files for a project
@@ -292,6 +296,16 @@ pub enum DisplayFormat {
     Detailed,
     /// Brief summary only
     Summary,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum ColorScheme {
+    /// Auto-detect terminal background (default)
+    Auto,
+    /// Dark background terminal colors
+    Dark,
+    /// Light background terminal colors
+    Light,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
