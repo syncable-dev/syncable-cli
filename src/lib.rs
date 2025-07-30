@@ -36,19 +36,26 @@ pub mod generator;
 pub mod handlers;
 
 // Re-export commonly used types and functions
-pub use analyzer::{analyze_project, ProjectAnalysis};
-pub use error::{IaCGeneratorError, Result};
-pub use generator::{generate_dockerfile, generate_compose, generate_terraform};
-pub use handlers::*;
+pub use analyzer::{ProjectAnalysis, analyze_project};
 use cli::Commands;
+pub use error::{IaCGeneratorError, Result};
+pub use generator::{generate_compose, generate_dockerfile, generate_terraform};
+pub use handlers::*;
 
 /// The current version of the CLI tool
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub async fn run_command(command: Commands) -> Result<()> {
     match command {
-        Commands::Analyze { path, json, detailed, display, only } => {
-            match handlers::handle_analyze(path, json, detailed, display, only) {
+        Commands::Analyze {
+            path,
+            json,
+            detailed,
+            display,
+            only,
+            color_scheme,
+        } => {
+            match handlers::handle_analyze(path, json, detailed, display, only, color_scheme) {
                 Ok(_output) => Ok(()), // The output was already printed by display_analysis_with_return
                 Err(e) => Err(e),
             }
@@ -61,22 +68,39 @@ pub async fn run_command(command: Commands) -> Result<()> {
             terraform,
             all,
             dry_run,
-            force
-        } => {
-            handlers::handle_generate(path, output, dockerfile, compose, terraform, all, dry_run, force)
-        }
-        Commands::Validate { path, types, fix } => {
-            handlers::handle_validate(path, types, fix)
-        }
-        Commands::Support { languages, frameworks, detailed } => {
-            handlers::handle_support(languages, frameworks, detailed)
-        }
-        Commands::Dependencies { path, licenses, vulnerabilities, prod_only, dev_only, format } => {
-            handlers::handle_dependencies(path, licenses, vulnerabilities, prod_only, dev_only, format).await.map(|_| ())
-        }
-        Commands::Vulnerabilities { path, severity, format, output } => {
-            handlers::handle_vulnerabilities(path, severity, format, output).await
-        }
+            force,
+        } => handlers::handle_generate(
+            path, output, dockerfile, compose, terraform, all, dry_run, force,
+        ),
+        Commands::Validate { path, types, fix } => handlers::handle_validate(path, types, fix),
+        Commands::Support {
+            languages,
+            frameworks,
+            detailed,
+        } => handlers::handle_support(languages, frameworks, detailed),
+        Commands::Dependencies {
+            path,
+            licenses,
+            vulnerabilities,
+            prod_only,
+            dev_only,
+            format,
+        } => handlers::handle_dependencies(
+            path,
+            licenses,
+            vulnerabilities,
+            prod_only,
+            dev_only,
+            format,
+        )
+        .await
+        .map(|_| ()),
+        Commands::Vulnerabilities {
+            path,
+            severity,
+            format,
+            output,
+        } => handlers::handle_vulnerabilities(path, severity, format, output).await,
         Commands::Security {
             path,
             mode,
@@ -88,7 +112,7 @@ pub async fn run_command(command: Commands) -> Result<()> {
             frameworks,
             format,
             output,
-            fail_on_findings
+            fail_on_findings,
         } => {
             handlers::handle_security(
                 path,
@@ -101,11 +125,10 @@ pub async fn run_command(command: Commands) -> Result<()> {
                 frameworks,
                 format,
                 output,
-                fail_on_findings
-            ).map(|_| ()) // Map Result<String> to Result<()>
+                fail_on_findings,
+            )
+            .map(|_| ()) // Map Result<String> to Result<()>
         }
-        Commands::Tools { command } => {
-            handlers::handle_tools(command).await
-        }
+        Commands::Tools { command } => handlers::handle_tools(command).await,
     }
-} 
+}
