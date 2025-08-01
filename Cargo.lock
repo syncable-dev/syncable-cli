@@ -3450,7 +3450,7 @@ dependencies = [
 
 [[package]]
 name = "syncable-cli"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "ahash",
  "aho-corasick",
@@ -3735,7 +3735,6 @@ name = "tokio"
 version = "1.47.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43864ed400b6043a4757a25c7a64a8efde741aed79a056a2fb348a406701bb35"
-
 dependencies = [
  "backtrace",
  "bytes",
