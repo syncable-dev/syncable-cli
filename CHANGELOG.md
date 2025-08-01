@@ -2,9 +2,47 @@
 
 All notable changes to this project will be documented in this file.
 
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.13.0](https://github.com/syncable-dev/syncable-cli/compare/v0.12.1...v0.13.0) - 2025-07-30
+
+### Added
+
+- updated color mode discovery
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.12.1](https://github.com/syncable-dev/syncable-cli/compare/v0.12.0...v0.12.1) - 2025-07-09
+
+### Other
+
+- update Cargo.lock dependencies
+
+## [0.12.0](https://github.com/syncable-dev/syncable-cli/compare/v0.11.1...v0.12.0) - 2025-07-02
+
+### Added
+
+- wrong named services
+- test
+- new cargo lock
+- fixed double print
+
+### Other
+
+- t
+- Merge branch 'main' of github.com:syncable-dev/syncable-cli into develop
+- *(deps)* bump indicatif from 0.17.11 to 0.17.12
+- *(deps)* bump reqwest from 0.12.20 to 0.12.21
+- *(deps)* bump dashmap from 5.5.3 to 6.1.0
+- *(deps)* bump rustsec from 0.30.2 to 0.30.4
 
 ## [0.11.1](https://github.com/syncable-dev/syncable-cli/compare/v0.11.0...v0.11.1) - 2025-06-20
 
