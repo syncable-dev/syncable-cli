@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.1](https://github.com/syncable-dev/syncable-cli/compare/v0.13.0...v0.13.1) - 2025-08-01
+
+### Added
+
+- updated color mode discovery
+
+### Other
+
+- Merge branch 'main' into develop
+- *(deps)* bump toml from 0.8.23 to 0.9.3
+- *(deps)* bump tokio from 1.46.1 to 1.47.0
+- Merge pull request #114 from syncable-dev/dependabot/cargo/develop/tokio-1.46.1
+
 ## [0.13.0](https://github.com/syncable-dev/syncable-cli/compare/v0.12.1...v0.13.0) - 2025-07-30
 
 ### Added
