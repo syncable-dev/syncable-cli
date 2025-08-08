@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.4](https://github.com/syncable-dev/syncable-cli/compare/v0.13.3...v0.13.4) - 2025-08-08
+
+### Other
+
+- update Cargo.lock dependencies
+
 ## [0.13.3](https://github.com/syncable-dev/syncable-cli/compare/v0.13.2...v0.13.3) - 2025-08-05
 
 ### Other
