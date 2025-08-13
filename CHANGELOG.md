@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.4](https://github.com/syncable-dev/syncable-cli/compare/v0.13.3...v0.13.4) - 2025-08-08
+
+### Other
+
+- update Cargo.lock dependencies
+
+## [0.13.3](https://github.com/syncable-dev/syncable-cli/compare/v0.13.2...v0.13.3) - 2025-08-05
+
+### Other
+
+- update Cargo.lock dependencies
+
+## [0.13.2](https://github.com/syncable-dev/syncable-cli/compare/v0.13.1...v0.13.2) - 2025-08-04
+
+### Other
+
+- update Cargo.lock dependencies
+
+## [0.13.1](https://github.com/syncable-dev/syncable-cli/compare/v0.13.0...v0.13.1) - 2025-08-01
+
+### Added
+
+- updated color mode discovery
+
+### Other
+
+- Merge branch 'main' into develop
+- *(deps)* bump toml from 0.8.23 to 0.9.3
+- *(deps)* bump tokio from 1.46.1 to 1.47.0
+- Merge pull request #114 from syncable-dev/dependabot/cargo/develop/tokio-1.46.1
+
 ## [0.13.0](https://github.com/syncable-dev/syncable-cli/compare/v0.12.1...v0.13.0) - 2025-07-30
 
 ### Added
