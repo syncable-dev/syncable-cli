@@ -1,5 +1,5 @@
 use crate::analyzer::{AnalysisConfig, DetectedLanguage, DependencyMap};
-use crate::analyzer::vulnerability_checker::{VulnerabilityChecker, VulnerabilityInfo};
+use crate::analyzer::vulnerability::{VulnerabilityChecker, VulnerabilityInfo};
 use crate::error::{Result, AnalysisError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -147,11 +147,11 @@ impl DependencyParser {
         Vulnerability {
             id: vuln_info.id.clone(),
             severity: match vuln_info.severity {
-                crate::analyzer::vulnerability_checker::VulnerabilitySeverity::Critical => VulnerabilitySeverity::Critical,
-                crate::analyzer::vulnerability_checker::VulnerabilitySeverity::High => VulnerabilitySeverity::High,
-                crate::analyzer::vulnerability_checker::VulnerabilitySeverity::Medium => VulnerabilitySeverity::Medium,
-                crate::analyzer::vulnerability_checker::VulnerabilitySeverity::Low => VulnerabilitySeverity::Low,
-                crate::analyzer::vulnerability_checker::VulnerabilitySeverity::Info => VulnerabilitySeverity::Info,
+                crate::analyzer::vulnerability::VulnerabilitySeverity::Critical => VulnerabilitySeverity::Critical,
+                crate::analyzer::vulnerability::VulnerabilitySeverity::High => VulnerabilitySeverity::High,
+                crate::analyzer::vulnerability::VulnerabilitySeverity::Medium => VulnerabilitySeverity::Medium,
+                crate::analyzer::vulnerability::VulnerabilitySeverity::Low => VulnerabilitySeverity::Low,
+                crate::analyzer::vulnerability::VulnerabilitySeverity::Info => VulnerabilitySeverity::Info,
             },
             description: vuln_info.description.clone(),
             fixed_in: vuln_info.patched_versions.clone(),

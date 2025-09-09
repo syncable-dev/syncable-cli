@@ -1,5 +1,5 @@
 use crate::{
-    analyzer::{self, vulnerability_checker::VulnerabilitySeverity},
+    analyzer::{self, vulnerability::VulnerabilitySeverity},
     cli::{OutputFormat, SeverityThreshold},
 };
 use std::path::PathBuf;
@@ -24,7 +24,7 @@ pub async fn handle_vulnerabilities(
     }
     
     // Check vulnerabilities
-    let checker = analyzer::vulnerability_checker::VulnerabilityChecker::new();
+    let checker = analyzer::vulnerability::VulnerabilityChecker::new();
     let report = checker.check_all_dependencies(&dependencies, &project_path).await
         .map_err(|e| crate::error::IaCGeneratorError::Analysis(
             crate::error::AnalysisError::DependencyParsing {
@@ -63,9 +63,9 @@ pub async fn handle_vulnerabilities(
 }
 
 fn filter_vulnerabilities_by_severity(
-    report: analyzer::vulnerability_checker::VulnerabilityReport,
+    report: analyzer::vulnerability::VulnerabilityReport,
     threshold: SeverityThreshold,
-) -> analyzer::vulnerability_checker::VulnerabilityReport {
+) -> analyzer::vulnerability::VulnerabilityReport {
     let min_severity = match threshold {
         SeverityThreshold::Low => VulnerabilitySeverity::Low,
         SeverityThreshold::Medium => VulnerabilitySeverity::Medium,
@@ -85,7 +85,7 @@ fn filter_vulnerabilities_by_severity(
         })
         .collect();
     
-    use analyzer::vulnerability_checker::VulnerabilityReport;
+    use analyzer::vulnerability::VulnerabilityReport;
     let mut filtered = VulnerabilityReport {
         checked_at: report.checked_at,
         total_vulnerabilities: 0,
@@ -114,7 +114,7 @@ fn filter_vulnerabilities_by_severity(
 }
 
 fn format_vulnerabilities_table(
-    report: &analyzer::vulnerability_checker::VulnerabilityReport,
+    report: &analyzer::vulnerability::VulnerabilityReport,
     severity: &Option<SeverityThreshold>,
     project_path: &std::path::Path,
 ) -> String {

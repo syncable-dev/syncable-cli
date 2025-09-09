@@ -373,7 +373,7 @@ sync-ctl security --fail-on-findings  # Exit with error code if issues found
 - **Rust** (20) - Actix-web, Axum, Rocket, Tokio, SeaORM, and more
 
 ### Package Managers
-- npm, yarn, pnpm, bun (JavaScript)
+- npm, yarn, pnpm, bun (JavaScript/TypeScript)
 - pip, poetry, pipenv, conda (Python)
 - Maven, Gradle (Java)
 - Cargo (Rust)

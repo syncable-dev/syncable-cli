@@ -89,7 +89,8 @@ sync-ctl security . --fail-on-findings
 ### 4. Vulnerability Scanning
 
 ```bash
-# Scan all dependencies for vulnerabilities
+# Scan all dependencies for vulnerabilities across all supported package managers
+# Supports: npm, yarn, pnpm, bun (JavaScript), pip (Python), cargo (Rust), go mod (Go)
 sync-ctl vulnerabilities .
 
 # Filter by severity
