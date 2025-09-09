@@ -1,0 +1,959 @@
+---
+trigger: model_decision
+description: Whenever you operate within the code base, make sure to adhere to the following rules
+---
+Syncable IaC CLI - Development Rules and Guidelines
+<llm_info>
+If the user asks you questions, you should assume you are a senior Rust developer following the IaC Generator CLI development guidelines and act accordingly.
+</llm_info>
+<project_overview>
+The Syncable IaC CLI is a Rust-based command-line application that analyzes code repositories and automatically generates Infrastructure as Code configurations including Dockerfiles, Docker Compose files, and Terraform configurations.
+Primary goals:
+
+Accuracy: Generate correct and optimized IaC configurations based on project analysis
+Extensibility: Support multiple languages, frameworks, and IaC outputs
+Reliability: Handle edge cases gracefully with comprehensive error handling
+Performance: Efficiently analyze large codebases
+Security: Safely process user input and generate secure configurations
+</project_overview>
+
+<project_structure>
+The project follows a modular structure optimized for maintainability, testability, and extensibility across all roadmap phases:
+
+```
+syncable-iac-cli/
+├── .cargo/
+│   └── config.toml         # Build optimizations and aliasing
+├── .github/
+│   └── workflows/
+│       ├── rust.yml        # CI/CD for testing, linting, and releases
+│       ├── security.yml    # Security scanning and audit workflows
+│       └── release.yml     # Automated release management
+├── Cargo.toml              # Dependencies and workspace configuration
+├── README.md               # User-facing documentation
+├── LICENSE                 # MIT or Apache 2.0
+├── .gitignore
+├── .rustfmt.toml           # Project-specific formatting rules
+├── .env.example            # Environment variables template
+├── config/                 # External configuration files
+│   ├── ai-providers.toml   # AI provider configurations
+│   ├── cloud-platforms.toml # Cloud platform settings
+│   └── security-policies.toml # Security compliance rules
+├── src/
+│   ├── main.rs             # CLI entry point
+│   ├── cli.rs              # Command definitions using Clap v4
+│   ├── lib.rs              # Library exports for testing
+│   ├── error.rs            # Custom error types
+│   │
+│   ├── config/             # 📋 Phase 1: Configuration Management
+│   │   ├── mod.rs          # Configuration orchestration
+│   │   ├── types.rs        # Config structs with serde
+│   │   ├── validation.rs   # Configuration validation
+│   │   └── defaults.rs     # Default configuration values
+│   │
+│   ├── analyzer/           # 📋 Phase 1: Core Analysis Engine
+│   │   ├── mod.rs          # Analysis orchestrator
+│   │   ├── language_detector.rs    # Language detection & version parsing
+│   │   ├── framework_detector.rs   # Framework identification with confidence scoring
+│   │   ├── dependency_parser.rs    # Dependency analysis & vulnerability scanning
+│   │   ├── project_context.rs      # Entry points, ports, environment variables
+│   │   ├── security_analyzer.rs    # Security vulnerability assessment
+│   │   ├── performance_analyzer.rs # Performance profiling & bottleneck detection
+│   │   └── compliance_checker.rs   # Compliance standards validation
+│   │
+│   ├── ai/                 # 🤖 Phase 2: AI Integration & Smart Generation
+│   │   ├── mod.rs          # AI orchestration
+│   │   ├── providers/      # AI provider integrations
+│   │   │   ├── mod.rs
+│   │   │   ├── openai.rs   # OpenAI GPT-4 integration
+│   │   │   ├── anthropic.rs # Anthropic Claude integration
+│   │   │   ├── ollama.rs   # Local LLM support
+│   │   │   └── traits.rs   # Common AI provider traits
+│   │   ├── prompts/        # Prompt engineering system
+│   │   │   ├── mod.rs
+│   │   │   ├── dockerfile.rs # Dockerfile generation prompts
+│   │   │   ├── compose.rs  # Docker Compose prompts
+│   │   │   ├── terraform.rs # Terraform prompts
+│   │   │   ├── security.rs # Security-focused prompts
+│   │   │   └── optimization.rs # Performance optimization prompts
+│   │   ├── response_processor.rs # AI response validation & sanitization
+│   │   ├── confidence_scorer.rs  # AI confidence assessment
+│   │   └── fallback_handler.rs   # Multi-attempt generation with fallbacks
+│   │
+│   ├── generator/          # 🤖 Phase 2: Enhanced Smart Generation
+│   │   ├── mod.rs          # Generation orchestrator
+│   │   ├── traits.rs       # Common generator traits
+│   │   ├── dockerfile/     # Smart Dockerfile generation
+│   │   │   ├── mod.rs
+│   │   │   ├── base_image_selector.rs # AI-powered base image selection
+│   │   │   ├── multi_stage_builder.rs # Intelligent multi-stage builds
+│   │   │   ├── optimizer.rs           # Performance & security optimizations
+│   │   │   └── health_checks.rs       # Health check generation
+│   │   ├── compose/        # Smart Docker Compose generation
+│   │   │   ├── mod.rs
+│   │   │   ├── service_analyzer.rs    # Service dependency analysis
+│   │   │   ├── network_config.rs      # Network configuration optimization
+│   │   │   ├── volume_manager.rs      # Volume and storage optimization
+│   │   │   └── load_balancer.rs       # Load balancer configuration
+│   │   ├── terraform/      # Smart Terraform generation
+│   │   │   ├── mod.rs
+│   │   │   ├── providers/  # Cloud provider-specific generation
+│   │   │   │   ├── mod.rs
+│   │   │   │   ├── aws.rs    # AWS ECS/Fargate configurations
+│   │   │   │   ├── gcp.rs    # Google Cloud Run setups
+│   │   │   │   ├── azure.rs  # Azure Container Instances
+│   │   │   │   └── kubernetes.rs # Kubernetes deployments
+│   │   │   ├── infrastructure.rs # Infrastructure best practices
+│   │   │   ├── monitoring.rs     # Monitoring & observability setup
+│   │   │   └── security.rs       # Security group & IAM configuration
+│   │   └── templates.rs    # Template engine with Tera
+│   │
+│   ├── cicd/               # 🚀 Phase 4: CI/CD Integration
+│   │   ├── mod.rs
+│   │   ├── github_actions.rs  # GitHub Actions workflow generation
+│   │   ├── gitlab_ci.rs       # GitLab CI pipeline generation
+│   │   ├── jenkins.rs         # Jenkins pipeline support
+│   │   ├── workflows/         # Workflow templates
+│   │   │   ├── build_test.rs
+│   │   │   ├── security_scan.rs
+│   │   │   └── deploy.rs
+│   │   └── registry_config.rs # Container registry configurations
+│   │
+│   ├── cloud/              # 🚀 Phase 4: Cloud Platform Integration
+│   │   ├── mod.rs
+│   │   ├── aws/            # AWS-specific integrations
+│   │   │   ├── mod.rs
+│   │   │   ├── ecs.rs      # ECS/Fargate deployment
+│   │   │   ├── lambda.rs   # Lambda function packaging
+│   │   │   ├── rds.rs      # RDS database setup
+│   │   │   └── s3.rs       # S3 storage configuration
+│   │   ├── gcp/            # Google Cloud integrations
+│   │   │   ├── mod.rs
+│   │   │   ├── cloud_run.rs # Cloud Run deployment
+│   │   │   ├── gke.rs      # GKE cluster setup
+│   │   │   ├── cloud_sql.rs # Cloud SQL integration
+│   │   │   └── storage.rs  # Cloud Storage configuration
+│   │   ├── azure/          # Azure integrations
+│   │   │   ├── mod.rs
+│   │   │   ├── container_instances.rs
+│   │   │   ├── aks.rs      # Azure Kubernetes Service
+│   │   │   ├── database.rs # Azure Database setup
+│   │   │   └── blob_storage.rs
+│   │   └── traits.rs       # Common cloud provider traits
+│   │
+│   ├── monitoring/         # 📊 Phase 4: Monitoring & Observability
+│   │   ├── mod.rs
+│   │   ├── metrics/        # Metrics generation
+│   │   │   ├── mod.rs
+│   │   │   ├── prometheus.rs # Prometheus configuration
+│   │   │   ├── grafana.rs    # Grafana dashboard templates
+│   │   │   └── application.rs # Application metrics setup
+│   │   ├── logging/        # Logging configuration
+│   │   │   ├── mod.rs
+│   │   │   ├── structured.rs # Structured logging setup
+│   │   │   ├── aggregation.rs # Log aggregation (ELK, Fluentd)
+│   │   │   └── retention.rs  # Log retention policies
+│   │   └── tracing/        # Distributed tracing
+│   │       ├── mod.rs
+│   │       ├── jaeger.rs   # Jaeger configuration
+│   │       ├── opentelemetry.rs # OpenTelemetry setup
+│   │       └── sampling.rs # Trace sampling strategies
+│   │
+│   ├── security/           # 🛡️ Phase 3: Security & Compliance
+│   │   ├── mod.rs
+│   │   ├── vulnerability_scanner.rs # Automated vulnerability scanning
+│   │   ├── compliance/     # Compliance standards
+│   │   │   ├── mod.rs
+│   │   │   ├── soc2.rs     # SOC 2 compliance configurations
+│   │   │   ├── gdpr.rs     # GDPR data protection setups
+│   │   │   ├── hipaa.rs    # HIPAA compliance templates
+│   │   │   └── pci_dss.rs  # PCI DSS security configurations
+│   │   ├── secret_manager.rs # Secret management integration
+│   │   ├── network_policies.rs # Network security policies
+│   │   └── audit.rs        # Security audit and reporting
+│   │
+│   ├── interactive/        # 🔧 Phase 5: Interactive Features & UX
+│   │   ├── mod.rs
+│   │   ├── wizard.rs       # Interactive configuration wizard
+│   │   ├── visualizer.rs   # Project analysis visualization
+│   │   ├── watch_mode.rs   # File change detection & hot-reload
+│   │   ├── feedback.rs     # User feedback collection system
+│   │   └── progress.rs     # Progress indication with indicatif
+│   │
+│   ├── validation/         # 🧪 Phase 5: Testing & Validation
+│   │   ├── mod.rs
+│   │   ├── docker_validator.rs    # Docker build validation
+│   │   ├── compose_validator.rs   # Compose service verification
+│   │   ├── terraform_validator.rs # Terraform plan validation
+│   │   ├── security_validator.rs  # Security compliance checking
+│   │   └── integration_tester.rs  # End-to-end deployment testing
+│   │
+│   ├── performance/        # 🔧 Phase 3: Performance Intelligence
+│   │   ├── mod.rs
+│   │   ├── profiler.rs     # Resource requirement estimation
+│   │   ├── scaler.rs       # Scaling recommendations
+│   │   ├── bottleneck_detector.rs # Bottleneck identification
+│   │   ├── load_test_gen.rs      # Load testing configuration generation
+│   │   └── optimizer.rs    # Performance optimization engine
+│   │
+│   ├── intelligence/       # 🔄 Phase 3: Continuous Improvement
+│   │   ├── mod.rs
+│   │   ├── feedback_processor.rs # User feedback analysis
+│   │   ├── quality_metrics.rs    # Generation quality tracking
+│   │   ├── success_tracker.rs    # Success rate monitoring
+│   │   ├── benchmark.rs          # Performance benchmarking
+│   │   └── learning_engine.rs    # AI model improvement
+│   │
+│   └── common/             # Shared utilities across all phases
+│       ├── mod.rs
+│       ├── file_utils.rs   # File system operations
+│       ├── command_utils.rs # Command execution utilities
+│       ├── cache.rs        # Caching layer with once_cell
+│       ├── parallel.rs     # Parallel processing with rayon
+│       ├── network.rs      # Network utilities for cloud APIs
+│       └── crypto.rs       # Cryptographic utilities for security
+│
+├── tests/                  # Comprehensive testing suite
+│   ├── unit/              # Unit tests
+│   │   ├── analyzer/
+│   │   ├── generator/
+│   │   ├── ai/
+│   │   └── security/
+│   ├── integration/        # Integration tests
+│   │   ├── common.rs
+│   │   ├── cli_tests.rs
+│   │   ├── ai_integration_tests.rs
+│   │   ├── cloud_platform_tests.rs
+│   │   └── end_to_end_tests.rs
+│   ├── fixtures/           # Test project samples
+│   │   ├── node_projects/  # Node.js test fixtures
+│   │   ├── rust_projects/  # Rust test fixtures
+│   │   ├── python_projects/ # Python test fixtures
+│   │   ├── java_projects/  # Java test fixtures
+│   │   ├── go_projects/    # Go test fixtures
+│   │   ├── complex_projects/ # Multi-language projects
+│   │   └── edge_cases/     # Edge case scenarios
+│   ├── benchmarks/         # Performance benchmarks
+│   │   ├── analysis_speed.rs
+│   │   ├── generation_performance.rs
+│   │   └── memory_usage.rs
+│   └── property/           # Property-based tests with proptest
+│       ├── language_detection.rs
+│       ├── framework_detection.rs
+│       └── security_validation.rs
+│
+├── templates/              # IaC templates organized by type and technology
+│   ├── dockerfiles/        # Dockerfile templates
+│   │   ├── base/           # Base image templates
+│   │   ├── languages/      # Language-specific templates
+│   │   │   ├── rust/
+│   │   │   ├── nodejs/
+│   │   │   ├── python/
+│   │   │   ├── java/
+│   │   │   └── go/
+│   │   ├── frameworks/     # Framework-specific optimizations
+│   │   │   ├── express/
+│   │   │   ├── nextjs/
+│   │   │   ├── spring-boot/
+│   │   │   ├── actix-web/
+│   │   │   └── fastapi/
+│   │   └── security/       # Security-hardened templates
+│   ├── compose/            # Docker Compose templates
+│   │   ├── basic/          # Basic service compositions
+│   │   ├── databases/      # Database service templates
+│   │   ├── caching/        # Cache service templates (Redis, Memcached)
+│   │   ├── messaging/      # Message queue templates
+│   │   ├── load_balancers/ # Load balancer configurations
+│   │   └── development/    # Development environment templates
+│   ├── terraform/          # Terraform templates
+│   │   ├── aws/            # AWS-specific modules
+│   │   ├── gcp/            # Google Cloud modules
+│   │   ├── azure/          # Azure modules
+│   │   ├── kubernetes/     # Kubernetes deployments
+│   │   ├── monitoring/     # Monitoring infrastructure
+│   │   └── security/       # Security configurations
+│   ├── cicd/               # CI/CD workflow templates
+│   │   ├── github-actions/ # GitHub Actions workflows
+│   │   ├── gitlab-ci/      # GitLab CI pipelines
+│   │   ├── jenkins/        # Jenkins pipeline templates
+│   │   └── azure-devops/   # Azure DevOps pipelines
+│   ├── monitoring/         # Monitoring configuration templates
+│   │   ├── prometheus/     # Prometheus configurations
+│   │   ├── grafana/        # Grafana dashboard templates
+│   │   ├── jaeger/         # Distributed tracing configs
+│   │   └── logging/        # Logging pipeline templates
+│   └── security/           # Security policy templates
+│       ├── network-policies/
+│       ├── rbac/
+│       ├── secrets-management/
+│       └── compliance/
+│
+├── docs/                   # Comprehensive documentation
+│   ├── architecture/       # Architecture decision records
+│   ├── user-guide/         # User documentation
+│   ├── api/                # API documentation
+│   ├── development/        # Development guidelines
+│   ├── security/           # Security documentation
+│   └── examples/           # Usage examples and tutorials
+│
+├── scripts/                # Development and deployment scripts
+│   ├── setup.sh           # Development environment setup
+│   ├── test.sh            # Test runner script
+│   ├── benchmark.sh       # Performance benchmarking
+│   ├── security-audit.sh  # Security audit script
+│   └── release.sh         # Release automation
+│
+└── examples/               # Example projects and configurations
+    ├── basic-web-app/      # Simple web application example
+    ├── microservices/      # Microservices architecture example
+    ├── ml-pipeline/        # Machine learning pipeline example
+    ├── cloud-native/       # Cloud-native application example
+    └── enterprise/         # Enterprise-grade configuration example
+```
+
+<structure_rules>
+**Phase-Based Organization**: Structure reflects development roadmap phases
+- Phase 1 modules (analyzer/, generator/) are foundational and stable
+- Phase 2 modules (ai/, enhanced generators) add AI intelligence
+- Phase 3 modules (security/, performance/, intelligence/) add advanced features
+- Phase 4 modules (cloud/, cicd/, monitoring/) add ecosystem integrations
+- Phase 5 modules (interactive/, validation/) enhance developer experience
+
+**Modular Architecture**: Each module has clear, single responsibility
+- AI modules are decoupled and swappable (multiple providers)
+- Cloud integrations are provider-agnostic with common traits
+- Security and compliance modules are comprehensive and extensible
+- Templates are organized by technology stack and use case
+
+**Scalability**: Structure supports future roadmap phases
+- Plugin architecture for custom AI providers and cloud platforms
+- Template system supports community contributions
+- Monitoring and feedback systems enable continuous improvement
+- Comprehensive testing ensures reliability at scale
+
+**Security-First**: Security considerations are integrated throughout
+- Dedicated security modules with compliance standards
+- Vulnerability scanning and audit capabilities
+- Secret management and network security policies
+- Security-hardened templates and configurations
+
+**Developer Experience**: Structure prioritizes ease of development and use
+- Interactive features for better user experience
+- Comprehensive testing and validation
+- Clear documentation and examples
+- Performance monitoring and optimization tools
+</structure_rules>
+</project_structure>
+
+<code_organization>
+<module_responsibilities>
+<analyzer_module>
+rustCopy// analyzer/mod.rs
+pub struct ProjectAnalysis {
+    pub languages: Vec<DetectedLanguage>,
+    pub frameworks: Vec<DetectedFramework>,
+    pub dependencies: DependencyMap,
+    pub entry_points: Vec<EntryPoint>,
+    pub ports: Vec<Port>,
+    pub environment_variables: Vec<EnvVar>,
+}
+
+Single Responsibility: Each analyzer component focuses on one aspect
+Composability: Analyzers can be combined and extended
+Results Aggregation: ProjectAnalysis serves as the canonical representation
+</analyzer_module>
+
+<generator_module>
+rustCopy// generator/mod.rs
+pub trait IaCGenerator {
+    type Config;
+    type Output;
+    
+    fn generate(&self, analysis: &ProjectAnalysis, config: Self::Config) 
+        -> Result<Self::Output, GeneratorError>;
+}
+
+Trait-Based Design: All generators implement common traits
+Configuration: Each generator has its own config type
+Template Management: Use embedded templates with include_str! for reliability
+</generator_module>
+</module_responsibilities>
+
+<dependency_guidelines>
+Essential dependencies organized by roadmap phase:
+
+**Phase 1: Foundation & Core Analysis**
+```toml
+[dependencies]
+# CLI Framework & Configuration
+clap = { version = "4", features = ["derive", "env", "cargo"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+toml = "0.8"
+
+# Error Handling & Logging
+thiserror = "1"
+anyhow = "1"
+log = "0.4"
+env_logger = "0.10"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# File System & Text Processing
+walkdir = "2"
+regex = "1"
+glob = "0.3"
+ignore = "0.4"
+
+# Template Engine & UI
+tera = "1"
+indicatif = "0.18"
+console = "0.15"
+colored = "2"
+
+# Performance & Caching
+once_cell = "1"
+rayon = "1.7"
+dashmap = "5"
+```
+
+**Phase 2: AI Integration & Smart Generation**
+```toml
+# AI & HTTP Client Dependencies
+reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+
+# AI Provider Integrations
+openai-api-rs = "5"            # OpenAI GPT-4 integration
+anthropic = "0.1"              # Anthropic Claude (when available)
+ollama-rs = "0.1"              # Local LLM support
+
+# JSON & API Processing
+jsonschema = "0.17"            # AI response validation
+uuid = { version = "1", features = ["v4"] }
+base64 = "0.21"
+```
+
+**Phase 3: Advanced Features & Intelligence**
+```toml
+# Security & Vulnerability Analysis
+rustsec = "0.28"               # Vulnerability database
+semver = "1"                   # Version comparison
+sha2 = "0.10"                  # Cryptographic hashing
+ring = "0.16"                  # Cryptographic operations
+
+# Performance Analysis & Monitoring
+sysinfo = "0.29"               # System information
+byte-unit = "4"                # Memory/storage units
+human-format = "1"             # Human-readable formatting
+
+# Database for Metrics & Feedback
+rusqlite = { version = "0.29", features = ["bundled"] }
+diesel = { version = "2", features = ["sqlite", "chrono"] }
+chrono = { version = "0.4", features = ["serde"] }
+```
+
+**Phase 4: Cloud Platform Integration**
+```toml
+# AWS SDK
+aws-config = "0.56"
+aws-sdk-ecs = "0.56"
+aws-sdk-ecr = "0.56"
+aws-sdk-s3 = "0.56"
+aws-sdk-iam = "0.56"
+
+# Google Cloud
+google-cloud-storage = "0.15"
+google-cloud-run = "0.8"
+tonic = "0.10"                 # gRPC support
+
+# Azure SDK
+azure_core = "0.15"
+azure_storage = "0.15"
+azure_identity = "0.15"
+
+# Kubernetes
+kube = { version = "0.87", features = ["derive"] }
+k8s-openapi = { version = "0.20", features = ["latest"] }
+
+# Docker & Container Operations
+bollard = "0.14"               # Docker API client
+docker-api = "0.14"
+tar = "0.4"                    # TAR archive support
+```
+
+**Phase 5: Interactive Features & Developer Experience**
+```toml
+# Interactive CLI Features
+inquire = "0.6"                # Interactive prompts
+ratatui = "0.24"               # Terminal UI
+crossterm = "0.27"             # Cross-platform terminal
+
+# File Watching & Hot Reload
+notify = "6"                   # File system notifications
+hotwatch = "0.4"               # File watching utilities
+
+# Visualization & Diagramming
+plotters = "0.3"               # Charts and graphs
+petgraph = "0.6"               # Dependency graphs
+graphviz-rust = "0.6"         # Graphviz integration
+
+# Testing & Validation
+assert_cmd = "2"               # CLI testing
+predicates = "3"               # Test assertions
+tempfile = "3"                 # Temporary files for testing
+proptest = "1"                 # Property-based testing
+criterion = "0.5"              # Benchmarking
+```
+
+**Development Dependencies**
+```toml
+[dev-dependencies]
+# Testing Framework
+tokio-test = "0.4"
+wiremock = "0.5"               # HTTP mocking for AI APIs
+fake = "2.8"                   # Fake data generation
+quickcheck = "1"               # Property-based testing
+quickcheck_macros = "1"
+
+# Code Quality
+cargo-audit = "0.18"           # Security audit
+cargo-deny = "0.14"            # Dependency analysis
+cargo-outdated = "0.13"       # Dependency updates
+```
+
+**Feature Flags for Conditional Compilation**
+```toml
+[features]
+default = ["local-generation"]
+
+# Core Features
+local-generation = []          # Basic template-based generation
+ai-integration = ["openai-api-rs", "anthropic", "reqwest", "tokio"]
+
+# AI Providers (mutually exclusive for optimization)
+openai = ["ai-integration", "openai-api-rs"]
+anthropic = ["ai-integration", "anthropic"]
+ollama = ["ai-integration", "ollama-rs"]
+
+# Cloud Platforms
+aws = ["aws-config", "aws-sdk-ecs", "aws-sdk-ecr", "aws-sdk-s3"]
+gcp = ["google-cloud-storage", "google-cloud-run", "tonic"]
+azure = ["azure_core", "azure_storage", "azure_identity"]
+kubernetes = ["kube", "k8s-openapi"]
+
+# Advanced Features
+security-scanning = ["rustsec", "sha2", "ring"]
+performance-analysis = ["sysinfo", "byte-unit"]
+interactive = ["inquire", "ratatui", "crossterm"]
+file-watching = ["notify", "hotwatch"]
+visualization = ["plotters", "petgraph", "graphviz-rust"]
+
+# Development Tools
+docker-integration = ["bollard", "tar"]
+database = ["rusqlite", "diesel", "chrono"]
+```
+
+**Dependency Management Rules**
+- **Version Pinning**: Pin major versions, allow patch updates
+- **Feature Minimization**: Only enable required features to reduce compile time
+- **Security First**: Regular `cargo audit` runs in CI/CD
+- **Performance**: Prefer async libraries for I/O operations
+- **Platform Support**: Ensure cross-platform compatibility (Windows, macOS, Linux)
+- **Optional Dependencies**: Use feature flags for optional functionality
+- **Licensing**: Verify all dependencies have compatible licenses (MIT/Apache 2.0)
+</dependency_guidelines>
+</code_organization>
+<error_handling>
+<error_hierarchy>
+rustCopy// error.rs
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum IaCGeneratorError {
+    #[error("Project analysis failed: {0}")]
+    Analysis(#[from] AnalysisError),
+    
+    #[error("IaC generation failed: {0}")]
+    Generation(#[from] GeneratorError),
+    
+    #[error("Configuration error: {0}")]
+    Config(#[from] ConfigError),
+    
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+}
+
+#[derive(Error, Debug)]
+pub enum AnalysisError {
+    #[error("Unsupported project type: {0}")]
+    UnsupportedProject(String),
+    
+    #[error("Failed to detect language in {path}")]
+    LanguageDetection { path: PathBuf },
+    
+    #[error("Dependency parsing failed for {file}: {reason}")]
+    DependencyParsing { file: String, reason: String },
+}
+</error_hierarchy>
+<error_handling_rules>
+
+No Panics in Library Code: Use Result<T, E> everywhere
+Context Propagation: Include file paths, line numbers where applicable
+User-Friendly Messages: Errors shown to users must be actionable
+Recovery Strategies: Provide defaults where sensible
+
+rustCopy// Example: Graceful degradation
+fn detect_framework(path: &Path) -> Result<Vec<Framework>, AnalysisError> {
+    let frameworks = vec![];
+    
+    // Try multiple detection strategies
+    if let Ok(pkg_json) = read_package_json(path) {
+        frameworks.extend(detect_node_frameworks(&pkg_json)?);
+    }
+    
+    if let Ok(requirements) = read_requirements_txt(path) {
+        frameworks.extend(detect_python_frameworks(&requirements)?);
+    }
+    
+    // Return partial results rather than failing completely
+    Ok(frameworks)
+}
+</error_handling_rules>
+</error_handling>
+<testing_strategy>
+<unit_tests>
+Place unit tests in the same file as the code:
+rustCopy#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_detect_node_version() {
+        let package_json = r#"{"engines": {"node": ">=14.0.0"}}"#;
+        let version = detect_node_version(package_json).unwrap();
+        assert_eq!(version, "14");
+    }
+}
+</unit_tests>
+<integration_tests>
+rustCopy// tests/integration/cli_tests.rs
+use assert_cmd::Command;
+use predicates::prelude::*;
+
+#[test]
+fn test_analyze_node_project() {
+    let mut cmd = Command::cargo_bin("sync-ctl").unwrap();
+    cmd.arg("analyze")
+        .arg("tests/fixtures/node_express_app")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Node.js"));
+}
+</integration_tests>
+<fixture_requirements>
+
+Each supported stack must have a fixture
+Fixtures should include edge cases (missing files, malformed configs)
+Document fixture purpose in README within fixture directory
+</fixture_requirements>
+
+<coverage_goals>
+
+Unit test coverage: >80%
+Integration test coverage for all CLI commands
+Property-based testing for parsers using proptest
+</coverage_goals>
+</testing_strategy>
+
+<documentation_requirements>
+<public_api_documentation>
+rustCopy/// Analyzes a project directory to detect languages, frameworks, and dependencies.
+/// 
+/// # Arguments
+/// * `path` - The root directory of the project to analyze
+/// 
+/// # Returns
+/// A `ProjectAnalysis` containing detected components or an error
+/// 
+/// # Examples
+/// ```
+/// let analysis = analyze_project(Path::new("./my-project"))?;
+/// println!("Languages: {:?}", analysis.languages);
+/// ```
+pub fn analyze_project(path: &Path) -> Result<ProjectAnalysis, AnalysisError> {
+    // ...
+}
+</public_api_documentation>
+<module_documentation>
+rustCopy//! # Analyzer Module
+//! 
+//! This module provides project analysis capabilities for detecting:
+//! - Programming languages and their versions
+//! - Frameworks and libraries
+//! - Dependencies and their versions
+//! - Entry points and exposed ports
+</module_documentation>
+<user_documentation>
+README.md must include:
+
+Installation instructions
+Quick start guide
+Supported languages/frameworks matrix
+Configuration options
+Troubleshooting guide
+</user_documentation>
+</documentation_requirements>
+
+<iac_generation_principles>
+<layered_approach>
+rustCopypub struct GenerationPipeline {
+    analyzers: Vec<Box<dyn Analyzer>>,
+    generators: Vec<Box<dyn IaCGenerator>>,
+    validators: Vec<Box<dyn Validator>>,
+}
+</layered_approach>
+<technology_specific_rules>
+<nodejs_projects>
+
+Detect package manager (npm, yarn, pnpm)
+Multi-stage builds for production
+Handle native dependencies
+Configure process managers (PM2)
+</nodejs_projects>
+
+<python_projects>
+
+Virtual environment setup
+Requirements.txt vs Pipfile vs pyproject.toml
+WSGI/ASGI server configuration
+Handle compiled extensions
+</python_projects>
+
+<java_spring_projects>
+
+Build tool detection (Maven, Gradle)
+JVM version selection
+Multi-stage builds with build caching
+Memory configuration
+</java_spring_projects>
+</technology_specific_rules>
+
+<template_management>
+rustCopy// templates.rs
+pub struct TemplateEngine {
+    tera: Tera,
+    custom_filters: HashMap<String, Box<dyn Fn(&Value, &HashMap<String, Value>) -> Result<Value>>>,
+}
+
+impl TemplateEngine {
+    pub fn render_dockerfile(&self, context: &DockerContext) -> Result<String> {
+        self.tera.render("dockerfile.j2", &Context::from_serialize(context)?)
+    }
+}
+</template_management>
+<best_practices_generation>
+The tool must generate IaC that follows best practices:
+<dockerfile_practices>
+
+Use specific base image tags
+Minimize layers
+Use build caching effectively
+Run as non-root user
+Include health checks
+</dockerfile_practices>
+
+<docker_compose_practices>
+
+Use explicit service dependencies
+Configure restart policies
+Use volumes for persistent data
+Set resource limits
+</docker_compose_practices>
+
+<terraform_practices>
+
+Use variables for configuration
+Implement proper state management
+Use data sources where applicable
+Include output values
+</terraform_practices>
+</best_practices_generation>
+</iac_generation_principles>
+
+<cli_interface>
+<command_structure>
+rustCopyuse clap::{Parser, Subcommand};
+
+#[derive(Parser)]
+#[command(name = "sync-ctl")]
+#[command(about = "Generate Infrastructure as Code from your codebase")]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+    
+    #[arg(short, long, global = true)]
+    config: Option<PathBuf>,
+    
+    #[arg(short, long, global = true, action = clap::ArgAction::Count)]
+    verbose: u8,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Analyze a project and display detected components
+    Analyze {
+        #[arg(value_name = "PROJECT_PATH")]
+        path: PathBuf,
+        
+        #[arg(short, long)]
+        json: bool,
+    },
+    
+    /// Generate IaC files for a project
+    Generate {
+        #[arg(value_name = "PROJECT_PATH")]
+        path: PathBuf,
+        
+        #[arg(short, long, value_name = "OUTPUT_DIR")]
+        output: Option<PathBuf>,
+        
+        #[arg(long)]
+        dockerfile: bool,
+        
+        #[arg(long)]
+        compose: bool,
+        
+        #[arg(long)]
+        terraform: bool,
+    },
+}
+</command_structure>
+<ux_guidelines>
+
+Progress Indication: Use indicatif for long-running operations
+Colored Output: Use termcolor for better readability
+Interactive Mode: Prompt for missing required information
+Dry Run: Always support --dry-run for generation commands
+Verbosity Levels: -v for info, -vv for debug, -vvv for trace
+</ux_guidelines>
+</cli_interface>
+
+<performance_considerations>
+<optimization_strategies>
+<parallel_analysis>
+rustCopyuse rayon::prelude::*;
+
+fn analyze_dependencies(paths: Vec<PathBuf>) -> Vec<Dependencies> {
+    paths.par_iter()
+        .filter_map(|path| parse_dependency_file(path).ok())
+        .collect()
+}
+</parallel_analysis>
+<caching>
+```rust
+use std::collections::HashMap;
+use once_cell::sync::Lazy;
+static LANGUAGE_CACHE: Lazy<Mutex<HashMap<PathBuf, Language>>> =
+Lazy::new(|| Mutex::new(HashMap::new()));
+Copy</caching>
+
+<lazy_loading>
+- Load templates on-demand
+- Parse files only when needed
+- Use memory-mapped files for large configs
+</lazy_loading>
+</optimization_strategies>
+
+<performance_targets>
+- Analyze 1000-file project in <5 seconds
+- Generate all IaC files in <1 second
+- Memory usage <100MB for typical projects
+</performance_targets>
+</performance_considerations>
+
+<security_practices>
+<input_validation>
+```rust
+fn validate_project_path(path: &Path) -> Result<PathBuf, SecurityError> {
+    let canonical = path.canonicalize()
+        .map_err(|_| SecurityError::InvalidPath)?;
+    
+    // Ensure path doesn't escape working directory
+    if !canonical.starts_with(std::env::current_dir()?) {
+        return Err(SecurityError::PathTraversal);
+    }
+    
+    Ok(canonical)
+}
+```
+</input_validation>
+<secure_defaults>
+<generated_dockerfiles>
+
+Always specify USER directive
+Avoid running as root
+Pin base image versions
+Scan for known vulnerabilities in dependencies
+</generated_dockerfiles>
+
+<environment_variables>
+
+Never embed secrets in generated files
+Use placeholder values with clear documentation
+Support .env files with proper gitignore
+</environment_variables>
+
+<file_permissions>
+
+Generated files should have restrictive permissions (644)
+Executable scripts should be 755
+Warn about overly permissive existing files
+</file_permissions>
+</secure_defaults>
+
+<security_checklist>
+
+ All user inputs are validated and sanitized
+ Path traversal attacks are prevented
+ No command injection vulnerabilities
+ Generated IaC follows security best practices
+ Sensitive data is never logged
+ Dependencies are regularly audited with cargo audit
+</security_checklist>
+</security_practices>
+
+<rust_style_guide>
+<naming_conventions>
+
+Use snake_case for functions, variables, and modules
+Use PascalCase for types, structs, enums, and traits
+Use SCREAMING_SNAKE_CASE for constants and statics
+Prefer descriptive names over abbreviations
+</naming_conventions>
+
+<code_organization>
+
+Keep functions focused and small
+Use impl blocks to organize related functionality
+Prefer composition over inheritance
+Use modules to organize related functionality
+</code_organization>
+<error_handling>
+
+Use Result<T, E> for recoverable errors
+Use Option<T> for optional values
+Avoid unwrap() and expect() in library code
+Provide context with error messages
+</error_handling>
+
+<memory_management>
+
+Prefer borrowing over cloning when possible
+Use Cow<str> for flexible string handling
+Consider Arc<T> and Rc<T> for shared ownership
+Use Vec<T> capacity hints when size is known
+</memory_management>
+</rust_style_guide>

@@ -1,5 +1,5 @@
 use syncable_cli::analyzer::dependency_parser::{DependencyParser};
-use syncable_cli::analyzer::vulnerability_checker::VulnerabilityChecker;
+use syncable_cli::analyzer::vulnerability::VulnerabilityChecker;
 use std::path::Path;
 
 #[tokio::main]
