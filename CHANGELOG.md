@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0](https://github.com/syncable-dev/syncable-cli/compare/v0.13.6...v0.14.0) - 2025-09-09
+
+### Added
+
+- added further refactor
+- improved vulnerablity scanner for more that just npm audit but also bun, yarn & pnpm
+
+### Other
+
+- Merge branch 'main' of github.com:syncable-dev/syncable-cli into develop
+- Merge branch 'develop' of github.com:syncable-dev/syncable-cli into develop
+
 ### Added
 - 🧄 **Bun Runtime Integration**: Complete support for Bun JavaScript runtime and package manager
   - Automatic Bun project detection via `bun.lockb`, `bunfig.toml`, and package.json configuration
