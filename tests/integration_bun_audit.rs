@@ -5,9 +5,9 @@ use tokio;
 
 use syncable_cli::analyzer::{
     dependency_parser::{DependencyParser, DependencyInfo, DependencyType, Language},
-    vulnerability_checker::VulnerabilityChecker,
-    runtime_detector::{RuntimeDetector, PackageManager, JavaScriptRuntime, DetectionConfidence},
-    tool_detector::ToolDetector,
+    vulnerability::VulnerabilityChecker,
+    runtime::{RuntimeDetector, PackageManager, JavaScriptRuntime, DetectionConfidence},
+    tool_management::ToolDetector,
 };
 
 /// Integration tests for end-to-end bun audit workflow

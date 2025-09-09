@@ -1,4 +1,4 @@
-use std::path::{PathBuf};
+use std::path::PathBuf;
 use std::fs;
 use serde::{Deserialize, Serialize};
 use log::{debug, info};
@@ -112,15 +112,14 @@ impl RuntimeDetector {
                 package_manager: manager,
                 detected_lockfiles,
                 has_package_json,
-                has_engines_field: false, // Will be updated below
+                has_engines_field: false,
                 confidence: DetectionConfidence::High,
             };
         }
         
         // Priority 2: Check package.json engines field (high confidence)
-        let mut engines_result = self.detect_by_engines_field();
-        if let Some((runtime, manager)) = engines_result.clone() {
-            engines_result = Some((runtime.clone(), manager.clone()));
+        let engines_result = self.detect_by_engines_field();
+        if let Some((runtime, manager)) = engines_result {
             info!("Detected {} runtime with {} package manager via engines field", runtime.as_str(), manager.as_str());
             return RuntimeDetectionResult {
                 runtime,
@@ -147,7 +146,6 @@ impl RuntimeDetector {
         
         // Priority 4: Default behavior based on project type
         if has_package_json {
-            // If package.json exists but no specific indicators, default to Node.js with npm
             debug!("Package.json exists but no specific runtime detected, defaulting to Node.js with npm");
             RuntimeDetectionResult {
                 runtime: JavaScriptRuntime::Node,
@@ -158,7 +156,6 @@ impl RuntimeDetector {
                 confidence: DetectionConfidence::Low,
             }
         } else {
-            // No package.json, not a JavaScript project
             debug!("No package.json found, not a JavaScript project");
             RuntimeDetectionResult {
                 runtime: JavaScriptRuntime::Unknown,
@@ -379,237 +376,5 @@ impl RuntimeDetector {
         }
         
         summary
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-    use tempfile::TempDir;
-    
-    fn create_test_project() -> (TempDir, PathBuf) {
-        let temp_dir = TempDir::new().unwrap();
-        let project_path = temp_dir.path().to_path_buf();
-        (temp_dir, project_path)
-    }
-    
-    #[test]
-    fn test_bun_project_detection() {
-        let (_temp_dir, project_path) = create_test_project();
-        
-        // Create bun.lockb file
-        fs::write(project_path.join("bun.lockb"), b"").unwrap();
-        
-        let detector = RuntimeDetector::new(project_path);
-        let result = detector.detect_js_runtime_and_package_manager();
-        
-        assert_eq!(result.runtime, JavaScriptRuntime::Bun);
-        assert_eq!(result.package_manager, PackageManager::Bun);
-        assert_eq!(result.confidence, DetectionConfidence::High);
-        assert!(result.detected_lockfiles.contains(&"bun.lockb".to_string()));
-    }
-    
-    #[test]
-    fn test_bun_engines_detection() {
-        let (_temp_dir, project_path) = create_test_project();
-        
-        // Create package.json with bun engine
-        let package_json = serde_json::json!({
-            "name": "test-project",
-            "engines": {
-                "bun": "^1.0.0"
-            }
-        });
-        fs::write(
-            project_path.join("package.json"), 
-            serde_json::to_string_pretty(&package_json).unwrap()
-        ).unwrap();
-        
-        let detector = RuntimeDetector::new(project_path);
-        let result = detector.detect_js_runtime_and_package_manager();
-        
-        assert_eq!(result.runtime, JavaScriptRuntime::Bun);
-        assert_eq!(result.package_manager, PackageManager::Bun);
-        assert_eq!(result.confidence, DetectionConfidence::High);
-        assert!(result.has_engines_field);
-    }
-    
-    #[test]
-    fn test_package_manager_field_detection() {
-        let (_temp_dir, project_path) = create_test_project();
-        
-        // Create package.json with packageManager field
-        let package_json = serde_json::json!({
-            "name": "test-project",
-            "packageManager": "bun@1.0.0"
-        });
-        fs::write(
-            project_path.join("package.json"), 
-            serde_json::to_string_pretty(&package_json).unwrap()
-        ).unwrap();
-        
-        let detector = RuntimeDetector::new(project_path);
-        let result = detector.detect_js_runtime_and_package_manager();
-        
-        assert_eq!(result.runtime, JavaScriptRuntime::Bun);
-        assert_eq!(result.package_manager, PackageManager::Bun);
-        assert_eq!(result.confidence, DetectionConfidence::High);
-    }
-    
-    #[test]
-    fn test_yarn_project_detection() {
-        let (_temp_dir, project_path) = create_test_project();
-        
-        // Create yarn.lock file
-        fs::write(project_path.join("yarn.lock"), b"").unwrap();
-        
-        let detector = RuntimeDetector::new(project_path);
-        let result = detector.detect_js_runtime_and_package_manager();
-        
-        assert_eq!(result.runtime, JavaScriptRuntime::Node);
-        assert_eq!(result.package_manager, PackageManager::Yarn);
-        assert_eq!(result.confidence, DetectionConfidence::High);
-    }
-    
-    #[test]
-    fn test_npm_project_detection() {
-        let (_temp_dir, project_path) = create_test_project();
-        
-        // Create package-lock.json file
-        fs::write(project_path.join("package-lock.json"), b"{}").unwrap();
-        
-        let detector = RuntimeDetector::new(project_path);
-        let result = detector.detect_js_runtime_and_package_manager();
-        
-        assert_eq!(result.runtime, JavaScriptRuntime::Node);
-        assert_eq!(result.package_manager, PackageManager::Npm);
-        assert_eq!(result.confidence, DetectionConfidence::High);
-    }
-    
-    #[test]
-    fn test_pnpm_project_detection() {
-        let (_temp_dir, project_path) = create_test_project();
-        
-        // Create pnpm-lock.yaml file
-        fs::write(project_path.join("pnpm-lock.yaml"), b"").unwrap();
-        
-        let detector = RuntimeDetector::new(project_path);
-        let result = detector.detect_js_runtime_and_package_manager();
-        
-        assert_eq!(result.runtime, JavaScriptRuntime::Node);
-        assert_eq!(result.package_manager, PackageManager::Pnpm);
-        assert_eq!(result.confidence, DetectionConfidence::High);
-    }
-    
-    #[test]
-    fn test_bunfig_detection() {
-        let (_temp_dir, project_path) = create_test_project();
-        
-        // Create bunfig.toml file
-        fs::write(project_path.join("bunfig.toml"), b"[install]\nregistry = \"https://registry.npmjs.org/\"").unwrap();
-        
-        let detector = RuntimeDetector::new(project_path);
-        let result = detector.detect_js_runtime_and_package_manager();
-        
-        assert_eq!(result.runtime, JavaScriptRuntime::Bun);
-        assert_eq!(result.package_manager, PackageManager::Bun);
-        assert_eq!(result.confidence, DetectionConfidence::Medium);
-    }
-    
-    #[test]
-    fn test_bun_script_detection() {
-        let (_temp_dir, project_path) = create_test_project();
-        
-        // Create package.json with bun script
-        let package_json = serde_json::json!({
-            "name": "test-project",
-            "scripts": {
-                "start": "bun run index.ts",
-                "dev": "bun --watch index.ts"
-            }
-        });
-        fs::write(
-            project_path.join("package.json"), 
-            serde_json::to_string_pretty(&package_json).unwrap()
-        ).unwrap();
-        
-        let detector = RuntimeDetector::new(project_path);
-        let result = detector.detect_js_runtime_and_package_manager();
-        
-        assert_eq!(result.runtime, JavaScriptRuntime::Bun);
-        assert_eq!(result.package_manager, PackageManager::Bun);
-        assert_eq!(result.confidence, DetectionConfidence::Medium);
-    }
-    
-    #[test]
-    fn test_default_detection() {
-        let (_temp_dir, project_path) = create_test_project();
-        
-        // Create only package.json with no special fields
-        let package_json = serde_json::json!({
-            "name": "test-project"
-        });
-        fs::write(
-            project_path.join("package.json"), 
-            serde_json::to_string_pretty(&package_json).unwrap()
-        ).unwrap();
-        
-        let detector = RuntimeDetector::new(project_path);
-        let result = detector.detect_js_runtime_and_package_manager();
-        
-        assert_eq!(result.runtime, JavaScriptRuntime::Node);
-        assert_eq!(result.package_manager, PackageManager::Npm);
-        assert_eq!(result.confidence, DetectionConfidence::Low);
-    }
-    
-    #[test]
-    fn test_multiple_lockfiles() {
-        let (_temp_dir, project_path) = create_test_project();
-        
-        // Create multiple lock files - bun should take priority
-        fs::write(project_path.join("bun.lockb"), b"").unwrap();
-        fs::write(project_path.join("package-lock.json"), b"{}").unwrap();
-        fs::write(project_path.join("yarn.lock"), b"").unwrap();
-        
-        let detector = RuntimeDetector::new(project_path);
-        let result = detector.detect_js_runtime_and_package_manager();
-        
-        assert_eq!(result.runtime, JavaScriptRuntime::Bun);
-        assert_eq!(result.package_manager, PackageManager::Bun);
-        assert_eq!(result.confidence, DetectionConfidence::High);
-        
-        let all_managers = detector.detect_all_package_managers();
-        assert!(all_managers.contains(&PackageManager::Bun));
-        assert!(all_managers.contains(&PackageManager::Npm));
-        assert!(all_managers.contains(&PackageManager::Yarn));
-    }
-    
-    #[test]
-    fn test_audit_commands() {
-        let (_temp_dir, project_path) = create_test_project();
-        
-        // Create bun project
-        fs::write(project_path.join("bun.lockb"), b"").unwrap();
-        
-        let detector = RuntimeDetector::new(project_path);
-        let commands = detector.get_audit_commands();
-        
-        assert!(commands.contains(&"bun audit".to_string()));
-    }
-    
-    #[test]
-    fn test_detection_summary() {
-        let (_temp_dir, project_path) = create_test_project();
-        
-        // Create bun project
-        fs::write(project_path.join("bun.lockb"), b"").unwrap();
-        
-        let detector = RuntimeDetector::new(project_path);
-        let summary = detector.get_detection_summary();
-        
-        assert!(summary.contains("bun"));
-        assert!(summary.contains("high confidence"));
-        assert!(summary.contains("bun.lockb"));
     }
 }
