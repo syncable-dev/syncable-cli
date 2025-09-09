@@ -1,5 +1,5 @@
 use crate::{
-    analyzer::{tool_installer::ToolInstaller, dependency_parser::Language},
+    analyzer::{tool_management::ToolInstaller, dependency_parser::Language},
     cli::{ToolsCommand, OutputFormat},
 };
 use std::collections::HashMap;

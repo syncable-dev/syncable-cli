@@ -2,7 +2,7 @@ use clap::Parser;
 use syncable_cli::{
     analyzer::{
         self, DetectedTechnology, LibraryType, ProjectCategory, TechnologyCategory,
-        analyze_monorepo, vulnerability_checker::VulnerabilitySeverity,
+        analyze_monorepo, vulnerability::VulnerabilitySeverity,
     },
     cli::{
         Cli, ColorScheme, Commands, DisplayFormat, OutputFormat, SecurityScanMode,
@@ -577,7 +577,7 @@ pub async fn handle_vulnerabilities(
     }
 
     // Check vulnerabilities
-    let checker = analyzer::vulnerability_checker::VulnerabilityChecker::new();
+    let checker = analyzer::vulnerability::VulnerabilityChecker::new();
     let report = checker
         .check_all_dependencies(&dependencies, &project_path)
         .await
@@ -612,7 +612,7 @@ pub async fn handle_vulnerabilities(
             })
             .collect();
 
-        use analyzer::vulnerability_checker::VulnerabilityReport;
+        use analyzer::vulnerability::VulnerabilityReport;
         let mut filtered = VulnerabilityReport {
             checked_at: report.checked_at,
             total_vulnerabilities: 0,

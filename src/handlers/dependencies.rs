@@ -1,5 +1,5 @@
 use crate::{
-    analyzer::{self, analyze_monorepo, vulnerability_checker::VulnerabilitySeverity},
+    analyzer::{self, analyze_monorepo, vulnerability::VulnerabilitySeverity},
     cli::OutputFormat,
 };
 use crate::handlers::utils::format_project_category;
@@ -222,7 +222,7 @@ async fn check_and_display_vulnerabilities(
         }
     }
     
-    let checker = analyzer::vulnerability_checker::VulnerabilityChecker::new();
+    let checker = analyzer::vulnerability::VulnerabilityChecker::new();
     match checker.check_all_dependencies(&deps_by_language, project_path).await {
         Ok(report) => {
             let mut stdout = StandardStream::stdout(ColorChoice::Always);
@@ -259,7 +259,7 @@ async fn check_and_display_vulnerabilities(
 }
 
 fn display_vulnerability_breakdown(
-    report: &analyzer::vulnerability_checker::VulnerabilityReport,
+    report: &analyzer::vulnerability::VulnerabilityReport,
     stdout: &mut termcolor::StandardStream,
 ) -> crate::Result<String> {
     use termcolor::{WriteColor, ColorSpec, Color};
@@ -300,7 +300,7 @@ fn display_vulnerability_breakdown(
 }
 
 fn display_vulnerable_dependencies(
-    report: &analyzer::vulnerability_checker::VulnerabilityReport,
+    report: &analyzer::vulnerability::VulnerabilityReport,
     stdout: &mut termcolor::StandardStream,
 ) -> crate::Result<String> {
     use termcolor::{WriteColor, ColorSpec, Color};

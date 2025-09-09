@@ -17,20 +17,18 @@ pub mod framework_detector;
 pub mod frameworks;
 pub mod language_detector;
 pub mod context;
-pub mod vulnerability_checker;
+pub mod vulnerability;
 pub mod security_analyzer;
 pub mod security;
-pub mod tool_installer;
-pub mod tool_detector;
-pub mod runtime_detector;
+pub mod tool_management;
+pub mod runtime;
 pub mod monorepo;
 pub mod docker_analyzer;
 pub mod display;
 
 // Re-export dependency analysis types
 pub use dependency_parser::{
-    DependencyInfo, DependencyAnalysis, DetailedDependencyMap,
-    Vulnerability, VulnerabilitySeverity
+    DependencyInfo, DependencyAnalysis, DetailedDependencyMap
 };
 
 // Re-export security analysis types
@@ -45,10 +43,15 @@ pub use security::{
 };
 pub use security::config::SecurityConfigPreset;
 
+// Re-export tool management types
+pub use tool_management::{ToolInstaller, ToolDetector, ToolStatus, InstallationSource};
+
 // Re-export runtime detection types
-pub use runtime_detector::{
-    RuntimeDetector, JavaScriptRuntime, PackageManager, RuntimeDetectionResult, DetectionConfidence
-};
+pub use runtime::{RuntimeDetector, JavaScriptRuntime, PackageManager, RuntimeDetectionResult, DetectionConfidence};
+
+// Re-export vulnerability checking types
+pub use vulnerability::{VulnerabilityChecker, VulnerabilityInfo, VulnerabilityReport, VulnerableDependency};
+pub use vulnerability::types::VulnerabilitySeverity as VulnSeverity;
 
 // Re-export monorepo analysis types
 pub use monorepo::{
