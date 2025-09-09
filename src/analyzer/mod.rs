@@ -21,6 +21,8 @@ pub mod vulnerability_checker;
 pub mod security_analyzer;
 pub mod security;
 pub mod tool_installer;
+pub mod tool_detector;
+pub mod runtime_detector;
 pub mod monorepo;
 pub mod docker_analyzer;
 pub mod display;
@@ -42,6 +44,11 @@ pub use security::{
     SecretPatternManager
 };
 pub use security::config::SecurityConfigPreset;
+
+// Re-export runtime detection types
+pub use runtime_detector::{
+    RuntimeDetector, JavaScriptRuntime, PackageManager, RuntimeDetectionResult, DetectionConfidence
+};
 
 // Re-export monorepo analysis types
 pub use monorepo::{

@@ -11,13 +11,13 @@ pub async fn handle_tools(command: ToolsCommand) -> crate::Result<()> {
         ToolsCommand::Install { languages, include_owasp, dry_run, yes } => {
             handle_tools_install(languages, include_owasp, dry_run, yes)
         }
-        ToolsCommand::Verify { languages, verbose } => handle_tools_verify(languages, verbose),
+        ToolsCommand::Verify { languages, detailed } => handle_tools_verify(languages, detailed),
         ToolsCommand::Guide { languages, platform } => handle_tools_guide(languages, platform),
     }
 }
 
 fn handle_tools_status(format: OutputFormat, languages: Option<Vec<String>>) -> crate::Result<()> {
-    let installer = ToolInstaller::new();
+    let mut installer = ToolInstaller::new();
     
     // Determine which languages to check
     let langs_to_check = get_languages_to_check(languages);
@@ -25,8 +25,8 @@ fn handle_tools_status(format: OutputFormat, languages: Option<Vec<String>>) -> 
     println!("🔧 Checking vulnerability scanning tools status...\n");
     
     match format {
-        OutputFormat::Table => display_status_table(&installer, &langs_to_check)?,
-        OutputFormat::Json => display_status_json(&installer, &langs_to_check),
+        OutputFormat::Table => display_status_table(&mut installer, &langs_to_check)?,
+        OutputFormat::Json => display_status_json(&mut installer, &langs_to_check),
     }
     
     Ok(())
@@ -44,7 +44,7 @@ fn handle_tools_install(
     let langs_to_install = get_languages_to_install(languages);
     
     if dry_run {
-        return handle_dry_run(&installer, &langs_to_install, include_owasp);
+        return handle_dry_run(&mut installer, &langs_to_install, include_owasp);
     }
     
     if !yes && !confirm_installation()? {
@@ -71,8 +71,8 @@ fn handle_tools_install(
     Ok(())
 }
 
-fn handle_tools_verify(languages: Option<Vec<String>>, verbose: bool) -> crate::Result<()> {
-    let installer = ToolInstaller::new();
+fn handle_tools_verify(languages: Option<Vec<String>>, detailed: bool) -> crate::Result<()> {
+    let mut installer = ToolInstaller::new();
     
     // Determine which languages to verify
     let langs_to_verify = get_languages_to_verify(languages);
@@ -82,7 +82,7 @@ fn handle_tools_verify(languages: Option<Vec<String>>, verbose: bool) -> crate::
     let mut all_working = true;
     
     for language in &langs_to_verify {
-        let (tool_name, is_working) = get_tool_for_language(&installer, language);
+        let (tool_name, is_working) = get_tool_for_language(&mut installer, language);
         
         print!("  {} {:?}: {}", 
                if is_working { "✅" } else { "❌" }, 
@@ -92,7 +92,7 @@ fn handle_tools_verify(languages: Option<Vec<String>>, verbose: bool) -> crate::
         if is_working {
             println!(" - working correctly");
             
-            if verbose {
+            if detailed {
                 print_version_info(tool_name);
             }
         } else {
@@ -208,10 +208,23 @@ fn get_languages_to_show(languages: Option<Vec<String>>) -> Vec<Language> {
     }
 }
 
-fn get_tool_for_language<'a>(installer: &ToolInstaller, language: &Language) -> (&'a str, bool) {
+fn get_tool_for_language<'a>(installer: &mut ToolInstaller, language: &Language) -> (&'a str, bool) {
     match language {
         Language::Rust => ("cargo-audit", installer.test_tool_availability("cargo-audit")),
-        Language::JavaScript | Language::TypeScript => ("npm", installer.test_tool_availability("npm")),
+        Language::JavaScript | Language::TypeScript => {
+            // Check all JavaScript package managers, prioritize bun
+            if installer.test_tool_availability("bun") {
+                ("bun", true)
+            } else if installer.test_tool_availability("npm") {
+                ("npm", true)
+            } else if installer.test_tool_availability("yarn") {
+                ("yarn", true)
+            } else if installer.test_tool_availability("pnpm") {
+                ("pnpm", true)
+            } else {
+                ("npm", false)
+            }
+        },
         Language::Python => ("pip-audit", installer.test_tool_availability("pip-audit")),
         Language::Go => ("govulncheck", installer.test_tool_availability("govulncheck")),
         Language::Java | Language::Kotlin => ("grype", installer.test_tool_availability("grype")),
@@ -219,37 +232,17 @@ fn get_tool_for_language<'a>(installer: &ToolInstaller, language: &Language) -> 
     }
 }
 
-fn display_status_table(installer: &ToolInstaller, langs_to_check: &[Language]) -> crate::Result<()> {
+fn display_status_table(installer: &mut ToolInstaller, langs_to_check: &[Language]) -> crate::Result<()> {
     let mut stdout = StandardStream::stdout(ColorChoice::Always);
     
     println!("📋 Vulnerability Scanning Tools Status");
     println!("{}", "=".repeat(50));
     
-    for language in langs_to_check {
-        let (tool_name, is_available) = get_tool_for_language(installer, language);
-        
-        if tool_name == "unknown" {
-            continue;
-        }
-        
-        print!("  {} {:?}: ", 
-               if is_available { "✅" } else { "❌" }, 
-               language);
-        
-        if is_available {
-            stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green)))?;
-            print!("{} installed", tool_name);
-        } else {
-            stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
-            print!("{} missing", tool_name);
-        }
-        
-        stdout.reset()?;
-        println!();
-    }
+    // Use the enhanced tool status display from ToolInstaller
+    installer.print_tool_status(langs_to_check);
     
-    // Check universal tools
-    println!("\n🔍 Universal Scanners:");
+    // Also check universal tools
+    println!("🔍 Universal Scanners:");
     let grype_available = installer.test_tool_availability("grype");
     print!("  {} Grype: ", if grype_available { "✅" } else { "❌" });
     if grype_available {
@@ -257,14 +250,14 @@ fn display_status_table(installer: &ToolInstaller, langs_to_check: &[Language]) 
         println!("installed");
     } else {
         stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
-        println!("missing");
+        println!("missing - Install with: brew install grype or download from GitHub");
     }
     stdout.reset()?;
     
     Ok(())
 }
 
-fn display_status_json(installer: &ToolInstaller, langs_to_check: &[Language]) {
+fn display_status_json(installer: &mut ToolInstaller, langs_to_check: &[Language]) {
     let mut status = HashMap::new();
     
     for language in langs_to_check {
@@ -283,7 +276,7 @@ fn display_status_json(installer: &ToolInstaller, langs_to_check: &[Language]) {
     println!("{}", serde_json::to_string_pretty(&status).unwrap());
 }
 
-fn handle_dry_run(installer: &ToolInstaller, langs_to_install: &[Language], include_owasp: bool) -> crate::Result<()> {
+fn handle_dry_run(installer: &mut ToolInstaller, langs_to_install: &[Language], include_owasp: bool) -> crate::Result<()> {
     println!("🔍 Dry run: Tools that would be installed:");
     println!("{}", "=".repeat(50));
     
@@ -332,6 +325,9 @@ fn print_version_info(tool_name: &str) {
     let version_result = match tool_name {
         "cargo-audit" => Command::new("cargo").args(&["audit", "--version"]).output(),
         "npm" => Command::new("npm").arg("--version").output(),
+        "bun" => Command::new("bun").arg("--version").output(),
+        "yarn" => Command::new("yarn").arg("--version").output(),
+        "pnpm" => Command::new("pnpm").arg("--version").output(),
         "pip-audit" => Command::new("pip-audit").arg("--version").output(),
         "govulncheck" => Command::new("govulncheck").arg("-version").output(),
         "grype" => Command::new("grype").arg("version").output(),
@@ -354,14 +350,28 @@ fn print_language_guide(language: &Language, target_platform: &str) {
             println!("  Usage: cargo audit");
         }
         Language::JavaScript | Language::TypeScript => {
-            println!("\n🌐 JavaScript/TypeScript - npm audit");
-            println!("  Install: Download Node.js from https://nodejs.org/");
+            println!("\n🌐 JavaScript/TypeScript - Multiple package managers");
+            println!("  Bun (recommended for speed):");
+            println!("    Install: curl -fsSL https://bun.sh/install | bash");
             match target_platform {
-                "macOS" => println!("  Package manager: brew install node"),
-                "Linux" => println!("  Package manager: sudo apt install nodejs npm (Ubuntu/Debian)"),
+                "Windows" => println!("    Windows: irm bun.sh/install.ps1 | iex"),
                 _ => {}
             }
-            println!("  Usage: npm audit");
+            println!("    Usage: bun audit");
+            println!("  npm (traditional):");
+            println!("    Install: Download Node.js from https://nodejs.org/");
+            match target_platform {
+                "macOS" => println!("    Package manager: brew install node"),
+                "Linux" => println!("    Package manager: sudo apt install nodejs npm (Ubuntu/Debian)"),
+                _ => {}
+            }
+            println!("    Usage: npm audit");
+            println!("  yarn:");
+            println!("    Install: npm install -g yarn");
+            println!("    Usage: yarn audit");
+            println!("  pnpm:");
+            println!("    Install: npm install -g pnpm");
+            println!("    Usage: pnpm audit");
         }
         Language::Python => {
             println!("\n🐍 Python - pip-audit");

@@ -267,7 +267,7 @@ pub enum ToolsCommand {
 
         /// Show detailed verification output
         #[arg(short, long)]
-        verbose: bool,
+        detailed: bool,
     },
 
     /// Show tool installation guides for manual setup

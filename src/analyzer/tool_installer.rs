@@ -1,4 +1,5 @@
 use crate::analyzer::dependency_parser::Language;
+use crate::analyzer::tool_detector::{ToolDetector, InstallationSource};
 use crate::error::{AnalysisError, IaCGeneratorError, Result};
 use log::{info, warn, debug};
 use std::process::Command;
@@ -8,12 +9,14 @@ use std::path::PathBuf;
 /// Tool installer for vulnerability scanning dependencies
 pub struct ToolInstaller {
     installed_tools: HashMap<String, bool>,
+    tool_detector: ToolDetector,
 }
 
 impl ToolInstaller {
     pub fn new() -> Self {
         Self {
             installed_tools: HashMap::new(),
+            tool_detector: ToolDetector::new(),
         }
     }
     
@@ -22,7 +25,12 @@ impl ToolInstaller {
         for language in languages {
             match language {
                 Language::Rust => self.ensure_cargo_audit()?,
-                Language::JavaScript | Language::TypeScript => self.ensure_npm()?,
+                Language::JavaScript | Language::TypeScript => {
+                    // For JS/TS, we try to ensure bun first, then npm as fallback
+                    if self.ensure_bun().is_err() {
+                        self.ensure_npm()?;
+                    }
+                },
                 Language::Python => self.ensure_pip_audit()?,
                 Language::Go => self.ensure_govulncheck()?,
                 Language::Java | Language::Kotlin => self.ensure_grype()?,
@@ -73,6 +81,102 @@ impl ToolInstaller {
         warn!("   npm audit is required for JavaScript/TypeScript vulnerability scanning");
         
         Ok(()) // Don't fail, just warn
+    }
+    
+    /// Check if bun is available, install if needed
+    fn ensure_bun(&mut self) -> Result<()> {
+        if self.is_tool_installed("bun") {
+            return Ok(());
+        }
+        
+        info!("🔧 Installing bun runtime and package manager...");
+        
+        // Check if already installed
+        if self.tool_detector.detect_tool("bun").available {
+            info!("✅ Bun is already installed");
+            return Ok(());
+        }
+        
+        // Install bun using their official installer
+        let install_result = if cfg!(target_os = "windows") {
+            self.install_bun_windows()
+        } else {
+            self.install_bun_unix()
+        };
+        
+        match install_result {
+            Ok(()) => {
+                info!("✅ Bun installed successfully");
+                // Refresh cache
+                self.tool_detector.clear_cache();
+                self.installed_tools.insert("bun".to_string(), true);
+                Ok(())
+            }
+            Err(e) => {
+                warn!("❌ Failed to install bun: {}", e);
+                warn!("📦 Please install bun manually from https://bun.sh/");
+                warn!("   Falling back to npm for JavaScript/TypeScript vulnerability scanning");
+                self.ensure_npm() // Fallback to npm
+            }
+        }
+    }
+    
+    /// Install bun on Windows using PowerShell
+    fn install_bun_windows(&self) -> Result<()> {
+        info!("💻 Installing bun on Windows using PowerShell...");
+        
+        let output = Command::new("powershell")
+            .args(&[
+                "-Command",
+                "irm bun.sh/install.ps1 | iex"
+            ])
+            .output()
+            .map_err(|e| IaCGeneratorError::Analysis(AnalysisError::DependencyParsing {
+                file: "bun installation".to_string(),
+                reason: format!("Failed to execute PowerShell installer: {}", e),
+            }))?;
+            
+        if output.status.success() {
+            info!("✅ Bun installed successfully via PowerShell");
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            Err(IaCGeneratorError::Analysis(AnalysisError::DependencyParsing {
+                file: "bun installation".to_string(),
+                reason: format!("PowerShell installation failed: {}", stderr),
+            }))
+        }
+    }
+    
+    /// Install bun on Unix systems using curl
+    fn install_bun_unix(&self) -> Result<()> {
+        info!("🐧 Installing bun on Unix using curl...");
+        
+        let output = Command::new("curl")
+            .args(&["-fsSL", "https://bun.sh/install"])
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .and_then(|curl_process| {
+                Command::new("bash")
+                    .stdin(curl_process.stdout.unwrap())
+                    .output()
+            })
+            .map_err(|e| IaCGeneratorError::Analysis(AnalysisError::DependencyParsing {
+                file: "bun installation".to_string(),
+                reason: format!("Failed to execute curl | bash installer: {}", e),
+            }))?;
+            
+        if output.status.success() {
+            info!("✅ Bun installed successfully via curl");
+            info!("💡 Note: You may need to restart your terminal or run 'source ~/.bashrc' to use bun");
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            Err(IaCGeneratorError::Analysis(AnalysisError::DependencyParsing {
+                file: "bun installation".to_string(),
+                reason: format!("curl installation failed: {}", stderr),
+            }))
+        }
     }
     
     /// Check if pip-audit is installed, install if needed
@@ -607,73 +711,19 @@ impl ToolInstaller {
     }
     
     /// Check if a tool is installed and available
-    fn is_tool_installed(&self, tool: &str) -> bool {
-        use std::process::Command;
+    fn is_tool_installed(&mut self, tool: &str) -> bool {
+        let status = self.tool_detector.detect_tool(tool);
         
-        // Check cache first
-        if let Some(&cached) = self.installed_tools.get(tool) {
-            return cached;
-        }
+        // Update cache with the detected status
+        self.installed_tools.insert(tool.to_string(), status.available);
         
-        // Different version check commands for different tools
-        let version_arg = match tool {
-            "grype" => "version",
-            "cargo-audit" => "--version",
-            "pip-audit" => "--version", 
-            "govulncheck" => "-version",
-            "dependency-check" => "--version",
-            _ => "--version",
-        };
-        
-        let result = Command::new(tool)
-            .arg(version_arg)
-            .output();
-            
-        match result {
-            Ok(output) => output.status.success(),
-            Err(_) => {
-                // Try platform-specific paths
-                self.try_alternative_paths(tool, version_arg)
-            }
-        }
+        status.available
     }
     
-    /// Try alternative paths for tools
-    fn try_alternative_paths(&self, tool: &str, version_arg: &str) -> bool {
-        use std::process::Command;
-        
-        let alternative_paths = if cfg!(windows) {
-            // Windows-specific paths
-            let userprofile = std::env::var("USERPROFILE").unwrap_or_default();
-            let appdata = std::env::var("APPDATA").unwrap_or_default();
-            vec![
-                format!("{}/.local/bin/{}.exe", userprofile, tool),
-                format!("{}/syncable-cli/bin/{}.exe", appdata, tool),
-                format!("C:/Program Files/{}/{}.exe", tool, tool),
-            ]
-        } else {
-            // Unix-specific paths
-            let home = std::env::var("HOME").unwrap_or_default();
-            vec![
-                format!("{}/go/bin/{}", home, tool),
-                format!("{}/.local/bin/{}", home, tool),
-                format!("{}/.cargo/bin/{}", home, tool),
-            ]
-        };
-        
-        for path in alternative_paths {
-            if let Ok(output) = Command::new(&path).arg(version_arg).output() {
-                if output.status.success() {
-                    return true;
-                }
-            }
-        }
-        
-        false
-    }
+
     
     /// Test if a tool is available by running version command (public method for external use)
-    pub fn test_tool_availability(&self, tool: &str) -> bool {
+    pub fn test_tool_availability(&mut self, tool: &str) -> bool {
         self.is_tool_installed(tool)
     }
     
@@ -682,23 +732,193 @@ impl ToolInstaller {
         self.installed_tools.clone()
     }
     
-    /// Print tool installation status
-    pub fn print_tool_status(&self, languages: &[Language]) {
+    /// Ensure JavaScript audit tools for detected package managers
+    pub fn ensure_js_audit_tools(&mut self, detected_managers: &[crate::analyzer::runtime_detector::PackageManager]) -> Result<()> {
+        for manager in detected_managers {
+            match manager {
+                crate::analyzer::runtime_detector::PackageManager::Bun => self.ensure_bun()?,
+                crate::analyzer::runtime_detector::PackageManager::Npm => self.ensure_npm()?,
+                crate::analyzer::runtime_detector::PackageManager::Yarn => self.ensure_yarn()?,
+                crate::analyzer::runtime_detector::PackageManager::Pnpm => self.ensure_pnpm()?,
+                crate::analyzer::runtime_detector::PackageManager::Unknown => {
+                    // Install npm as default
+                    self.ensure_npm()?
+                }
+            }
+        }
+        Ok(())
+    }
+    
+    /// Ensure yarn is available
+    fn ensure_yarn(&mut self) -> Result<()> {
+        if self.is_tool_installed("yarn") {
+            return Ok(());
+        }
+        
+        info!("🔧 Installing yarn package manager...");
+        
+        let output = Command::new("npm")
+            .args(&["install", "-g", "yarn"])
+            .output()
+            .map_err(|e| IaCGeneratorError::Analysis(AnalysisError::DependencyParsing {
+                file: "yarn installation".to_string(),
+                reason: format!("Failed to install yarn: {}", e),
+            }))?;
+            
+        if output.status.success() {
+            info!("✅ yarn installed successfully");
+            self.installed_tools.insert("yarn".to_string(), true);
+        } else {
+            warn!("❌ Failed to install yarn via npm");
+            warn!("📦 Please install yarn manually: https://yarnpkg.com/");
+        }
+        
+        Ok(())
+    }
+    
+    /// Ensure pnpm is available
+    fn ensure_pnpm(&mut self) -> Result<()> {
+        if self.is_tool_installed("pnpm") {
+            return Ok(());
+        }
+        
+        info!("🔧 Installing pnpm package manager...");
+        
+        let output = Command::new("npm")
+            .args(&["install", "-g", "pnpm"])
+            .output()
+            .map_err(|e| IaCGeneratorError::Analysis(AnalysisError::DependencyParsing {
+                file: "pnpm installation".to_string(),
+                reason: format!("Failed to install pnpm: {}", e),
+            }))?;
+            
+        if output.status.success() {
+            info!("✅ pnpm installed successfully");
+            self.installed_tools.insert("pnpm".to_string(), true);
+        } else {
+            warn!("❌ Failed to install pnpm via npm");
+            warn!("📦 Please install pnpm manually: https://pnpm.io/");
+        }
+        
+        Ok(())
+    }
+    
+    /// Print tool installation status with detailed information
+    pub fn print_tool_status(&mut self, languages: &[Language]) {
         println!("\n🔧 Vulnerability Scanning Tools Status:");
         println!("{}", "=".repeat(50));
         
+        let tool_statuses = self.tool_detector.detect_all_vulnerability_tools(languages);
+        
         for language in languages {
-            let (tool, status) = match language {
-                Language::Rust => ("cargo-audit", self.installed_tools.get("cargo-audit").unwrap_or(&false)),
-                Language::JavaScript | Language::TypeScript => ("npm", self.installed_tools.get("npm").unwrap_or(&false)),
-                Language::Python => ("pip-audit", self.installed_tools.get("pip-audit").unwrap_or(&false)),
-                Language::Go => ("govulncheck", self.installed_tools.get("govulncheck").unwrap_or(&false)),
-                Language::Java | Language::Kotlin => ("grype", self.installed_tools.get("grype").unwrap_or(&false)),
+            match language {
+                Language::Rust => {
+                    self.print_single_tool_status("cargo-audit", &tool_statuses, language);
+                }
+                Language::JavaScript | Language::TypeScript => {
+                    // Show all JavaScript package managers
+                    let js_tools = ["bun", "npm", "yarn", "pnpm"];
+                    for tool in &js_tools {
+                        if let Some(status) = tool_statuses.get(*tool) {
+                            self.print_js_tool_status(tool, status, language);
+                        }
+                    }
+                }
+                Language::Python => {
+                    self.print_single_tool_status("pip-audit", &tool_statuses, language);
+                }
+                Language::Go => {
+                    self.print_single_tool_status("govulncheck", &tool_statuses, language);
+                }
+                Language::Java | Language::Kotlin => {
+                    self.print_single_tool_status("grype", &tool_statuses, language);
+                }
                 _ => continue,
-            };
+            }
+        }
+        println!();
+    }
+    
+    /// Print status for a single tool
+    fn print_single_tool_status(
+        &self,
+        tool_name: &str,
+        tool_statuses: &HashMap<String, crate::analyzer::tool_detector::ToolStatus>,
+        language: &Language,
+    ) {
+        if let Some(status) = tool_statuses.get(tool_name) {
+            let status_icon = if status.available { "✅" } else { "❌" };
+            print!("  {} {:?}: {} {}", status_icon, language, tool_name, 
+                   if status.available { "installed" } else { "missing" });
             
-            let status_icon = if *status { "✅" } else { "❌" };
-            println!("  {} {:?}: {} {}", status_icon, language, tool, if *status { "installed" } else { "missing" });
+            if status.available {
+                if let Some(ref version) = status.version {
+                    print!(" (v{})", version);
+                }
+                if let Some(ref path) = status.path {
+                    print!(" at {}", path.display());
+                }
+                match &status.installation_source {
+                    crate::analyzer::tool_detector::InstallationSource::SystemPath => print!(" [system]"),
+                    crate::analyzer::tool_detector::InstallationSource::UserLocal => print!(" [user]"),
+                    crate::analyzer::tool_detector::InstallationSource::CargoHome => print!(" [cargo]"),
+                    crate::analyzer::tool_detector::InstallationSource::GoHome => print!(" [go]"),
+                    crate::analyzer::tool_detector::InstallationSource::PackageManager(pm) => print!(" [{}]", pm),
+                    crate::analyzer::tool_detector::InstallationSource::Manual => print!(" [manual]"),
+                    crate::analyzer::tool_detector::InstallationSource::NotFound => {},
+                }
+            } else {
+                // Provide installation guidance for missing tools
+                print!(" - Install with: ");
+                match tool_name {
+                    "cargo-audit" => print!("cargo install cargo-audit"),
+                    "pip-audit" => print!("pip install pip-audit or pipx install pip-audit"),
+                    "govulncheck" => print!("go install golang.org/x/vuln/cmd/govulncheck@latest"),
+                    "grype" => print!("brew install grype or download from GitHub"),
+                    _ => print!("check documentation"),
+                }
+            }
+            println!();
+        }
+    }
+    
+    /// Print status for JavaScript package manager tools
+    fn print_js_tool_status(
+        &self,
+        tool_name: &str,
+        status: &crate::analyzer::tool_detector::ToolStatus,
+        language: &Language,
+    ) {
+        let status_icon = if status.available { "✅" } else { "❌" };
+        print!("  {} {:?}: {} {}", status_icon, language, tool_name, 
+               if status.available { "installed" } else { "missing" });
+        
+        if status.available {
+            if let Some(ref version) = status.version {
+                print!(" (v{})", version);
+            }
+            if let Some(ref path) = status.path {
+                print!(" at {}", path.display());
+            }
+            match &status.installation_source {
+                crate::analyzer::tool_detector::InstallationSource::SystemPath => print!(" [system]"),
+                crate::analyzer::tool_detector::InstallationSource::UserLocal => print!(" [user]"),
+                crate::analyzer::tool_detector::InstallationSource::CargoHome => print!(" [cargo]"),
+                crate::analyzer::tool_detector::InstallationSource::GoHome => print!(" [go]"),
+                crate::analyzer::tool_detector::InstallationSource::PackageManager(pm) => print!(" [{}]", pm),
+                crate::analyzer::tool_detector::InstallationSource::Manual => print!(" [manual]"),
+                crate::analyzer::tool_detector::InstallationSource::NotFound => {},
+            }
+        } else {
+            // Provide installation guidance for missing JS tools
+            print!(" - Install with: ");
+            match tool_name {
+                "bun" => print!("curl -fsSL https://bun.sh/install | bash"),
+                "npm" => print!("Install Node.js from https://nodejs.org/"),
+                "yarn" => print!("npm install -g yarn"),
+                "pnpm" => print!("npm install -g pnpm"),
+                _ => print!("check documentation"),
+            }
         }
         println!();
     }
