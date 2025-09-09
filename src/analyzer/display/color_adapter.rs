@@ -57,7 +57,7 @@ impl ColorAdapter {
                 "Apple_Terminal" => {
                     // macOS Terminal.app - check for light theme indicators
                     // Many users have light themes, so be more aggressive
-                    if let Ok(term_session_id) = env::var("TERM_SESSION_ID") {
+                    if let Ok(_term_session_id) = env::var("TERM_SESSION_ID") {
                         // If we can't detect definitively, assume light for Terminal.app
                         // since many users use the default light theme
                         return ColorScheme::Light;
@@ -66,7 +66,7 @@ impl ColorAdapter {
                 }
                 "iTerm.app" => {
                     // iTerm2 - check for theme hints
-                    if let Ok(iterm_session_id) = env::var("ITERM_SESSION_ID") {
+                    if let Ok(_iterm_session_id) = env::var("ITERM_SESSION_ID") {
                         // Default to dark for iTerm as it's more commonly used with dark themes
                         return ColorScheme::Dark;
                     }
