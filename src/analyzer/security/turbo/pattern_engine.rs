@@ -258,8 +258,8 @@ impl PatternEngine {
     fn calculate_confidence(&self, line: &str, content: &str, pattern: &CompiledPattern, file_meta: &super::file_discovery::FileMetadata) -> f32 {
         let mut confidence: f32 = 0.6;
         
-        let line_lower = line.to_lowercase();
-        let content_lower = content.to_lowercase();
+        let _line_lower = line.to_lowercase();
+        let _content_lower = content.to_lowercase();
         
         // Enhanced false positive detection
         if self.is_obvious_false_positive(line, content, file_meta) {
@@ -679,7 +679,7 @@ impl PatternEngine {
     /// Load default security patterns - focused on ACTUAL secrets, not references
     fn load_default_patterns(
         secret_patterns: &mut Vec<(String, Arc<CompiledPattern>)>,
-        env_var_patterns: &mut Vec<(String, Arc<CompiledPattern>)>,
+        _env_var_patterns: &mut Vec<(String, Arc<CompiledPattern>)>,
         api_key_patterns: &mut Vec<(String, Arc<CompiledPattern>)>,
         complex_patterns: &mut Vec<(Regex, Arc<CompiledPattern>)>,
     ) -> Result<(), SecurityError> {

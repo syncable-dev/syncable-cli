@@ -3,12 +3,12 @@ use crate::error::{AnalysisError, IaCGeneratorError, Result};
 use super::common::InstallationUtils;
 use std::collections::HashMap;
 use std::process::Command;
-use log::{info, warn, debug};
+use log::{info, warn};
 
 /// Ensure npm is available (comes with Node.js)
 pub fn ensure_npm(
     tool_detector: &mut ToolDetector,
-    installed_tools: &mut HashMap<String, bool>,
+    _installed_tools: &mut HashMap<String, bool>,
 ) -> Result<()> {
     if tool_detector.detect_tool("npm").available {
         return Ok(());

@@ -1,8 +1,8 @@
 use crate::analyzer::tool_management::ToolDetector;
-use crate::error::{AnalysisError, IaCGeneratorError, Result};
+use crate::error::Result;
 use super::common::InstallationUtils;
 use std::collections::HashMap;
-use log::{info, warn};
+use log::info;
 
 /// Install cargo-audit for Rust vulnerability scanning
 pub fn install_cargo_audit(
