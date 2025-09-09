@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- 🧄 **Bun Runtime Integration**: Complete support for Bun JavaScript runtime and package manager
+  - Automatic Bun project detection via `bun.lockb`, `bunfig.toml`, and package.json configuration
+  - Multi-runtime vulnerability scanning with priority-based package manager detection (Bun > pnpm > yarn > npm)
+  - Cross-platform Bun installation support (Windows PowerShell, Unix curl/bash)
+  - Runtime detection with confidence levels and fallback mechanisms
+  - Comprehensive unit and integration tests (34+ tests covering all scenarios)
+  - Enhanced ToolDetector with caching and alternative command support
+  - Updated documentation with Bun examples and migration guides
+
 ## [0.11.1](https://github.com/syncable-dev/syncable-cli/compare/v0.11.0...v0.11.1) - 2025-06-20
 
 ### Added
