@@ -40,117 +40,6 @@ impl TelemetryClient {
         properties
     }
     
-    pub fn track_command_start(&self, command: &str) {
-        let properties = self.create_common_properties();
-        let client = self.http_client.clone();
-        let cmd = command.to_string();
-        let pending_tasks = self.pending_tasks.clone();
-        
-        log::debug!("Tracking command start: {}", cmd);
-        
-        // Send the event asynchronously
-        let handle = tokio::spawn(async move {
-            // Create the event payload according to PostHog API
-            let payload = json!({
-                "api_key": POSTHOG_PROJECT_API_KEY,
-                "event": "command_start",
-                "properties": {
-                    "command": cmd,
-                    "version": env!("CARGO_PKG_VERSION"),
-                    "os": std::env::consts::OS,
-                    "personal_id": rand::random::<u32>(),
-                    "distinct_id": properties.get("distinct_id").unwrap_or(&json!("unknown")),
-                },
-                "timestamp": chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
-            });
-            
-            log::debug!("Sending telemetry payload: {:?}", payload);
-            
-            match client
-                .post(POSTHOG_API_ENDPOINT)
-                .json(&payload)
-                .send()
-                .await
-            {
-                Ok(response) => {
-                    if response.status().is_success() {
-                        log::debug!("Successfully sent telemetry event: command_start");
-                    } else {
-                        let status = response.status();
-                        let body = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-                        log::warn!("Failed to send telemetry event 'command_start': HTTP {} - {}", status, body);
-                    }
-                }
-                Err(e) => {
-                    log::warn!("Failed to send telemetry event 'command_start': {}", e);
-                }
-            }
-        });
-        
-        // Keep track of the task
-        let pending_tasks_clone = pending_tasks.clone();
-        tokio::spawn(async move {
-            pending_tasks_clone.lock().await.push(handle);
-        });
-    }
-    
-    pub fn track_command_complete(&self, command: &str, duration: Duration, success: bool) {
-        let properties = self.create_common_properties();
-        let client = self.http_client.clone();
-        let cmd = command.to_string();
-        let duration_ms = duration.as_millis() as u64;
-        let pending_tasks = self.pending_tasks.clone();
-        
-        log::debug!("Tracking command complete: {}", cmd);
-        
-        // Send the event asynchronously
-        let handle = tokio::spawn(async move {
-            // Create the event payload according to PostHog API
-            let payload = json!({
-                "api_key": POSTHOG_PROJECT_API_KEY,
-                "event": "command_complete",
-                "properties": {
-                    "command": cmd,
-                    "duration_ms": duration_ms,
-                    "success": success,
-                    "version": env!("CARGO_PKG_VERSION"),
-                    "os": std::env::consts::OS,
-                    "personal_id": rand::random::<u32>(),
-                    "distinct_id": properties.get("distinct_id").unwrap_or(&json!("unknown")),
-                },
-                "timestamp": chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
-            });
-            
-            log::debug!("Sending telemetry payload: {:?}", payload);
-            
-            match client
-                .post(POSTHOG_API_ENDPOINT)
-                .json(&payload)
-                .send()
-                .await
-            {
-                Ok(response) => {
-                    if response.status().is_success() {
-                        log::debug!("Successfully sent telemetry event: command_complete");
-                    } else {
-                        let status = response.status();
-                        let body = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-                        log::warn!("Failed to send telemetry event 'command_complete': HTTP {} - {}", status, body);
-                    }
-                }
-                Err(e) => {
-                    log::warn!("Failed to send telemetry event 'command_complete': {}", e);
-                }
-            }
-        });
-        
-        // Keep track of the task
-        let pending_tasks_clone = pending_tasks.clone();
-        tokio::spawn(async move {
-            pending_tasks_clone.lock().await.push(handle);
-        });
-    }
-    
     pub fn track_event(&self, name: &str, properties: HashMap<String, serde_json::Value>) {
         let mut event_properties = self.create_common_properties();
         
@@ -205,7 +94,40 @@ impl TelemetryClient {
         });
     }
     
-    // Specific methods for the three events mentioned
+    // Specific methods for the actual commands
+    pub fn track_analyze(&self) {
+        self.track_event("analyze", HashMap::new());
+    }
+    
+    pub fn track_generate(&self) {
+        self.track_event("generate", HashMap::new());
+    }
+    
+    pub fn track_validate(&self) {
+        self.track_event("validate", HashMap::new());
+    }
+    
+    pub fn track_support(&self) {
+        self.track_event("support", HashMap::new());
+    }
+    
+    pub fn track_dependencies(&self) {
+        self.track_event("dependencies", HashMap::new());
+    }
+    
+    pub fn track_vulnerabilities(&self) {
+        self.track_event("vulnerabilities", HashMap::new());
+    }
+    
+    pub fn track_security(&self) {
+        self.track_event("security", HashMap::new());
+    }
+    
+    pub fn track_tools(&self) {
+        self.track_event("tools", HashMap::new());
+    }
+    
+    // Existing specific methods for events
     pub fn track_security_scan(&self) {
         self.track_event("Security Scan", HashMap::new());
     }
