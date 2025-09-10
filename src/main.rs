@@ -90,15 +90,6 @@ async fn run() -> syncable_cli::Result<()> {
 
     log::debug!("Command name: {}", command_name);
 
-    // Track command start for all commands
-    let start_time = SystemTime::now();
-    if let Some(telemetry_client) = telemetry::get_telemetry_client() {
-        log::debug!("Tracking command start");
-        telemetry_client.track_command_start(command_name);
-    } else {
-        log::debug!("No telemetry client available for command start");
-    }
-
     // Execute command
     let result = match cli.command {
         Commands::Analyze {
@@ -109,6 +100,11 @@ async fn run() -> syncable_cli::Result<()> {
             only,
             color_scheme,
         } => {
+            // Track Analyze command
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_analyze();
+            }
+            
             // Track Analyze Folder event
             if let Some(telemetry_client) = telemetry::get_telemetry_client() {
                 telemetry_client.track_analyze_folder();
@@ -128,15 +124,36 @@ async fn run() -> syncable_cli::Result<()> {
             all,
             dry_run,
             force,
-        } => handle_generate(
-            path, output, dockerfile, compose, terraform, all, dry_run, force,
-        ),
-        Commands::Validate { path, types, fix } => handle_validate(path, types, fix),
+        } => {
+            // Track Generate command
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_generate();
+            }
+            
+            handle_generate(
+                path, output, dockerfile, compose, terraform, all, dry_run, force,
+            )
+        },
+        Commands::Validate { path, types, fix } => {
+            // Track Validate command
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_validate();
+            }
+            
+            handle_validate(path, types, fix)
+        },
         Commands::Support {
             languages,
             frameworks,
             detailed,
-        } => handle_support(languages, frameworks, detailed),
+        } => {
+            // Track Support command
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_support();
+            }
+            
+            handle_support(languages, frameworks, detailed)
+        },
         Commands::Dependencies {
             path,
             licenses,
@@ -144,15 +161,27 @@ async fn run() -> syncable_cli::Result<()> {
             prod_only,
             dev_only,
             format,
-        } => handle_dependencies(path, licenses, vulnerabilities, prod_only, dev_only, format)
-            .await
-            .map(|_| ()),
+        } => {
+            // Track Dependencies command
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_dependencies();
+            }
+            
+            handle_dependencies(path, licenses, vulnerabilities, prod_only, dev_only, format)
+                .await
+                .map(|_| ())
+        },
         Commands::Vulnerabilities {
             path,
             severity,
             format,
             output,
         } => {
+            // Track Vulnerabilities command
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_vulnerabilities();
+            }
+            
             // Track Vulnerability Scan event
             if let Some(telemetry_client) = telemetry::get_telemetry_client() {
                 telemetry_client.track_vulnerability_scan();
@@ -173,6 +202,11 @@ async fn run() -> syncable_cli::Result<()> {
             output,
             fail_on_findings,
         } => {
+            // Track Security command
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_security();
+            }
+            
             // Track Security Scan event
             if let Some(telemetry_client) = telemetry::get_telemetry_client() {
                 telemetry_client.track_security_scan();
@@ -192,15 +226,15 @@ async fn run() -> syncable_cli::Result<()> {
                 fail_on_findings,
             )
         },
-        Commands::Tools { command } => handle_tools(command).await,
+        Commands::Tools { command } => {
+            // Track Tools command
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_tools();
+            }
+            
+            handle_tools(command).await
+        },
     };
-
-    // Track command completion for all commands
-    let duration = SystemTime::now().duration_since(start_time).unwrap_or_default();
-    let success = result.is_ok();
-    if let Some(telemetry_client) = telemetry::get_telemetry_client() {
-        telemetry_client.track_command_complete(command_name, duration, success);
-    }
 
     // Flush telemetry events before exiting
     if let Some(telemetry_client) = telemetry::get_telemetry_client() {
