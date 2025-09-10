@@ -1,6 +1,5 @@
 use crate::analyzer::dependency_parser::Language;
-use crate::analyzer::tool_management::{ToolDetector, ToolStatus, InstallationSource};
-use std::collections::HashMap;
+use crate::analyzer::tool_management::{ToolDetector, InstallationSource};
 
 /// Handles reporting and display of tool status information
 pub struct ToolStatusReporter {

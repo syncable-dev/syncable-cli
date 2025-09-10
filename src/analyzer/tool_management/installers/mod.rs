@@ -12,7 +12,6 @@ pub mod java;
 pub use common::InstallationStrategy;
 
 use crate::error::Result;
-use std::collections::HashMap;
 
 /// Common trait for tool installers
 pub trait ToolInstaller {

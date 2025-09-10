@@ -1,5 +1,5 @@
 use crate::analyzer::tool_management::ToolDetector;
-use crate::error::{AnalysisError, IaCGeneratorError, Result};
+use crate::error::Result;
 use super::common::InstallationUtils;
 use std::collections::HashMap;
 use log::{info, warn};
