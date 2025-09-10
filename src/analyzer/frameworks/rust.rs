@@ -39,6 +39,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec!["actix".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Axum".to_string(),
@@ -49,6 +50,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Rocket".to_string(),
@@ -59,36 +61,62 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Warp".to_string(),
             category: TechnologyCategory::BackendFramework,
             confidence: 0.95,
             dependency_patterns: vec!["warp".to_string()],
-            requires: vec!["Tokio".to_string()],
-            conflicts_with: vec![],
-            is_primary_indicator: true,
-            alternative_names: vec![],
-        },
-        TechnologyRule {
-            name: "Tide".to_string(),
-            category: TechnologyCategory::BackendFramework,
-            confidence: 0.95,
-            dependency_patterns: vec!["tide".to_string()],
-            requires: vec!["async-std".to_string()],
-            conflicts_with: vec![],
-            is_primary_indicator: true,
-            alternative_names: vec![],
-        },
-        TechnologyRule {
-            name: "Poem".to_string(),
-            category: TechnologyCategory::BackendFramework,
-            confidence: 0.95,
-            dependency_patterns: vec!["poem".to_string(), "poem-openapi".to_string()],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
+        },
+        TechnologyRule {
+            name: "Tide".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["tide".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+            file_indicators: vec![],
+        },
+        TechnologyRule {
+            name: "Thruster".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["thruster".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+            file_indicators: vec![],
+        },
+        TechnologyRule {
+            name: "Poem".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["poem".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+            file_indicators: vec![],
+        },
+        TechnologyRule {
+            name: "Rwf".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["rwf".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Salvo".to_string(),
@@ -99,6 +127,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Gotham".to_string(),
@@ -109,6 +138,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Iron".to_string(),
@@ -119,6 +149,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Nickel".to_string(),
@@ -129,36 +160,51 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
-        },
-        TechnologyRule {
-            name: "Thruster".to_string(),
-            category: TechnologyCategory::BackendFramework,
-            confidence: 0.95,
-            dependency_patterns: vec!["thruster".to_string()],
-            requires: vec![],
-            conflicts_with: vec![],
-            is_primary_indicator: true,
-            alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Rouille".to_string(),
             category: TechnologyCategory::BackendFramework,
-            confidence: 0.95,
+            confidence: 0.90,
             dependency_patterns: vec!["rouille".to_string()],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
-            name: "Cot".to_string(),
+            name: "Rustful".to_string(),
             category: TechnologyCategory::BackendFramework,
-            confidence: 0.95,
-            dependency_patterns: vec!["cot".to_string()],
+            confidence: 0.90,
+            dependency_patterns: vec!["rustful".to_string()],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
+        },
+        TechnologyRule {
+            name: "Rustless".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["rustless".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+            file_indicators: vec![],
+        },
+        TechnologyRule {
+            name: "Saphir".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.90,
+            dependency_patterns: vec!["saphir".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Tardis".to_string(),
@@ -169,6 +215,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Loco".to_string(),
@@ -179,6 +226,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec!["loco".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Trillium".to_string(),
@@ -189,8 +237,9 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
-
+        
         // ASYNC RUNTIMES
         TechnologyRule {
             name: "Tokio".to_string(),
@@ -201,6 +250,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec!["async-std".to_string()],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "async-std".to_string(),
@@ -211,6 +261,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec!["Tokio".to_string()],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "smol".to_string(),
@@ -221,8 +272,9 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
-
+        
         // HTTP CLIENTS & SERVERS
         TechnologyRule {
             name: "reqwest".to_string(),
@@ -233,6 +285,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "hyper".to_string(),
@@ -243,6 +296,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "ureq".to_string(),
@@ -253,70 +307,9 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
-
-        // DATABASE/ORM
-        TechnologyRule {
-            name: "SeaORM".to_string(),
-            category: TechnologyCategory::Database,
-            confidence: 0.90,
-            dependency_patterns: vec!["sea-orm".to_string()],
-            requires: vec![],
-            conflicts_with: vec![],
-            is_primary_indicator: false,
-            alternative_names: vec!["sea_orm".to_string()],
-        },
-        TechnologyRule {
-            name: "Diesel".to_string(),
-            category: TechnologyCategory::Database,
-            confidence: 0.90,
-            dependency_patterns: vec!["diesel".to_string()],
-            requires: vec![],
-            conflicts_with: vec![],
-            is_primary_indicator: false,
-            alternative_names: vec![],
-        },
-        TechnologyRule {
-            name: "SQLx".to_string(),
-            category: TechnologyCategory::Database,
-            confidence: 0.90,
-            dependency_patterns: vec!["sqlx".to_string()],
-            requires: vec![],
-            conflicts_with: vec![],
-            is_primary_indicator: false,
-            alternative_names: vec![],
-        },
-        TechnologyRule {
-            name: "rusqlite".to_string(),
-            category: TechnologyCategory::Database,
-            confidence: 0.90,
-            dependency_patterns: vec!["rusqlite".to_string()],
-            requires: vec![],
-            conflicts_with: vec![],
-            is_primary_indicator: false,
-            alternative_names: vec![],
-        },
-        TechnologyRule {
-            name: "redis".to_string(),
-            category: TechnologyCategory::Database,
-            confidence: 0.90,
-            dependency_patterns: vec!["redis".to_string()],
-            requires: vec![],
-            conflicts_with: vec![],
-            is_primary_indicator: false,
-            alternative_names: vec![],
-        },
-        TechnologyRule {
-            name: "MongoDB".to_string(),
-            category: TechnologyCategory::Database,
-            confidence: 0.90,
-            dependency_patterns: vec!["mongodb".to_string()],
-            requires: vec![],
-            conflicts_with: vec![],
-            is_primary_indicator: false,
-            alternative_names: vec![],
-        },
-
+        
         // ERROR HANDLING
         TechnologyRule {
             name: "anyhow".to_string(),
@@ -327,6 +320,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "thiserror".to_string(),
@@ -337,6 +331,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "eyre".to_string(),
@@ -347,6 +342,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "color-eyre".to_string(),
@@ -357,8 +353,9 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
-
+        
         // SERIALIZATION
         TechnologyRule {
             name: "Serde".to_string(),
@@ -369,6 +366,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "serde_json".to_string(),
@@ -379,6 +377,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "bincode".to_string(),
@@ -389,6 +388,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "toml".to_string(),
@@ -399,6 +399,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "ron".to_string(),
@@ -409,8 +410,9 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
-
+        
         // CLI FRAMEWORKS
         TechnologyRule {
             name: "clap".to_string(),
@@ -421,6 +423,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "structopt".to_string(),
@@ -431,6 +434,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "argh".to_string(),
@@ -441,8 +445,20 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
-
+        TechnologyRule {
+            name: "bpaf".to_string(),
+            category: TechnologyCategory::Library(LibraryType::CLI),
+            confidence: 0.85,
+            dependency_patterns: vec!["bpaf".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: true,
+            alternative_names: vec![],
+            file_indicators: vec![],
+        },
+        
         // LOGGING AND TRACING
         TechnologyRule {
             name: "tracing".to_string(),
@@ -453,6 +469,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "log".to_string(),
@@ -463,6 +480,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "env_logger".to_string(),
@@ -473,8 +491,31 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
-
+        TechnologyRule {
+            name: "slog".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.85,
+            dependency_patterns: vec!["slog".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+            file_indicators: vec![],
+        },
+        TechnologyRule {
+            name: "fern".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.85,
+            dependency_patterns: vec!["fern".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+            file_indicators: vec![],
+        },
+        
         // TESTING
         TechnologyRule {
             name: "rstest".to_string(),
@@ -485,6 +526,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "proptest".to_string(),
@@ -495,6 +537,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "quickcheck".to_string(),
@@ -505,6 +548,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Criterion".to_string(),
@@ -515,9 +559,56 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
-
-        // CRYPTOGRAPHY
+        
+        // DATABASE
+        TechnologyRule {
+            name: "Diesel".to_string(),
+            category: TechnologyCategory::Database,
+            confidence: 0.90,
+            dependency_patterns: vec!["diesel".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+            file_indicators: vec![],
+        },
+        TechnologyRule {
+            name: "SQLx".to_string(),
+            category: TechnologyCategory::Database,
+            confidence: 0.90,
+            dependency_patterns: vec!["sqlx".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+            file_indicators: vec![],
+        },
+        TechnologyRule {
+            name: "SeaORM".to_string(),
+            category: TechnologyCategory::Database,
+            confidence: 0.90,
+            dependency_patterns: vec!["sea-orm".to_string(), "sea-orm-migration".to_string(), "sea-orm-cli".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec!["seaorm".to_string()],
+            file_indicators: vec![],
+        },
+        TechnologyRule {
+            name: "Rbatis".to_string(),
+            category: TechnologyCategory::Database,
+            confidence: 0.90,
+            dependency_patterns: vec!["rbatis".to_string(), "rbdc".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+            file_indicators: vec![],
+        },
+        
+        // CRYPTOGRAPHY & SECURITY
         TechnologyRule {
             name: "ring".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
@@ -527,6 +618,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "rustls".to_string(),
@@ -537,6 +629,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "sha2".to_string(),
@@ -547,8 +640,42 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
-
+        TechnologyRule {
+            name: "hmac".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.85,
+            dependency_patterns: vec!["hmac".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+            file_indicators: vec![],
+        },
+        TechnologyRule {
+            name: "aes".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.85,
+            dependency_patterns: vec!["aes".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+            file_indicators: vec![],
+        },
+        TechnologyRule {
+            name: "rsa".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.85,
+            dependency_patterns: vec!["rsa".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+            file_indicators: vec![],
+        },
+        
         // DATE/TIME
         TechnologyRule {
             name: "chrono".to_string(),
@@ -559,6 +686,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "time".to_string(),
@@ -569,102 +697,9 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
-
-        // CONCURRENCY
-        TechnologyRule {
-            name: "rayon".to_string(),
-            category: TechnologyCategory::Library(LibraryType::Utility),
-            confidence: 0.85,
-            dependency_patterns: vec!["rayon".to_string()],
-            requires: vec![],
-            conflicts_with: vec![],
-            is_primary_indicator: false,
-            alternative_names: vec![],
-        },
-        TechnologyRule {
-            name: "crossbeam".to_string(),
-            category: TechnologyCategory::Library(LibraryType::Utility),
-            confidence: 0.85,
-            dependency_patterns: vec!["crossbeam".to_string()],
-            requires: vec![],
-            conflicts_with: vec![],
-            is_primary_indicator: false,
-            alternative_names: vec![],
-        },
-        TechnologyRule {
-            name: "dashmap".to_string(),
-            category: TechnologyCategory::Library(LibraryType::Utility),
-            confidence: 0.85,
-            dependency_patterns: vec!["dashmap".to_string()],
-            requires: vec![],
-            conflicts_with: vec![],
-            is_primary_indicator: false,
-            alternative_names: vec![],
-        },
-
-        // GUI FRAMEWORKS (WASM/Desktop)
-        TechnologyRule {
-            name: "Leptos".to_string(),
-            category: TechnologyCategory::FrontendFramework,
-            confidence: 0.95,
-            dependency_patterns: vec!["leptos".to_string()],
-            requires: vec![],
-            conflicts_with: vec!["Yew".to_string(), "Dioxus".to_string()],
-            is_primary_indicator: true,
-            alternative_names: vec![],
-        },
-        TechnologyRule {
-            name: "Yew".to_string(),
-            category: TechnologyCategory::FrontendFramework,
-            confidence: 0.95,
-            dependency_patterns: vec!["yew".to_string()],
-            requires: vec![],
-            conflicts_with: vec!["Leptos".to_string(), "Dioxus".to_string()],
-            is_primary_indicator: true,
-            alternative_names: vec![],
-        },
-        TechnologyRule {
-            name: "Dioxus".to_string(),
-            category: TechnologyCategory::FrontendFramework,
-            confidence: 0.95,
-            dependency_patterns: vec!["dioxus".to_string()],
-            requires: vec![],
-            conflicts_with: vec!["Leptos".to_string(), "Yew".to_string()],
-            is_primary_indicator: true,
-            alternative_names: vec![],
-        },
-        TechnologyRule {
-            name: "Tauri".to_string(),
-            category: TechnologyCategory::Library(LibraryType::UI),
-            confidence: 0.95,
-            dependency_patterns: vec!["tauri".to_string()],
-            requires: vec![],
-            conflicts_with: vec![],
-            is_primary_indicator: true,
-            alternative_names: vec![],
-        },
-        TechnologyRule {
-            name: "egui".to_string(),
-            category: TechnologyCategory::Library(LibraryType::UI),
-            confidence: 0.95,
-            dependency_patterns: vec!["egui".to_string()],
-            requires: vec![],
-            conflicts_with: vec![],
-            is_primary_indicator: false,
-            alternative_names: vec![],
-        },
-        TechnologyRule {
-            name: "iced".to_string(),
-            category: TechnologyCategory::Library(LibraryType::UI),
-            confidence: 0.95,
-            dependency_patterns: vec!["iced".to_string()],
-            requires: vec![],
-            conflicts_with: vec![],
-            is_primary_indicator: false,
-            alternative_names: vec![],
-        },
-
+        
         // WASM
         TechnologyRule {
             name: "wasm-bindgen".to_string(),
@@ -675,6 +710,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "js-sys".to_string(),
@@ -685,6 +721,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "web-sys".to_string(),
@@ -695,8 +732,9 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
-
+        
         // GAME DEVELOPMENT
         TechnologyRule {
             name: "Bevy".to_string(),
@@ -707,6 +745,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "ggez".to_string(),
@@ -717,42 +756,9 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
-
-        // MATH/SCIENCE
-        TechnologyRule {
-            name: "ndarray".to_string(),
-            category: TechnologyCategory::Library(LibraryType::Utility),
-            confidence: 0.85,
-            dependency_patterns: vec!["ndarray".to_string()],
-            requires: vec![],
-            conflicts_with: vec![],
-            is_primary_indicator: false,
-            alternative_names: vec![],
-        },
-        TechnologyRule {
-            name: "nalgebra".to_string(),
-            category: TechnologyCategory::Library(LibraryType::Utility),
-            confidence: 0.85,
-            dependency_patterns: vec!["nalgebra".to_string()],
-            requires: vec![],
-            conflicts_with: vec![],
-            is_primary_indicator: false,
-            alternative_names: vec![],
-        },
-
-        // IMAGE PROCESSING
-        TechnologyRule {
-            name: "image".to_string(),
-            category: TechnologyCategory::Library(LibraryType::Utility),
-            confidence: 0.85,
-            dependency_patterns: vec!["image".to_string()],
-            requires: vec![],
-            conflicts_with: vec![],
-            is_primary_indicator: false,
-            alternative_names: vec![],
-        },
-
+        
         // TEMPLATING
         TechnologyRule {
             name: "handlebars".to_string(),
@@ -763,6 +769,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "tera".to_string(),
@@ -773,6 +780,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "askama".to_string(),
@@ -783,8 +791,46 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
-
+        
+        // MATH/SCIENCE
+        TechnologyRule {
+            name: "ndarray".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.85,
+            dependency_patterns: vec!["ndarray".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+            file_indicators: vec![],
+        },
+        TechnologyRule {
+            name: "nalgebra".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.85,
+            dependency_patterns: vec!["nalgebra".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+            file_indicators: vec![],
+        },
+        
+        // IMAGE PROCESSING
+        TechnologyRule {
+            name: "image".to_string(),
+            category: TechnologyCategory::Library(LibraryType::Utility),
+            confidence: 0.85,
+            dependency_patterns: vec!["image".to_string()],
+            requires: vec![],
+            conflicts_with: vec![],
+            is_primary_indicator: false,
+            alternative_names: vec![],
+            file_indicators: vec![],
+        },
+        
         // PARSING
         TechnologyRule {
             name: "nom".to_string(),
@@ -795,6 +841,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "pest".to_string(),
@@ -805,8 +852,9 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
-
+        
         // COMPRESSION
         TechnologyRule {
             name: "flate2".to_string(),
@@ -817,6 +865,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "zstd".to_string(),
@@ -827,6 +876,7 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
     ]
-} 
+}

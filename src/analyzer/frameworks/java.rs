@@ -39,6 +39,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec!["spring".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Spring Framework".to_string(),
@@ -49,6 +50,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec!["spring".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Spring Data".to_string(),
@@ -59,6 +61,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Spring Security".to_string(),
@@ -69,6 +72,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Spring Cloud".to_string(),
@@ -79,6 +83,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Spring Cloud Gateway".to_string(),
@@ -89,6 +94,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Spring Cloud Config".to_string(),
@@ -99,6 +105,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Spring Cloud Netflix".to_string(),
@@ -109,6 +116,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Spring WebFlux".to_string(),
@@ -119,6 +127,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Spring MVC".to_string(),
@@ -129,6 +138,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Spring Batch".to_string(),
@@ -139,6 +149,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Spring Integration".to_string(),
@@ -148,6 +159,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             requires: vec!["Spring Framework".to_string()],
             conflicts_with: vec![],
             is_primary_indicator: false,
+            file_indicators: vec![],
             alternative_names: vec![],
         },
         TechnologyRule {
@@ -158,6 +170,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             requires: vec!["Spring Framework".to_string()],
             conflicts_with: vec![],
             is_primary_indicator: false,
+            file_indicators: vec![],
             alternative_names: vec![],
         },
 
@@ -170,6 +183,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
+            file_indicators: vec![],
             alternative_names: vec![],
         },
         TechnologyRule {
@@ -180,6 +194,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
+            file_indicators: vec![],
             alternative_names: vec![],
         },
         TechnologyRule {
@@ -190,6 +205,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
+            file_indicators: vec![],
             alternative_names: vec![],
         },
         TechnologyRule {
@@ -200,6 +216,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
+            file_indicators: vec![],
             alternative_names: vec!["eclipse vert.x".to_string(), "vertx".to_string()],
         },
 
@@ -213,6 +230,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec!["apache struts".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "JSF".to_string(),
@@ -223,6 +241,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec!["javaserver faces".to_string()],
+            file_indicators: vec![],
         },
 
         // LIGHTWEIGHT FRAMEWORKS
@@ -235,6 +254,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Spark Java".to_string(),
@@ -245,6 +265,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec!["spark".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Javalin".to_string(),
@@ -255,6 +276,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Ratpack".to_string(),
@@ -265,6 +287,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Ninja Framework".to_string(),
@@ -275,6 +298,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec!["ninja".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Blade".to_string(),
@@ -285,6 +309,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
 
         // PLAY FRAMEWORK
@@ -297,6 +322,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec!["play".to_string()],
+            file_indicators: vec![],
         },
 
         // ORM/DATABASE - EXPANDED
@@ -309,6 +335,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["hibernate orm".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "MyBatis".to_string(),
@@ -319,6 +346,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "JOOQ".to_string(),
@@ -329,6 +357,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "JPA".to_string(),
@@ -339,6 +368,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["java persistence api".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "EclipseLink".to_string(),
@@ -349,6 +379,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Apache OpenJPA".to_string(),
@@ -359,6 +390,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["openjpa".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "QueryDSL".to_string(),
@@ -369,6 +401,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "JDBI".to_string(),
@@ -379,6 +412,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
 
         // DATABASE DRIVERS - CRITICAL FOR INFRASTRUCTURE
@@ -391,6 +425,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["mysql".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "PostgreSQL Driver".to_string(),
@@ -401,6 +436,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["postgres".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "MongoDB Driver".to_string(),
@@ -411,6 +447,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["mongodb".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Redis Jedis".to_string(),
@@ -421,6 +458,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["redis".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "H2 Database".to_string(),
@@ -431,6 +469,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Apache Derby".to_string(),
@@ -441,6 +480,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["derby".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "SQLite JDBC".to_string(),
@@ -451,6 +491,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["sqlite".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Oracle JDBC".to_string(),
@@ -461,6 +502,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["oracle".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "SQL Server JDBC".to_string(),
@@ -471,6 +513,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["sqlserver".to_string()],
+            file_indicators: vec![],
         },
 
         // ENTERPRISE JAVA
@@ -483,6 +526,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec!["java ee".to_string()],
+            file_indicators: vec![],
         },
 
         // BUILD TOOLS
@@ -495,6 +539,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["apache maven".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Gradle".to_string(),
@@ -505,6 +550,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
 
         // TESTING
@@ -517,6 +563,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "TestNG".to_string(),
@@ -527,6 +574,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Mockito".to_string(),
@@ -537,6 +585,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
 
         // REACTIVE FRAMEWORKS
@@ -549,6 +598,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["project reactor".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "RxJava".to_string(),
@@ -559,6 +609,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "RSocket".to_string(),
@@ -569,6 +620,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
 
         // KOTLIN SPECIFIC
@@ -581,6 +633,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
 
         // MESSAGE BROKERS & MESSAGING (Critical for infrastructure)
@@ -593,6 +646,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["kafka".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "RabbitMQ".to_string(),
@@ -603,6 +657,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["rabbitmq".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Apache ActiveMQ".to_string(),
@@ -613,6 +668,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["activemq".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Apache Pulsar".to_string(),
@@ -623,6 +679,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["pulsar".to_string()],
+            file_indicators: vec![],
         },
 
         // SEARCH ENGINES (Critical for data infrastructure)
@@ -635,6 +692,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["elastic".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Apache Solr".to_string(),
@@ -645,6 +703,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["solr".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Apache Lucene".to_string(),
@@ -655,6 +714,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["lucene".to_string()],
+            file_indicators: vec![],
         },
 
         // CACHING (Critical for performance)
@@ -667,6 +727,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Apache Ignite".to_string(),
@@ -677,6 +738,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["ignite".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "EhCache".to_string(),
@@ -687,6 +749,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Caffeine".to_string(),
@@ -697,6 +760,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
 
         // SECURITY FRAMEWORKS (Critical for enterprise)
@@ -709,6 +773,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["shiro".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Bouncy Castle".to_string(),
@@ -719,6 +784,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Keycloak".to_string(),
@@ -729,6 +795,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Jasypt".to_string(),
@@ -739,6 +806,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
 
         // WEB SERVERS & APPLICATION SERVERS (Critical for deployment)
@@ -751,6 +819,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["tomcat".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Jetty".to_string(),
@@ -761,6 +830,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["eclipse jetty".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Undertow".to_string(),
@@ -771,6 +841,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Netty".to_string(),
@@ -781,6 +852,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
 
         // HTTP CLIENTS (Important for integration)
@@ -793,6 +865,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["httpclient".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "OkHttp".to_string(),
@@ -803,6 +876,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Retrofit".to_string(),
@@ -813,6 +887,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
 
         // JSON/XML PROCESSING (Critical for APIs)
@@ -824,6 +899,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
+            file_indicators: vec![],
             alternative_names: vec![],
         },
         TechnologyRule {
@@ -835,6 +911,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Apache JAXB".to_string(),
@@ -845,6 +922,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["jaxb".to_string()],
+            file_indicators: vec![],
         },
 
         // LOGGING (Critical for monitoring)
@@ -857,6 +935,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Log4j".to_string(),
@@ -867,6 +946,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["apache log4j".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "SLF4J".to_string(),
@@ -877,6 +957,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
 
         // MONITORING & METRICS (Critical for production)
@@ -888,6 +969,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
+            file_indicators: vec![],
             alternative_names: vec![],
         },
         TechnologyRule {
@@ -899,6 +981,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Actuator".to_string(),
@@ -909,6 +992,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
 
         // VALIDATION (Important for data integrity)
@@ -921,6 +1005,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["jsr303".to_string(), "jsr380".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Hibernate Validator".to_string(),
@@ -930,6 +1015,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
+            file_indicators: vec![],
             alternative_names: vec![],
         },
 
@@ -943,6 +1029,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Cucumber".to_string(),
@@ -953,6 +1040,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "WireMock".to_string(),
@@ -963,6 +1051,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "REST Assured".to_string(),
@@ -973,6 +1062,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Testcontainers".to_string(),
@@ -982,6 +1072,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
+            file_indicators: vec![],
             alternative_names: vec![],
         },
 
@@ -995,6 +1086,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["spark".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Apache Flink".to_string(),
@@ -1005,6 +1097,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["flink".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Apache Storm".to_string(),
@@ -1015,6 +1108,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["storm".to_string()],
+            file_indicators: vec![],
         },
 
         // UTILITIES & TOOLS
@@ -1027,6 +1121,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "MapStruct".to_string(),
@@ -1037,6 +1132,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Google Guava".to_string(),
@@ -1047,6 +1143,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["guava".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Apache Commons".to_string(),
@@ -1057,6 +1154,7 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["commons".to_string()],
+            file_indicators: vec![],
         },
     ]
 } 
