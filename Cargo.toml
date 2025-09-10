@@ -45,7 +45,7 @@ term_size = "0.3"
 # Vulnerability checking dependencies
 rustsec = "0.30"
 reqwest = { version = "0.12", features = ["json", "blocking"] }
-tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread"] }
+tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "sync"] }
 textwrap = "0.16"
 tempfile = "3"
 dirs = "6"
@@ -62,6 +62,11 @@ parking_lot = "0.12"              # Faster mutex/rwlock
 ahash = "0.8"                     # Fast hash function
 bstr = "1.9"                      # Byte string utilities
 simdutf8 = "0.1"                  # SIMD UTF-8 validation
+
+# Telemetry dependencies
+uuid = { version = "1.0", features = ["v4"] }
+rand = "0.8"
+futures-util = "0.3"
 
 [dev-dependencies]
 assert_cmd = "2"

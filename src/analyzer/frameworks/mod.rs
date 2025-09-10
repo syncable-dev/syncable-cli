@@ -32,6 +32,8 @@ pub struct TechnologyRule {
     pub is_primary_indicator: bool,
     /// Alternative names for this technology
     pub alternative_names: Vec<String>,
+    /// File indicators that can help identify this technology
+    pub file_indicators: Vec<String>,
 }
 
 /// Shared utilities for framework detection across languages
@@ -98,6 +100,7 @@ impl FrameworkDetectionUtils {
                     requires: rule.requires.clone(),
                     conflicts_with: rule.conflicts_with.clone(),
                     is_primary: rule.is_primary_indicator,
+                    file_indicators: rule.file_indicators.clone(),
                 });
             } else if rule.name.contains("Tanstack") {
                 // Debug logging when Tanstack Start is not detected
@@ -211,4 +214,4 @@ impl FrameworkDetectionUtils {
         
         technologies
     }
-} 
+}

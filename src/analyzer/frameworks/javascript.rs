@@ -1,6 +1,7 @@
 use super::{LanguageFrameworkDetector, TechnologyRule, FrameworkDetectionUtils};
 use crate::analyzer::{DetectedTechnology, DetectedLanguage, TechnologyCategory, LibraryType};
 use crate::error::Result;
+use std::fs;
 use std::path::Path;
 
 pub struct JavaScriptFrameworkDetector;
@@ -9,22 +10,21 @@ impl LanguageFrameworkDetector for JavaScriptFrameworkDetector {
     fn detect_frameworks(&self, language: &DetectedLanguage) -> Result<Vec<DetectedTechnology>> {
         let rules = get_js_technology_rules();
         
+        // New: Enhanced detection using file-based approach first
+        let mut technologies = detect_frameworks_from_files(language, &rules)?;
+        
         // Combine main and dev dependencies for comprehensive detection
         let all_deps: Vec<String> = language.main_dependencies.iter()
             .chain(language.dev_dependencies.iter())
             .cloned()
             .collect();
         
-        let mut technologies = FrameworkDetectionUtils::detect_technologies_by_dependencies(
-            &rules, &all_deps, language.confidence
-        );
-        
         // Enhanced detection: analyze actual source files for usage patterns
         if let Some(enhanced_techs) = detect_technologies_from_source_files(language, &rules) {
-            // Merge with dependency-based detection, preferring higher confidence scores
+            // Merge with file-based detection, preferring higher confidence scores
             for enhanced_tech in enhanced_techs {
                 if let Some(existing) = technologies.iter_mut().find(|t| t.name == enhanced_tech.name) {
-                    // Use higher confidence between dependency and source file analysis
+                    // Use higher confidence between file-based and source file analysis
                     if enhanced_tech.confidence > existing.confidence {
                         existing.confidence = enhanced_tech.confidence;
                     }
@@ -32,6 +32,24 @@ impl LanguageFrameworkDetector for JavaScriptFrameworkDetector {
                     // Add new technology found in source files
                     technologies.push(enhanced_tech);
                 }
+            }
+        }
+        
+        // Fallback to dependency-based detection
+        let dependency_based_techs = FrameworkDetectionUtils::detect_technologies_by_dependencies(
+            &rules, &all_deps, language.confidence
+        );
+        
+        // Merge dependency-based detections with higher confidence scores
+        for dep_tech in dependency_based_techs {
+            if let Some(existing) = technologies.iter_mut().find(|t| t.name == dep_tech.name) {
+                // Use higher confidence between file-based and dependency-based detection
+                if dep_tech.confidence > existing.confidence {
+                    existing.confidence = dep_tech.confidence;
+                }
+            } else {
+                // Add new technology found through dependencies
+                technologies.push(dep_tech);
             }
         }
         
@@ -43,9 +61,313 @@ impl LanguageFrameworkDetector for JavaScriptFrameworkDetector {
     }
 }
 
+/// New: Enhanced detection that analyzes project files for framework indicators
+fn detect_frameworks_from_files(language: &DetectedLanguage, rules: &[TechnologyRule]) -> Result<Vec<DetectedTechnology>> {
+    let mut detected = Vec::new();
+    
+    // Check for configuration files first (highest priority)
+    if let Some(config_detections) = detect_by_config_files(language, rules) {
+        detected.extend(config_detections);
+    }
+    
+    // If no config-based detections, check project structure (medium priority)
+    if detected.is_empty() {
+        if let Some(structure_detections) = detect_by_project_structure(language, rules) {
+            detected.extend(structure_detections);
+        }
+    }
+    
+    // Check source code patterns (lower priority)
+    if let Some(source_detections) = detect_by_source_patterns(language, rules) {
+        // Merge with existing detections, preferring higher confidence
+        for source_tech in source_detections {
+            if let Some(existing_tech) = detected.iter_mut().find(|t| t.name == source_tech.name) {
+                if source_tech.confidence > existing_tech.confidence {
+                    existing_tech.confidence = source_tech.confidence;
+                }
+            } else {
+                detected.push(source_tech);
+            }
+        }
+    }
+    
+    Ok(detected)
+}
+
+/// New: Detect frameworks by checking for framework-specific configuration files
+fn detect_by_config_files(language: &DetectedLanguage, rules: &[TechnologyRule]) -> Option<Vec<DetectedTechnology>> {
+    let mut detected = Vec::new();
+    
+    // Check each file in the project for config files
+    for file_path in &language.files {
+        if let Some(file_name) = file_path.file_name().and_then(|n| n.to_str()) {
+            // Check for Expo config files
+            if file_name == "app.json" || file_name == "app.config.js" || file_name == "app.config.ts" {
+                if let Some(expo_rule) = rules.iter().find(|r| r.name == "Expo") {
+                    detected.push(DetectedTechnology {
+                        name: expo_rule.name.clone(),
+                        version: None,
+                        category: expo_rule.category.clone(),
+                        confidence: 0.98, // High confidence from config file
+                        requires: expo_rule.requires.clone(),
+                        conflicts_with: expo_rule.conflicts_with.clone(),
+                        is_primary: expo_rule.is_primary_indicator,
+                        file_indicators: expo_rule.file_indicators.clone(),
+                    });
+                }
+            }
+            // Check for Next.js config files
+            else if file_name == "next.config.js" || file_name == "next.config.ts" {
+                if let Some(nextjs_rule) = rules.iter().find(|r| r.name == "Next.js") {
+                    detected.push(DetectedTechnology {
+                        name: nextjs_rule.name.clone(),
+                        version: None,
+                        category: nextjs_rule.category.clone(),
+                        confidence: 0.98, // High confidence from config file
+                        requires: nextjs_rule.requires.clone(),
+                        conflicts_with: nextjs_rule.conflicts_with.clone(),
+                        is_primary: nextjs_rule.is_primary_indicator,
+                        file_indicators: nextjs_rule.file_indicators.clone(),
+                    });
+                }
+            }
+            // Check for TanStack Start config files
+            else if file_name == "app.config.ts" {
+                // Additional check for TanStack-specific content
+                if let Ok(content) = std::fs::read_to_string(file_path) {
+                    if content.contains("@tanstack/react-start") || content.contains("vinxi") {
+                        if let Some(tanstack_rule) = rules.iter().find(|r| r.name == "Tanstack Start") {
+                            detected.push(DetectedTechnology {
+                                name: tanstack_rule.name.clone(),
+                                version: None,
+                                category: tanstack_rule.category.clone(),
+                                confidence: 0.95, // High confidence from config file with TanStack content
+                                requires: tanstack_rule.requires.clone(),
+                                conflicts_with: tanstack_rule.conflicts_with.clone(),
+                                is_primary: tanstack_rule.is_primary_indicator,
+                                file_indicators: tanstack_rule.file_indicators.clone(),
+                            });
+                        }
+                    }
+                }
+            }
+            // Check for React Native config files
+            else if file_name == "react-native.config.js" {
+                if let Some(rn_rule) = rules.iter().find(|r| r.name == "React Native") {
+                    detected.push(DetectedTechnology {
+                        name: rn_rule.name.clone(),
+                        version: None,
+                        category: rn_rule.category.clone(),
+                        confidence: 0.95, // High confidence from config file
+                        requires: rn_rule.requires.clone(),
+                        conflicts_with: rn_rule.conflicts_with.clone(),
+                        is_primary: rn_rule.is_primary_indicator,
+                        file_indicators: rn_rule.file_indicators.clone(),
+                    });
+                }
+            }
+        }
+    }
+    
+    if detected.is_empty() {
+        None
+    } else {
+        Some(detected)
+    }
+}
+
+/// New: Detect frameworks by analyzing project structure
+fn detect_by_project_structure(language: &DetectedLanguage, rules: &[TechnologyRule]) -> Option<Vec<DetectedTechnology>> {
+    let mut detected = Vec::new();
+    let mut has_android_dir = false;
+    let mut has_ios_dir = false;
+    let mut has_pages_dir = false;
+    let mut has_app_dir = false;
+    let mut has_app_routes_dir = false;
+    
+    // Check project directories
+    for file_path in &language.files {
+        if let Some(parent) = file_path.parent() {
+            let path_str = parent.to_string_lossy();
+            
+            // Check for React Native structure
+            if path_str.contains("android") {
+                has_android_dir = true;
+            } else if path_str.contains("ios") {
+                has_ios_dir = true;
+            }
+            // Check for Next.js structure
+            else if path_str.contains("pages") {
+                has_pages_dir = true;
+            } else if path_str.contains("app") && !path_str.contains("app.config") {
+                has_app_dir = true;
+            }
+            // Check for TanStack Start structure
+            else if path_str.contains("app/routes") {
+                has_app_routes_dir = true;
+            }
+        }
+    }
+    
+    // Determine frameworks based on structure
+    if has_app_routes_dir {
+        // Likely TanStack Start
+        if let Some(tanstack_rule) = rules.iter().find(|r| r.name == "Tanstack Start") {
+            detected.push(DetectedTechnology {
+                name: tanstack_rule.name.clone(),
+                version: None,
+                category: tanstack_rule.category.clone(),
+                confidence: 0.8, // Medium confidence from structure
+                requires: tanstack_rule.requires.clone(),
+                conflicts_with: tanstack_rule.conflicts_with.clone(),
+                is_primary: tanstack_rule.is_primary_indicator,
+                file_indicators: tanstack_rule.file_indicators.clone(),
+            });
+        }
+    } else if has_pages_dir || has_app_dir {
+        // Likely Next.js
+        if let Some(nextjs_rule) = rules.iter().find(|r| r.name == "Next.js") {
+            detected.push(DetectedTechnology {
+                name: nextjs_rule.name.clone(),
+                version: None,
+                category: nextjs_rule.category.clone(),
+                confidence: 0.8, // Medium confidence from structure
+                requires: nextjs_rule.requires.clone(),
+                conflicts_with: nextjs_rule.conflicts_with.clone(),
+                is_primary: nextjs_rule.is_primary_indicator,
+                file_indicators: nextjs_rule.file_indicators.clone(),
+            });
+        }
+    } else if has_android_dir && has_ios_dir {
+        // Likely React Native
+        if let Some(rn_rule) = rules.iter().find(|r| r.name == "React Native") {
+            detected.push(DetectedTechnology {
+                name: rn_rule.name.clone(),
+                version: None,
+                category: rn_rule.category.clone(),
+                confidence: 0.8, // Medium confidence from structure
+                requires: rn_rule.requires.clone(),
+                conflicts_with: rn_rule.conflicts_with.clone(),
+                is_primary: rn_rule.is_primary_indicator,
+                file_indicators: rn_rule.file_indicators.clone(),
+            });
+        }
+    }
+    
+    // Check for Expo structure (App.js/App.tsx with expo imports)
+    for file_path in &language.files {
+        if let Some(file_name) = file_path.file_name().and_then(|n| n.to_str()) {
+            if file_name == "App.js" || file_name == "App.tsx" {
+                if let Ok(content) = std::fs::read_to_string(file_path) {
+                    if content.contains("expo") && content.contains("registerRootComponent") {
+                        if let Some(expo_rule) = rules.iter().find(|r| r.name == "Expo") {
+                            detected.push(DetectedTechnology {
+                                name: expo_rule.name.clone(),
+                                version: None,
+                                category: expo_rule.category.clone(),
+                                confidence: 0.85, // Medium-high confidence from structure + source patterns
+                                requires: expo_rule.requires.clone(),
+                                conflicts_with: expo_rule.conflicts_with.clone(),
+                                is_primary: expo_rule.is_primary_indicator,
+                                file_indicators: expo_rule.file_indicators.clone(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    if detected.is_empty() {
+        None
+    } else {
+        Some(detected)
+    }
+}
+
+/// New: Detect frameworks by analyzing source code patterns
+fn detect_by_source_patterns(language: &DetectedLanguage, rules: &[TechnologyRule]) -> Option<Vec<DetectedTechnology>> {
+    let mut detected = Vec::new();
+    
+    // Analyze files for usage patterns
+    for file_path in &language.files {
+        if let Ok(content) = std::fs::read_to_string(file_path) {
+            // Check for Expo source patterns
+            if content.contains("expo") && content.contains("from 'expo'") {
+                if let Some(expo_rule) = rules.iter().find(|r| r.name == "Expo") {
+                    detected.push(DetectedTechnology {
+                        name: expo_rule.name.clone(),
+                        version: None,
+                        category: expo_rule.category.clone(),
+                        confidence: 0.7, // Medium confidence from source patterns
+                        requires: expo_rule.requires.clone(),
+                        conflicts_with: expo_rule.conflicts_with.clone(),
+                        is_primary: expo_rule.is_primary_indicator,
+                        file_indicators: expo_rule.file_indicators.clone(),
+                    });
+                }
+            }
+            
+            // Check for Next.js source patterns
+            if content.contains("next/") {
+                if let Some(nextjs_rule) = rules.iter().find(|r| r.name == "Next.js") {
+                    detected.push(DetectedTechnology {
+                        name: nextjs_rule.name.clone(),
+                        version: None,
+                        category: nextjs_rule.category.clone(),
+                        confidence: 0.7, // Medium confidence from source patterns
+                        requires: nextjs_rule.requires.clone(),
+                        conflicts_with: nextjs_rule.conflicts_with.clone(),
+                        is_primary: nextjs_rule.is_primary_indicator,
+                        file_indicators: nextjs_rule.file_indicators.clone(),
+                    });
+                }
+            }
+            
+            // Check for TanStack Router patterns
+            if content.contains("@tanstack/react-router") && content.contains("createFileRoute") {
+                if let Some(tanstack_rule) = rules.iter().find(|r| r.name == "Tanstack Start") {
+                    detected.push(DetectedTechnology {
+                        name: tanstack_rule.name.clone(),
+                        version: None,
+                        category: tanstack_rule.category.clone(),
+                        confidence: 0.7, // Medium confidence from source patterns
+                        requires: tanstack_rule.requires.clone(),
+                        conflicts_with: tanstack_rule.conflicts_with.clone(),
+                        is_primary: tanstack_rule.is_primary_indicator,
+                        file_indicators: tanstack_rule.file_indicators.clone(),
+                    });
+                }
+            }
+            
+            // Check for React Router patterns
+            if content.contains("react-router") && content.contains("BrowserRouter") {
+                if let Some(rr_rule) = rules.iter().find(|r| r.name == "React Router v7") {
+                    detected.push(DetectedTechnology {
+                        name: rr_rule.name.clone(),
+                        version: None,
+                        category: rr_rule.category.clone(),
+                        confidence: 0.7, // Medium confidence from source patterns
+                        requires: rr_rule.requires.clone(),
+                        conflicts_with: rr_rule.conflicts_with.clone(),
+                        is_primary: rr_rule.is_primary_indicator,
+                        file_indicators: rr_rule.file_indicators.clone(),
+                    });
+                }
+            }
+        }
+    }
+    
+    if detected.is_empty() {
+        None
+    } else {
+        Some(detected)
+    }
+}
+
 /// Enhanced detection that analyzes actual source files for technology usage patterns
-fn detect_technologies_from_source_files(language: &DetectedLanguage, _rules: &[TechnologyRule]) -> Option<Vec<DetectedTechnology>> {
-    use std::fs;
+fn detect_technologies_from_source_files(language: &DetectedLanguage, rules: &[TechnologyRule]) -> Option<Vec<DetectedTechnology>> {
+    
     
     let mut detected = Vec::new();
     
@@ -54,54 +376,66 @@ fn detect_technologies_from_source_files(language: &DetectedLanguage, _rules: &[
         if let Ok(content) = fs::read_to_string(file_path) {
             // Analyze Drizzle ORM usage patterns
             if let Some(drizzle_confidence) = analyze_drizzle_usage(&content, file_path) {
-                detected.push(DetectedTechnology {
-                    name: "Drizzle ORM".to_string(),
-                    version: None,
-                    category: TechnologyCategory::Database,
-                    confidence: drizzle_confidence,
-                    requires: vec![],
-                    conflicts_with: vec![],
-                    is_primary: false,
-                });
+                if let Some(drizzle_rule) = rules.iter().find(|r| r.name == "Drizzle ORM") {
+                    detected.push(DetectedTechnology {
+                        name: "Drizzle ORM".to_string(),
+                        version: None,
+                        category: TechnologyCategory::Database,
+                        confidence: drizzle_confidence,
+                        requires: vec![],
+                        conflicts_with: vec![],
+                        is_primary: false,
+                        file_indicators: drizzle_rule.file_indicators.clone(),
+                    });
+                }
             }
             
             // Analyze Prisma usage patterns
             if let Some(prisma_confidence) = analyze_prisma_usage(&content, file_path) {
-                detected.push(DetectedTechnology {
-                    name: "Prisma".to_string(),
-                    version: None,
-                    category: TechnologyCategory::Database,
-                    confidence: prisma_confidence,
-                    requires: vec![],
-                    conflicts_with: vec![],
-                    is_primary: false,
-                });
+                if let Some(prisma_rule) = rules.iter().find(|r| r.name == "Prisma") {
+                    detected.push(DetectedTechnology {
+                        name: "Prisma".to_string(),
+                        version: None,
+                        category: TechnologyCategory::Database,
+                        confidence: prisma_confidence,
+                        requires: vec![],
+                        conflicts_with: vec![],
+                        is_primary: false,
+                        file_indicators: prisma_rule.file_indicators.clone(),
+                    });
+                }
             }
             
             // Analyze Encore usage patterns
             if let Some(encore_confidence) = analyze_encore_usage(&content, file_path) {
-                detected.push(DetectedTechnology {
-                    name: "Encore".to_string(),
-                    version: None,
-                    category: TechnologyCategory::BackendFramework,
-                    confidence: encore_confidence,
-                    requires: vec![],
-                    conflicts_with: vec![],
-                    is_primary: true,
-                });
+                if let Some(encore_rule) = rules.iter().find(|r| r.name == "Encore") {
+                    detected.push(DetectedTechnology {
+                        name: "Encore".to_string(),
+                        version: None,
+                        category: TechnologyCategory::BackendFramework,
+                        confidence: encore_confidence,
+                        requires: vec![],
+                        conflicts_with: vec![],
+                        is_primary: true,
+                        file_indicators: encore_rule.file_indicators.clone(),
+                    });
+                }
             }
             
             // Analyze Tanstack Start usage patterns
             if let Some(tanstack_confidence) = analyze_tanstack_start_usage(&content, file_path) {
-                detected.push(DetectedTechnology {
-                    name: "Tanstack Start".to_string(),
-                    version: None,
-                    category: TechnologyCategory::MetaFramework,
-                    confidence: tanstack_confidence,
-                    requires: vec!["React".to_string()],
-                    conflicts_with: vec!["Next.js".to_string(), "React Router v7".to_string(), "SvelteKit".to_string(), "Nuxt.js".to_string()],
-                    is_primary: true,
-                });
+                if let Some(tanstack_rule) = rules.iter().find(|r| r.name == "Tanstack Start") {
+                    detected.push(DetectedTechnology {
+                        name: "Tanstack Start".to_string(),
+                        version: None,
+                        category: TechnologyCategory::MetaFramework,
+                        confidence: tanstack_confidence,
+                        requires: vec!["React".to_string()],
+                        conflicts_with: vec!["Next.js".to_string(), "React Router v7".to_string(), "SvelteKit".to_string(), "Nuxt.js".to_string()],
+                        is_primary: true,
+                        file_indicators: tanstack_rule.file_indicators.clone(),
+                    });
+                }
             }
         }
     }
@@ -382,6 +716,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec!["Tanstack Start".to_string(), "React Router v7".to_string(), "SvelteKit".to_string(), "Nuxt.js".to_string()],
             is_primary_indicator: true,
             alternative_names: vec!["nextjs".to_string()],
+            file_indicators: vec!["next.config.js".to_string(), "next.config.ts".to_string(), "pages/".to_string(), "app/".to_string()],
         },
         TechnologyRule {
             name: "Tanstack Start".to_string(),
@@ -392,6 +727,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec!["Next.js".to_string(), "React Router v7".to_string(), "SvelteKit".to_string(), "Nuxt.js".to_string()],
             is_primary_indicator: true,
             alternative_names: vec!["tanstack-start".to_string(), "TanStack Start".to_string()],
+            file_indicators: vec!["app.config.ts".to_string(), "app.config.js".to_string(), "app/routes/".to_string(), "vite.config.ts".to_string()],
         },
         TechnologyRule {
             name: "React Router v7".to_string(),
@@ -402,6 +738,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec!["Next.js".to_string(), "Tanstack Start".to_string(), "SvelteKit".to_string(), "Nuxt.js".to_string(), "React Native".to_string(), "Expo".to_string()],
             is_primary_indicator: true,
             alternative_names: vec!["remix".to_string(), "react-router".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "SvelteKit".to_string(),
@@ -412,6 +749,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec!["Next.js".to_string(), "Tanstack Start".to_string(), "React Router v7".to_string(), "Nuxt.js".to_string()],
             is_primary_indicator: true,
             alternative_names: vec!["svelte-kit".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Nuxt.js".to_string(),
@@ -422,6 +760,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec!["Next.js".to_string(), "Tanstack Start".to_string(), "React Router v7".to_string(), "SvelteKit".to_string()],
             is_primary_indicator: true,
             alternative_names: vec!["nuxtjs".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Astro".to_string(),
@@ -432,6 +771,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "SolidStart".to_string(),
@@ -442,6 +782,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec!["Next.js".to_string(), "Tanstack Start".to_string(), "React Router v7".to_string(), "SvelteKit".to_string()],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         
         // MOBILE FRAMEWORKS (React Native/Expo)
@@ -454,6 +795,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec!["Next.js".to_string(), "React Router v7".to_string(), "SvelteKit".to_string(), "Nuxt.js".to_string(), "Tanstack Start".to_string()],
             is_primary_indicator: true,
             alternative_names: vec!["reactnative".to_string()],
+            file_indicators: vec!["react-native.config.js".to_string(), "android/".to_string(), "ios/".to_string()],
         },
         TechnologyRule {
             name: "Expo".to_string(),
@@ -464,6 +806,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec!["Next.js".to_string(), "React Router v7".to_string(), "SvelteKit".to_string(), "Nuxt.js".to_string(), "Tanstack Start".to_string()],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec!["app.json".to_string(), "app.config.js".to_string(), "app.config.ts".to_string()],
         },
         
         // FRONTEND FRAMEWORKS (Provide structure)
@@ -476,6 +819,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec!["angular".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Svelte".to_string(),
@@ -486,6 +830,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false, // SvelteKit would be primary
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         
         // UI LIBRARIES (Not frameworks!)
@@ -498,6 +843,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false, // Meta-frameworks using React would be primary
             alternative_names: vec!["reactjs".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Vue.js".to_string(),
@@ -508,6 +854,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["vuejs".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "SolidJS".to_string(),
@@ -518,6 +865,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["solid".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "HTMX".to_string(),
@@ -528,6 +876,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["htmx".to_string()],
+            file_indicators: vec![],
         },
         
         // BACKEND FRAMEWORKS
@@ -540,6 +889,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec!["express".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Fastify".to_string(),
@@ -550,6 +900,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Nest.js".to_string(),
@@ -560,6 +911,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec!["nestjs".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Hono".to_string(),
@@ -570,6 +922,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Elysia".to_string(),
@@ -580,6 +933,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Encore".to_string(),
@@ -590,6 +944,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec!["encore-ts-starter".to_string()],
+            file_indicators: vec![],
         },
         
         // BUILD TOOLS (Not frameworks!)
@@ -602,6 +957,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Webpack".to_string(),
@@ -612,6 +968,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         
         // DATABASE/ORM (Important for Docker/infrastructure setup, migrations, etc.)
@@ -624,6 +981,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Drizzle ORM".to_string(),
@@ -634,6 +992,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["drizzle".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Sequelize".to_string(),
@@ -644,6 +1003,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "TypeORM".to_string(),
@@ -654,6 +1014,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "MikroORM".to_string(),
@@ -664,6 +1025,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["mikro-orm".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Mongoose".to_string(),
@@ -674,6 +1036,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Typegoose".to_string(),
@@ -684,6 +1047,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Objection.js".to_string(),
@@ -694,6 +1058,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["objectionjs".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Bookshelf".to_string(),
@@ -704,6 +1069,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Waterline".to_string(),
@@ -714,6 +1080,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Knex.js".to_string(),
@@ -724,6 +1091,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["knexjs".to_string()],
+            file_indicators: vec![],
         },
         
         // RUNTIMES (Important for IaC - determines base images, package managers)
@@ -736,6 +1104,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["nodejs".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Bun".to_string(),
@@ -746,6 +1115,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Deno".to_string(),
@@ -756,6 +1126,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "WinterJS".to_string(),
@@ -766,6 +1137,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["winter.js".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Cloudflare Workers".to_string(),
@@ -776,6 +1148,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["cloudflare-workers".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Vercel Edge Runtime".to_string(),
@@ -786,6 +1159,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["vercel-edge".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Hermes".to_string(),
@@ -796,6 +1170,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Electron".to_string(),
@@ -806,6 +1181,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Tauri".to_string(),
@@ -816,6 +1192,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec!["Electron".to_string()],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "QuickJS".to_string(),
@@ -826,6 +1203,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         
         // TESTING (Keep minimal - only major frameworks that affect build process)
@@ -838,6 +1216,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Vitest".to_string(),
@@ -848,6 +1227,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
+            file_indicators: vec![],
         },
     ]
 } 

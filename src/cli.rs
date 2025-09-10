@@ -31,6 +31,10 @@ pub struct Cli {
     /// Clear the update check cache and force a new check
     #[arg(long, global = true)]
     pub clear_update_cache: bool,
+
+    /// Disable telemetry data collection
+    #[arg(long, global = true)]
+    pub disable_telemetry: bool,
 }
 
 #[derive(Subcommand)]
