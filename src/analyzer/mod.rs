@@ -138,6 +138,8 @@ pub struct DetectedTechnology {
     pub conflicts_with: Vec<String>,
     /// Whether this is the primary technology driving the architecture
     pub is_primary: bool,
+    /// File indicators that helped identify this technology
+    pub file_indicators: Vec<String>,
 }
 
 /// Represents a service within a microservice architecture
@@ -481,6 +483,7 @@ mod tests {
                 requires: vec!["serde".to_string(), "tokio".to_string()],
                 conflicts_with: vec![],
                 is_primary: true,
+                file_indicators: vec![],
             }
         ];
         
