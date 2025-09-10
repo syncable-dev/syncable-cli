@@ -9,6 +9,7 @@ use syncable_cli::{
         SeverityThreshold, ToolsCommand,
     },
     config, generator,
+    telemetry::{self},
 };
 
 use colored::Colorize;
@@ -41,14 +42,53 @@ async fn run() -> syncable_cli::Result<()> {
     // Initialize logging
     cli.init_logging();
 
+    log::debug!("Loading configuration...");
+    
     // Load configuration
-    let _config = match config::load_config(cli.config.as_deref()) {
+    let mut config = match config::load_config(cli.config.as_deref()) {
         Ok(config) => config,
         Err(e) => {
             eprintln!("Failed to load configuration: {}", e);
             process::exit(1);
         }
     };
+
+    log::debug!("Configuration loaded: telemetry enabled = {}", config.telemetry.enabled);
+
+    // Override telemetry setting if CLI flag is set
+    if cli.disable_telemetry {
+        config.telemetry.enabled = false;
+    }
+
+    log::debug!("Initializing telemetry...");
+    
+    // Initialize telemetry
+    if let Err(e) = telemetry::init_telemetry(&config).await {
+        log::warn!("Failed to initialize telemetry: {}", e);
+    } else {
+        log::debug!("Telemetry initialized successfully");
+    }
+
+    // Check if telemetry client is available
+    if telemetry::get_telemetry_client().is_some() {
+        log::debug!("Telemetry client is available");
+    } else {
+        log::debug!("Telemetry client is NOT available");
+    }
+
+    // Get command name for telemetry
+    let command_name = match &cli.command {
+        Commands::Analyze { .. } => "analyze",
+        Commands::Generate { .. } => "generate",
+        Commands::Validate { .. } => "validate",
+        Commands::Support { .. } => "support",
+        Commands::Dependencies { .. } => "dependencies",
+        Commands::Vulnerabilities { .. } => "vulnerabilities",
+        Commands::Security { .. } => "security",
+        Commands::Tools { .. } => "tools",
+    };
+
+    log::debug!("Command name: {}", command_name);
 
     // Execute command
     let result = match cli.command {
@@ -60,6 +100,16 @@ async fn run() -> syncable_cli::Result<()> {
             only,
             color_scheme,
         } => {
+            // Track Analyze command
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_analyze();
+            }
+            
+            // Track Analyze Folder event
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_analyze_folder();
+            }
+            
             match handle_analyze(path, json, detailed, display, only, color_scheme) {
                 Ok(_output) => Ok(()), // The output was already printed by display_analysis_with_return
                 Err(e) => Err(e),
@@ -74,15 +124,36 @@ async fn run() -> syncable_cli::Result<()> {
             all,
             dry_run,
             force,
-        } => handle_generate(
-            path, output, dockerfile, compose, terraform, all, dry_run, force,
-        ),
-        Commands::Validate { path, types, fix } => handle_validate(path, types, fix),
+        } => {
+            // Track Generate command
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_generate();
+            }
+            
+            handle_generate(
+                path, output, dockerfile, compose, terraform, all, dry_run, force,
+            )
+        },
+        Commands::Validate { path, types, fix } => {
+            // Track Validate command
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_validate();
+            }
+            
+            handle_validate(path, types, fix)
+        },
         Commands::Support {
             languages,
             frameworks,
             detailed,
-        } => handle_support(languages, frameworks, detailed),
+        } => {
+            // Track Support command
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_support();
+            }
+            
+            handle_support(languages, frameworks, detailed)
+        },
         Commands::Dependencies {
             path,
             licenses,
@@ -90,15 +161,34 @@ async fn run() -> syncable_cli::Result<()> {
             prod_only,
             dev_only,
             format,
-        } => handle_dependencies(path, licenses, vulnerabilities, prod_only, dev_only, format)
-            .await
-            .map(|_| ()),
+        } => {
+            // Track Dependencies command
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_dependencies();
+            }
+            
+            handle_dependencies(path, licenses, vulnerabilities, prod_only, dev_only, format)
+                .await
+                .map(|_| ())
+        },
         Commands::Vulnerabilities {
             path,
             severity,
             format,
             output,
-        } => handle_vulnerabilities(path, severity, format, output).await,
+        } => {
+            // Track Vulnerabilities command
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_vulnerabilities();
+            }
+            
+            // Track Vulnerability Scan event
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_vulnerability_scan();
+            }
+            
+            handle_vulnerabilities(path, severity, format, output).await
+        },
         Commands::Security {
             path,
             mode,
@@ -111,21 +201,45 @@ async fn run() -> syncable_cli::Result<()> {
             format,
             output,
             fail_on_findings,
-        } => handle_security(
-            path,
-            mode,
-            include_low,
-            no_secrets,
-            no_code_patterns,
-            no_infrastructure,
-            no_compliance,
-            frameworks,
-            format,
-            output,
-            fail_on_findings,
-        ),
-        Commands::Tools { command } => handle_tools(command).await,
+        } => {
+            // Track Security command
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_security();
+            }
+            
+            // Track Security Scan event
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_security_scan();
+            }
+            
+            handle_security(
+                path,
+                mode,
+                include_low,
+                no_secrets,
+                no_code_patterns,
+                no_infrastructure,
+                no_compliance,
+                frameworks,
+                format,
+                output,
+                fail_on_findings,
+            )
+        },
+        Commands::Tools { command } => {
+            // Track Tools command
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_tools();
+            }
+            
+            handle_tools(command).await
+        },
     };
+
+    // Flush telemetry events before exiting
+    if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+        telemetry_client.flush().await;
+    }
 
     if let Err(e) = result {
         eprintln!("Error: {}", e);

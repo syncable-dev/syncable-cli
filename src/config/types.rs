@@ -6,6 +6,7 @@ pub struct Config {
     pub analysis: AnalysisConfig,
     pub generation: GenerationConfig,
     pub output: OutputConfig,
+    pub telemetry: TelemetryConfig,  // New field for telemetry configuration
 }
 
 /// Analysis configuration
@@ -65,6 +66,12 @@ pub enum OutputFormat {
     Json,
 }
 
+// Telemetry configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TelemetryConfig {
+    pub enabled: bool,
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -102,6 +109,9 @@ impl Default for Config {
                 overwrite_existing: false,
                 create_backup: true,
             },
+            telemetry: TelemetryConfig {
+                enabled: true, // Telemetry enabled by default
+            },
         }
     }
-} 
+}
