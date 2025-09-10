@@ -1,7 +1,6 @@
 use crate::analyzer::dependency_parser::Language;
 use crate::analyzer::tool_management::{ToolDetector, InstallationSource};
-use crate::error::{AnalysisError, IaCGeneratorError, Result};
-use log::{info, warn, debug};
+use crate::error::Result;
 use std::collections::HashMap;
 use thiserror::Error;
 
