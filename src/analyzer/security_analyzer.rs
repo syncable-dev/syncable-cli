@@ -1551,7 +1551,7 @@ impl SecurityAnalyzer {
     }
     
     // Additional helper methods...
-    fn collect_source_files(&self, project_root: &Path, language: &str) -> Result<Vec<PathBuf>, SecurityError> {
+    fn collect_source_files(&self, _project_root: &Path, _language: &str) -> Result<Vec<PathBuf>, SecurityError> {
         // TODO: Implement source file collection based on language
         Ok(vec![])
     }
@@ -1874,7 +1874,7 @@ mod tests {
         config.skip_gitignored_files = false;
         config.downgrade_gitignored_severity = true;
         
-        let analyzer = SecurityAnalyzer::with_config(config).unwrap();
+        let _analyzer = SecurityAnalyzer::with_config(config).unwrap();
         // Additional test logic could be added here for downgrade behavior
     }
     
@@ -2027,7 +2027,7 @@ mod tests {
         
         for pattern in &legitimate_patterns {
             // These should either not match any secret pattern, or be filtered out by context detection
-            let matches_old_generic_pattern = pattern.to_lowercase().contains("secret") || 
+            let _matches_old_generic_pattern = pattern.to_lowercase().contains("secret") || 
                                             pattern.to_lowercase().contains("key");
             
             // Our new patterns should be more specific and not match env var access
