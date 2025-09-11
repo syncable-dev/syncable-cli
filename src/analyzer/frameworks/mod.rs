@@ -84,7 +84,8 @@ impl FrameworkDetectionUtils {
                 let pattern_confidence = matches as f32 / total_patterns as f32;
                 // Use additive approach instead of multiplicative to avoid extremely low scores
                 // Base confidence provides a floor, pattern confidence provides the scaling
-                let final_confidence = (rule.confidence * pattern_confidence + base_confidence * 0.1).min(1.0);
+                // Cap dependency-based confidence at 0.95 to ensure file-based detection (1.0) takes precedence
+                let final_confidence = (rule.confidence * pattern_confidence + base_confidence * 0.1).min(0.95);
                 
                 // Debug logging for Tanstack Start detection
                 if rule.name.contains("Tanstack") {
@@ -123,7 +124,9 @@ impl FrameworkDetectionUtils {
                 dependency.contains(&pattern.replace('*', ""))
             }
         } else {
-            dependency == pattern || dependency.contains(pattern)
+            // For dependency detection, use exact matching to avoid false positives
+            // Only match if the dependency is exactly the pattern or starts with the pattern followed by a version specifier
+            dependency == pattern || dependency.starts_with(&(pattern.to_string() + "@")) || dependency.starts_with(&(pattern.to_string() + "/"))
         }
     }
 
