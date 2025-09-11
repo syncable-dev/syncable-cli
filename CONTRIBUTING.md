@@ -134,6 +134,7 @@ git commit -m "feat: add support for Ruby language detection"
 
 ### High Priority
 
+
 1. **Language Support**: Add detection for new languages (Ruby, PHP, C#)
 2. **Framework Detection**: Expand framework detection patterns
 3. **Security Scanning**: Integrate additional vulnerability databases
