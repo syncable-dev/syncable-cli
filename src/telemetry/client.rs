@@ -95,49 +95,52 @@ impl TelemetryClient {
     }
     
     // Specific methods for the actual commands
-    pub fn track_analyze(&self) {
-        self.track_event("analyze", HashMap::new());
+    pub fn track_analyze(&self, properties: HashMap<String, serde_json::Value>) {
+        self.track_event("analyze", properties);
     }
     
-    pub fn track_generate(&self) {
-        self.track_event("generate", HashMap::new());
+    pub fn track_generate(&self, properties: HashMap<String, serde_json::Value>) {
+        self.track_event("generate", properties);
     }
     
-    pub fn track_validate(&self) {
-        self.track_event("validate", HashMap::new());
+    pub fn track_validate(&self, properties: HashMap<String, serde_json::Value>) {
+        self.track_event("validate", properties);
     }
     
-    pub fn track_support(&self) {
-        self.track_event("support", HashMap::new());
+    pub fn track_support(&self, properties: HashMap<String, serde_json::Value>) {
+        self.track_event("support", properties);
     }
     
-    pub fn track_dependencies(&self) {
-        self.track_event("dependencies", HashMap::new());
+    pub fn track_dependencies(&self, properties: HashMap<String, serde_json::Value>) {
+        self.track_event("dependencies", properties);
     }
     
-    pub fn track_vulnerabilities(&self) {
-        self.track_event("vulnerabilities", HashMap::new());
+    // Updated to accept properties
+    pub fn track_vulnerabilities(&self, properties: HashMap<String, serde_json::Value>) {
+        self.track_event("Vulnerability Scan", properties);
     }
     
-    pub fn track_security(&self) {
-        self.track_event("security", HashMap::new());
+    // Updated to accept properties
+    pub fn track_security(&self, properties: HashMap<String, serde_json::Value>) {
+        self.track_event("Security Scan", properties);
     }
     
-    pub fn track_tools(&self) {
-        self.track_event("tools", HashMap::new());
+    pub fn track_tools(&self, properties: HashMap<String, serde_json::Value>) {
+        self.track_event("tools", properties);
     }
     
     // Existing specific methods for events
     pub fn track_security_scan(&self) {
-        self.track_event("Security Scan", HashMap::new());
+        // Deprecated: Use track_security with properties instead
     }
     
-    pub fn track_analyze_folder(&self) {
-        self.track_event("Analyze Folder", HashMap::new());
+    // Updated to accept properties
+    pub fn track_analyze_folder(&self, properties: HashMap<String, serde_json::Value>) {
+        self.track_event("Analyze Folder", properties);
     }
     
     pub fn track_vulnerability_scan(&self) {
-        self.track_event("Vulnerability Scan", HashMap::new());
+        // Deprecated: Use track_vulnerabilities with properties instead
     }
     
     // Flush method to ensure all events are sent before the program exits
