@@ -24,6 +24,10 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_PLZ_TOKEN }} # ← checkout must use the same token
+      - name: Check for uncommitted changes
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)"
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Run release-plz
@@ -50,6 +54,10 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_PLZ_TOKEN }}
+      - name: Check for uncommitted changes
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)"
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Run release-plz PR
