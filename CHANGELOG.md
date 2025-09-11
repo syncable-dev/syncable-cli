@@ -106,6 +106,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.17.0](https://github.com/syncable-dev/syncable-cli/compare/v0.16.0...v0.17.0) - 2025-09-11
+
+### Added
+
+- test trigger
+- improved telemtry and removed dublets
+
+### Fixed
+
+- .qodor folder for some reason wasn't corectly ignored
+
+### Other
+
+- added privacy-policy for telemetry
+- fixed vulnerabilities output for different languages
+
 ## [0.12.1](https://github.com/syncable-dev/syncable-cli/compare/v0.12.0...v0.12.1) - 2025-07-09
 
 ### Other
