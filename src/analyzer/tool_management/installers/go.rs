@@ -23,7 +23,7 @@ pub fn install_govulncheck(
     if success {
         info!("✅ govulncheck installed successfully");
         installed_tools.insert("govulncheck".to_string(), true);
-        tool_detector.clear_cache();
+        tool_detector.clear_cache(); // Clear cache to force fresh detection
         info!("💡 Note: Make sure ~/go/bin is in your PATH to use govulncheck");
     } else {
         warn!("❌ Failed to install govulncheck");

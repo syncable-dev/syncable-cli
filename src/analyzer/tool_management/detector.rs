@@ -9,6 +9,7 @@ use log::{debug, info};
 pub struct ToolStatus {
     pub available: bool,
     pub path: Option<PathBuf>,
+    pub execution_path: Option<PathBuf>, // Path to use for execution
     pub version: Option<String>,
     pub installation_source: InstallationSource,
     pub last_checked: SystemTime,
@@ -162,6 +163,7 @@ impl ToolDetector {
         let not_found = ToolStatus {
             available: false,
             path: None,
+            execution_path: None,
             version: None,
             installation_source: InstallationSource::NotFound,
             last_checked: SystemTime::now(),
@@ -183,6 +185,7 @@ impl ToolDetector {
             return ToolStatus {
                 available: true,
                 path: Some(path),
+                execution_path: None, // Execute by name when in PATH
                 version,
                 installation_source: InstallationSource::SystemPath,
                 last_checked: SystemTime::now(),
@@ -204,7 +207,8 @@ impl ToolDetector {
                           tool_name, tool_path, version, source);
                     return ToolStatus {
                         available: true,
-                        path: Some(tool_path),
+                        path: Some(tool_path.clone()),
+                        execution_path: Some(tool_path), // Use full path for execution
                         version: Some(version),
                         installation_source: source,
                         last_checked: SystemTime::now(),
@@ -222,6 +226,7 @@ impl ToolDetector {
                         return ToolStatus {
                             available: true,
                             path: Some(tool_path_exe),
+                            execution_path: Some(tool_path_exe), // Use full path for execution
                             version,
                             installation_source: source,
                             last_checked: SystemTime::now(),
@@ -236,6 +241,7 @@ impl ToolDetector {
         ToolStatus {
             available: false,
             path: None,
+            execution_path: None,
             version: None,
             installation_source: InstallationSource::NotFound,
             last_checked: SystemTime::now(),
