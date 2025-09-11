@@ -6,6 +6,48 @@ Thank you for your interest in contributing to the Syncable Infrastructure-as-Co
 
 We are committed to providing a welcoming and inclusive environment. Please be respectful and constructive in all interactions.
 
+## 🛡️ Telemetry and Privacy
+
+Syncable CLI collects anonymous usage data to help us improve the product. This data includes:
+
+- Command usage (which commands are run)
+- System information (OS type, CLI version)
+- Performance metrics (execution time, success/failure status)
+
+We do NOT collect:
+- Personal or sensitive information
+- File contents or project data
+- Environment variables or secrets
+- Any personally identifiable information
+
+### Opting Out of Telemetry
+
+Users can opt out of telemetry collection through multiple methods:
+
+1. **Command-Line Flag**: Add `--disable-telemetry` to any command
+   ```bash
+   sync-ctl --disable-telemetry analyze .
+   ```
+
+2. **Environment Variable**: Set `SYNCABLE_CLI_TELEMETRY=false`
+   ```bash
+   export SYNCABLE_CLI_TELEMETRY=false
+   sync-ctl analyze .
+   ```
+
+3. **Configuration File**: Add the following to your `.syncable.toml` file
+   ```toml
+   [telemetry]
+   enabled = false
+   ```
+
+The opt-out mechanisms follow this priority order:
+1. `--disable-telemetry` CLI flag (highest priority)
+2. `SYNCABLE_CLI_TELEMETRY` environment variable (medium priority)
+3. `telemetry.enabled` in config file (lowest priority)
+
+Our telemetry system is designed with user privacy in mind. All data is anonymized and collected in compliance with privacy regulations.
+
 ## 🚀 Getting Started
 
 ### Prerequisites
