@@ -14,14 +14,11 @@ impl RuntimeDetectionEngine {
     }
     
     /// Get all available package managers in a project
-    pub fn get_all_package_managers(project_path: &Path) -> Vec<String> {
+    pub fn get_all_package_managers(project_path: &Path) -> Vec<super::javascript::PackageManager> {
         use super::javascript::RuntimeDetector;
         
         let js_detector = RuntimeDetector::new(project_path.to_path_buf());
         js_detector.detect_all_package_managers()
-            .into_iter()
-            .map(|pm| pm.as_str().to_string())
-            .collect()
     }
     
     /// Check if a project uses a specific runtime
