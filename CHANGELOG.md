@@ -106,6 +106,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.18.0](https://github.com/syncable-dev/syncable-cli/compare/v0.17.0...v0.18.0) - 2025-09-11
+
+### Added
+
+- improved analyzer from false positives of voltagen and expo issues
+
+### Other
+
+- Merge pull request #159 from syncable-dev/develop
+
 ## [0.17.0](https://github.com/syncable-dev/syncable-cli/compare/v0.16.0...v0.17.0) - 2025-09-11
 
 ### Added
