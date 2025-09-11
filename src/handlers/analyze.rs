@@ -37,6 +37,8 @@ pub fn handle_analyze(
     let monorepo_analysis = analyze_monorepo(&path)?;
 
     let output = if json {
+        println!("🔍 Analyzing JSON OUTPUT: {}", path.display());
+
         display_analysis_with_return(&monorepo_analysis, DisplayMode::Json)
     } else {
         // Determine display mode
