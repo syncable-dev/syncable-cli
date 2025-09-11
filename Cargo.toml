@@ -1,6 +1,6 @@
 [package]
 name = "syncable-cli"
-version = "0.16.0"
+version = "0.17.0"
 edition = "2024"
 authors = ["Syncable Team"]
 description = "A Rust-based CLI that analyzes code repositories and generates Infrastructure as Code configurations"
