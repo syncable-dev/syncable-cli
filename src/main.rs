@@ -39,7 +39,16 @@ async fn run() -> syncable_cli::Result<()> {
         println!("✅ Update cache cleared. Checking for updates now...");
     }
 
-    check_for_update().await;
+    // Suppress update banner when JSON output is requested
+    let suppress_update_banner = cli.json || matches!(
+        &cli.command,
+        Commands::Analyze { json: true, .. }
+            | Commands::Dependencies { format: OutputFormat::Json, .. }
+            | Commands::Vulnerabilities { format: OutputFormat::Json, .. }
+            | Commands::Security { format: OutputFormat::Json, .. }
+            | Commands::Tools { command: ToolsCommand::Status { format: OutputFormat::Json, .. } }
+    );
+    check_for_update(suppress_update_banner).await;
 
     // Initialize logging
     cli.init_logging();
@@ -266,7 +275,10 @@ async fn run() -> syncable_cli::Result<()> {
                 properties.insert("dev_only".to_string(), json!(true));
             }
             
-            let format_str = match format {
+            // Honor global --json flag for output selection
+            let effective_format = if cli.json { OutputFormat::Json } else { format };
+
+            let format_str = match effective_format {
                 OutputFormat::Table => "table",
                 OutputFormat::Json => "json",
             };
@@ -277,7 +289,7 @@ async fn run() -> syncable_cli::Result<()> {
                 telemetry_client.track_dependencies(properties);
             }
             
-            handle_dependencies(path, licenses, vulnerabilities, prod_only, dev_only, format)
+            handle_dependencies(path, licenses, vulnerabilities, prod_only, dev_only, effective_format)
                 .await
                 .map(|_| ())
         },
@@ -300,7 +312,10 @@ async fn run() -> syncable_cli::Result<()> {
                 properties.insert("severity_threshold".to_string(), json!(severity_str));
             }
             
-            let format_str = match format {
+            // Honor global --json flag for output selection
+            let effective_format = if cli.json { OutputFormat::Json } else { format };
+
+            let format_str = match effective_format {
                 OutputFormat::Table => "table",
                 OutputFormat::Json => "json",
             };
@@ -315,7 +330,7 @@ async fn run() -> syncable_cli::Result<()> {
                 telemetry_client.track_vulnerabilities(properties);
             }
             
-            handle_vulnerabilities(path, severity, format, output).await
+            handle_vulnerabilities(path, severity, effective_format, output).await
         },
         Commands::Security {
             path,
@@ -366,7 +381,10 @@ async fn run() -> syncable_cli::Result<()> {
                 properties.insert("compliance_frameworks".to_string(), json!(frameworks));
             }
             
-            let format_str = match format {
+            // Honor global --json flag for output selection
+            let effective_format = if cli.json { OutputFormat::Json } else { format };
+
+            let format_str = match effective_format {
                 OutputFormat::Table => "table",
                 OutputFormat::Json => "json",
             };
@@ -394,7 +412,7 @@ async fn run() -> syncable_cli::Result<()> {
                 no_infrastructure,
                 no_compliance,
                 frameworks,
-                format,
+                effective_format,
                 output,
                 fail_on_findings,
             )
@@ -506,7 +524,11 @@ fn clear_update_cache() {
     }
 }
 
-async fn check_for_update() {
+async fn check_for_update(suppress_output: bool) {
+    // In JSON mode (or when suppressed), avoid any banner or network I/O
+    if suppress_output {
+        return;
+    }
     let cache_dir_path = cache_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("syncable-cli");
@@ -617,7 +639,9 @@ async fn check_for_update() {
                                 && latest != current
                                 && is_version_newer(current, latest)
                             {
-                                show_update_notification(current, latest);
+                                if !suppress_output {
+                                    show_update_notification(current, latest);
+                                }
                             }
                         }
                         Err(e) => {
