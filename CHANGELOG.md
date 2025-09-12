@@ -106,6 +106,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.18.3](https://github.com/syncable-dev/syncable-cli/compare/v0.18.2...v0.18.3) - 2025-09-12
+
+### Added
+
+- Removed Update Banner on json outputs
+
 ## [0.18.2](https://github.com/syncable-dev/syncable-cli/compare/v0.18.1...v0.18.2) - 2025-09-11
 
 ### Added
