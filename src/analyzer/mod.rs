@@ -198,6 +198,7 @@ pub enum ProjectType {
     Library,
     MobileApp,
     DesktopApp,
+    FunctionApp,
     Microservice,
     StaticSite,
     Hybrid, // Multiple types

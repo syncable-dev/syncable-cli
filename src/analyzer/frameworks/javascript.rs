@@ -229,15 +229,15 @@ fn detect_by_project_structure(language: &DetectedLanguage, rules: &[TechnologyR
             let file_name = file_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
             
             // Check for React Native structure
-            if path_str.contains("android") {
+            if path_str.ends_with("/android") || path_str.contains("/android/") {
                 has_android_dir = true;
-            } else if path_str.contains("ios") {
+            } else if path_str.ends_with("/ios") || path_str.contains("/ios/") {
                 has_ios_dir = true;
             }
             // Check for Next.js structure
-            else if path_str.contains("pages") {
+            else if path_str.ends_with("/pages") || path_str.contains("/pages/") {
                 has_pages_dir = true;
-            } else if path_str.contains("app") && !path_str.contains("app.config") && !path_str.contains("encore.app") {
+            } else if (path_str.ends_with("/app") || path_str.contains("/app/")) && !path_str.contains("app.config") && !path_str.contains("encore.app") {
                 has_app_dir = true;
             }
             // Check for TanStack Start structure
@@ -1002,6 +1002,25 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             is_primary_indicator: true,
             alternative_names: vec!["encore-ts-starter".to_string()],
             file_indicators: vec!["encore.app".to_string(), "encore.service.ts".to_string(), "encore.service.js".to_string()],
+        },
+        TechnologyRule {
+            name: "Azure Functions".to_string(),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.95,
+            dependency_patterns: vec!["@azure/functions".to_string()],
+            requires: vec!["Node.js".to_string()],
+            conflicts_with: vec![
+                // Similar backend frameworks
+                "Express.js".to_string(),
+                "Fastify".to_string(),
+                "Nest.js".to_string(),
+                "Hono".to_string(),
+                "Elysia".to_string(),
+                "Encore".to_string(),
+            ],
+            is_primary_indicator: true,
+            alternative_names: vec!["azure-functions".to_string()],
+            file_indicators: vec!["host.json".to_string(), "local.settings.json".to_string(), "function.json".to_string()],
         },
         
         // BUILD TOOLS (Not frameworks!)
