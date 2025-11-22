@@ -119,6 +119,58 @@ mod tests {
             assert!(!react_tech.is_primary); // Should be false since Next.js is the meta-framework
         }
     }
+
+    #[test]
+    fn test_vite_react_is_not_misclassified_as_next() {
+        let language = DetectedLanguage {
+            name: "TypeScript".to_string(),
+            version: Some("18.0.0".to_string()),
+            confidence: 0.9,
+            files: vec![PathBuf::from("src/App.tsx")],
+            main_dependencies: vec![
+                "react".to_string(),
+                "react-dom".to_string(),
+                "vite".to_string(),
+            ],
+            dev_dependencies: vec!["vite".to_string()],
+            package_manager: Some("npm".to_string()),
+        };
+
+        let config = AnalysisConfig::default();
+        let project_root = Path::new(".");
+
+        let technologies = detect_frameworks(project_root, &[language], &config).unwrap();
+
+        assert!(technologies.iter().any(|t| t.name == "Vite"));
+        assert!(technologies.iter().any(|t| t.name == "React"));
+        assert!(technologies.iter().all(|t| t.name != "Next.js"));
+    }
+
+    #[test]
+    fn test_tanstack_start_detection_over_structure_only() {
+        let language = DetectedLanguage {
+            name: "TypeScript".to_string(),
+            version: Some("18.0.0".to_string()),
+            confidence: 0.9,
+            files: vec![PathBuf::from("app/routes/index.tsx")],
+            main_dependencies: vec![
+                "@tanstack/react-start".to_string(),
+                "@tanstack/react-router".to_string(),
+                "react".to_string(),
+                "react-dom".to_string(),
+            ],
+            dev_dependencies: vec![],
+            package_manager: Some("npm".to_string()),
+        };
+
+        let config = AnalysisConfig::default();
+        let project_root = Path::new(".");
+
+        let technologies = detect_frameworks(project_root, &[language], &config).unwrap();
+
+        assert!(technologies.iter().any(|t| t.name == "Tanstack Start"));
+        assert!(technologies.iter().all(|t| t.name != "Next.js"));
+    }
     
     #[test]
     fn test_python_fastapi_detection() {

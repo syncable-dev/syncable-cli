@@ -250,26 +250,40 @@ fn analyze_javascript_project(
                         }
                     }
                     
-                    // Extract dependencies
-                    if let Some(deps) = package_json.get("dependencies") {
-                        if let Some(deps_obj) = deps.as_object() {
-                            for (name, _) in deps_obj {
-                                info.main_dependencies.push(name.clone());
-                            }
+                    // Extract dependencies (always include all buckets for framework detection)
+                    if let Some(deps) = package_json.get("dependencies").and_then(|d| d.as_object()) {
+                        for (name, _) in deps {
+                            info.main_dependencies.push(name.clone());
                         }
                     }
-                    
-                    // Extract dev dependencies if enabled
-                    if config.include_dev_dependencies {
-                        if let Some(dev_deps) = package_json.get("devDependencies") {
-                            if let Some(dev_deps_obj) = dev_deps.as_object() {
-                                for (name, _) in dev_deps_obj {
-                                    info.dev_dependencies.push(name.clone());
-                                }
-                            }
+
+                    // Frameworks like Vite/Remix/Next are often in devDependencies; always include
+                    if let Some(dev_deps) = package_json.get("devDependencies").and_then(|d| d.as_object()) {
+                        for (name, _) in dev_deps {
+                            info.main_dependencies.push(name.clone());
+                            info.dev_dependencies.push(name.clone());
                         }
                     }
-                    
+
+                    // peerDependencies frequently carry framework identity (e.g., react-router)
+                    if let Some(peer_deps) = package_json.get("peerDependencies").and_then(|d| d.as_object()) {
+                        for (name, _) in peer_deps {
+                            info.main_dependencies.push(name.clone());
+                        }
+                    }
+
+                    // optional/bundled deps can also hold framework markers (rare but cheap to add)
+                    if let Some(opt_deps) = package_json.get("optionalDependencies").and_then(|d| d.as_object()) {
+                        for (name, _) in opt_deps {
+                            info.main_dependencies.push(name.clone());
+                        }
+                    }
+                    if let Some(bundle_deps) = package_json.get("bundledDependencies").and_then(|d| d.as_array()) {
+                        for dep in bundle_deps.iter().filter_map(|d| d.as_str()) {
+                            info.main_dependencies.push(dep.to_string());
+                        }
+                    }
+
                     info.confidence = 0.95; // High confidence with manifest
                 }
             }
