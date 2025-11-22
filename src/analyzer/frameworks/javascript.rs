@@ -155,7 +155,7 @@ fn detect_by_config_files(language: &DetectedLanguage, rules: &[TechnologyRule])
                 }
             }
             // Check for Next.js config files
-            else if file_name == "next.config.js" || file_name == "next.config.ts" {
+            else if file_name.starts_with("next.config.") {
                 if let Some(nextjs_rule) = rules.iter().find(|r| r.name == "Next.js") {
                     detected.push(DetectedTechnology {
                         name: nextjs_rule.name.clone(),
@@ -221,13 +221,15 @@ fn detect_by_project_structure(language: &DetectedLanguage, rules: &[TechnologyR
     let mut has_encore_service_files = false;
     let mut has_app_json = false;
     let mut has_app_js_ts = false;
-    
+    let mut has_next_config = false;
+    let mut has_tanstack_config = false;
+
     // Check project directories
     for file_path in &language.files {
         if let Some(parent) = file_path.parent() {
             let path_str = parent.to_string_lossy();
             let file_name = file_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            
+
             // Check for React Native structure
             if path_str.contains("android") {
                 has_android_dir = true;
@@ -235,13 +237,13 @@ fn detect_by_project_structure(language: &DetectedLanguage, rules: &[TechnologyR
                 has_ios_dir = true;
             }
             // Check for Next.js structure
-            else if path_str.contains("pages") {
+            else if has_path_component(parent, "pages") {
                 has_pages_dir = true;
-            } else if path_str.contains("app") && !path_str.contains("app.config") && !path_str.contains("encore.app") {
+            } else if has_path_component(parent, "app") && !file_name.contains("app.config") && !file_name.contains("encore.app") {
                 has_app_dir = true;
             }
             // Check for TanStack Start structure
-            else if path_str.contains("app/routes") {
+            else if has_app_routes(parent) {
                 has_app_routes_dir = true;
             }
             // Check for Encore structure
@@ -256,12 +258,22 @@ fn detect_by_project_structure(language: &DetectedLanguage, rules: &[TechnologyR
             } else if file_name == "App.js" || file_name == "App.tsx" {
                 has_app_js_ts = true;
             }
+
+            // Configs (need to be recorded so structure checks can require them)
+            if file_name.starts_with("next.config.") {
+                has_next_config = true;
+            }
+            if file_name == "app.config.ts" || file_name == "app.config.js" || file_name.starts_with("vinxi.config") {
+                has_tanstack_config = true;
+            }
         }
     }
-    
+
     // Check if we have Expo dependencies
     let has_expo_deps = language.main_dependencies.iter().any(|dep| dep == "expo" || dep == "react-native");
-    
+    let has_next_dep = language.main_dependencies.iter().any(|dep| dep == "next" || dep.starts_with("next@"));
+    let has_tanstack_dep = language.main_dependencies.iter().any(|dep| dep.contains("tanstack/react-start") || dep.contains("tanstack-start") || dep.contains("vinxi"));
+
     // Determine frameworks based on structure
     if has_encore_app_file || has_encore_service_files {
         // Likely Encore
@@ -277,7 +289,7 @@ fn detect_by_project_structure(language: &DetectedLanguage, rules: &[TechnologyR
                 file_indicators: encore_rule.file_indicators.clone(),
             });
         }
-    } else if has_app_routes_dir {
+    } else if has_app_routes_dir && (has_tanstack_dep || has_tanstack_config) {
         // Likely TanStack Start
         if let Some(tanstack_rule) = rules.iter().find(|r| r.name == "Tanstack Start") {
             detected.push(DetectedTechnology {
@@ -291,7 +303,7 @@ fn detect_by_project_structure(language: &DetectedLanguage, rules: &[TechnologyR
                 file_indicators: tanstack_rule.file_indicators.clone(),
             });
         }
-    } else if has_pages_dir || has_app_dir {
+    } else if (has_pages_dir || has_app_dir) && (has_next_dep || has_next_config) {
         // Likely Next.js
         if let Some(nextjs_rule) = rules.iter().find(|r| r.name == "Next.js") {
             detected.push(DetectedTechnology {
@@ -340,6 +352,21 @@ fn detect_by_project_structure(language: &DetectedLanguage, rules: &[TechnologyR
     } else {
         Some(detected)
     }
+}
+
+/// Returns true if any path component exactly matches the target (avoids substring false positives like "apps/")
+fn has_path_component(path: &Path, target: &str) -> bool {
+    path.components()
+        .any(|c| c.as_os_str().to_string_lossy() == target)
+}
+
+/// Detects the canonical TanStack Start layout app/routes (component-level, not substring)
+fn has_app_routes(path: &Path) -> bool {
+    let components: Vec<String> = path
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().to_string())
+        .collect();
+    components.windows(2).any(|w| w[0] == "app" && w[1] == "routes")
 }
 
 /// New: Detect frameworks by analyzing source code patterns
