@@ -1,0 +1,7 @@
+{
+  "name": "fixture-nuxt",
+  "private": true,
+  "dependencies": {
+    "nuxt": "3.11.0"
+  }
+}
