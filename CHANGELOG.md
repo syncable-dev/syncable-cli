@@ -106,6 +106,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.20.0](https://github.com/syncable-dev/syncable-cli/compare/v0.19.0...v0.20.0) - 2025-12-16
+
+### Added
+
+- updated syncable-cli
+
+### Other
+
+- Merge pull request #187 from syncable-dev/develop
+
 ## [0.19.0](https://github.com/syncable-dev/syncable-cli/compare/v0.18.6...v0.19.0) - 2025-12-16
 
 ### Added
