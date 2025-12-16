@@ -106,6 +106,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.19.0](https://github.com/syncable-dev/syncable-cli/compare/v0.18.6...v0.19.0) - 2025-12-16
+
+### Added
+
+- Add AI agent layer with Rig framework and harden framework detection
+
+### Other
+
+- Merge pull request #185 from syncable-dev/develop
+
 ## [0.18.6](https://github.com/syncable-dev/syncable-cli/compare/v0.18.5...v0.18.6) - 2025-11-22
 
 ### Added
