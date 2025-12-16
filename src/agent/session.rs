@@ -3,13 +3,17 @@
 //! Provides a rich REPL experience similar to Claude Code with:
 //! - `/model` - Select from available models based on configured API keys
 //! - `/provider` - Switch provider (prompts for API key if not set)
+//! - `/cost` - Show token usage and estimated cost
 //! - `/help` - Show available commands
 //! - `/clear` - Clear conversation history
 //! - `/exit` or `/quit` - Exit the session
 
+use crate::agent::commands::{TokenUsage, SLASH_COMMANDS};
 use crate::agent::{AgentError, AgentResult, ProviderType};
+use crate::agent::ui::{SlashCommandAutocomplete, ansi};
 use crate::config::{load_agent_config, save_agent_config};
 use colored::Colorize;
+use inquire::Text;
 use std::io::{self, Write};
 use std::path::Path;
 
@@ -39,6 +43,7 @@ pub struct ChatSession {
     pub model: String,
     pub project_path: std::path::PathBuf,
     pub history: Vec<(String, String)>, // (role, content)
+    pub token_usage: TokenUsage,
 }
 
 impl ChatSession {
@@ -53,6 +58,7 @@ impl ChatSession {
             model: model.unwrap_or(default_model),
             project_path: project_path.to_path_buf(),
             history: Vec::new(),
+            token_usage: TokenUsage::new(),
         }
     }
 
@@ -258,15 +264,21 @@ impl ChatSession {
     /// Handle /help command
     pub fn print_help() {
         println!();
-        println!("{}", "📖 Available Commands:".cyan().bold());
+        println!("  {}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{}", ansi::PURPLE, ansi::RESET);
+        println!("  {}📖 Available Commands{}", ansi::PURPLE, ansi::RESET);
+        println!("  {}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{}", ansi::PURPLE, ansi::RESET);
         println!();
-        println!("  {}  - Select a different AI model", "/model".white().bold());
-        println!("  {} - Switch provider (OpenAI/Anthropic)", "/provider".white().bold());
-        println!("  {}  - Clear conversation history", "/clear".white().bold());
-        println!("  {}   - Show this help message", "/help".white().bold());
-        println!("  {}   - Exit the chat", "/exit".white().bold());
+        
+        for cmd in SLASH_COMMANDS.iter() {
+            let alias = cmd.alias.map(|a| format!(" ({})", a)).unwrap_or_default();
+            println!("  {}/{:<12}{}{} - {}{}{}", 
+                ansi::CYAN, cmd.name, alias, ansi::RESET,
+                ansi::DIM, cmd.description, ansi::RESET
+            );
+        }
+        
         println!();
-        println!("{}", "Just type your message and press Enter to chat!".dimmed());
+        println!("  {}Tip: Type / to see interactive command picker!{}", ansi::DIM, ansi::RESET);
         println!();
     }
 
@@ -343,6 +355,13 @@ impl ChatSession {
     pub fn process_command(&mut self, input: &str) -> AgentResult<bool> {
         let cmd = input.trim().to_lowercase();
         
+        // Handle bare "/" - now handled interactively in read_input
+        // Just show help if they somehow got here
+        if cmd == "/" {
+            Self::print_help();
+            return Ok(true);
+        }
+        
         match cmd.as_str() {
             "/exit" | "/quit" | "/q" => {
                 println!("\n{}", "👋 Goodbye!".green());
@@ -357,12 +376,16 @@ impl ChatSession {
             "/provider" | "/p" => {
                 self.handle_provider_command()?;
             }
+            "/cost" => {
+                self.token_usage.print_report(&self.model);
+            }
             "/clear" | "/c" => {
                 self.history.clear();
                 println!("{}", "✓ Conversation history cleared".green());
             }
             _ => {
                 if cmd.starts_with('/') {
+                    // Unknown command - interactive picker already handled in read_input
                     println!("{}", format!("Unknown command: {}. Type /help for available commands.", cmd).yellow());
                 }
             }
@@ -376,13 +399,31 @@ impl ChatSession {
         input.trim().starts_with('/')
     }
 
-    /// Read user input with prompt
+    /// Read user input with prompt - with interactive slash command support
+    /// Uses `inquire` library for proper terminal handling and autocomplete
     pub fn read_input(&self) -> io::Result<String> {
-        print!("{}", "You: ".green().bold());
-        io::stdout().flush()?;
-        
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        Ok(input.trim().to_string())
+        // Use inquire::Text with custom autocomplete for slash commands
+        let input = Text::new("You:")
+            .with_autocomplete(SlashCommandAutocomplete::new())
+            .with_help_message("Type / for commands, or ask a question")
+            .prompt();
+
+        match input {
+            Ok(text) => {
+                let trimmed = text.trim();
+                // Handle case where full suggestion was submitted (e.g., "/model        Description")
+                // Extract just the command if it looks like a suggestion format
+                if trimmed.starts_with('/') && trimmed.contains("  ") {
+                    // This looks like a suggestion format, extract just the command
+                    if let Some(cmd) = trimmed.split_whitespace().next() {
+                        return Ok(cmd.to_string());
+                    }
+                }
+                Ok(trimmed.to_string())
+            }
+            Err(inquire::InquireError::OperationCanceled) => Ok("exit".to_string()),
+            Err(inquire::InquireError::OperationInterrupted) => Ok("exit".to_string()),
+            Err(e) => Err(io::Error::new(io::ErrorKind::Other, e.to_string())),
+        }
     }
 }
