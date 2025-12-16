@@ -24,6 +24,7 @@
 //! - `/clear` - Clear conversation history
 //! - `/exit` - Exit the chat
 
+pub mod commands;
 pub mod session;
 pub mod tools;
 pub mod ui;
@@ -35,6 +36,7 @@ use rig::{
     providers::{anthropic, openai},
 };
 use session::ChatSession;
+use commands::TokenUsage;
 use std::path::Path;
 use std::sync::Arc;
 use ui::{ResponseFormatter, Spinner, ToolDisplayHook, spawn_tool_display_handler};
@@ -228,6 +230,12 @@ pub async fn run_interactive(
                 // Stop spinner and show beautifully formatted response
                 spinner.stop().await;
                 ResponseFormatter::print_response(&text);
+                
+                // Track token usage (estimate since Rig doesn't expose exact counts)
+                let prompt_tokens = TokenUsage::estimate_tokens(&input);
+                let completion_tokens = TokenUsage::estimate_tokens(&text);
+                session.token_usage.add_request(prompt_tokens, completion_tokens);
+                
                 session.history.push(("user".to_string(), input));
                 session.history.push(("assistant".to_string(), text));
             }
