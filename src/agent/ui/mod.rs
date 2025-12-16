@@ -8,6 +8,7 @@
 //! - Thinking/reasoning indicators
 //! - Elapsed time tracking
 
+pub mod autocomplete;
 pub mod colors;
 pub mod hooks;
 pub mod response;
@@ -15,6 +16,7 @@ pub mod spinner;
 pub mod streaming;
 pub mod tool_display;
 
+pub use autocomplete::*;
 pub use colors::*;
 pub use hooks::*;
 pub use response::*;
