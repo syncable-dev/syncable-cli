@@ -813,20 +813,16 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec!["tanstack-start".to_string(), "TanStack Start".to_string()],
             file_indicators: vec!["app.config.ts".to_string(), "app.config.js".to_string(), "app/routes/".to_string(), "vite.config.ts".to_string()],
         },
-        // React Router v7 as a framework (not just routing library) requires:
-        // - @react-router/dev (the framework CLI) OR react-router.config.ts
-        // - Just having react-router-dom is NOT enough (that's library usage)
         TechnologyRule {
             name: "React Router v7".to_string(),
             category: TechnologyCategory::MetaFramework,
             confidence: 0.95,
-            // ONLY match the framework package, not just the routing library
-            dependency_patterns: vec!["@react-router/dev".to_string(), "@react-router/node".to_string(), "@react-router/serve".to_string()],
+            dependency_patterns: vec!["react-router".to_string(), "react-dom".to_string(), "react-router-dom".to_string()],
             requires: vec!["React".to_string()],
-            conflicts_with: vec!["Next.js".to_string(), "Tanstack Start".to_string(), "SvelteKit".to_string(), "Nuxt.js".to_string(), "React Native".to_string(), "Expo".to_string(), "Encore".to_string()],
+            conflicts_with: vec!["Next.js".to_string(), "Tanstack Start".to_string(), "SvelteKit".to_string(), "Nuxt.js".to_string(), "React Native".to_string(), "Expo".to_string()],
             is_primary_indicator: true,
-            alternative_names: vec!["remix".to_string()],
-            file_indicators: vec!["react-router.config.ts".to_string(), "react-router.config.js".to_string()],
+            alternative_names: vec!["remix".to_string(), "react-router".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "SvelteKit".to_string(),
@@ -837,18 +833,18 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec!["Next.js".to_string(), "Tanstack Start".to_string(), "React Router v7".to_string(), "Nuxt.js".to_string()],
             is_primary_indicator: true,
             alternative_names: vec!["svelte-kit".to_string()],
-            file_indicators: vec!["svelte.config.js".to_string(), "svelte.config.ts".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Nuxt.js".to_string(),
             category: TechnologyCategory::MetaFramework,
             confidence: 0.95,
-            dependency_patterns: vec!["nuxt".to_string()],
+            dependency_patterns: vec!["nuxt".to_string(), "@nuxt/core".to_string()],
             requires: vec!["Vue.js".to_string()],
             conflicts_with: vec!["Next.js".to_string(), "Tanstack Start".to_string(), "React Router v7".to_string(), "SvelteKit".to_string()],
             is_primary_indicator: true,
             alternative_names: vec!["nuxtjs".to_string()],
-            file_indicators: vec!["nuxt.config.ts".to_string(), "nuxt.config.js".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Astro".to_string(),
@@ -859,18 +855,18 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
-            file_indicators: vec!["astro.config.mjs".to_string(), "astro.config.ts".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "SolidStart".to_string(),
             category: TechnologyCategory::MetaFramework,
             confidence: 0.95,
-            dependency_patterns: vec!["solid-start".to_string(), "@solidjs/start".to_string()],
+            dependency_patterns: vec!["solid-start".to_string()],
             requires: vec!["SolidJS".to_string()],
             conflicts_with: vec!["Next.js".to_string(), "Tanstack Start".to_string(), "React Router v7".to_string(), "SvelteKit".to_string()],
             is_primary_indicator: true,
             alternative_names: vec![],
-            file_indicators: vec!["app.config.ts".to_string(), "app.config.js".to_string()],
+            file_indicators: vec![],
         },
         
         // MOBILE FRAMEWORKS (React Native/Expo)
@@ -907,7 +903,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec!["angular".to_string()],
-            file_indicators: vec!["angular.json".to_string(), "angular.cli.json".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Svelte".to_string(),
@@ -917,20 +913,6 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false, // SvelteKit would be primary
-            alternative_names: vec![],
-            file_indicators: vec!["svelte.config.js".to_string()],
-        },
-        
-        // ROUTING LIBRARIES (Not frameworks! Just client-side routing)
-        TechnologyRule {
-            name: "React Router".to_string(),
-            category: TechnologyCategory::Library(LibraryType::Routing),
-            confidence: 0.85,
-            // This is the routing LIBRARY, not the framework
-            dependency_patterns: vec!["react-router-dom".to_string()],
-            requires: vec!["React".to_string()],
-            conflicts_with: vec![],
-            is_primary_indicator: false,
             alternative_names: vec![],
             file_indicators: vec![],
         },
@@ -991,7 +973,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec!["express".to_string()],
-            file_indicators: vec!["app.js".to_string(), "server.js".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Fastify".to_string(),
@@ -1002,7 +984,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec![],
-            file_indicators: vec!["fastify.config.js".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Nest.js".to_string(),
@@ -1013,7 +995,7 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec!["nestjs".to_string()],
-            file_indicators: vec!["nest-cli.json".to_string()],
+            file_indicators: vec![],
         },
         TechnologyRule {
             name: "Hono".to_string(),
@@ -1037,17 +1019,15 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        // Encore.ts - TypeScript backend framework
-        // ONLY match encore.dev package, not just "encore" which is too generic
         TechnologyRule {
             name: "Encore".to_string(),
             category: TechnologyCategory::BackendFramework,
             confidence: 0.95,
-            dependency_patterns: vec!["encore.dev".to_string()],
+            dependency_patterns: vec!["encore.dev".to_string(), "encore".to_string()],
             requires: vec![],
-            conflicts_with: vec!["Next.js".to_string(), "React Router v7".to_string(), "Tanstack Start".to_string()],
+            conflicts_with: vec!["Next.js".to_string()],
             is_primary_indicator: true,
-            alternative_names: vec![],
+            alternative_names: vec!["encore-ts-starter".to_string()],
             file_indicators: vec!["encore.app".to_string(), "encore.service.ts".to_string(), "encore.service.js".to_string()],
         },
         
