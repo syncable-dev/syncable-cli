@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod analyzer;
 pub mod cli;
 pub mod common;
@@ -103,5 +104,55 @@ pub async fn run_command(command: Commands) -> Result<()> {
             .map(|_| ()) // Map Result<String> to Result<()>
         }
         Commands::Tools { command } => handlers::handle_tools(command).await,
+        Commands::Chat { path, provider, model, query, setup } => {
+            use agent::{run_interactive, run_query, ProviderType};
+            use agent::config::{ensure_credentials, run_setup_wizard};
+            use cli::ChatProvider;
+            
+            // If setup flag is passed, run the wizard
+            if setup {
+                run_setup_wizard()
+                    .map(|_| ())
+                    .map_err(|e| error::IaCGeneratorError::Config(
+                        error::ConfigError::ParsingFailed(e.to_string()),
+                    ))?;
+                return Ok(());
+            }
+            
+            let project_path = path.canonicalize().unwrap_or(path);
+            
+            // Convert CLI provider to agent provider type
+            let cli_provider = provider.map(|p| match p {
+                ChatProvider::Openai => ProviderType::OpenAI,
+                ChatProvider::Anthropic => ProviderType::Anthropic,
+                ChatProvider::Ollama => ProviderType::OpenAI, // Fallback
+            });
+            
+            // Ensure credentials are available (prompts if needed)
+            let (agent_provider, default_model) = ensure_credentials(cli_provider)
+                .map_err(|e| error::IaCGeneratorError::Config(
+                    error::ConfigError::ParsingFailed(e.to_string()),
+                ))?;
+            
+            // Use provided model, or default from config
+            let model = model.or(default_model);
+            
+            if let Some(q) = query {
+                run_query(&project_path, &q, agent_provider, model)
+                    .await
+                    .map(|response| {
+                        println!("{}", response);
+                    })
+                    .map_err(|e| error::IaCGeneratorError::Config(
+                        error::ConfigError::ParsingFailed(e.to_string()),
+                    ))
+            } else {
+                run_interactive(&project_path, agent_provider, model)
+                    .await
+                    .map_err(|e| error::IaCGeneratorError::Config(
+                        error::ConfigError::ParsingFailed(e.to_string()),
+                    ))
+            }
+        }
     }
 }

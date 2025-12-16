@@ -49,6 +49,11 @@ fn scan_for_projects(
             let dir_name = entry.file_name().to_string_lossy().to_string();
             let dir_path = entry.path();
 
+            // Skip placeholder/template directories like `${{ values.name }}`
+            if is_placeholder_dir(&dir_path) {
+                continue;
+            }
+
             // Skip excluded patterns
             if should_exclude_directory(&dir_name, config) {
                 continue;
@@ -80,6 +85,18 @@ fn should_exclude_directory(dir_name: &str, config: &MonorepoDetectionConfig) ->
 
 /// Checks if a directory appears to be a project directory
 fn is_project_directory(path: &Path) -> Result<bool> {
+    // If package.json exists but has a template placeholder name, treat as non-project
+    let pkg = path.join("package.json");
+    if pkg.exists() {
+        if let Ok(content) = std::fs::read_to_string(&pkg) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                if json.get("name").and_then(|n| n.as_str()).map(|s| s.contains("${") || s.contains("}}")) == Some(true) {
+                    return Ok(false);
+                }
+            }
+        }
+    }
+
     // Common project indicator files
     let project_indicators = [
         // JavaScript/TypeScript
@@ -102,6 +119,12 @@ fn is_project_directory(path: &Path) -> Result<bool> {
         "Dockerfile",
     ];
 
+    let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+    // Skip obvious template placeholders and generic buckets when no manifest exists
+    let generic_buckets = ["src", "packages", "apps", "app", "libs", "services", "packages" ];
+    let is_template_placeholder = is_placeholder_dir(path);
+
     // Check for manifest files
     for indicator in &project_indicators {
         if indicator.contains('*') {
@@ -123,16 +146,20 @@ fn is_project_directory(path: &Path) -> Result<bool> {
         }
     }
 
-    // Check for common source directories with code
-    let source_dirs = ["src", "lib", "app", "pages", "components"];
-    for src_dir in &source_dirs {
-        let src_path = path.join(src_dir);
-        if src_path.is_dir() && directory_contains_code(&src_path)? {
-            return Ok(true);
-        }
+    // If we reach here there is no manifest. Avoid promoting plain source buckets to projects.
+    if is_template_placeholder || generic_buckets.contains(&dir_name) {
+        return Ok(false);
     }
 
     Ok(false)
+}
+
+/// Returns true for directory names that are template placeholders (e.g. `${{ values.name }}`)
+fn is_placeholder_dir(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .map(|s| s.contains("${") || s.contains("}}"))
+        .unwrap_or(false)
 }
 
 /// Checks if a directory contains source code files
@@ -163,21 +190,51 @@ fn directory_contains_code(path: &Path) -> Result<bool> {
 
 /// Filters out nested projects, keeping only top-level ones
 fn filter_nested_projects(mut projects: Vec<PathBuf>) -> Result<Vec<PathBuf>> {
-    projects.sort_by_key(|p| p.components().count());
+    // Keep all distinct projects, including nested ones (workspace roots often co-exist with member crates/apps)
+    projects.sort();
+    projects.dedup();
+    Ok(projects)
+}
 
-    let mut filtered = Vec::new();
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    for project in projects {
-        let is_nested = filtered.iter().any(|parent: &PathBuf| {
-            project.starts_with(parent) && project != *parent
-        });
+    #[test]
+    fn keeps_nested_projects_for_workspaces() {
+        let projects = vec![
+            PathBuf::from("."),
+            PathBuf::from("apps/api"),
+            PathBuf::from("apps/web"),
+            PathBuf::from("libs/common"),
+        ];
 
-        if !is_nested {
-            filtered.push(project);
-        }
+        let filtered = filter_nested_projects(projects).unwrap();
+
+        assert!(filtered.iter().any(|p| p == &PathBuf::from(".")));
+        assert!(filtered.iter().any(|p| p == &PathBuf::from("apps/api")));
+        assert!(filtered.iter().any(|p| p == &PathBuf::from("apps/web")));
+        assert!(filtered.iter().any(|p| p == &PathBuf::from("libs/common")));
     }
 
-    Ok(filtered)
+    #[test]
+    fn skips_placeholder_dirs() {
+        assert!(is_placeholder_dir(Path::new("${{ values.name }}")));
+        assert!(is_placeholder_dir(Path::new("templates/${{ service }}")));
+        assert!(!is_placeholder_dir(Path::new("apps/api")));
+    }
+
+    #[test]
+    fn skips_placeholder_package_json_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let pkg_path = tmp.path().join("package.json");
+        std::fs::write(
+            &pkg_path,
+            r#"{ "name": "${{ values.name }}", "version": "1.0.0" }"#,
+        ).unwrap();
+
+        assert!(!is_project_directory(tmp.path()).unwrap());
+    }
 }
 
 /// Determines if the detected projects constitute a monorepo

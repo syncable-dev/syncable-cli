@@ -14,7 +14,8 @@ pub struct MonorepoDetectionConfig {
 impl Default for MonorepoDetectionConfig {
     fn default() -> Self {
         Self {
-            max_depth: 3,
+            // Monorepos often nest apps/libs 3–5 levels deep (e.g., apps/api/src)
+            max_depth: 5,
             min_project_confidence: 0.6,
             deep_scan: true,
             exclude_patterns: vec![
