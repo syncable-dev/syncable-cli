@@ -154,6 +154,7 @@ async fn run_spinner(
     let mut phrase_index = 0;
     let mut current_tool: Option<String> = None;
     let mut tools_completed: usize = 0;
+    let mut has_printed_tool_line = false;
     let mut interval = tokio::time::interval(Duration::from_millis(ANIMATION_INTERVAL_MS));
     let mut rng = StdRng::from_entropy();
 
@@ -172,7 +173,7 @@ async fn run_spinner(
                 let frame = SPINNER_FRAMES[frame_index % SPINNER_FRAMES.len()];
                 frame_index += 1;
 
-                // Cycle phrases every PHRASE_CHANGE_INTERVAL_SECS if not showing tool activity
+                // Cycle phrases if idle
                 if current_tool.is_none() && last_phrase_change.elapsed().as_secs() >= PHRASE_CHANGE_INTERVAL_SECS {
                     if rng.gen_bool(0.25) && !TIPS.is_empty() {
                         let tip_idx = rng.gen_range(0..TIPS.len());
@@ -184,43 +185,44 @@ async fn run_spinner(
                     last_phrase_change = Instant::now();
                 }
 
-                // Build compact single-line display
-                let display = if let Some(ref tool) = current_tool {
-                    // Currently executing a tool
-                    if tools_completed > 0 {
-                        format!("{}{}{} {}✓{}{} {}🔧 {}{} {}",
-                            ansi::CYAN, frame, ansi::RESET,
-                            ansi::SUCCESS, tools_completed, ansi::RESET,
-                            ansi::PURPLE, tool, ansi::RESET,
-                            current_text)
-                    } else {
-                        format!("{}{}{} {}🔧 {}{} {}",
-                            ansi::CYAN, frame, ansi::RESET,
-                            ansi::PURPLE, tool, ansi::RESET,
-                            current_text)
+                if has_printed_tool_line {
+                    // Move up to tool line, update it, move back down to spinner line
+                    if let Some(ref tool) = current_tool {
+                        print!("{}{}  {}🔧 {}{}{}",
+                            ansi::CURSOR_UP,
+                            ansi::CLEAR_LINE,
+                            ansi::PURPLE,
+                            tool,
+                            ansi::RESET,
+                            "\n" // Move back down
+                        );
                     }
-                } else if tools_completed > 0 {
-                    // Between tools, show completed count
-                    format!("{}{}{} {}✓{}{} {}",
-                        ansi::CYAN, frame, ansi::RESET,
-                        ansi::SUCCESS, tools_completed, ansi::RESET,
-                        current_text)
+                    // Now update spinner line
+                    print!("\r{}  {}{}{} {} {}{}({}){}",
+                        ansi::CLEAR_LINE,
+                        ansi::CYAN,
+                        frame,
+                        ansi::RESET,
+                        current_text,
+                        ansi::GRAY,
+                        ansi::DIM,
+                        format_elapsed(elapsed),
+                        ansi::RESET
+                    );
                 } else {
-                    // Initial state, just thinking
-                    format!("{}{}{} {}",
-                        ansi::CYAN, frame, ansi::RESET,
-                        current_text)
-                };
-
-                // Update the SAME line (no newlines!)
-                print!("\r{}{} {}{}({}){}",
-                    ansi::CLEAR_LINE,
-                    display,
-                    ansi::GRAY,
-                    ansi::DIM,
-                    format_elapsed(elapsed),
-                    ansi::RESET
-                );
+                    // Single line mode (no tool yet)
+                    print!("\r{}  {}{}{} {} {}{}({}){}",
+                        ansi::CLEAR_LINE,
+                        ansi::CYAN,
+                        frame,
+                        ansi::RESET,
+                        current_text,
+                        ansi::GRAY,
+                        ansi::DIM,
+                        format_elapsed(elapsed),
+                        ansi::RESET
+                    );
+                }
                 let _ = io::stdout().flush();
             }
             Some(msg) = receiver.recv() => {
@@ -229,6 +231,18 @@ async fn run_spinner(
                         current_text = text;
                     }
                     SpinnerMessage::ToolExecuting { name, description } => {
+                        if !has_printed_tool_line {
+                            // First tool - print tool line then newline for spinner
+                            print!("\r{}  {}🔧 {}{}{}\n",
+                                ansi::CLEAR_LINE,
+                                ansi::PURPLE,
+                                name,
+                                ansi::RESET,
+                                "" // Spinner will be on next line
+                            );
+                            has_printed_tool_line = true;
+                        }
+                        // Tool line will be updated on next tick
                         current_tool = Some(name);
                         current_text = description;
                         last_phrase_change = Instant::now();
@@ -241,7 +255,6 @@ async fn run_spinner(
                     }
                     SpinnerMessage::Thinking(subject) => {
                         current_text = format!("💭 {}", subject);
-                        current_tool = None;
                     }
                     SpinnerMessage::Stop => {
                         is_running.store(false, Ordering::SeqCst);
@@ -252,9 +265,17 @@ async fn run_spinner(
         }
     }
 
-    // Clear the spinner line and show cursor
-    // Optionally print a summary if tools were used
-    print!("\r{}", ansi::CLEAR_LINE);
+    // Clear both lines and show summary
+    if has_printed_tool_line {
+        // Clear spinner line
+        print!("\r{}", ansi::CLEAR_LINE);
+        // Move up and clear tool line
+        print!("{}{}", ansi::CURSOR_UP, ansi::CLEAR_LINE);
+    } else {
+        print!("\r{}", ansi::CLEAR_LINE);
+    }
+    
+    // Print summary
     if tools_completed > 0 {
         println!("  {}✓{} {} tool{} used",
             ansi::SUCCESS, ansi::RESET,
