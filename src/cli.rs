@@ -236,9 +236,9 @@ pub enum Commands {
         #[arg(value_name = "PROJECT_PATH", default_value = ".")]
         path: PathBuf,
 
-        /// LLM provider to use (omit to use saved default or prompt for setup)
-        #[arg(long, value_enum)]
-        provider: Option<ChatProvider>,
+        /// LLM provider to use
+        #[arg(long, value_enum, default_value = "openai")]
+        provider: ChatProvider,
 
         /// Model to use (e.g., gpt-4o, claude-3-5-sonnet-latest, llama3.2)
         #[arg(long)]
@@ -247,10 +247,6 @@ pub enum Commands {
         /// Run a single query instead of interactive mode
         #[arg(long)]
         query: Option<String>,
-
-        /// Run the setup wizard to configure API keys
-        #[arg(long)]
-        setup: bool,
     },
 }
 

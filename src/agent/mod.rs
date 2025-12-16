@@ -10,26 +10,34 @@
 //! sync-ctl chat
 //!
 //! # With specific provider
-//! sync-ctl chat --provider openai --model gpt-4o
+//! sync-ctl chat --provider openai --model gpt-5.2
 //!
 //! # Single query
-//! sync-ctl chat -q "What security issues does this project have?"
+//! sync-ctl chat --query "What security issues does this project have?"
 //! ```
+//!
+//! # Interactive Commands
+//!
+//! - `/model` - Switch to a different AI model
+//! - `/provider` - Switch provider (prompts for API key if needed)
+//! - `/help` - Show available commands
+//! - `/clear` - Clear conversation history
+//! - `/exit` - Exit the chat
 
-pub mod config;
+pub mod session;
 pub mod tools;
 pub mod ui;
 
-use futures::StreamExt;
+use colored::Colorize;
 use rig::{
-    agent::MultiTurnStreamItem,
     client::{CompletionClient, ProviderClient},
-    completion::{Message, Prompt},
+    completion::Prompt,
     providers::{anthropic, openai},
-    streaming::{StreamedAssistantContent, StreamingChat},
 };
-use std::io::{self, BufRead, Write};
+use session::ChatSession;
 use std::path::Path;
+use std::sync::Arc;
+use ui::{ResponseFormatter, Spinner, ToolDisplayHook, spawn_tool_display_handler};
 
 /// Provider type for the agent
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -71,9 +79,6 @@ pub enum AgentError {
 
     #[error("Tool error: {0}")]
     ToolError(String),
-
-    #[error("Client initialization error: {0}")]
-    ClientError(String),
 }
 
 pub type AgentResult<T> = Result<T, AgentError>;
@@ -81,293 +86,157 @@ pub type AgentResult<T> = Result<T, AgentError>;
 /// Get the system prompt for the agent
 fn get_system_prompt(project_path: &Path) -> String {
     format!(
-        r#"You are an expert AI coding assistant integrated into the Syncable CLI. You help developers understand, navigate, and improve their codebases through deep, thorough investigation.
+        r#"You are a helpful AI assistant integrated into the Syncable CLI tool. You help developers understand and improve their codebases.
 
 ## Project Context
-Project location: {}
+You are currently working with a project located at: {}
 
-## Your Tools
+## Your Capabilities
+You have access to tools to help analyze and understand the project:
 
-### 🏗️ MONOREPO DISCOVERY (USE FIRST!)
-- **discover_services** - **START HERE for monorepos!** Lists ALL services/packages with their:
-  - Names, paths, types (Next.js, Express, Rust binary, etc.)
-  - Frameworks detected (React, Prisma, tRPC, etc.)
-  - Workspace configuration
-  - Use `path: "apps"` or `path: "services"` to focus on specific areas
+1. **analyze_project** - Analyze the project to detect languages, frameworks, dependencies, and architecture
+2. **security_scan** - Perform security analysis to find potential vulnerabilities and secrets
+3. **check_vulnerabilities** - Check dependencies for known security vulnerabilities
+4. **read_file** - Read the contents of a file in the project
+5. **list_directory** - List files and directories in a path
 
-### 🔍 DEEP ANALYSIS
-- **analyze_project** - Comprehensive analysis of a specific project
-  - **ALWAYS specify `path`** to analyze individual services: `path: "apps/api"`
-  - `mode: "json"` - Structured data (default, best for parsing)
-  - `mode: "detailed"` - Full analysis with Docker info
-  - **For monorepos: Call this MULTIPLE TIMES with different paths!**
-
-### 🔎 CODE SEARCH
-- **search_code** - Grep-like search across files
-  - `pattern: "function_name"` - Find where things are defined/used
-  - `path: "apps/api"` - Search within specific service
-  - `regex: true` - Enable regex patterns
-  - `extension: "ts"` - Filter by file type
-  - `max_results: 100` - Increase for thorough search
-
-- **find_files** - Find files by name/pattern
-  - `pattern: "*.config.*"` - Find all config files
-  - `pattern: "Dockerfile*"` - Find Dockerfiles
-  - `include_dirs: true` - Include directories
-
-- **read_file** - Read actual file contents
-  - Use after finding files to see implementation details
-  - `start_line`/`end_line` - Read specific sections
-
-- **list_directory** - Explore directory structure
-  - `recursive: true` - See nested structure
-
-### 🛡️ SECURITY
-- **security_scan** - Find secrets, hardcoded credentials, security issues
-- **check_vulnerabilities** - Check dependencies for known CVEs
-
-### 📦 GENERATION
-- **generate_iac** - Generate Infrastructure as Code
-  - `path: "apps/api"` - Generate for specific service
-  - `generate_type: "dockerfile" | "compose" | "terraform" | "all"`
-
-## AGENTIC INVESTIGATION PROTOCOL
-
-You are a DEEPLY INVESTIGATIVE agent. You have up to 300 tool calls - USE THEM!
-
-### For Monorepos (multiple services/packages):
-1. **ALWAYS start with `discover_services`** to map the entire structure
-2. **Analyze EACH relevant service individually** with `analyze_project(path: "service/path")`
-3. **Search across the monorepo** for patterns, shared code, cross-service dependencies
-4. **Read key files** in each service (entry points, configs, main logic)
-5. **Cross-reference** - how do services communicate? What's shared?
-
-### For Deep Investigation:
-1. **Don't stop at surface level** - dig into implementation
-2. **Follow the code** - if you find a function call, search for its definition
-3. **Check configs** - look for .env files, config directories, environment setup
-4. **Examine dependencies** - package.json, Cargo.toml, what's being used?
-5. **Read actual source code** - use read_file to understand implementation
-
-### Investigation Mindset:
-- "I found 5 services, let me analyze each one..."
-- "The API uses Express, let me find the route definitions..."
-- "This imports from ../shared, let me explore that directory..."
-- "There's a database connection, let me find the schema..."
-- "I see tRPC, let me find the router definitions..."
-
-## Response Guidelines
-- NEVER answer without thorough investigation first
-- Show your exploration: "Discovering services... Found 5 apps. Analyzing apps/api..."
-- For each service: summarize its purpose, tech stack, key files
-- When asked to investigate: USE MANY TOOLS, explore deeply
-- Format code with ```language blocks
-- Be specific: "In apps/api/src/routes/users.ts line 45..." 
-- Don't guess - if you're uncertain, explore more!"#,
+## Guidelines
+- Use the available tools to gather information before answering questions about the project
+- Be concise but thorough in your explanations
+- When you find issues, suggest specific fixes
+- Format code examples using markdown code blocks"#,
         project_path.display()
     )
 }
 
-/// Run the agent in interactive mode with beautiful UI
+/// Run the agent in interactive mode with custom REPL supporting /model and /provider commands
 pub async fn run_interactive(
     project_path: &Path,
     provider: ProviderType,
     model: Option<String>,
 ) -> AgentResult<()> {
     use tools::*;
-    use ui::AgentUI;
 
-    let project_path_buf = project_path.to_path_buf();
-    let preamble = get_system_prompt(project_path);
-    let mut ui = AgentUI::new();
-    let mut chat_history: Vec<Message> = Vec::new();
-
-    let provider_name = match provider {
-        ProviderType::OpenAI => "OpenAI",
-        ProviderType::Anthropic => "Anthropic",
-    };
-
-    match provider {
-        ProviderType::OpenAI => {
-            let client = openai::Client::from_env();
-            let model_name = model.as_deref().unwrap_or("gpt-4o");
-
-            let agent = client
-                .agent(model_name)
-                .preamble(&preamble)
-                .max_tokens(4096)
-                .tool(DiscoverServicesTool::new(project_path_buf.clone()))
-                .tool(AnalyzeTool::new(project_path_buf.clone()))
-                .tool(SecurityScanTool::new(project_path_buf.clone()))
-                .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
-                .tool(ReadFileTool::new(project_path_buf.clone()))
-                .tool(ListDirectoryTool::new(project_path_buf.clone()))
-                .tool(SearchCodeTool::new(project_path_buf.clone()))
-                .tool(FindFilesTool::new(project_path_buf.clone()))
-                .tool(GenerateIaCTool::new(project_path_buf.clone()))
-                .build();
-
-            ui.print_welcome(provider_name, model_name);
-
-            // Custom chat loop with streaming
-            loop {
-                ui.print_prompt();
-                io::stdout().flush().ok();
-
-                let mut input = String::new();
-                if io::stdin().lock().read_line(&mut input).is_err() {
-                    break;
-                }
-
-                let input = input.trim();
-                if input.is_empty() {
+    let mut session = ChatSession::new(project_path, provider, model);
+    
+    // Load API key from config file to env if not already set
+    ChatSession::load_api_key_to_env(session.provider);
+    
+    // Check if API key is configured, prompt if not
+    if !ChatSession::has_api_key(session.provider) {
+        ChatSession::prompt_api_key(session.provider)?;
+    }
+    
+    session.print_banner();
+    
+    loop {
+        // Read user input
+        let input = match session.read_input() {
+            Ok(input) => input,
+            Err(_) => break,
+        };
+        
+        if input.is_empty() {
+            continue;
+        }
+        
+        // Check for commands
+        if ChatSession::is_command(&input) {
+            match session.process_command(&input) {
+                Ok(true) => continue,
+                Ok(false) => break, // /exit
+                Err(e) => {
+                    eprintln!("{}", format!("Error: {}", e).red());
                     continue;
-                }
-                if input.eq_ignore_ascii_case("exit") || input.eq_ignore_ascii_case("quit") {
-                    println!("\n  {} Goodbye!\n", ui::SPARKLES);
-                    break;
-                }
-
-                ui.start_thinking();
-
-                // Use streaming chat with multi-turn enabled for tool calls
-                let mut stream = agent.stream_chat(input, chat_history.clone()).multi_turn(300).await;
-                ui.stop_thinking();
-                ui.print_assistant_header();
-                ui.start_streaming();
-
-                let mut full_response = String::new();
-                let mut had_tool_calls = false;
-                let mut last_update = 0;
-
-                while let Some(chunk) = stream.next().await {
-                    match chunk {
-                        Ok(MultiTurnStreamItem::StreamAssistantItem(StreamedAssistantContent::Text(text))) => {
-                            full_response.push_str(&text.text);
-                            // Update progress every 50 chars
-                            if full_response.len() - last_update > 50 {
-                                ui.update_streaming(full_response.len());
-                                last_update = full_response.len();
-                            }
-                        }
-                        Ok(MultiTurnStreamItem::StreamAssistantItem(StreamedAssistantContent::ToolCall(tool_call))) => {
-                            had_tool_calls = true;
-                            ui.pause_spinner();
-                            ui.print_tool_call_notification(&tool_call.function.name);
-                            ui.print_tool_call_complete(&tool_call.function.name);
-                            ui.start_streaming();
-                        }
-                        Ok(MultiTurnStreamItem::StreamAssistantItem(_)) => {}
-                        Ok(MultiTurnStreamItem::StreamUserItem(_)) => {}
-                        Ok(MultiTurnStreamItem::FinalResponse(_)) => {}
-                        Err(e) => {
-                            ui.print_error(&format!("Stream error: {}", e));
-                            break;
-                        }
-                        _ => {}
-                    }
-                }
-
-                // Render the complete response with markdown
-                ui.finish_streaming_and_render(&full_response);
-
-                // Update chat history
-                if !full_response.is_empty() || had_tool_calls {
-                    chat_history.push(Message::user(input));
-                    chat_history.push(Message::assistant(&full_response));
                 }
             }
         }
-        ProviderType::Anthropic => {
-            let client = anthropic::Client::from_env();
-            let model_name = model.as_deref().unwrap_or("claude-3-5-sonnet-latest");
-
-            let agent = client
-                .agent(model_name)
-                .preamble(&preamble)
-                .max_tokens(4096)
-                .tool(DiscoverServicesTool::new(project_path_buf.clone()))
-                .tool(AnalyzeTool::new(project_path_buf.clone()))
-                .tool(SecurityScanTool::new(project_path_buf.clone()))
-                .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
-                .tool(ReadFileTool::new(project_path_buf.clone()))
-                .tool(ListDirectoryTool::new(project_path_buf.clone()))
-                .tool(SearchCodeTool::new(project_path_buf.clone()))
-                .tool(FindFilesTool::new(project_path_buf.clone()))
-                .tool(GenerateIaCTool::new(project_path_buf.clone()))
-                .build();
-
-            ui.print_welcome(provider_name, model_name);
-
-            // Custom chat loop with streaming
-            loop {
-                ui.print_prompt();
-                io::stdout().flush().ok();
-
-                let mut input = String::new();
-                if io::stdin().lock().read_line(&mut input).is_err() {
-                    break;
-                }
-
-                let input = input.trim();
-                if input.is_empty() {
-                    continue;
-                }
-                if input.eq_ignore_ascii_case("exit") || input.eq_ignore_ascii_case("quit") {
-                    println!("\n  {} Goodbye!\n", ui::SPARKLES);
-                    break;
-                }
-
-                ui.start_thinking();
-
-                // Use streaming chat with multi-turn enabled for tool calls
-                let mut stream = agent.stream_chat(input, chat_history.clone()).multi_turn(300).await;
-                ui.stop_thinking();
-                ui.print_assistant_header();
-                ui.start_streaming();
-
-                let mut full_response = String::new();
-                let mut had_tool_calls = false;
-                let mut last_update = 0;
-
-                while let Some(chunk) = stream.next().await {
-                    match chunk {
-                        Ok(MultiTurnStreamItem::StreamAssistantItem(StreamedAssistantContent::Text(text))) => {
-                            full_response.push_str(&text.text);
-                            // Update progress every 50 chars
-                            if full_response.len() - last_update > 50 {
-                                ui.update_streaming(full_response.len());
-                                last_update = full_response.len();
-                            }
+        
+        // Check API key before making request (in case provider changed)
+        if !ChatSession::has_api_key(session.provider) {
+            eprintln!("{}", "No API key configured. Use /provider to set one.".yellow());
+            continue;
+        }
+        
+        // Start spinner for visual feedback
+        println!();
+        let spinner = Arc::new(Spinner::new("Thinking..."));
+        
+        // Create hook for tool display
+        let (hook, receiver) = ToolDisplayHook::new();
+        let spinner_clone = spinner.clone();
+        let _tool_display_handle = spawn_tool_display_handler(receiver, spinner_clone);
+        
+        let project_path_buf = session.project_path.clone();
+        let preamble = get_system_prompt(&session.project_path);
+        
+        let response = match session.provider {
+            ProviderType::OpenAI => {
+                let client = openai::Client::from_env();
+                // For GPT-5.x reasoning models, explicitly set reasoning_effort to avoid
+                // deserialization errors (Rig's ReasoningEffort enum lacks "none" variant)
+                let reasoning_params = if session.model.starts_with("gpt-5") || session.model.starts_with("o1") {
+                    Some(serde_json::json!({
+                        "reasoning": {
+                            "effort": "medium"
                         }
-                        Ok(MultiTurnStreamItem::StreamAssistantItem(StreamedAssistantContent::ToolCall(tool_call))) => {
-                            had_tool_calls = true;
-                            ui.pause_spinner();
-                            ui.print_tool_call_notification(&tool_call.function.name);
-                            ui.print_tool_call_complete(&tool_call.function.name);
-                            ui.start_streaming();
-                        }
-                        Ok(MultiTurnStreamItem::StreamAssistantItem(_)) => {}
-                        Ok(MultiTurnStreamItem::StreamUserItem(_)) => {}
-                        Ok(MultiTurnStreamItem::FinalResponse(_)) => {}
-                        Err(e) => {
-                            ui.print_error(&format!("Stream error: {}", e));
-                            break;
-                        }
-                        _ => {}
-                    }
+                    }))
+                } else {
+                    None
+                };
+                
+                let mut builder = client
+                    .agent(&session.model)
+                    .preamble(&preamble)
+                    .max_tokens(4096)
+                    .tool(AnalyzeTool::new(project_path_buf.clone()))
+                    .tool(SecurityScanTool::new(project_path_buf.clone()))
+                    .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
+                    .tool(ReadFileTool::new(project_path_buf.clone()))
+                    .tool(ListDirectoryTool::new(project_path_buf));
+                
+                if let Some(params) = reasoning_params {
+                    builder = builder.additional_params(params);
                 }
-
-                // Render the complete response with markdown
-                ui.finish_streaming_and_render(&full_response);
-
-                // Update chat history
-                if !full_response.is_empty() || had_tool_calls {
-                    chat_history.push(Message::user(input));
-                    chat_history.push(Message::assistant(&full_response));
-                }
+                
+                let agent = builder.build();
+                // Allow up to 10 tool call turns for thorough analysis
+                // Use hook to display tool calls as they happen
+                agent.prompt(&input).with_hook(hook.clone()).multi_turn(10).await
+            }
+            ProviderType::Anthropic => {
+                let client = anthropic::Client::from_env();
+                let agent = client
+                    .agent(&session.model)
+                    .preamble(&preamble)
+                    .max_tokens(4096)
+                    .tool(AnalyzeTool::new(project_path_buf.clone()))
+                    .tool(SecurityScanTool::new(project_path_buf.clone()))
+                    .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
+                    .tool(ReadFileTool::new(project_path_buf.clone()))
+                    .tool(ListDirectoryTool::new(project_path_buf))
+                    .build();
+                
+                // Allow up to 10 tool call turns for thorough analysis
+                // Use hook to display tool calls as they happen
+                agent.prompt(&input).with_hook(hook.clone()).multi_turn(10).await
+            }
+        };
+        
+        match response {
+            Ok(text) => {
+                // Stop spinner and show beautifully formatted response
+                spinner.stop().await;
+                ResponseFormatter::print_response(&text);
+                session.history.push(("user".to_string(), input));
+                session.history.push(("assistant".to_string(), text));
+            }
+            Err(e) => {
+                spinner.stop().await;
+                eprintln!("{}", format!("Error: {}", e).red());
             }
         }
+        println!();
     }
 
     Ok(())
@@ -388,49 +257,59 @@ pub async fn run_query(
     match provider {
         ProviderType::OpenAI => {
             let client = openai::Client::from_env();
-            let model_name = model.as_deref().unwrap_or("gpt-4o");
+            let model_name = model.as_deref().unwrap_or("gpt-5.2");
+            
+            // For GPT-5.x reasoning models, explicitly set reasoning_effort
+            let reasoning_params = if model_name.starts_with("gpt-5") || model_name.starts_with("o1") {
+                Some(serde_json::json!({
+                    "reasoning": {
+                        "effort": "medium"
+                    }
+                }))
+            } else {
+                None
+            };
 
-            let agent = client
+            let mut builder = client
                 .agent(model_name)
                 .preamble(&preamble)
                 .max_tokens(4096)
-                .tool(DiscoverServicesTool::new(project_path_buf.clone()))
                 .tool(AnalyzeTool::new(project_path_buf.clone()))
                 .tool(SecurityScanTool::new(project_path_buf.clone()))
                 .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
                 .tool(ReadFileTool::new(project_path_buf.clone()))
-                .tool(ListDirectoryTool::new(project_path_buf.clone()))
-                .tool(SearchCodeTool::new(project_path_buf.clone()))
-                .tool(FindFilesTool::new(project_path_buf.clone()))
-                .tool(GenerateIaCTool::new(project_path_buf))
-                .build();
+                .tool(ListDirectoryTool::new(project_path_buf));
+            
+            if let Some(params) = reasoning_params {
+                builder = builder.additional_params(params);
+            }
+            
+            let agent = builder.build();
 
             agent
                 .prompt(query)
+                .multi_turn(10)
                 .await
                 .map_err(|e| AgentError::ProviderError(e.to_string()))
         }
         ProviderType::Anthropic => {
             let client = anthropic::Client::from_env();
-            let model_name = model.as_deref().unwrap_or("claude-3-5-sonnet-latest");
+            let model_name = model.as_deref().unwrap_or("claude-sonnet-4-20250514");
 
             let agent = client
                 .agent(model_name)
                 .preamble(&preamble)
                 .max_tokens(4096)
-                .tool(DiscoverServicesTool::new(project_path_buf.clone()))
                 .tool(AnalyzeTool::new(project_path_buf.clone()))
                 .tool(SecurityScanTool::new(project_path_buf.clone()))
                 .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
                 .tool(ReadFileTool::new(project_path_buf.clone()))
-                .tool(ListDirectoryTool::new(project_path_buf.clone()))
-                .tool(SearchCodeTool::new(project_path_buf.clone()))
-                .tool(FindFilesTool::new(project_path_buf.clone()))
-                .tool(GenerateIaCTool::new(project_path_buf))
+                .tool(ListDirectoryTool::new(project_path_buf))
                 .build();
 
             agent
                 .prompt(query)
+                .multi_turn(10)
                 .await
                 .map_err(|e| AgentError::ProviderError(e.to_string()))
         }

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
 
-use crate::analyzer::security::turbo::{TurboConfig, TurboSecurityAnalyzer, ScanMode};
+use crate::analyzer::security::turbo::{TurboSecurityAnalyzer, TurboConfig, ScanMode};
 
 // ============================================================================
 // Security Scan Tool
@@ -79,26 +79,30 @@ impl Tool for SecurityScanTool {
             scan_mode,
             ..TurboConfig::default()
         };
+
+        let scanner = TurboSecurityAnalyzer::new(config)
+            .map_err(|e| SecurityScanError(format!("Failed to create scanner: {}", e)))?;
         
-        let analyzer = TurboSecurityAnalyzer::new(config)
-            .map_err(|e| SecurityScanError(format!("Failed to create analyzer: {}", e)))?;
-        
-        let report = analyzer.analyze_project(&path)
+        let report = scanner.analyze_project(&path)
             .map_err(|e| SecurityScanError(format!("Scan failed: {}", e)))?;
-        
-        let findings = report.findings;
 
         let result = json!({
-            "total_findings": findings.len(),
-            "findings": findings.iter().take(50).map(|f| {
+            "total_findings": report.total_findings,
+            "overall_score": report.overall_score,
+            "risk_level": format!("{:?}", report.risk_level),
+            "files_scanned": report.files_scanned,
+            "findings": report.findings.iter().take(50).map(|f| {
                 json!({
-                    "file": f.file_path.as_ref().map(|p| p.display().to_string()).unwrap_or_default(),
-                    "line": f.line_number,
                     "title": f.title,
+                    "description": f.description,
                     "severity": format!("{:?}", f.severity),
-                    "evidence": f.evidence.as_ref().map(|e| e.chars().take(50).collect::<String>()).unwrap_or_default(),
+                    "category": format!("{:?}", f.category),
+                    "file_path": f.file_path.as_ref().map(|p| p.display().to_string()),
+                    "line_number": f.line_number,
+                    "evidence": f.evidence.as_ref().map(|e| e.chars().take(100).collect::<String>()),
                 })
             }).collect::<Vec<_>>(),
+            "recommendations": report.recommendations.iter().take(10).collect::<Vec<_>>(),
             "scan_mode": args.mode.as_deref().unwrap_or("balanced"),
         });
 
