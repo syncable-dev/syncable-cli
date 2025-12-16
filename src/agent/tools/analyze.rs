@@ -6,16 +6,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
 
-use crate::analyzer::display::{DisplayMode, display_analysis_to_string};
-use crate::analyzer::analyze_monorepo;
-
 /// Arguments for the analyze tool
 #[derive(Debug, Deserialize)]
 pub struct AnalyzeArgs {
     /// Optional subdirectory path to analyze
     pub path: Option<String>,
-    /// Display mode: "matrix" (default), "detailed", "summary", or "json"
-    pub mode: Option<String>,
 }
 
 /// Error type for analyze tool
@@ -45,18 +40,13 @@ impl Tool for AnalyzeTool {
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
             name: Self::NAME.to_string(),
-            description: "Analyze the project to detect programming languages, frameworks, dependencies, build tools, and architecture patterns. Returns a comprehensive overview of the project's technology stack. Use 'detailed' mode for full analysis, 'summary' for quick overview, 'json' for structured data.".to_string(),
+            description: "Analyze the project to detect programming languages, frameworks, dependencies, build tools, and architecture patterns. Returns a comprehensive overview of the project's technology stack.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "path": {
                         "type": "string",
                         "description": "Optional subdirectory path to analyze (relative to project root). If not provided, analyzes the entire project."
-                    },
-                    "mode": {
-                        "type": "string",
-                        "enum": ["matrix", "detailed", "summary", "json"],
-                        "description": "Display mode: 'matrix' for compact dashboard, 'detailed' for full analysis with Docker info, 'summary' for brief overview, 'json' for structured data. Default is 'json' for best agent parsing."
                     }
                 }
             }),
@@ -70,21 +60,9 @@ impl Tool for AnalyzeTool {
             self.project_path.clone()
         };
 
-        // Parse display mode - default to JSON for agent consumption
-        let display_mode = match args.mode.as_deref() {
-            Some("matrix") => DisplayMode::Matrix,
-            Some("detailed") => DisplayMode::Detailed,
-            Some("summary") => DisplayMode::Summary,
-            Some("json") | None => DisplayMode::Json,
-            _ => DisplayMode::Json,
-        };
-
-        match analyze_monorepo(&path) {
-            Ok(analysis) => {
-                // Use the display system to format output
-                let output = display_analysis_to_string(&analysis, display_mode);
-                Ok(output)
-            }
+        match crate::analyzer::analyze_project(&path) {
+            Ok(analysis) => serde_json::to_string_pretty(&analysis)
+                .map_err(|e| AnalyzeError(format!("Failed to serialize: {}", e))),
             Err(e) => Err(AnalyzeError(format!("Analysis failed: {}", e))),
         }
     }

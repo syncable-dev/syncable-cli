@@ -5,8 +5,7 @@ use syncable_cli::{
         analyze_monorepo, vulnerability::VulnerabilitySeverity,
     },
     cli::{
-        Cli, ColorScheme, Commands, DisplayFormat, OutputFormat, SecurityScanMode,
-        SeverityThreshold, ToolsCommand,
+        ChatProvider, Cli, ColorScheme, Commands, DisplayFormat, OutputFormat, SecurityScanMode, SeverityThreshold, ToolsCommand
     },
     config, generator,
     telemetry::{self},
@@ -483,33 +482,30 @@ async fn run() -> syncable_cli::Result<()> {
             handle_tools(command).await
         },
 
-        Commands::Chat { path, provider, model, query, setup } => {
-            // Create telemetry properties
+        Commands::Chat { path, provider, model, query } => {
             let mut properties = HashMap::new();
-            let provider_str = provider.as_ref().map(|p| match p {
-                syncable_cli::cli::ChatProvider::Openai => "openai",
-                syncable_cli::cli::ChatProvider::Anthropic => "anthropic",
-                syncable_cli::cli::ChatProvider::Ollama => "ollama",
-            }).unwrap_or("auto");
+            
+            let provider_str = match provider {
+                ChatProvider::Openai => "openai",
+                ChatProvider::Anthropic => "anthropic",
+                ChatProvider::Ollama => "ollama",
+            };
             properties.insert("provider".to_string(), json!(provider_str));
-            if let Some(ref m) = model {
+            
+            if let Some(m) = &model {
                 properties.insert("model".to_string(), json!(m));
             }
-            if setup {
-                properties.insert("mode".to_string(), json!("setup"));
-            } else if query.is_some() {
-                properties.insert("mode".to_string(), json!("single_query"));
-            } else {
-                properties.insert("mode".to_string(), json!("interactive"));
-            }
+            
+            properties.insert("mode".to_string(), json!(if query.is_some() { "query" } else { "interactive" }));
             
             // Track Chat command
             if let Some(telemetry_client) = telemetry::get_telemetry_client() {
-                telemetry_client.track_event("chat", properties);
+                telemetry_client.track_event("chat", properties.clone());
             }
             
-            handle_chat(path, provider, model, query, setup).await
+            syncable_cli::run_command(Commands::Chat { path, provider, model, query }).await
         },
+
     };
 
     // Flush telemetry events before exiting
@@ -1188,70 +1184,4 @@ pub fn handle_security(
 
 async fn handle_tools(command: ToolsCommand) -> syncable_cli::Result<()> {
     syncable_cli::handlers::tools::handle_tools(command).await
-}
-
-async fn handle_chat(
-    path: PathBuf,
-    provider: Option<syncable_cli::cli::ChatProvider>,
-    model: Option<String>,
-    query: Option<String>,
-    setup: bool,
-) -> syncable_cli::Result<()> {
-    use syncable_cli::agent::{run_interactive, run_query, ProviderType};
-    use syncable_cli::agent::config::{ensure_credentials, run_setup_wizard};
-    
-    // If setup flag is passed, run the wizard
-    if setup {
-        run_setup_wizard()
-            .map(|_| ())
-            .map_err(|e| syncable_cli::error::IaCGeneratorError::Config(
-                syncable_cli::error::ConfigError::ParsingFailed(e.to_string()),
-            ))?;
-        return Ok(());
-    }
-    
-    let project_path = path.canonicalize().unwrap_or(path);
-    
-    // Convert CLI provider to agent provider type
-    let cli_provider = provider.map(|p| match p {
-        syncable_cli::cli::ChatProvider::Openai => ProviderType::OpenAI,
-        syncable_cli::cli::ChatProvider::Anthropic => ProviderType::Anthropic,
-        syncable_cli::cli::ChatProvider::Ollama => ProviderType::OpenAI, // Fallback
-    });
-    
-    // Ensure credentials are available (prompts if needed)
-    let (agent_provider, default_model) = ensure_credentials(cli_provider)
-        .map_err(|e| syncable_cli::error::IaCGeneratorError::Config(
-            syncable_cli::error::ConfigError::ParsingFailed(e.to_string()),
-        ))?;
-    
-    // Use provided model, or default from config
-    let model = model.or(default_model);
-    
-    if let Some(q) = query {
-        // Single query mode
-        match run_query(&project_path, &q, agent_provider, model).await {
-            Ok(response) => {
-                println!("{}", response);
-                Ok(())
-            }
-            Err(e) => {
-                eprintln!("Agent error: {}", e);
-                Err(syncable_cli::error::IaCGeneratorError::Config(
-                    syncable_cli::error::ConfigError::ParsingFailed(e.to_string()),
-                ))
-            }
-        }
-    } else {
-        // Interactive mode
-        match run_interactive(&project_path, agent_provider, model).await {
-            Ok(()) => Ok(()),
-            Err(e) => {
-                eprintln!("Agent error: {}", e);
-                Err(syncable_cli::error::IaCGeneratorError::Config(
-                    syncable_cli::error::ConfigError::ParsingFailed(e.to_string()),
-                ))
-            }
-        }
-    }
 }

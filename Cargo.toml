@@ -69,11 +69,7 @@ rand = "0.8"
 futures-util = "0.3"
 
 # Agent dependencies (using Rig - LLM application framework)
-rig-core = "0.27"
-dialoguer = "0.11"  # Interactive terminal prompts
-termimad = "0.30"  # Markdown rendering in terminal
-console = "0.15"   # Terminal styling and control
-futures = "0.3"    # Async stream processing
+rig-core = { version = "0.26", features = ["derive"] }
 
 [dev-dependencies]
 assert_cmd = "2"
