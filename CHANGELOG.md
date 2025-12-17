@@ -116,6 +116,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Other
 
 - Merge pull request #202 from syncable-dev/develop
+- Merge pull request #201 from syncable-dev/develop
 - Merge branch 'develop' of github.com:syncable-dev/syncable-cli into develop
 
 ## [0.22.3](https://github.com/syncable-dev/syncable-cli/compare/v0.22.2...v0.22.3) - 2025-12-17
