@@ -23,6 +23,9 @@ pub enum IaCGeneratorError {
 
     #[error("Security error: {0}")]
     Security(#[from] SecurityError),
+
+    #[error("Agent error: {0}")]
+    Agent(#[from] crate::agent::AgentError),
 }
 
 #[derive(Error, Debug)]

@@ -229,6 +229,25 @@ pub enum Commands {
         #[command(subcommand)]
         command: ToolsCommand,
     },
+
+    /// Start an interactive AI chat session to analyze and understand your project
+    Chat {
+        /// Path to the project directory (default: current directory)
+        #[arg(value_name = "PROJECT_PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// LLM provider to use
+        #[arg(long, value_enum, default_value = "openai")]
+        provider: ChatProvider,
+
+        /// Model to use (e.g., gpt-4o, claude-3-5-sonnet-latest, llama3.2)
+        #[arg(long)]
+        model: Option<String>,
+
+        /// Run a single query instead of interactive mode
+        #[arg(long)]
+        query: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -332,6 +351,17 @@ pub enum SecurityScanMode {
     Thorough,
     /// Paranoid scan - most comprehensive including low-severity findings
     Paranoid,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
+pub enum ChatProvider {
+    /// OpenAI (GPT-4o, GPT-4, etc.)
+    #[default]
+    Openai,
+    /// Anthropic (Claude 3)
+    Anthropic,
+    /// Ollama (local LLM, no API key needed)
+    Ollama,
 }
 
 impl Cli {

@@ -6,7 +6,9 @@ pub struct Config {
     pub analysis: AnalysisConfig,
     pub generation: GenerationConfig,
     pub output: OutputConfig,
-    pub telemetry: TelemetryConfig,  // New field for telemetry configuration
+    pub telemetry: TelemetryConfig,
+    #[serde(default)]
+    pub agent: AgentConfig,
 }
 
 /// Analysis configuration
@@ -72,6 +74,27 @@ pub struct TelemetryConfig {
     pub enabled: bool,
 }
 
+/// Agent/Chat configuration
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AgentConfig {
+    /// OpenAI API key
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub openai_api_key: Option<String>,
+    /// Anthropic API key
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub anthropic_api_key: Option<String>,
+    /// Default provider (openai or anthropic)
+    #[serde(default = "default_provider")]
+    pub default_provider: String,
+    /// Default model
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_model: Option<String>,
+}
+
+fn default_provider() -> String {
+    "openai".to_string()
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -110,8 +133,9 @@ impl Default for Config {
                 create_backup: true,
             },
             telemetry: TelemetryConfig {
-                enabled: true, // Telemetry enabled by default
+                enabled: true,
             },
+            agent: AgentConfig::default(),
         }
     }
 }
