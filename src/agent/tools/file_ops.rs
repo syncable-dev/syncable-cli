@@ -5,13 +5,20 @@
 //! - Writing single files (WriteFileTool) - for Dockerfiles, terraform files, etc.
 //! - Writing multiple files (WriteFilesTool) - for Terraform modules, Helm charts
 //! - Listing directories (ListDirectoryTool)
+//!
+//! File write operations include interactive diff confirmation before applying changes.
 
+use crate::agent::ide::IdeClient;
+use crate::agent::ui::confirmation::ConfirmationResult;
+use crate::agent::ui::diff::{confirm_file_write, confirm_file_write_with_ide};
 use rig::completion::ToolDefinition;
 use rig::tool::Tool;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 // ============================================================================
 // Read File Tool
@@ -307,14 +314,85 @@ pub struct WriteFileArgs {
 #[error("Write file error: {0}")]
 pub struct WriteFileError(String);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Session-level tracking of always-allowed file patterns
+#[derive(Debug)]
+pub struct AllowedFilePatterns {
+    patterns: Mutex<HashSet<String>>,
+}
+
+impl AllowedFilePatterns {
+    pub fn new() -> Self {
+        Self {
+            patterns: Mutex::new(HashSet::new()),
+        }
+    }
+
+    /// Check if a file pattern is already allowed
+    pub fn is_allowed(&self, filename: &str) -> bool {
+        let patterns = self.patterns.lock().unwrap();
+        patterns.contains(filename)
+    }
+
+    /// Add a file pattern to the allowed list
+    pub fn allow(&self, pattern: String) {
+        let mut patterns = self.patterns.lock().unwrap();
+        patterns.insert(pattern);
+    }
+}
+
+impl Default for AllowedFilePatterns {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct WriteFileTool {
     project_path: PathBuf,
+    /// Whether to require confirmation before writing
+    require_confirmation: bool,
+    /// Session-level allowed file patterns
+    allowed_patterns: std::sync::Arc<AllowedFilePatterns>,
+    /// Optional IDE client for native diff viewing
+    ide_client: Option<std::sync::Arc<tokio::sync::Mutex<IdeClient>>>,
 }
 
 impl WriteFileTool {
     pub fn new(project_path: PathBuf) -> Self {
-        Self { project_path }
+        Self {
+            project_path,
+            require_confirmation: true,
+            allowed_patterns: std::sync::Arc::new(AllowedFilePatterns::new()),
+            ide_client: None,
+        }
+    }
+
+    /// Create with shared allowed patterns state (for session persistence)
+    pub fn with_allowed_patterns(
+        project_path: PathBuf,
+        allowed_patterns: std::sync::Arc<AllowedFilePatterns>,
+    ) -> Self {
+        Self {
+            project_path,
+            require_confirmation: true,
+            allowed_patterns,
+            ide_client: None,
+        }
+    }
+
+    /// Set IDE client for native diff viewing
+    pub fn with_ide_client(
+        mut self,
+        ide_client: std::sync::Arc<tokio::sync::Mutex<IdeClient>>,
+    ) -> Self {
+        self.ide_client = Some(ide_client);
+        self
+    }
+
+    /// Disable confirmation prompts
+    pub fn without_confirmation(mut self) -> Self {
+        self.require_confirmation = false;
+        self
     }
 
     fn validate_path(&self, requested: &PathBuf) -> Result<PathBuf, WriteFileError> {
@@ -396,6 +474,73 @@ The tool will create parent directories automatically if they don't exist."#.to_
         let requested_path = PathBuf::from(&args.path);
         let file_path = self.validate_path(&requested_path)?;
 
+        // Read existing content for diff (if file exists)
+        let old_content = if file_path.exists() {
+            fs::read_to_string(&file_path).ok()
+        } else {
+            None
+        };
+
+        // Get filename for pattern matching
+        let filename = std::path::Path::new(&args.path)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| args.path.clone());
+
+        // Check if confirmation is needed
+        let needs_confirmation = self.require_confirmation
+            && !self.allowed_patterns.is_allowed(&filename);
+
+        if needs_confirmation {
+            // Get IDE client reference if available
+            let ide_client_guard = if let Some(ref client) = self.ide_client {
+                Some(client.lock().await)
+            } else {
+                None
+            };
+            let ide_client_ref = ide_client_guard.as_deref();
+
+            // Show diff with IDE integration if available
+            let confirmation = confirm_file_write_with_ide(
+                &args.path,
+                old_content.as_deref(),
+                &args.content,
+                ide_client_ref,
+            )
+            .await;
+
+            match confirmation {
+                ConfirmationResult::Proceed => {
+                    // Continue with write
+                }
+                ConfirmationResult::ProceedAlways(pattern) => {
+                    // Remember this file pattern for the session
+                    self.allowed_patterns.allow(pattern);
+                }
+                ConfirmationResult::Modify(feedback) => {
+                    // Return feedback to the agent
+                    let result = json!({
+                        "cancelled": true,
+                        "reason": "User requested changes",
+                        "user_feedback": feedback,
+                        "original_path": args.path
+                    });
+                    return serde_json::to_string_pretty(&result)
+                        .map_err(|e| WriteFileError(format!("Failed to serialize: {}", e)));
+                }
+                ConfirmationResult::Cancel => {
+                    // User cancelled
+                    let result = json!({
+                        "cancelled": true,
+                        "reason": "User cancelled the operation",
+                        "original_path": args.path
+                    });
+                    return serde_json::to_string_pretty(&result)
+                        .map_err(|e| WriteFileError(format!("Failed to serialize: {}", e)));
+                }
+            }
+        }
+
         // Create parent directories if needed
         let create_dirs = args.create_dirs.unwrap_or(true);
         if create_dirs {
@@ -454,14 +599,40 @@ pub struct WriteFilesArgs {
 #[error("Write files error: {0}")]
 pub struct WriteFilesError(String);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct WriteFilesTool {
     project_path: PathBuf,
+    /// Whether to require confirmation before writing
+    require_confirmation: bool,
+    /// Session-level allowed file patterns
+    allowed_patterns: std::sync::Arc<AllowedFilePatterns>,
 }
 
 impl WriteFilesTool {
     pub fn new(project_path: PathBuf) -> Self {
-        Self { project_path }
+        Self {
+            project_path,
+            require_confirmation: true,
+            allowed_patterns: std::sync::Arc::new(AllowedFilePatterns::new()),
+        }
+    }
+
+    /// Create with shared allowed patterns state
+    pub fn with_allowed_patterns(
+        project_path: PathBuf,
+        allowed_patterns: std::sync::Arc<AllowedFilePatterns>,
+    ) -> Self {
+        Self {
+            project_path,
+            require_confirmation: true,
+            allowed_patterns,
+        }
+    }
+
+    /// Disable confirmation prompts
+    pub fn without_confirmation(mut self) -> Self {
+        self.require_confirmation = false;
+        self
     }
 
     fn validate_path(&self, requested: &PathBuf) -> Result<PathBuf, WriteFilesError> {
@@ -549,10 +720,60 @@ All files are written atomically - if any file fails, previously written files i
         let mut results = Vec::new();
         let mut total_bytes = 0usize;
         let mut total_lines = 0usize;
+        let mut skipped_files = Vec::new();
 
         for file in &args.files {
             let requested_path = PathBuf::from(&file.path);
             let file_path = self.validate_path(&requested_path)?;
+
+            // Read existing content for diff
+            let old_content = if file_path.exists() {
+                fs::read_to_string(&file_path).ok()
+            } else {
+                None
+            };
+
+            // Get filename for pattern matching
+            let filename = std::path::Path::new(&file.path)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| file.path.clone());
+
+            // Check if confirmation is needed
+            let needs_confirmation = self.require_confirmation
+                && !self.allowed_patterns.is_allowed(&filename);
+
+            if needs_confirmation {
+                let confirmation = confirm_file_write(
+                    &file.path,
+                    old_content.as_deref(),
+                    &file.content,
+                );
+
+                match confirmation {
+                    ConfirmationResult::Proceed => {
+                        // Continue with this file
+                    }
+                    ConfirmationResult::ProceedAlways(pattern) => {
+                        self.allowed_patterns.allow(pattern);
+                    }
+                    ConfirmationResult::Modify(feedback) => {
+                        skipped_files.push(json!({
+                            "path": file.path,
+                            "reason": "User requested changes",
+                            "feedback": feedback
+                        }));
+                        continue;
+                    }
+                    ConfirmationResult::Cancel => {
+                        skipped_files.push(json!({
+                            "path": file.path,
+                            "reason": "User cancelled"
+                        }));
+                        continue;
+                    }
+                }
+            }
 
             // Create parent directories if needed
             if create_dirs {
@@ -581,13 +802,25 @@ All files are written atomically - if any file fails, previously written files i
             }));
         }
 
-        let result = json!({
-            "success": true,
-            "files_written": results.len(),
-            "total_lines": total_lines,
-            "total_bytes": total_bytes,
-            "files": results
-        });
+        let result = if skipped_files.is_empty() {
+            json!({
+                "success": true,
+                "files_written": results.len(),
+                "total_lines": total_lines,
+                "total_bytes": total_bytes,
+                "files": results
+            })
+        } else {
+            json!({
+                "success": results.len() > 0,
+                "files_written": results.len(),
+                "files_skipped": skipped_files.len(),
+                "total_lines": total_lines,
+                "total_bytes": total_bytes,
+                "files": results,
+                "skipped": skipped_files
+            })
+        };
 
         serde_json::to_string_pretty(&result)
             .map_err(|e| WriteFilesError(format!("Failed to serialize: {}", e)))

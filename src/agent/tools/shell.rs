@@ -5,14 +5,19 @@
 //! - Terraform validate/plan
 //! - Helm lint
 //! - Kubernetes dry-run
+//!
+//! Includes interactive confirmation before execution and streaming output display.
 
+use crate::agent::ui::confirmation::{confirm_shell_command, AllowedCommands, ConfirmationResult};
+use crate::agent::ui::shell_output::StreamingShellOutput;
 use rig::completion::ToolDefinition;
 use rig::tool::Tool;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::time::Duration;
+use std::sync::Arc;
 
 /// Allowed command prefixes for security
 const ALLOWED_COMMANDS: &[&str] = &[
@@ -59,14 +64,37 @@ pub struct ShellArgs {
 #[error("Shell error: {0}")]
 pub struct ShellError(String);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ShellTool {
     project_path: PathBuf,
+    /// Session-level allowed command prefixes (shared across tool instances)
+    allowed_commands: Arc<AllowedCommands>,
+    /// Whether to require confirmation before executing commands
+    require_confirmation: bool,
 }
 
 impl ShellTool {
     pub fn new(project_path: PathBuf) -> Self {
-        Self { project_path }
+        Self {
+            project_path,
+            allowed_commands: Arc::new(AllowedCommands::new()),
+            require_confirmation: true,
+        }
+    }
+
+    /// Create with shared allowed commands state (for session persistence)
+    pub fn with_allowed_commands(project_path: PathBuf, allowed_commands: Arc<AllowedCommands>) -> Self {
+        Self {
+            project_path,
+            allowed_commands,
+            require_confirmation: true,
+        }
+    }
+
+    /// Disable confirmation prompts (useful for scripted/batch mode)
+    pub fn without_confirmation(mut self) -> Self {
+        self.require_confirmation = false;
+        self
     }
 
     fn is_command_allowed(&self, command: &str) -> bool {
@@ -160,12 +188,57 @@ Use this to validate generated configurations:
 
         // Validate and get working directory
         let working_dir = self.validate_working_dir(&args.working_dir)?;
+        let working_dir_str = working_dir.to_string_lossy().to_string();
 
         // Set timeout (max 5 minutes)
-        let timeout = Duration::from_secs(args.timeout_secs.unwrap_or(60).min(300));
+        let timeout_secs = args.timeout_secs.unwrap_or(60).min(300);
 
-        // Execute command
-        let output = Command::new("sh")
+        // Check if confirmation is needed
+        let needs_confirmation = self.require_confirmation
+            && !self.allowed_commands.is_allowed(&args.command);
+
+        if needs_confirmation {
+            // Show confirmation prompt
+            let confirmation = confirm_shell_command(&args.command, &working_dir_str);
+
+            match confirmation {
+                ConfirmationResult::Proceed => {
+                    // Continue with execution
+                }
+                ConfirmationResult::ProceedAlways(prefix) => {
+                    // Remember this command prefix for the session
+                    self.allowed_commands.allow(prefix);
+                }
+                ConfirmationResult::Modify(feedback) => {
+                    // Return feedback to the agent so it can try a different approach
+                    let result = json!({
+                        "cancelled": true,
+                        "reason": "User requested modification",
+                        "user_feedback": feedback,
+                        "original_command": args.command
+                    });
+                    return serde_json::to_string_pretty(&result)
+                        .map_err(|e| ShellError(format!("Failed to serialize: {}", e)));
+                }
+                ConfirmationResult::Cancel => {
+                    // User cancelled the operation
+                    let result = json!({
+                        "cancelled": true,
+                        "reason": "User cancelled the operation",
+                        "original_command": args.command
+                    });
+                    return serde_json::to_string_pretty(&result)
+                        .map_err(|e| ShellError(format!("Failed to serialize: {}", e)));
+                }
+            }
+        }
+
+        // Create streaming output display
+        let mut stream_display = StreamingShellOutput::new(&args.command, timeout_secs);
+        stream_display.render();
+
+        // Execute command with streaming output
+        let mut child = Command::new("sh")
             .arg("-c")
             .arg(&args.command)
             .current_dir(&working_dir)
@@ -174,33 +247,72 @@ Use this to validate generated configurations:
             .spawn()
             .map_err(|e| ShellError(format!("Failed to spawn command: {}", e)))?;
 
-        // Wait for output with timeout
-        let output = output
-            .wait_with_output()
+        // Read stdout and stderr in parallel, streaming output
+        let stdout = child.stdout.take();
+        let stderr = child.stderr.take();
+
+        let mut stdout_content = String::new();
+        let mut stderr_content = String::new();
+
+        // Read stdout
+        if let Some(stdout) = stdout {
+            let reader = BufReader::new(stdout);
+            for line in reader.lines() {
+                if let Ok(line) = line {
+                    stdout_content.push_str(&line);
+                    stdout_content.push('\n');
+                    stream_display.push_line(&line);
+                }
+            }
+        }
+
+        // Read stderr
+        if let Some(stderr) = stderr {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines() {
+                if let Ok(line) = line {
+                    stderr_content.push_str(&line);
+                    stderr_content.push('\n');
+                    stream_display.push_line(&line);
+                }
+            }
+        }
+
+        // Wait for command to complete
+        let status = child
+            .wait()
             .map_err(|e| ShellError(format!("Command execution failed: {}", e)))?;
 
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
+        // Finalize display
+        stream_display.finish(status.success(), status.code());
 
         // Truncate output if too long
         const MAX_OUTPUT: usize = 10000;
-        let stdout_truncated = if stdout.len() > MAX_OUTPUT {
-            format!("{}...\n[Output truncated, {} total bytes]", &stdout[..MAX_OUTPUT], stdout.len())
+        let stdout_truncated = if stdout_content.len() > MAX_OUTPUT {
+            format!(
+                "{}...\n[Output truncated, {} total bytes]",
+                &stdout_content[..MAX_OUTPUT],
+                stdout_content.len()
+            )
         } else {
-            stdout.to_string()
+            stdout_content
         };
 
-        let stderr_truncated = if stderr.len() > MAX_OUTPUT {
-            format!("{}...\n[Output truncated, {} total bytes]", &stderr[..MAX_OUTPUT], stderr.len())
+        let stderr_truncated = if stderr_content.len() > MAX_OUTPUT {
+            format!(
+                "{}...\n[Output truncated, {} total bytes]",
+                &stderr_content[..MAX_OUTPUT],
+                stderr_content.len()
+            )
         } else {
-            stderr.to_string()
+            stderr_content
         };
 
         let result = json!({
             "command": args.command,
-            "working_dir": working_dir.to_string_lossy(),
-            "exit_code": output.status.code(),
-            "success": output.status.success(),
+            "working_dir": working_dir_str,
+            "exit_code": status.code(),
+            "success": status.success(),
             "stdout": stdout_truncated,
             "stderr": stderr_truncated
         });
