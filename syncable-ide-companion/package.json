@@ -1,0 +1,125 @@
+{
+  "name": "syncable-ide-companion",
+  "displayName": "Syncable IDE Companion",
+  "description": "IDE companion extension for Syncable Agent - enables native diff views and IDE integration",
+  "version": "0.1.0",
+  "publisher": "syncable",
+  "icon": "assets/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/syncable-dev/syncable-cli"
+  },
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "license": "Apache-2.0",
+  "categories": [
+    "AI"
+  ],
+  "keywords": [
+    "syncable",
+    "syncable-cli",
+    "syncable agent",
+    "cli",
+    "ide integration",
+    "ide companion",
+    "ai coding"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "Syncable Agent",
+      "properties": {
+        "syncable.debug.logging.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable detailed logging for debugging the Syncable IDE Companion."
+        }
+      }
+    },
+    "languages": [
+      {
+        "id": "syncable-diff-editable"
+      }
+    ],
+    "commands": [
+      {
+        "command": "syncable.diff.accept",
+        "title": "Syncable: Accept Diff",
+        "icon": "$(check)"
+      },
+      {
+        "command": "syncable.diff.cancel",
+        "title": "Syncable: Close Diff Editor",
+        "icon": "$(close)"
+      },
+      {
+        "command": "syncable.showStatus",
+        "title": "Syncable: Show Companion Status"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "syncable.diff.accept",
+          "when": "syncable.diff.isVisible"
+        },
+        {
+          "command": "syncable.diff.cancel",
+          "when": "syncable.diff.isVisible"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "syncable.diff.accept",
+          "when": "syncable.diff.isVisible",
+          "group": "navigation"
+        },
+        {
+          "command": "syncable.diff.cancel",
+          "when": "syncable.diff.isVisible",
+          "group": "navigation"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "syncable.diff.accept",
+        "key": "ctrl+s",
+        "when": "syncable.diff.isVisible"
+      },
+      {
+        "command": "syncable.diff.accept",
+        "key": "cmd+s",
+        "when": "syncable.diff.isVisible"
+      }
+    ]
+  },
+  "main": "./dist/extension.cjs",
+  "type": "module",
+  "scripts": {
+    "vscode:prepublish": "npm run build:prod",
+    "build": "npm run build:dev",
+    "build:dev": "node esbuild.mjs",
+    "build:prod": "node esbuild.mjs --production",
+    "watch": "node esbuild.mjs --watch",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.70.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.23.0",
+    "cors": "^2.8.5",
+    "express": "^5.0.0",
+    "zod": "^3.22.0"
+  }
+}

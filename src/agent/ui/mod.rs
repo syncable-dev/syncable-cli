@@ -7,19 +7,27 @@
 //! - Animated spinners with witty phrases during processing
 //! - Thinking/reasoning indicators
 //! - Elapsed time tracking
+//! - Interactive tool confirmation prompts
+//! - Diff rendering for file changes
 
 pub mod autocomplete;
 pub mod colors;
+pub mod confirmation;
+pub mod diff;
 pub mod hooks;
 pub mod response;
+pub mod shell_output;
 pub mod spinner;
 pub mod streaming;
 pub mod tool_display;
 
 pub use autocomplete::*;
 pub use colors::*;
+pub use confirmation::*;
+pub use diff::*;
 pub use hooks::*;
 pub use response::*;
+pub use shell_output::*;
 pub use spinner::*;
 pub use streaming::*;
 pub use tool_display::*;

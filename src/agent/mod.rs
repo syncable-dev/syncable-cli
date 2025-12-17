@@ -32,6 +32,7 @@
 
 pub mod commands;
 pub mod history;
+pub mod ide;
 pub mod prompts;
 pub mod session;
 pub mod tools;
@@ -39,6 +40,7 @@ pub mod ui;
 
 use colored::Colorize;
 use history::{ConversationHistory, ToolCallRecord};
+use ide::IdeClient;
 use rig::{
     client::{CompletionClient, ProviderClient},
     completion::Prompt,
@@ -47,6 +49,8 @@ use rig::{
 use session::ChatSession;
 use commands::TokenUsage;
 use std::path::Path;
+use std::sync::Arc;
+use tokio::sync::Mutex as TokioMutex;
 use ui::{ResponseFormatter, ToolDisplayHook};
 
 /// Provider type for the agent
@@ -117,6 +121,29 @@ pub async fn run_interactive(
 
     // Initialize conversation history with compaction support
     let mut conversation_history = ConversationHistory::new();
+
+    // Initialize IDE client for native diff viewing
+    let ide_client: Option<Arc<TokioMutex<IdeClient>>> = {
+        let mut client = IdeClient::new().await;
+        if client.is_ide_available() {
+            match client.connect().await {
+                Ok(()) => {
+                    println!(
+                        "{} Connected to {} IDE companion",
+                        "✓".green(),
+                        client.ide_name().unwrap_or("VS Code")
+                    );
+                    Some(Arc::new(TokioMutex::new(client)))
+                }
+                Err(_) => {
+                    // IDE detected but companion not running - that's fine
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    };
 
     // Load API key from config file to env if not already set
     ChatSession::load_api_key_to_env(session.provider);
@@ -213,8 +240,15 @@ pub async fn run_interactive(
 
                 // Add generation tools if this is a generation query
                 if is_generation {
+                    // Create WriteFileTool with IDE client if connected
+                    let write_file_tool = if let Some(ref client) = ide_client {
+                        WriteFileTool::new(project_path_buf.clone())
+                            .with_ide_client(client.clone())
+                    } else {
+                        WriteFileTool::new(project_path_buf.clone())
+                    };
                     builder = builder
-                        .tool(WriteFileTool::new(project_path_buf.clone()))
+                        .tool(write_file_tool)
                         .tool(WriteFilesTool::new(project_path_buf.clone()))
                         .tool(ShellTool::new(project_path_buf.clone()));
                 }
@@ -247,8 +281,15 @@ pub async fn run_interactive(
 
                 // Add generation tools if this is a generation query
                 if is_generation {
+                    // Create WriteFileTool with IDE client if connected
+                    let write_file_tool = if let Some(ref client) = ide_client {
+                        WriteFileTool::new(project_path_buf.clone())
+                            .with_ide_client(client.clone())
+                    } else {
+                        WriteFileTool::new(project_path_buf.clone())
+                    };
                     builder = builder
-                        .tool(WriteFileTool::new(project_path_buf.clone()))
+                        .tool(write_file_tool)
                         .tool(WriteFilesTool::new(project_path_buf.clone()))
                         .tool(ShellTool::new(project_path_buf.clone()));
                 }
