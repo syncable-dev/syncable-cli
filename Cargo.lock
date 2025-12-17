@@ -3002,7 +3002,6 @@ dependencies = [
  "bit-set",
  "bit-vec",
  "bitflags 2.9.1",
- "lazy_static",
  "num-traits",
  "rand 0.9.1",
  "rand_chacha 0.9.0",
@@ -3892,7 +3891,7 @@ dependencies = [
 
 [[package]]
 name = "syncable-cli"
-version = "0.22.3"
+version = "0.23.0"
 dependencies = [
  "ahash",
  "aho-corasick",
