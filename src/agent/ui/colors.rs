@@ -10,12 +10,15 @@ pub mod icons {
     pub const EXECUTING: &str = "◐";
     pub const SUCCESS: &str = "✓";
     pub const ERROR: &str = "✗";
+    pub const WARNING: &str = "⚠";
     pub const CANCELED: &str = "⊘";
     pub const CONFIRMING: &str = "⏳";
     pub const ARROW: &str = "→";
     pub const THINKING: &str = "💭";
     pub const ROBOT: &str = "🤖";
     pub const TOOL: &str = "🔧";
+    pub const SHELL: &str = "🐚";
+    pub const EDIT: &str = "✏️";
     pub const FILE: &str = "📄";
     pub const FOLDER: &str = "📁";
     pub const SECURITY: &str = "🔒";
