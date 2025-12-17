@@ -330,6 +330,14 @@ impl ChatSession {
         // Print the gradient ASCII logo
         Self::print_logo();
 
+        // Platform promo
+        println!(
+            "  {} {}",
+            "🚀".dimmed(),
+            "Want to deploy? Deploy instantly from Syncable Platform → https://syncable.dev".dimmed()
+        );
+        println!();
+
         // Print agent info
         println!(
             "  {} {} powered by {}: {}",
