@@ -33,9 +33,11 @@ sync-ctl security                   # Thorough scan (default)
 sync-ctl security --mode lightning  # Ultra-fast critical files only
 sync-ctl security --mode paranoid   # Most comprehensive scan
 
+# AI Agent - Interactive DevOps assistant
+sync-ctl chat
+
 # Force update check (clears cache)
 sync-ctl --clear-update-cache analyze .
-
 
 # Get help with any command
 sync-ctl --help                     # Show all available commands
@@ -102,6 +104,12 @@ $ sync-ctl analyze ./my-express-app
 - **Immediate notifications** - Shows updates instantly when available
 - **Clear instructions** - Provides multiple update methods with step-by-step guidance
 - **Zero-maintenance** - Automatically keeps you informed of new releases
+
+### 🤖 AI Agent
+- **Interactive chat** - Natural language DevOps assistant powered by OpenAI/Anthropic
+- **Code generation** - Creates Dockerfiles, Terraform, Helm charts, and CI/CD configs
+- **Project-aware** - Analyzes your codebase to generate optimized configurations
+- **IDE integration** - Native diff views in VS Code for file changes
 
 ## 🛠️ Installation
 
@@ -170,6 +178,34 @@ sync-ctl vulnerabilities            # Dependency vulnerability scan
 sync-ctl dependencies --licenses    # Show license information
 sync-ctl dependencies --vulnerabilities  # Check for known CVEs
 ```
+
+### 🤖 AI Agent
+
+```bash
+# Start interactive chat
+sync-ctl chat
+
+# Use specific provider/model
+sync-ctl chat --provider openai --model gpt-4o
+sync-ctl chat --provider anthropic --model claude-sonnet-4-20250514
+
+# Single query mode
+sync-ctl chat --query "Create a Dockerfile for this project"
+```
+
+**Commands in chat:**
+- `/model` - Switch AI model
+- `/provider` - Switch provider (OpenAI/Anthropic)
+- `/clear` - Clear conversation
+- `/exit` - Exit chat
+
+**IDE Integration (VS Code):**
+
+For native diff views when the agent modifies files:
+
+1. Install [Syncable IDE Companion](https://marketplace.visualstudio.com/items?itemName=syncable.syncable-ide-companion)
+2. Run `sync-ctl chat` from VS Code's integrated terminal
+3. File changes open in VS Code's diff viewer instead of terminal
 
 ### Security Scan Modes
 
@@ -386,18 +422,17 @@ sync-ctl security --fail-on-findings  # Exit with error code if issues found
 ### ✅ Phase 1: Analysis Engine (Complete)
 - Project analysis and technology detection
 - Vulnerability scanning with 260+ supported packages
-- Turbo Security Engine turbo-fast scanning with 5 modes
+- Turbo Security Engine with 5 scan modes
 
-### 🔄 Phase 2: AI-Powered Generation (In Progress)
-- Smart Dockerfile generation
-- Intelligent Docker Compose creation
-- Cloud-optimized configurations
+### ✅ Phase 2: AI Agent (Complete)
+- Interactive chat with OpenAI/Anthropic
+- Dockerfile, Terraform, Helm chart generation
+- VS Code IDE integration for native diffs
 
-### 📅 Future Phases
-- Kubernetes manifests & Helm charts
-- Terraform modules for AWS/GCP/Azure
-- CI/CD pipeline generation
-- Real-time monitoring setup
+### 📅 Phase 3: Coming Soon
+- Kubernetes manifest generation
+- CI/CD pipeline templates
+- Multi-cloud Terraform modules
 
 ## 🤝 Contributing
 
