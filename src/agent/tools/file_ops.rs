@@ -1,4 +1,10 @@
-//! File operation tools for reading and exploring the project using Rig's Tool trait
+//! File operation tools for reading, writing, and exploring the project using Rig's Tool trait
+//!
+//! Provides tools for:
+//! - Reading files (ReadFileTool)
+//! - Writing single files (WriteFileTool) - for Dockerfiles, terraform files, etc.
+//! - Writing multiple files (WriteFilesTool) - for Terraform modules, Helm charts
+//! - Listing directories (ListDirectoryTool)
 
 use rig::completion::ToolDefinition;
 use rig::tool::Tool;
@@ -112,6 +118,9 @@ impl Tool for ReadFileTool {
                     "error": format!("Start line {} exceeds file length ({})", start, lines.len())
                 }).to_string());
             }
+
+            // Ensure end_idx >= start_idx to avoid slice panic when end_line < start_line
+            let end_idx = end_idx.max(start_idx);
 
             let selected: Vec<String> = lines[start_idx..end_idx]
                 .iter()
@@ -256,7 +265,7 @@ impl Tool for ListDirectoryTool {
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
         let path_str = args.path.as_deref().unwrap_or(".");
-        
+
         let requested_path = if path_str.is_empty() || path_str == "." {
             self.project_path.clone()
         } else {
@@ -277,5 +286,310 @@ impl Tool for ListDirectoryTool {
 
         serde_json::to_string_pretty(&result)
             .map_err(|e| ListDirectoryError(format!("Failed to serialize: {}", e)))
+    }
+}
+
+// ============================================================================
+// Write File Tool - For writing Dockerfiles, Terraform files, Helm values, etc.
+// ============================================================================
+
+#[derive(Debug, Deserialize)]
+pub struct WriteFileArgs {
+    /// Path to the file to write (relative to project root)
+    pub path: String,
+    /// Content to write to the file
+    pub content: String,
+    /// If true, create parent directories if they don't exist (default: true)
+    pub create_dirs: Option<bool>,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("Write file error: {0}")]
+pub struct WriteFileError(String);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WriteFileTool {
+    project_path: PathBuf,
+}
+
+impl WriteFileTool {
+    pub fn new(project_path: PathBuf) -> Self {
+        Self { project_path }
+    }
+
+    fn validate_path(&self, requested: &PathBuf) -> Result<PathBuf, WriteFileError> {
+        let canonical_project = self.project_path.canonicalize()
+            .map_err(|e| WriteFileError(format!("Invalid project path: {}", e)))?;
+
+        let target = if requested.is_absolute() {
+            requested.clone()
+        } else {
+            self.project_path.join(requested)
+        };
+
+        // For new files, we can't canonicalize yet, so check the parent
+        let parent = target.parent()
+            .ok_or_else(|| WriteFileError("Invalid path: no parent directory".to_string()))?;
+
+        // If parent exists, canonicalize it; otherwise check the path prefix
+        let is_within_project = if parent.exists() {
+            let canonical_parent = parent.canonicalize()
+                .map_err(|e| WriteFileError(format!("Invalid parent path: {}", e)))?;
+            canonical_parent.starts_with(&canonical_project)
+        } else {
+            // For nested new directories, check if the normalized path stays within project
+            let normalized = self.project_path.join(requested);
+            !normalized.components().any(|c| c == std::path::Component::ParentDir)
+        };
+
+        if !is_within_project {
+            return Err(WriteFileError("Access denied: path is outside project directory".to_string()));
+        }
+
+        Ok(target)
+    }
+}
+
+impl Tool for WriteFileTool {
+    const NAME: &'static str = "write_file";
+
+    type Error = WriteFileError;
+    type Args = WriteFileArgs;
+    type Output = String;
+
+    async fn definition(&self, _prompt: String) -> ToolDefinition {
+        ToolDefinition {
+            name: Self::NAME.to_string(),
+            description: r#"Write content to a file in the project. Creates the file if it doesn't exist, or overwrites if it does.
+
+Use this tool to:
+- Generate Dockerfiles for applications
+- Create Terraform configuration files (.tf)
+- Write Helm chart templates and values
+- Create docker-compose.yml files
+- Generate CI/CD configuration files (.github/workflows, .gitlab-ci.yml)
+- Write Kubernetes manifests
+
+The tool will create parent directories automatically if they don't exist."#.to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to the file to write (relative to project root). Example: 'Dockerfile', 'terraform/main.tf', 'helm/values.yaml'"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "The complete content to write to the file"
+                    },
+                    "create_dirs": {
+                        "type": "boolean",
+                        "description": "If true (default), create parent directories if they don't exist"
+                    }
+                },
+                "required": ["path", "content"]
+            }),
+        }
+    }
+
+    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+        let requested_path = PathBuf::from(&args.path);
+        let file_path = self.validate_path(&requested_path)?;
+
+        // Create parent directories if needed
+        let create_dirs = args.create_dirs.unwrap_or(true);
+        if create_dirs {
+            if let Some(parent) = file_path.parent() {
+                if !parent.exists() {
+                    fs::create_dir_all(parent)
+                        .map_err(|e| WriteFileError(format!("Failed to create directories: {}", e)))?;
+                }
+            }
+        }
+
+        // Check if file exists (for reporting)
+        let file_existed = file_path.exists();
+
+        // Write the content
+        fs::write(&file_path, &args.content)
+            .map_err(|e| WriteFileError(format!("Failed to write file: {}", e)))?;
+
+        let action = if file_existed { "Updated" } else { "Created" };
+        let lines = args.content.lines().count();
+
+        let result = json!({
+            "success": true,
+            "action": action,
+            "path": args.path,
+            "lines_written": lines,
+            "bytes_written": args.content.len()
+        });
+
+        serde_json::to_string_pretty(&result)
+            .map_err(|e| WriteFileError(format!("Failed to serialize: {}", e)))
+    }
+}
+
+// ============================================================================
+// Write Files Tool - For writing multiple files (Terraform modules, Helm charts)
+// ============================================================================
+
+#[derive(Debug, Deserialize)]
+pub struct FileToWrite {
+    /// Path to the file (relative to project root)
+    pub path: String,
+    /// Content to write
+    pub content: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct WriteFilesArgs {
+    /// List of files to write
+    pub files: Vec<FileToWrite>,
+    /// If true, create parent directories if they don't exist (default: true)
+    pub create_dirs: Option<bool>,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("Write files error: {0}")]
+pub struct WriteFilesError(String);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WriteFilesTool {
+    project_path: PathBuf,
+}
+
+impl WriteFilesTool {
+    pub fn new(project_path: PathBuf) -> Self {
+        Self { project_path }
+    }
+
+    fn validate_path(&self, requested: &PathBuf) -> Result<PathBuf, WriteFilesError> {
+        let canonical_project = self.project_path.canonicalize()
+            .map_err(|e| WriteFilesError(format!("Invalid project path: {}", e)))?;
+
+        let target = if requested.is_absolute() {
+            requested.clone()
+        } else {
+            self.project_path.join(requested)
+        };
+
+        let parent = target.parent()
+            .ok_or_else(|| WriteFilesError("Invalid path: no parent directory".to_string()))?;
+
+        let is_within_project = if parent.exists() {
+            let canonical_parent = parent.canonicalize()
+                .map_err(|e| WriteFilesError(format!("Invalid parent path: {}", e)))?;
+            canonical_parent.starts_with(&canonical_project)
+        } else {
+            let normalized = self.project_path.join(requested);
+            !normalized.components().any(|c| c == std::path::Component::ParentDir)
+        };
+
+        if !is_within_project {
+            return Err(WriteFilesError("Access denied: path is outside project directory".to_string()));
+        }
+
+        Ok(target)
+    }
+}
+
+impl Tool for WriteFilesTool {
+    const NAME: &'static str = "write_files";
+
+    type Error = WriteFilesError;
+    type Args = WriteFilesArgs;
+    type Output = String;
+
+    async fn definition(&self, _prompt: String) -> ToolDefinition {
+        ToolDefinition {
+            name: Self::NAME.to_string(),
+            description: r#"Write multiple files at once. Ideal for creating complete infrastructure configurations.
+
+Use this tool when you need to create multiple related files together:
+- Complete Terraform modules (main.tf, variables.tf, outputs.tf, providers.tf)
+- Full Helm charts (Chart.yaml, values.yaml, templates/*.yaml)
+- Kubernetes manifests (deployment.yaml, service.yaml, configmap.yaml)
+- Multi-file docker-compose setups
+
+All files are written atomically - if any file fails, previously written files in the batch remain."#.to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "files": {
+                        "type": "array",
+                        "description": "List of files to write",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "path": {
+                                    "type": "string",
+                                    "description": "Path to the file (relative to project root)"
+                                },
+                                "content": {
+                                    "type": "string",
+                                    "description": "Content to write to the file"
+                                }
+                            },
+                            "required": ["path", "content"]
+                        }
+                    },
+                    "create_dirs": {
+                        "type": "boolean",
+                        "description": "If true (default), create parent directories if they don't exist"
+                    }
+                },
+                "required": ["files"]
+            }),
+        }
+    }
+
+    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+        let create_dirs = args.create_dirs.unwrap_or(true);
+        let mut results = Vec::new();
+        let mut total_bytes = 0usize;
+        let mut total_lines = 0usize;
+
+        for file in &args.files {
+            let requested_path = PathBuf::from(&file.path);
+            let file_path = self.validate_path(&requested_path)?;
+
+            // Create parent directories if needed
+            if create_dirs {
+                if let Some(parent) = file_path.parent() {
+                    if !parent.exists() {
+                        fs::create_dir_all(parent)
+                            .map_err(|e| WriteFilesError(format!("Failed to create directories for {}: {}", file.path, e)))?;
+                    }
+                }
+            }
+
+            let file_existed = file_path.exists();
+
+            fs::write(&file_path, &file.content)
+                .map_err(|e| WriteFilesError(format!("Failed to write {}: {}", file.path, e)))?;
+
+            let lines = file.content.lines().count();
+            total_bytes += file.content.len();
+            total_lines += lines;
+
+            results.push(json!({
+                "path": file.path,
+                "action": if file_existed { "updated" } else { "created" },
+                "lines": lines,
+                "bytes": file.content.len()
+            }));
+        }
+
+        let result = json!({
+            "success": true,
+            "files_written": results.len(),
+            "total_lines": total_lines,
+            "total_bytes": total_bytes,
+            "files": results
+        });
+
+        serde_json::to_string_pretty(&result)
+            .map_err(|e| WriteFilesError(format!("Failed to serialize: {}", e)))
     }
 }
