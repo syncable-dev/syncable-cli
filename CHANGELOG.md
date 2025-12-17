@@ -110,10 +110,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
+- Add Syncable IDE Companion VS Code extension
 - VS Code extension Syncable Cli Companion
 
 ### Other
 
+- Merge pull request #202 from syncable-dev/develop
 - Merge pull request #201 from syncable-dev/develop
 - Merge branch 'develop' of github.com:syncable-dev/syncable-cli into develop
 
