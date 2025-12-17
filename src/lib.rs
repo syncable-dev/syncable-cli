@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod analyzer;
 pub mod cli;
 pub mod common;
@@ -103,5 +104,28 @@ pub async fn run_command(command: Commands) -> Result<()> {
             .map(|_| ()) // Map Result<String> to Result<()>
         }
         Commands::Tools { command } => handlers::handle_tools(command).await,
+        Commands::Chat { path, provider, model, query } => {
+            use agent::ProviderType;
+            use cli::ChatProvider;
+
+            let project_path = path.canonicalize().unwrap_or(path);
+            let provider_type = match provider {
+                ChatProvider::Openai => ProviderType::OpenAI,
+                ChatProvider::Anthropic => ProviderType::Anthropic,
+                ChatProvider::Ollama => {
+                    eprintln!("Ollama support coming soon. Using OpenAI as fallback.");
+                    ProviderType::OpenAI
+                }
+            };
+
+            if let Some(q) = query {
+                let response = agent::run_query(&project_path, &q, provider_type, model).await?;
+                println!("{}", response);
+                Ok(())
+            } else {
+                agent::run_interactive(&project_path, provider_type, model).await?;
+                Ok(())
+            }
+        }
     }
 }

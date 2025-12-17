@@ -5,8 +5,7 @@ use syncable_cli::{
         analyze_monorepo, vulnerability::VulnerabilitySeverity,
     },
     cli::{
-        Cli, ColorScheme, Commands, DisplayFormat, OutputFormat, SecurityScanMode,
-        SeverityThreshold, ToolsCommand,
+        ChatProvider, Cli, ColorScheme, Commands, DisplayFormat, OutputFormat, SecurityScanMode, SeverityThreshold, ToolsCommand
     },
     config, generator,
     telemetry::{self},
@@ -97,6 +96,7 @@ async fn run() -> syncable_cli::Result<()> {
         Commands::Vulnerabilities { .. } => "vulnerabilities",
         Commands::Security { .. } => "security",
         Commands::Tools { .. } => "tools",
+        Commands::Chat { .. } => "chat",
     };
 
     log::debug!("Command name: {}", command_name);
@@ -480,6 +480,30 @@ async fn run() -> syncable_cli::Result<()> {
             }
             
             handle_tools(command).await
+        },
+
+        Commands::Chat { path, provider, model, query } => {
+            let mut properties = HashMap::new();
+            
+            let provider_str = match provider {
+                ChatProvider::Openai => "openai",
+                ChatProvider::Anthropic => "anthropic",
+                ChatProvider::Ollama => "ollama",
+            };
+            properties.insert("provider".to_string(), json!(provider_str));
+            
+            if let Some(m) = &model {
+                properties.insert("model".to_string(), json!(m));
+            }
+            
+            properties.insert("mode".to_string(), json!(if query.is_some() { "query" } else { "interactive" }));
+            
+            // Track Chat command
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_event("chat", properties.clone());
+            }
+            
+            syncable_cli::run_command(Commands::Chat { path, provider, model, query }).await
         },
 
     };

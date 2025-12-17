@@ -1,0 +1,11 @@
+{
+  "name": "fixture-tanstack-start",
+  "private": true,
+  "dependencies": {
+    "@tanstack/react-start": "1.0.0",
+    "@tanstack/react-router": "1.0.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "vinxi": "0.1.0"
+  }
+}

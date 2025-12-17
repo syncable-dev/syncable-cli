@@ -4,7 +4,7 @@ use tempfile::TempDir;
 use tokio;
 
 use syncable_cli::analyzer::{
-    dependency_parser::{DependencyParser, DependencyInfo, DependencyType, Language},
+    dependency_parser::{DependencyParser, Language},
     vulnerability::VulnerabilityChecker,
     runtime::{RuntimeDetector, PackageManager, JavaScriptRuntime, DetectionConfidence},
     tool_management::ToolDetector,
@@ -57,12 +57,8 @@ async fn test_bun_project_detection_and_audit_workflow() {
     assert!(report.is_ok());
     let vulnerability_report = report.unwrap();
     
-    // Verify report structure
-    assert!(vulnerability_report.total_vulnerabilities >= 0);
-    assert!(vulnerability_report.critical_count >= 0);
-    assert!(vulnerability_report.high_count >= 0);
-    assert!(vulnerability_report.medium_count >= 0);
-    assert!(vulnerability_report.low_count >= 0);
+    // Verify report structure exists (counts are usize and always >= 0)
+    // No assertions needed - the fact that we got a report is sufficient
 }
 
 #[tokio::test]
@@ -186,8 +182,8 @@ async fn test_vulnerability_checking_with_mixed_languages() {
     
     let vulnerability_report = report.unwrap();
     
-    // Should handle mixed language vulnerabilities
-    assert!(vulnerability_report.total_vulnerabilities >= 0);
+    // Should handle mixed language vulnerabilities (counts are usize and always >= 0)
+    // No assertion needed - the fact that we got a report is sufficient
 }
 
 #[test]
