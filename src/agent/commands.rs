@@ -8,8 +8,8 @@
 
 use crate::agent::ui::colors::ansi;
 use crossterm::{
-    cursor::{self, MoveTo, MoveUp, MoveToColumn},
-    event::{self, Event, KeyCode, KeyEvent as CrosstermKeyEvent, KeyModifiers},
+    cursor::{self, MoveUp, MoveToColumn},
+    event::{self, Event, KeyCode},
     execute,
     terminal::{self, Clear, ClearType},
 };

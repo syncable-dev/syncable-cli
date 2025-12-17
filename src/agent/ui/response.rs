@@ -23,6 +23,12 @@ pub mod brand {
     pub const SUCCESS: &str = "\x1b[38;5;114m";
     /// Yellow for warnings
     pub const YELLOW: &str = "\x1b[38;5;221m";
+    /// Peach/light orange for thinking (like N in logo)
+    pub const PEACH: &str = "\x1b[38;5;216m";
+    /// Lighter peach for thinking secondary
+    pub const LIGHT_PEACH: &str = "\x1b[38;5;223m";
+    /// Coral/salmon for thinking accents
+    pub const CORAL: &str = "\x1b[38;5;209m";
     /// Reset
     pub const RESET: &str = "\x1b[0m";
     /// Bold
