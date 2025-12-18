@@ -2,7 +2,7 @@
   "name": "syncable-ide-companion",
   "displayName": "Syncable IDE Companion",
   "description": "IDE companion extension for Syncable Agent - enables native diff views and IDE integration",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "syncable",
   "icon": "assets/icon.png",
   "repository": {

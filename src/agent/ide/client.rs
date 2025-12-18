@@ -126,7 +126,7 @@ impl IdeClient {
         // Try to read connection config from file
         if let Some(config) = self.read_connection_config().await {
             self.port = Some(config.port);
-            self.auth_token = config.auth_token;
+            self.auth_token = config.auth_token.clone();
 
             // Try to establish connection
             if self.establish_connection().await.is_ok() {
@@ -157,43 +157,31 @@ impl IdeClient {
     /// Read connection config from port file
     /// Supports both Syncable and Gemini CLI companion extensions
     async fn read_connection_config(&self) -> Option<ConnectionConfig> {
-        let process_info = self.process_info.as_ref()?;
-        let pid = process_info.pid;
         let temp_dir = env::temp_dir();
 
-        // Try Syncable extension first
+        // Try Syncable extension first - scan all port files, match by workspace
         let syncable_port_dir = temp_dir.join("syncable").join("ide");
-        if let Some(config) = self.find_port_file(&syncable_port_dir, "syncable-ide-server", pid) {
+        if let Some(config) = self.find_port_file_by_workspace(&syncable_port_dir, "syncable-ide-server") {
             return Some(config);
         }
 
         // Try Gemini CLI extension (for compatibility)
         let gemini_port_dir = temp_dir.join("gemini").join("ide");
-        if let Some(config) = self.find_port_file(&gemini_port_dir, "gemini-ide-server", pid) {
+        if let Some(config) = self.find_port_file_by_workspace(&gemini_port_dir, "gemini-ide-server") {
             return Some(config);
-        }
-
-        // Legacy Gemini format (single file in temp dir)
-        let legacy_gemini = temp_dir.join(format!("gemini-ide-server-{}.json", pid));
-        if let Ok(content) = fs::read_to_string(&legacy_gemini) {
-            if let Ok(config) = serde_json::from_str::<ConnectionConfig>(&content) {
-                if self.validate_workspace_path(&config.workspace_path) {
-                    return Some(config);
-                }
-            }
         }
 
         None
     }
 
-    /// Find a port file in a directory matching the given prefix and PID
-    fn find_port_file(&self, dir: &PathBuf, prefix: &str, pid: u32) -> Option<ConnectionConfig> {
+    /// Find a port file in a directory by scanning all files and matching workspace path
+    fn find_port_file_by_workspace(&self, dir: &PathBuf, prefix: &str) -> Option<ConnectionConfig> {
         let entries = fs::read_dir(dir).ok()?;
-        let file_prefix = format!("{}-{}-", prefix, pid);
 
         for entry in entries.flatten() {
             let filename = entry.file_name().to_string_lossy().to_string();
-            if filename.starts_with(&file_prefix) && filename.ends_with(".json") {
+            // Match any file starting with the prefix and ending with .json
+            if filename.starts_with(prefix) && filename.ends_with(".json") {
                 if let Ok(content) = fs::read_to_string(entry.path()) {
                     if let Ok(config) = serde_json::from_str::<ConnectionConfig>(&content) {
                         if self.validate_workspace_path(&config.workspace_path) {
@@ -253,7 +241,10 @@ impl IdeClient {
         );
 
         // Send initialize request
-        let mut request = self.http_client.post(&url).json(&init_request);
+        let mut request = self.http_client
+            .post(&url)
+            .header("Accept", "application/json, text/event-stream")
+            .json(&init_request);
 
         if let Some(token) = &self.auth_token {
             request = request.header("Authorization", format!("Bearer {}", token));
@@ -271,11 +262,14 @@ impl IdeClient {
             }
         }
 
-        // Parse response
-        let response_data: JsonRpcResponse = response
-            .json()
+        // Parse response (SSE format: "event: message\ndata: {json}")
+        let response_text = response
+            .text()
             .await
             .map_err(|e| IdeError::ConnectionFailed(e.to_string()))?;
+
+        let response_data: JsonRpcResponse = Self::parse_sse_response(&response_text)
+            .map_err(IdeError::ConnectionFailed)?;
 
         if response_data.error.is_some() {
             return Err(IdeError::ConnectionFailed(
@@ -287,6 +281,20 @@ impl IdeClient {
         }
 
         Ok(())
+    }
+
+    /// Parse SSE response format to extract JSON
+    fn parse_sse_response(text: &str) -> Result<JsonRpcResponse, String> {
+        // SSE format: "event: message\ndata: {json}\n\n"
+        for line in text.lines() {
+            if let Some(json_str) = line.strip_prefix("data: ") {
+                return serde_json::from_str(json_str)
+                    .map_err(|e| format!("Failed to parse JSON: {}", e));
+            }
+        }
+        // Fallback: try parsing entire response as JSON (for non-SSE responses)
+        serde_json::from_str(text)
+            .map_err(|e| format!("Failed to parse response: {}", e))
     }
 
     /// Get next request ID
@@ -307,7 +315,10 @@ impl IdeClient {
 
         let request = JsonRpcRequest::new(self.next_request_id(), method, params);
 
-        let mut http_request = self.http_client.post(&url).json(&request);
+        let mut http_request = self.http_client
+            .post(&url)
+            .header("Accept", "application/json, text/event-stream")
+            .json(&request);
 
         if let Some(token) = &self.auth_token {
             http_request = http_request.header("Authorization", format!("Bearer {}", token));
@@ -322,10 +333,13 @@ impl IdeClient {
             .await
             .map_err(|e| IdeError::RequestFailed(e.to_string()))?;
 
-        response
-            .json()
+        let response_text = response
+            .text()
             .await
-            .map_err(|e| IdeError::RequestFailed(e.to_string()))
+            .map_err(|e| IdeError::RequestFailed(e.to_string()))?;
+
+        Self::parse_sse_response(&response_text)
+            .map_err(IdeError::RequestFailed)
     }
 
     /// Open a diff view in the IDE
