@@ -606,6 +606,8 @@ pub struct WriteFilesTool {
     require_confirmation: bool,
     /// Session-level allowed file patterns
     allowed_patterns: std::sync::Arc<AllowedFilePatterns>,
+    /// Optional IDE client for native diff views
+    ide_client: Option<std::sync::Arc<tokio::sync::Mutex<IdeClient>>>,
 }
 
 impl WriteFilesTool {
@@ -614,6 +616,7 @@ impl WriteFilesTool {
             project_path,
             require_confirmation: true,
             allowed_patterns: std::sync::Arc::new(AllowedFilePatterns::new()),
+            ide_client: None,
         }
     }
 
@@ -626,12 +629,19 @@ impl WriteFilesTool {
             project_path,
             require_confirmation: true,
             allowed_patterns,
+            ide_client: None,
         }
     }
 
     /// Disable confirmation prompts
     pub fn without_confirmation(mut self) -> Self {
         self.require_confirmation = false;
+        self
+    }
+
+    /// Set the IDE client for native diff views
+    pub fn with_ide_client(mut self, ide_client: std::sync::Arc<tokio::sync::Mutex<IdeClient>>) -> Self {
+        self.ide_client = Some(ide_client);
         self
     }
 
@@ -744,11 +754,31 @@ All files are written atomically - if any file fails, previously written files i
                 && !self.allowed_patterns.is_allowed(&filename);
 
             if needs_confirmation {
-                let confirmation = confirm_file_write(
-                    &file.path,
-                    old_content.as_deref(),
-                    &file.content,
-                );
+                // Use IDE diff if client is connected, otherwise terminal diff
+                let confirmation = if let Some(ref client) = self.ide_client {
+                    let guard = client.lock().await;
+                    if guard.is_connected() {
+                        confirm_file_write_with_ide(
+                            &file.path,
+                            old_content.as_deref(),
+                            &file.content,
+                            Some(&*guard),
+                        ).await
+                    } else {
+                        drop(guard);
+                        confirm_file_write(
+                            &file.path,
+                            old_content.as_deref(),
+                            &file.content,
+                        )
+                    }
+                } else {
+                    confirm_file_write(
+                        &file.path,
+                        old_content.as_deref(),
+                        &file.content,
+                    )
+                };
 
                 match confirmation {
                     ConfirmationResult::Proceed => {
