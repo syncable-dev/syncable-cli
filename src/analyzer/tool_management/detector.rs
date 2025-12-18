@@ -227,7 +227,7 @@ impl ToolDetector {
                             available: true,
                             path: Some(tool_path_exe),
                             execution_path: Some(tool_path_exe), // Use full path for execution
-                            version,
+                            version: Some(version),
                             installation_source: source,
                             last_checked: SystemTime::now(),
                         };
@@ -281,8 +281,8 @@ impl ToolDetector {
                     paths.push(userprofile_path.join("go").join("bin"));
                 }
                 if let Ok(appdata) = std::env::var("APPDATA") {
-                    paths.push(PathBuf::from(appdata).join("syncable-cli").join("bin"));
-                    paths.push(PathBuf::from(appdata).join("npm"));
+                    paths.push(PathBuf::from(&appdata).join("syncable-cli").join("bin"));
+                    paths.push(PathBuf::from(&appdata).join("npm"));
                 }
                 // Program Files
                 paths.push(PathBuf::from("C:\\Program Files"));
