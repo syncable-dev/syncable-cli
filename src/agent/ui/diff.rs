@@ -13,6 +13,17 @@ use std::io::{self, Write};
 
 use crate::agent::ide::{DiffResult, IdeClient};
 
+/// Safely truncate a string to a maximum number of characters (not bytes)
+/// This avoids panics when slicing UTF-8 strings with multi-byte characters
+fn truncate_str(s: &str, max_chars: usize) -> String {
+    if s.chars().count() <= max_chars {
+        s.to_string()
+    } else {
+        let truncated: String = s.chars().take(max_chars.saturating_sub(3)).collect();
+        format!("{}...", truncated)
+    }
+}
+
 /// Get custom render config for file confirmation prompts
 fn get_file_confirmation_render_config() -> RenderConfig<'static> {
     RenderConfig::default()
@@ -66,13 +77,9 @@ pub fn render_diff(old_content: &str, new_content: &str, filename: &str) {
             }
         };
 
-        // Truncate content if needed
+        // Truncate content if needed (using character count, not bytes)
         let max_content_len = inner_width.saturating_sub(8); // line num + prefix + spaces
-        let truncated = if content.len() > max_content_len {
-            format!("{}...", &content[..max_content_len.saturating_sub(3)])
-        } else {
-            content.to_string()
-        };
+        let truncated = truncate_str(content, max_content_len);
 
         match style {
             "red" => println!(
@@ -140,11 +147,7 @@ pub fn render_new_file(content: &str, filename: &str) {
     for (i, line) in lines.iter().take(MAX_PREVIEW_LINES).enumerate() {
         let line_num = format!("{:>4}", i + 1);
         let max_content_len = inner_width.saturating_sub(8);
-        let truncated = if line.len() > max_content_len {
-            format!("{}...", &line[..max_content_len.saturating_sub(3)])
-        } else {
-            line.to_string()
-        };
+        let truncated = truncate_str(line, max_content_len);
 
         println!(
             "{} {} {} {}",

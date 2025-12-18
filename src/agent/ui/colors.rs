@@ -49,6 +49,7 @@ pub mod ansi {
     pub const MAGENTA: &str = "\x1b[38;5;207m";
     pub const CYAN: &str = "\x1b[38;5;51m";
     pub const GRAY: &str = "\x1b[38;5;245m";
+    pub const WHITE: &str = "\x1b[38;5;255m";
     pub const SUCCESS: &str = "\x1b[38;5;114m"; // Green for success
 }
 

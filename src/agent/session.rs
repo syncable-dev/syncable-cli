@@ -10,10 +10,9 @@
 
 use crate::agent::commands::{TokenUsage, SLASH_COMMANDS};
 use crate::agent::{AgentError, AgentResult, ProviderType};
-use crate::agent::ui::{SlashCommandAutocomplete, ansi};
+use crate::agent::ui::ansi;
 use crate::config::{load_agent_config, save_agent_config};
 use colored::Colorize;
-use inquire::Text;
 use std::io::{self, Write};
 use std::path::Path;
 
@@ -407,17 +406,13 @@ impl ChatSession {
         input.trim().starts_with('/')
     }
 
-    /// Read user input with prompt - with interactive slash command support
-    /// Uses `inquire` library for proper terminal handling and autocomplete
+    /// Read user input with prompt - with interactive file picker support
+    /// Uses custom terminal handling for @ file references and / commands
     pub fn read_input(&self) -> io::Result<String> {
-        // Use inquire::Text with custom autocomplete for slash commands
-        let input = Text::new("You:")
-            .with_autocomplete(SlashCommandAutocomplete::new())
-            .with_help_message("Type / for commands, or ask a question")
-            .prompt();
+        use crate::agent::ui::input::{read_input_with_file_picker, InputResult};
 
-        match input {
-            Ok(text) => {
+        match read_input_with_file_picker("You:", &self.project_path) {
+            InputResult::Submit(text) => {
                 let trimmed = text.trim();
                 // Handle case where full suggestion was submitted (e.g., "/model        Description")
                 // Extract just the command if it looks like a suggestion format
@@ -429,9 +424,8 @@ impl ChatSession {
                 }
                 Ok(trimmed.to_string())
             }
-            Err(inquire::InquireError::OperationCanceled) => Ok("exit".to_string()),
-            Err(inquire::InquireError::OperationInterrupted) => Ok("exit".to_string()),
-            Err(e) => Err(io::Error::new(io::ErrorKind::Other, e.to_string())),
+            InputResult::Cancel => Ok("".to_string()),
+            InputResult::Exit => Ok("exit".to_string()),
         }
     }
 }
