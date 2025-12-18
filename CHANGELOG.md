@@ -106,6 +106,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.24.0](https://github.com/syncable-dev/syncable-cli/compare/v0.23.1...v0.24.0) - 2025-12-18
+
+### Added
+
+- updated Agent dockerfile generation alongside the Syncable Cli Companion, allowing for IDE to show diff and change suggestions from the cli agent
+
 ## [0.23.1](https://github.com/syncable-dev/syncable-cli/compare/v0.23.0...v0.23.1) - 2025-12-17
 
 ### Added
