@@ -106,6 +106,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.23.1](https://github.com/syncable-dev/syncable-cli/compare/v0.23.0...v0.23.1) - 2025-12-17
+
+### Added
+
+- Add Syncable IDE Companion VS Code extension
+
+### Other
+
+- Merge branch 'main' into release-plz-2025-12-17T22-17-01Z
+- release v0.23.0
+- Merge pull request #202 from syncable-dev/develop
+
 ## [0.23.0](https://github.com/syncable-dev/syncable-cli/compare/v0.22.3...v0.23.0) - 2025-12-17
 
 ### Added
