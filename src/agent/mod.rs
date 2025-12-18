@@ -135,12 +135,18 @@ pub async fn run_interactive(
                     );
                     Some(Arc::new(TokioMutex::new(client)))
                 }
-                Err(_) => {
-                    // IDE detected but companion not running - that's fine
+                Err(e) => {
+                    // IDE detected but companion not running or connection failed
+                    println!(
+                        "{} IDE companion not connected: {}",
+                        "!".yellow(),
+                        e
+                    );
                     None
                 }
             }
         } else {
+            println!("{} No IDE detected (TERM_PROGRAM={})", "·".dimmed(), std::env::var("TERM_PROGRAM").unwrap_or_default());
             None
         }
     };
@@ -240,16 +246,23 @@ pub async fn run_interactive(
 
                 // Add generation tools if this is a generation query
                 if is_generation {
-                    // Create WriteFileTool with IDE client if connected
-                    let write_file_tool = if let Some(ref client) = ide_client {
-                        WriteFileTool::new(project_path_buf.clone())
-                            .with_ide_client(client.clone())
+                    // Create file tools with IDE client if connected
+                    let (write_file_tool, write_files_tool) = if let Some(ref client) = ide_client {
+                        (
+                            WriteFileTool::new(project_path_buf.clone())
+                                .with_ide_client(client.clone()),
+                            WriteFilesTool::new(project_path_buf.clone())
+                                .with_ide_client(client.clone()),
+                        )
                     } else {
-                        WriteFileTool::new(project_path_buf.clone())
+                        (
+                            WriteFileTool::new(project_path_buf.clone()),
+                            WriteFilesTool::new(project_path_buf.clone()),
+                        )
                     };
                     builder = builder
                         .tool(write_file_tool)
-                        .tool(WriteFilesTool::new(project_path_buf.clone()))
+                        .tool(write_files_tool)
                         .tool(ShellTool::new(project_path_buf.clone()));
                 }
 
@@ -281,16 +294,23 @@ pub async fn run_interactive(
 
                 // Add generation tools if this is a generation query
                 if is_generation {
-                    // Create WriteFileTool with IDE client if connected
-                    let write_file_tool = if let Some(ref client) = ide_client {
-                        WriteFileTool::new(project_path_buf.clone())
-                            .with_ide_client(client.clone())
+                    // Create file tools with IDE client if connected
+                    let (write_file_tool, write_files_tool) = if let Some(ref client) = ide_client {
+                        (
+                            WriteFileTool::new(project_path_buf.clone())
+                                .with_ide_client(client.clone()),
+                            WriteFilesTool::new(project_path_buf.clone())
+                                .with_ide_client(client.clone()),
+                        )
                     } else {
-                        WriteFileTool::new(project_path_buf.clone())
+                        (
+                            WriteFileTool::new(project_path_buf.clone()),
+                            WriteFilesTool::new(project_path_buf.clone()),
+                        )
                     };
                     builder = builder
                         .tool(write_file_tool)
-                        .tool(WriteFilesTool::new(project_path_buf.clone()))
+                        .tool(write_files_tool)
                         .tool(ShellTool::new(project_path_buf.clone()));
                 }
 

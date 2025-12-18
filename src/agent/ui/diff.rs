@@ -241,8 +241,11 @@ pub fn confirm_file_write(
 
 /// Confirm file write with IDE integration
 ///
-/// If an IDE client is connected, the diff will be shown in the IDE's native
-/// diff viewer. Otherwise, falls back to terminal diff display.
+/// When an IDE client is connected, this shows BOTH:
+/// 1. The diff in the IDE's native diff viewer
+/// 2. A terminal menu for confirmation
+///
+/// The user can respond from either place - first response wins.
 ///
 /// # Arguments
 /// * `path` - Path to the file being modified
@@ -259,44 +262,158 @@ pub async fn confirm_file_write_with_ide(
     ide_client: Option<&IdeClient>,
 ) -> crate::agent::ui::confirmation::ConfirmationResult {
     use crate::agent::ui::confirmation::ConfirmationResult;
+    use inquire::{InquireError, Select, Text};
+    use tokio::sync::oneshot;
 
-    // Try IDE diff first if connected
-    if let Some(client) = ide_client {
-        if client.is_connected() {
-            // Convert to absolute path for IDE
-            let abs_path = std::path::Path::new(path)
-                .canonicalize()
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|_| path.to_string());
+    // Show terminal diff first
+    match old_content {
+        Some(old) => render_diff(old, new_content, path),
+        None => render_new_file(new_content, path),
+    };
+
+    // Try to open IDE diff if connected (non-blocking)
+    let ide_connected = ide_client.map(|c| c.is_connected()).unwrap_or(false);
+
+    if ide_connected {
+        let client = ide_client.unwrap();
+
+        // Convert to absolute path for IDE
+        let abs_path = std::path::Path::new(path)
+            .canonicalize()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| path.to_string());
+
+        // Create channels for communication
+        let (terminal_tx, terminal_rx) = oneshot::channel::<ConfirmationResult>();
+        let (cancel_tx, _cancel_rx) = oneshot::channel::<()>();
+        let (menu_ready_tx, menu_ready_rx) = oneshot::channel::<()>();
+
+        // Spawn terminal input on blocking thread
+        let path_owned = path.to_string();
+        let ide_name = client.ide_name().unwrap_or("IDE").to_string();
+        let terminal_handle = tokio::task::spawn_blocking(move || {
+            let options = vec![
+                "Yes, allow once".to_string(),
+                "Yes, allow always".to_string(),
+                "Type here to suggest changes".to_string(),
+            ];
 
             println!(
-                "{} Opening diff in {}...",
+                "{} Diff opened in {} - respond here or in the IDE",
                 "→".cyan(),
-                client.ide_name().unwrap_or("IDE")
+                ide_name
             );
+            println!("{}", "Apply this change?".white());
 
-            match client.open_diff(&abs_path, new_content).await {
-                Ok(DiffResult::Accepted { content: _ }) => {
-                    println!("{} Changes accepted in IDE", "✓".green());
-                    return ConfirmationResult::Proceed;
+            // Signal that the menu is about to be displayed
+            let _ = menu_ready_tx.send(());
+
+            let selection = Select::new("", options.clone())
+                .with_render_config(get_file_confirmation_render_config())
+                .with_page_size(3)
+                .with_help_message("↑↓ to move, Enter to select, Esc to cancel (or use IDE)")
+                .prompt();
+
+            let result = match selection {
+                Ok(answer) => {
+                    if answer == options[0] {
+                        ConfirmationResult::Proceed
+                    } else if answer == options[1] {
+                        let filename = std::path::Path::new(&path_owned)
+                            .file_name()
+                            .map(|n| n.to_string_lossy().to_string())
+                            .unwrap_or_else(|| path_owned.clone());
+                        ConfirmationResult::ProceedAlways(filename)
+                    } else {
+                        // User wants to type feedback
+                        println!();
+                        match Text::new("What changes would you like?")
+                            .with_help_message("Press Enter to submit, Esc to cancel")
+                            .prompt()
+                        {
+                            Ok(feedback) if !feedback.trim().is_empty() => {
+                                ConfirmationResult::Modify(feedback)
+                            }
+                            _ => ConfirmationResult::Cancel,
+                        }
+                    }
                 }
-                Ok(DiffResult::Rejected) => {
-                    println!("{} Changes rejected in IDE", "✗".red());
-                    return ConfirmationResult::Cancel;
+                Err(InquireError::OperationCanceled) | Err(InquireError::OperationInterrupted) => {
+                    ConfirmationResult::Cancel
                 }
-                Err(e) => {
-                    // Fall through to terminal diff
-                    println!(
-                        "{} IDE diff failed ({}), showing terminal diff...",
-                        "!".yellow(),
-                        e
-                    );
+                Err(_) => ConfirmationResult::Cancel,
+            };
+
+            let _ = terminal_tx.send(result);
+        });
+
+        // Wait for terminal menu to be ready before opening IDE diff
+        let _ = menu_ready_rx.await;
+
+        // Small delay to ensure terminal has rendered the Select prompt
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        // Now open IDE diff
+        let ide_future = client.open_diff(&abs_path, new_content);
+
+        // Race: first response wins
+        tokio::select! {
+            // IDE responded
+            ide_result = ide_future => {
+                // Cancel terminal input (it's blocking so we can't really cancel it,
+                // but we'll ignore its result)
+                let _ = cancel_tx.send(());
+                terminal_handle.abort();
+
+                match ide_result {
+                    Ok(DiffResult::Accepted { content: _ }) => {
+                        println!("\n{} Changes accepted in IDE", "✓".green());
+                        return ConfirmationResult::Proceed;
+                    }
+                    Ok(DiffResult::Rejected) => {
+                        println!("\n{} Changes rejected in IDE", "✗".red());
+                        return ConfirmationResult::Cancel;
+                    }
+                    Err(e) => {
+                        println!("\n{} IDE error: {}", "!".yellow(), e);
+                        // IDE failed but terminal thread is already running
+                        // Just return Cancel - user can retry
+                        return ConfirmationResult::Cancel;
+                    }
+                }
+            }
+            // Terminal responded
+            terminal_result = terminal_rx => {
+                // Close IDE diff
+                let _ = client.close_diff(&abs_path).await;
+
+                match terminal_result {
+                    Ok(result) => {
+                        match &result {
+                            ConfirmationResult::Proceed => {
+                                println!("{} Changes accepted", "✓".green());
+                            }
+                            ConfirmationResult::ProceedAlways(_) => {
+                                println!("{} Changes accepted (always for this file type)", "✓".green());
+                            }
+                            ConfirmationResult::Cancel => {
+                                println!("{} Changes cancelled", "✗".red());
+                            }
+                            ConfirmationResult::Modify(_) => {
+                                println!("{} Feedback provided", "→".cyan());
+                            }
+                        }
+                        return result;
+                    }
+                    Err(_) => {
+                        return ConfirmationResult::Cancel;
+                    }
                 }
             }
         }
     }
 
-    // Fallback: terminal diff and confirmation
+    // No IDE connection - just use terminal
     confirm_file_write(path, old_content, new_content)
 }
 
