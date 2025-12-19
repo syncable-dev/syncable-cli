@@ -106,6 +106,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.24.3](https://github.com/syncable-dev/syncable-cli/compare/v0.24.2...v0.24.3) - 2025-12-19
+
+### Added
+
+- updated with logo
+
+### Other
+
+- update ROADMAP with completed features and cleaner structure
+
 ## [0.24.2](https://github.com/syncable-dev/syncable-cli/compare/v0.24.1...v0.24.2) - 2025-12-19
 
 ### Added
