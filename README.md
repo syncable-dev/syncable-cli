@@ -85,18 +85,20 @@ The Syncable Agent is like having a senior DevOps engineer available 24/7. It ca
 - Maps service dependencies and port configurations
 - Reads your existing configs and improves them
 
-### Work With Your IDE
-The agent integrates with VS Code for a seamless experience:
+### 🔌 VS Code Integration (Recommended)
+
+For the best experience, install the **Syncable IDE Companion** extension:
 
 ```bash
-# 1. Install the companion extension
 code --install-extension syncable.syncable-ide-companion
-
-# 2. Run from VS Code's terminal
-sync-ctl chat
-
-# 3. File changes open in VS Code's native diff view
 ```
+
+This enables:
+- **Native diff views** — Review file changes side-by-side in VS Code
+- **One-click accept/reject** — Accept with `Cmd+S` or reject changes easily
+- **Auto-detection** — Works automatically when running `sync-ctl chat` in VS Code's terminal
+
+> Without the extension, the agent still works but shows diffs in the terminal instead.
 
 ### Chat Commands
 | Command | Description |
