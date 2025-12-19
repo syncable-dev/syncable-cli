@@ -7,6 +7,7 @@
 //! in the IDE's native diff viewer for a better experience.
 
 use colored::Colorize;
+use crossterm::{cursor, execute, terminal};
 use inquire::ui::{Color, IndexPrefix, RenderConfig, StyleSheet, Styled};
 use similar::{ChangeTag, TextDiff};
 use std::io::{self, Write};
@@ -367,6 +368,17 @@ pub async fn confirm_file_write_with_ide(
                 // but we'll ignore its result)
                 let _ = cancel_tx.send(());
                 terminal_handle.abort();
+
+                // CRITICAL: Reset terminal state since abort() doesn't let inquire cleanup
+                // This prevents terminal corruption when rendering subsequent diffs
+                let _ = terminal::disable_raw_mode();
+                let _ = execute!(
+                    std::io::stdout(),
+                    cursor::Show,
+                    terminal::Clear(terminal::ClearType::FromCursorDown)
+                );
+                print!("\r");
+                let _ = std::io::stdout().flush();
 
                 match ide_result {
                     Ok(DiffResult::Accepted { content: _ }) => {

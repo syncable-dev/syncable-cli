@@ -10,8 +10,8 @@
 use crate::agent::commands::SLASH_COMMANDS;
 use crate::agent::ui::colors::ansi;
 use crossterm::{
-    cursor::{self, MoveToColumn, MoveUp},
-    event::{self, Event, KeyCode, KeyModifiers},
+    cursor::{self, MoveUp},
+    event::{self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyModifiers},
     execute,
     terminal::{self, Clear, ClearType},
 };
@@ -54,6 +54,8 @@ struct InputState {
     project_path: PathBuf,
     /// Number of lines rendered for suggestions (for cleanup)
     rendered_lines: usize,
+    /// Number of wrapped lines the input text occupied in last render
+    prev_wrapped_lines: usize,
 }
 
 impl InputState {
@@ -67,11 +69,17 @@ impl InputState {
             completion_start: None,
             project_path,
             rendered_lines: 0,
+            prev_wrapped_lines: 1,
         }
     }
 
     /// Insert character at cursor
     fn insert_char(&mut self, c: char) {
+        // Skip carriage returns, keep newlines for multi-line support
+        if c == '\r' {
+            return;
+        }
+
         // Insert at cursor position
         let byte_pos = self.char_to_byte_pos(self.cursor);
         self.text.insert(byte_pos, c);
@@ -115,6 +123,76 @@ impl InputState {
                 }
             }
         }
+    }
+
+    /// Delete word before cursor (Ctrl+Backspace / Cmd+Delete / Alt+Backspace)
+    fn delete_word_left(&mut self) {
+        if self.cursor == 0 {
+            return;
+        }
+
+        let chars: Vec<char> = self.text.chars().collect();
+        let mut new_cursor = self.cursor;
+
+        // Skip whitespace going backwards
+        while new_cursor > 0 && chars[new_cursor - 1].is_whitespace() {
+            new_cursor -= 1;
+        }
+
+        // Skip word characters going backwards
+        while new_cursor > 0 && !chars[new_cursor - 1].is_whitespace() {
+            new_cursor -= 1;
+        }
+
+        // Delete from new_cursor to current cursor
+        let start_byte = self.char_to_byte_pos(new_cursor);
+        let end_byte = self.char_to_byte_pos(self.cursor);
+        self.text.replace_range(start_byte..end_byte, "");
+        self.cursor = new_cursor;
+
+        // Update suggestions if active
+        if let Some(start) = self.completion_start {
+            if self.cursor <= start {
+                self.close_suggestions();
+            } else {
+                self.refresh_suggestions();
+            }
+        }
+    }
+
+    /// Clear entire input (Ctrl+U)
+    fn clear_all(&mut self) {
+        self.text.clear();
+        self.cursor = 0;
+        self.close_suggestions();
+    }
+
+    /// Delete from cursor to beginning of current line (Cmd+Backspace)
+    fn delete_to_line_start(&mut self) {
+        if self.cursor == 0 {
+            return;
+        }
+
+        let chars: Vec<char> = self.text.chars().collect();
+
+        // Find the previous newline or start of text
+        let mut line_start = self.cursor;
+        while line_start > 0 && chars[line_start - 1] != '\n' {
+            line_start -= 1;
+        }
+
+        // If cursor is at line start, delete the newline to join with previous line
+        if line_start == self.cursor && self.cursor > 0 {
+            line_start -= 1;
+        }
+
+        // Delete from line_start to cursor
+        let start_byte = self.char_to_byte_pos(line_start);
+        let end_byte = self.char_to_byte_pos(self.cursor);
+        self.text.replace_range(start_byte..end_byte, "");
+        self.cursor = line_start;
+
+        self.close_suggestions();
     }
 
     /// Convert character position to byte position
@@ -313,20 +391,131 @@ impl InputState {
     fn cursor_end(&mut self) {
         self.cursor = self.text.chars().count();
     }
+
+    /// Move cursor up one line
+    fn cursor_up(&mut self) {
+        let chars: Vec<char> = self.text.chars().collect();
+        if self.cursor == 0 {
+            return;
+        }
+
+        // Find the start of the current line
+        let mut current_line_start = self.cursor;
+        while current_line_start > 0 && chars[current_line_start - 1] != '\n' {
+            current_line_start -= 1;
+        }
+
+        // If we're on the first line, can't go up
+        if current_line_start == 0 {
+            return;
+        }
+
+        // Find the column position on current line
+        let col = self.cursor - current_line_start;
+
+        // Find the start of the previous line
+        let prev_line_end = current_line_start - 1; // Position of the \n
+        let mut prev_line_start = prev_line_end;
+        while prev_line_start > 0 && chars[prev_line_start - 1] != '\n' {
+            prev_line_start -= 1;
+        }
+
+        // Calculate the length of the previous line
+        let prev_line_len = prev_line_end - prev_line_start;
+
+        // Move cursor to same column on previous line (or end if line is shorter)
+        self.cursor = prev_line_start + col.min(prev_line_len);
+    }
+
+    /// Move cursor down one line
+    fn cursor_down(&mut self) {
+        let chars: Vec<char> = self.text.chars().collect();
+        let text_len = chars.len();
+
+        // Find the start of the current line
+        let mut current_line_start = self.cursor;
+        while current_line_start > 0 && chars[current_line_start - 1] != '\n' {
+            current_line_start -= 1;
+        }
+
+        // Find the column position on current line
+        let col = self.cursor - current_line_start;
+
+        // Find the end of the current line (the \n or end of text)
+        let mut current_line_end = self.cursor;
+        while current_line_end < text_len && chars[current_line_end] != '\n' {
+            current_line_end += 1;
+        }
+
+        // If we're on the last line, can't go down
+        if current_line_end >= text_len {
+            return;
+        }
+
+        // Find the start of the next line
+        let next_line_start = current_line_end + 1;
+
+        // Find the end of the next line
+        let mut next_line_end = next_line_start;
+        while next_line_end < text_len && chars[next_line_end] != '\n' {
+            next_line_end += 1;
+        }
+
+        // Calculate the length of the next line
+        let next_line_len = next_line_end - next_line_start;
+
+        // Move cursor to same column on next line (or end if line is shorter)
+        self.cursor = next_line_start + col.min(next_line_len);
+    }
 }
 
-/// Render the input UI
-fn render(state: &InputState, prompt: &str, stdout: &mut io::Stdout) -> io::Result<usize> {
-    // Clear current line and render input
-    execute!(stdout, MoveToColumn(0), Clear(ClearType::CurrentLine))?;
+/// Render the input UI with multi-line support
+fn render(state: &mut InputState, prompt: &str, stdout: &mut io::Stdout) -> io::Result<usize> {
+    // Get terminal width
+    let (term_width, _) = terminal::size().unwrap_or((80, 24));
+    let term_width = term_width as usize;
+
+    // Calculate prompt length
+    let prompt_len = prompt.len() + 1; // +1 for space
+
+    // Move up to clear previous rendered lines, then to column 0
+    if state.prev_wrapped_lines > 1 {
+        execute!(stdout, cursor::MoveUp((state.prev_wrapped_lines - 1) as u16))?;
+    }
+    execute!(stdout, cursor::MoveToColumn(0))?;
+
+    // Clear from cursor to end of screen
+    execute!(stdout, Clear(ClearType::FromCursorDown))?;
 
     // Print prompt and input text
-    print!("{}{}{} {}", ansi::SUCCESS, prompt, ansi::RESET, state.text);
+    // In raw mode, \n doesn't return to column 0, so we need \r\n
+    let display_text = state.text.replace('\n', "\r\n");
+    print!("{}{}{} {}", ansi::SUCCESS, prompt, ansi::RESET, display_text);
+    stdout.flush()?;
+
+    // Calculate how many lines the text spans (counting newlines + wrapping)
+    let mut total_lines = 1;
+    let mut current_line_len = prompt_len;
+
+    for c in state.text.chars() {
+        if c == '\n' {
+            total_lines += 1;
+            current_line_len = 0;
+        } else {
+            current_line_len += 1;
+            if term_width > 0 && current_line_len > term_width {
+                total_lines += 1;
+                current_line_len = 1;
+            }
+        }
+    }
+    state.prev_wrapped_lines = total_lines;
 
     // Render suggestions below if active
     let mut lines_rendered = 0;
     if state.showing_suggestions && !state.suggestions.is_empty() {
-        println!(); // Move to next line
+        // Move to next line for suggestions
+        println!();
         lines_rendered += 1;
 
         for (i, suggestion) in state.suggestions.iter().enumerate() {
@@ -335,28 +524,48 @@ fn render(state: &InputState, prompt: &str, stdout: &mut io::Stdout) -> io::Resu
 
             if is_selected {
                 if suggestion.is_dir {
-                    println!("\r  {}{} {}{}", ansi::CYAN, prefix, suggestion.display, ansi::RESET);
+                    println!("  {}{} {}{}", ansi::CYAN, prefix, suggestion.display, ansi::RESET);
                 } else {
-                    println!("\r  {}{} {}{}", ansi::WHITE, prefix, suggestion.display, ansi::RESET);
+                    println!("  {}{} {}{}", ansi::WHITE, prefix, suggestion.display, ansi::RESET);
                 }
             } else {
-                println!("\r  {}{} {}{}", ansi::DIM, prefix, suggestion.display, ansi::RESET);
+                println!("  {}{} {}{}", ansi::DIM, prefix, suggestion.display, ansi::RESET);
             }
             lines_rendered += 1;
         }
 
         // Print hint
-        println!("\r  {}[↑↓ navigate, Enter select, Esc cancel]{}", ansi::DIM, ansi::RESET);
+        println!("  {}[↑↓ navigate, Enter select, Esc cancel]{}", ansi::DIM, ansi::RESET);
         lines_rendered += 1;
-
-        // Move cursor back up to input line
-        execute!(stdout, MoveUp(lines_rendered as u16))?;
     }
 
-    // Position cursor correctly within input
-    let prompt_visual_len = prompt.len() + 1; // +1 for space
-    let cursor_col = prompt_visual_len + state.text.chars().take(state.cursor).count();
-    execute!(stdout, MoveToColumn(cursor_col as u16))?;
+    // Position cursor correctly within input (handling newlines)
+    // Calculate which line and column the cursor is on
+    let mut cursor_line = 0;
+    let mut cursor_col = prompt_len;
+
+    for (i, c) in state.text.chars().enumerate() {
+        if i >= state.cursor {
+            break;
+        }
+        if c == '\n' {
+            cursor_line += 1;
+            cursor_col = 0;
+        } else {
+            cursor_col += 1;
+            if term_width > 0 && cursor_col >= term_width {
+                cursor_line += 1;
+                cursor_col = 0;
+            }
+        }
+    }
+
+    // Move cursor from end of text to correct position
+    let lines_after_cursor = total_lines.saturating_sub(cursor_line + 1) + lines_rendered;
+    if lines_after_cursor > 0 {
+        execute!(stdout, cursor::MoveUp(lines_after_cursor as u16))?;
+    }
+    execute!(stdout, cursor::MoveToColumn(cursor_col as u16))?;
 
     stdout.flush()?;
     Ok(lines_rendered)
@@ -380,28 +589,42 @@ fn clear_suggestions(num_lines: usize, stdout: &mut io::Stdout) -> io::Result<()
 /// Read user input with Claude Code-style @ file picker
 pub fn read_input_with_file_picker(prompt: &str, project_path: &PathBuf) -> InputResult {
     let mut stdout = io::stdout();
-    let mut state = InputState::new(project_path.clone());
 
     // Enable raw mode
     if terminal::enable_raw_mode().is_err() {
         return read_simple_input(prompt);
     }
 
-    // Initial render
+    // Enable bracketed paste mode to detect paste vs keypress
+    let _ = execute!(stdout, EnableBracketedPaste);
+
+    // Print initial prompt and capture start row for absolute positioning
     print!("{}{}{} ", ansi::SUCCESS, prompt, ansi::RESET);
     let _ = stdout.flush();
 
+    // Create state after printing prompt so start_row is correct
+    let mut state = InputState::new(project_path.clone());
+
     let result = loop {
         match event::read() {
-            Ok(Event::Key(key_event)) => {
-                // Clear previous suggestions before processing
-                if state.rendered_lines > 0 {
-                    let _ = clear_suggestions(state.rendered_lines, &mut stdout);
+            // Handle paste events - insert all pasted text at once
+            Ok(Event::Paste(pasted_text)) => {
+                // Normalize line endings: \r\n -> \n, lone \r -> \n
+                let normalized = pasted_text.replace("\r\n", "\n").replace('\r', "\n");
+                for c in normalized.chars() {
+                    state.insert_char(c);
                 }
-
+                // Render after paste completes
+                state.rendered_lines = render(&mut state, prompt, &mut stdout).unwrap_or(0);
+            }
+            Ok(Event::Key(key_event)) => {
                 match key_event.code {
                     KeyCode::Enter => {
-                        if state.showing_suggestions && state.selected >= 0 {
+                        // Shift+Enter or Alt+Enter inserts newline instead of submitting
+                        if key_event.modifiers.contains(KeyModifiers::SHIFT) ||
+                           key_event.modifiers.contains(KeyModifiers::ALT) {
+                            state.insert_char('\n');
+                        } else if state.showing_suggestions && state.selected >= 0 {
                             // Accept selection, don't submit
                             state.accept_selection();
                         } else if !state.text.trim().is_empty() {
@@ -446,11 +669,15 @@ pub fn read_input_with_file_picker(prompt: &str, project_path: &PathBuf) -> Inpu
                     KeyCode::Up => {
                         if state.showing_suggestions {
                             state.select_up();
+                        } else {
+                            state.cursor_up();
                         }
                     }
                     KeyCode::Down => {
                         if state.showing_suggestions {
                             state.select_down();
+                        } else {
+                            state.cursor_down();
                         }
                     }
                     KeyCode::Left => {
@@ -472,8 +699,43 @@ pub fn read_input_with_file_picker(prompt: &str, project_path: &PathBuf) -> Inpu
                     KeyCode::End | KeyCode::Char('e') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
                         state.cursor_end();
                     }
+                    // Ctrl+U - Clear entire input
+                    KeyCode::Char('u') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                        state.clear_all();
+                    }
+                    // Ctrl+K - Delete to beginning of current line (works on all platforms)
+                    KeyCode::Char('k') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                        state.delete_to_line_start();
+                    }
+                    // Ctrl+Shift+Backspace - Delete to beginning of current line (cross-platform)
+                    KeyCode::Backspace if key_event.modifiers.contains(KeyModifiers::CONTROL)
+                        && key_event.modifiers.contains(KeyModifiers::SHIFT) => {
+                        state.delete_to_line_start();
+                    }
+                    // Cmd+Backspace (Mac) - Delete to beginning of current line (if terminal passes it)
+                    KeyCode::Backspace if key_event.modifiers.contains(KeyModifiers::SUPER) => {
+                        state.delete_to_line_start();
+                    }
+                    // Ctrl+W or Alt+Backspace - Delete word left
+                    KeyCode::Char('w') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                        state.delete_word_left();
+                    }
+                    KeyCode::Backspace if key_event.modifiers.contains(KeyModifiers::ALT) => {
+                        state.delete_word_left();
+                    }
+                    KeyCode::Backspace if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                        state.delete_word_left();
+                    }
+                    // Ctrl+J - Insert newline (multi-line input)
+                    KeyCode::Char('j') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                        state.insert_char('\n');
+                    }
                     KeyCode::Backspace => {
                         state.backspace();
+                    }
+                    KeyCode::Char('\n') => {
+                        // Handle newline char that might come through during paste
+                        state.insert_char('\n');
                     }
                     KeyCode::Char(c) => {
                         state.insert_char(c);
@@ -481,12 +743,16 @@ pub fn read_input_with_file_picker(prompt: &str, project_path: &PathBuf) -> Inpu
                     _ => {}
                 }
 
-                // Re-render
-                state.rendered_lines = render(&state, prompt, &mut stdout).unwrap_or(0);
+                // Only render if no more events are pending (batches rapid input like paste)
+                // This prevents thousands of renders during paste operations
+                let should_render = !event::poll(std::time::Duration::from_millis(0)).unwrap_or(false);
+                if should_render {
+                    state.rendered_lines = render(&mut state, prompt, &mut stdout).unwrap_or(0);
+                }
             }
             Ok(Event::Resize(_, _)) => {
                 // Redraw on resize
-                state.rendered_lines = render(&state, prompt, &mut stdout).unwrap_or(0);
+                state.rendered_lines = render(&mut state, prompt, &mut stdout).unwrap_or(0);
             }
             Err(_) => {
                 break InputResult::Cancel;
@@ -494,6 +760,9 @@ pub fn read_input_with_file_picker(prompt: &str, project_path: &PathBuf) -> Inpu
             _ => {}
         }
     };
+
+    // Disable bracketed paste mode
+    let _ = execute!(stdout, DisableBracketedPaste);
 
     // Disable raw mode
     let _ = terminal::disable_raw_mode();
