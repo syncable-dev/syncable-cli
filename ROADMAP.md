@@ -28,7 +28,7 @@
 
 ### 🤖 AI Agent
 - [x] **Multi-Provider Support**:
-  - [x] OpenAI (GPT-4, GPT-4o, GPT-3.5)
+  - [x] OpenAI (GPT-5, GPT-4, GPT-4o, GPT-3.5)
   - [x] Anthropic (Claude Sonnet, Claude Opus)
 - [x] **Interactive Chat** — Natural language DevOps assistance
 - [x] **Project-Aware Context** — Analyzes codebase before generating
