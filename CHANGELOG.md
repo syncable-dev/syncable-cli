@@ -106,6 +106,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.24.5](https://github.com/syncable-dev/syncable-cli/compare/v0.24.4...v0.24.5) - 2025-12-19
+
+### Other
+
+- Merge pull request #215 from syncable-dev/develop
+- Merge pull request #145 from syncable-dev/dependabot/cargo/develop/rayon-1.11.0
+
 ## [0.24.4](https://github.com/syncable-dev/syncable-cli/compare/v0.24.3...v0.24.4) - 2025-12-19
 
 ### Added
