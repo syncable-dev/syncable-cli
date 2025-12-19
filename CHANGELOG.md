@@ -106,6 +106,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.24.4](https://github.com/syncable-dev/syncable-cli/compare/v0.24.3...v0.24.4) - 2025-12-19
+
+### Added
+
+- feat(ROADMAP updates) Updated Roadmap to reflect current progress
+
+### Other
+
+- bug(newline broken) Fixed a broken UI for file/folder search
+
 ## [0.24.3](https://github.com/syncable-dev/syncable-cli/compare/v0.24.2...v0.24.3) - 2025-12-19
 
 ### Added
