@@ -424,7 +424,7 @@ impl ChatSession {
                 }
                 Ok(trimmed.to_string())
             }
-            InputResult::Cancel => Ok("".to_string()),
+            InputResult::Cancel => Ok("exit".to_string()),  // Ctrl+C exits
             InputResult::Exit => Ok("exit".to_string()),
         }
     }
