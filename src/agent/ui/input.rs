@@ -514,8 +514,8 @@ fn render(state: &mut InputState, prompt: &str, stdout: &mut io::Stdout) -> io::
     // Render suggestions below if active
     let mut lines_rendered = 0;
     if state.showing_suggestions && !state.suggestions.is_empty() {
-        // Move to next line for suggestions
-        println!();
+        // Move to next line for suggestions (use \r\n in raw mode)
+        print!("\r\n");
         lines_rendered += 1;
 
         for (i, suggestion) in state.suggestions.iter().enumerate() {
@@ -524,18 +524,18 @@ fn render(state: &mut InputState, prompt: &str, stdout: &mut io::Stdout) -> io::
 
             if is_selected {
                 if suggestion.is_dir {
-                    println!("  {}{} {}{}", ansi::CYAN, prefix, suggestion.display, ansi::RESET);
+                    print!("  {}{} {}{}\r\n", ansi::CYAN, prefix, suggestion.display, ansi::RESET);
                 } else {
-                    println!("  {}{} {}{}", ansi::WHITE, prefix, suggestion.display, ansi::RESET);
+                    print!("  {}{} {}{}\r\n", ansi::WHITE, prefix, suggestion.display, ansi::RESET);
                 }
             } else {
-                println!("  {}{} {}{}", ansi::DIM, prefix, suggestion.display, ansi::RESET);
+                print!("  {}{} {}{}\r\n", ansi::DIM, prefix, suggestion.display, ansi::RESET);
             }
             lines_rendered += 1;
         }
 
         // Print hint
-        println!("  {}[↑↓ navigate, Enter select, Esc cancel]{}", ansi::DIM, ansi::RESET);
+        print!("  {}[↑↓ navigate, Enter select, Esc cancel]{}\r\n", ansi::DIM, ansi::RESET);
         lines_rendered += 1;
     }
 
