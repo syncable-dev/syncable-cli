@@ -164,12 +164,12 @@ impl TurboSecurityAnalyzer {
         
         // Phase 3: Parallel scanning with work-stealing
         let scan_start = Instant::now();
-        let findings = self.parallel_scan(filtered_files)?;
-        info!("🔍 Scanned files in {:?}, found {} findings", 
+        let (findings, files_scanned) = self.parallel_scan(filtered_files)?;
+        info!("🔍 Scanned files in {:?}, found {} findings",
               scan_start.elapsed(), findings.len());
-        
+
         // Phase 4: Result aggregation and report generation
-        let report = ResultAggregator::aggregate(findings, start.elapsed());
+        let report = ResultAggregator::aggregate(findings, start.elapsed(), files_scanned);
         
         info!("✅ Turbo analysis completed in {:?}", start.elapsed());
         Ok(report)
@@ -226,7 +226,7 @@ impl TurboSecurityAnalyzer {
     }
     
     /// Parallel scan with work-stealing and early termination
-    fn parallel_scan(&self, files: Vec<FileMetadata>) -> Result<Vec<SecurityFinding>, SecurityError> {
+    fn parallel_scan(&self, files: Vec<FileMetadata>) -> Result<(Vec<SecurityFinding>, usize), SecurityError> {
         let thread_count = if self.config.worker_threads == 0 {
             num_cpus::get()
         } else {
@@ -333,10 +333,10 @@ impl TurboSecurityAnalyzer {
             handle.join().unwrap();
         }
         
-        info!("Scan complete: {} files scanned, {} skipped, {} findings", 
+        info!("Scan complete: {} files scanned, {} skipped, {} findings",
               files_scanned, files_skipped, all_findings.len());
-        
-        Ok(all_findings)
+
+        Ok((all_findings, files_scanned))
     }
 }
 

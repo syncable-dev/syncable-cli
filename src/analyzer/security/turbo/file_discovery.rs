@@ -131,7 +131,7 @@ impl FileDiscovery {
         Ok(paths)
     }
     
-    /// Get untracked files that might contain secrets
+    /// Get untracked files that might contain secrets (including gitignored files)
     fn get_untracked_secret_files(&self, project_root: &Path) -> Result<Vec<PathBuf>, SecurityError> {
         // Common secret file patterns that might not be tracked
         let secret_patterns = vec![
@@ -144,26 +144,46 @@ impl FileDiscovery {
             "config/*.json",
             "config/*.yml",
         ];
-        
+
         let mut untracked_files = Vec::new();
-        
+
         for pattern in secret_patterns {
+            // First, get untracked files that are NOT gitignored (potential accidental exposure)
             let output = Command::new("git")
                 .args(&["ls-files", "--others", "--exclude-standard", pattern])
                 .current_dir(project_root)
                 .output();
-            
+
             if let Ok(output) = output {
                 if output.status.success() {
                     let paths: Vec<PathBuf> = String::from_utf8_lossy(&output.stdout)
                         .lines()
+                        .filter(|line| !line.is_empty())
+                        .map(|line| project_root.join(line))
+                        .collect();
+                    untracked_files.extend(paths);
+                }
+            }
+
+            // Also get gitignored files - these should be scanned to verify they exist
+            // and contain real secrets (important for security audit completeness)
+            let output = Command::new("git")
+                .args(&["ls-files", "--others", "--ignored", "--exclude-standard", pattern])
+                .current_dir(project_root)
+                .output();
+
+            if let Ok(output) = output {
+                if output.status.success() {
+                    let paths: Vec<PathBuf> = String::from_utf8_lossy(&output.stdout)
+                        .lines()
+                        .filter(|line| !line.is_empty())
                         .map(|line| project_root.join(line))
                         .collect();
                     untracked_files.extend(paths);
                 }
             }
         }
-        
+
         Ok(untracked_files)
     }
     

@@ -153,7 +153,7 @@ fn format_security_table(
         output.push_str(&format_security_findings_box(security_report, path));
         output.push_str(&format_gitignore_legend());
     } else {
-        output.push_str(&format_no_findings_box());
+        output.push_str(&format_no_findings_box(security_report.files_scanned));
     }
     
     // Recommendations
@@ -176,13 +176,7 @@ fn format_security_summary_box(
         TurboSecuritySeverity::Info => "blue",
     }), true);
     score_box.add_line("Total Findings:", &security_report.total_findings.to_string().cyan(), true);
-    
-    // Analysis scope
-    let config_files = security_report.findings.iter()
-        .filter_map(|f| f.file_path.as_ref())
-        .collect::<std::collections::HashSet<_>>()
-        .len();
-    score_box.add_line("Files Analyzed:", &config_files.max(1).to_string().green(), true);
+    score_box.add_line("Files Scanned:", &security_report.files_scanned.to_string().green(), true);
     score_box.add_line("Scan Mode:", &format!("{:?}", scan_mode).green(), true);
     
     format!("\n{}\n", score_box.draw())
@@ -402,10 +396,16 @@ fn format_gitignore_legend() -> String {
     format!("\n{}\n", legend_box.draw())
 }
 
-fn format_no_findings_box() -> String {
+fn format_no_findings_box(files_scanned: usize) -> String {
     let mut no_findings_box = BoxDrawer::new("Security Status");
-    no_findings_box.add_value_only(&"✅ No security issues detected".green());
-    no_findings_box.add_value_only("💡 Regular security scanning recommended");
+    if files_scanned == 0 {
+        no_findings_box.add_value_only(&"⚠️  No files were scanned".yellow());
+        no_findings_box.add_value_only("This may indicate that all files were filtered out or the scan failed.");
+        no_findings_box.add_value_only("💡 Try running with --mode thorough or --mode paranoid for a deeper scan");
+    } else {
+        no_findings_box.add_value_only(&"✅ No security issues detected".green());
+        no_findings_box.add_value_only("💡 Regular security scanning recommended");
+    }
     format!("\n{}\n", no_findings_box.draw())
 }
 

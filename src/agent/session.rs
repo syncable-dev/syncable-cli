@@ -406,6 +406,37 @@ impl ChatSession {
         input.trim().starts_with('/')
     }
 
+    /// Strip @ prefix from file/folder references for AI consumption
+    /// Keeps the path but removes the leading @ that was used for autocomplete
+    /// e.g., "check @src/main.rs for issues" -> "check src/main.rs for issues"
+    fn strip_file_references(input: &str) -> String {
+        let mut result = String::with_capacity(input.len());
+        let chars: Vec<char> = input.chars().collect();
+        let mut i = 0;
+
+        while i < chars.len() {
+            if chars[i] == '@' {
+                // Check if this @ is at start or after whitespace (valid file reference trigger)
+                let is_valid_trigger = i == 0 || chars[i - 1].is_whitespace();
+
+                if is_valid_trigger {
+                    // Check if there's a path after @ (not just @ followed by space/end)
+                    let has_path = i + 1 < chars.len() && !chars[i + 1].is_whitespace();
+
+                    if has_path {
+                        // Skip the @ but keep the path
+                        i += 1;
+                        continue;
+                    }
+                }
+            }
+            result.push(chars[i]);
+            i += 1;
+        }
+
+        result
+    }
+
     /// Read user input with prompt - with interactive file picker support
     /// Uses custom terminal handling for @ file references and / commands
     pub fn read_input(&self) -> io::Result<String> {
@@ -422,7 +453,9 @@ impl ChatSession {
                         return Ok(cmd.to_string());
                     }
                 }
-                Ok(trimmed.to_string())
+                // Strip @ prefix from file references before sending to AI
+                // The @ is for UI autocomplete, but the AI should see just the path
+                Ok(Self::strip_file_references(trimmed))
             }
             InputResult::Cancel => Ok("exit".to_string()),  // Ctrl+C exits
             InputResult::Exit => Ok("exit".to_string()),
