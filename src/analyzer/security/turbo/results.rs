@@ -44,7 +44,7 @@ pub struct ResultAggregator;
 
 impl ResultAggregator {
     /// Aggregate findings into a comprehensive report
-    pub fn aggregate(mut findings: Vec<SecurityFinding>, scan_duration: Duration) -> SecurityReport {
+    pub fn aggregate(mut findings: Vec<SecurityFinding>, scan_duration: Duration, files_scanned: usize) -> SecurityReport {
         // Deduplicate findings
         findings = Self::deduplicate_findings(findings);
         
@@ -77,7 +77,7 @@ impl ResultAggregator {
             overall_score,
             risk_level,
             total_findings,
-            files_scanned: 0, // TODO: Track actual count
+            files_scanned,
             findings_by_severity,
             findings_by_category,
             findings,
@@ -329,7 +329,7 @@ mod tests {
             },
         ];
         
-        let report = ResultAggregator::aggregate(findings, Duration::from_secs(5));
+        let report = ResultAggregator::aggregate(findings, Duration::from_secs(5), 10);
         
         assert_eq!(report.total_findings, 2);
         assert_eq!(report.risk_level, SecuritySeverity::Critical);
