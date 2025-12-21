@@ -106,6 +106,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.25.0](https://github.com/syncable-dev/syncable-cli/compare/v0.24.5...v0.25.0) - 2025-12-20
+
+### Added
+
+- fixed security scan context share
+
+### Other
+
+- *(@ reference)* updated session logic with "@" ref
+
 ## [0.24.5](https://github.com/syncable-dev/syncable-cli/compare/v0.24.4...v0.24.5) - 2025-12-19
 
 ### Other
