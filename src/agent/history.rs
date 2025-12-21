@@ -35,6 +35,9 @@ pub struct ToolCallRecord {
     pub tool_name: String,
     pub args_summary: String,
     pub result_summary: String,
+    /// Tool call ID for proper message pairing (optional for backwards compat)
+    #[serde(default)]
+    pub tool_id: Option<String>,
 }
 
 /// Conversation history manager with compaction support
@@ -163,36 +166,97 @@ impl ConversationHistory {
     }
 
     /// Create a text summary of conversation turns
+    /// Includes detailed tool call information to preserve context
     fn create_summary(&self, turns: &[ConversationTurn]) -> String {
+        use std::collections::HashSet;
+
         let mut summary_parts = Vec::new();
+        let mut all_files_read: HashSet<String> = HashSet::new();
+        let mut all_files_written: HashSet<String> = HashSet::new();
 
         for (i, turn) in turns.iter().enumerate() {
             let mut turn_summary = format!(
-                "Turn {}: User asked about: {}",
+                "Turn {}: User: {}",
                 i + 1,
-                Self::truncate_text(&turn.user_message, 100)
+                Self::truncate_text(&turn.user_message, 150)
             );
 
             if !turn.tool_calls.is_empty() {
-                let tool_names: Vec<_> = turn.tool_calls.iter()
-                    .map(|tc| tc.tool_name.as_str())
-                    .collect();
-                turn_summary.push_str(&format!(". Tools used: {}", tool_names.join(", ")));
+                // Group tool calls by type for better summary
+                let mut reads = Vec::new();
+                let mut writes = Vec::new();
+                let mut other = Vec::new();
+
+                for tc in &turn.tool_calls {
+                    match tc.tool_name.as_str() {
+                        "read_file" => {
+                            reads.push(tc.args_summary.clone());
+                            all_files_read.insert(tc.args_summary.clone());
+                        }
+                        "write_file" | "write_files" => {
+                            writes.push(tc.args_summary.clone());
+                            all_files_written.insert(tc.args_summary.clone());
+                        }
+                        "list_directory" => {
+                            other.push(format!("listed {}", tc.args_summary));
+                        }
+                        _ => {
+                            other.push(format!("{}({})", tc.tool_name, Self::truncate_text(&tc.args_summary, 30)));
+                        }
+                    }
+                }
+
+                if !reads.is_empty() {
+                    turn_summary.push_str(&format!("\n  - Read {} files: {}",
+                        reads.len(),
+                        reads.iter().take(5).cloned().collect::<Vec<_>>().join(", ")
+                    ));
+                    if reads.len() > 5 {
+                        turn_summary.push_str(&format!(" (+{} more)", reads.len() - 5));
+                    }
+                }
+                if !writes.is_empty() {
+                    turn_summary.push_str(&format!("\n  - Wrote: {}", writes.join(", ")));
+                }
+                if !other.is_empty() {
+                    turn_summary.push_str(&format!("\n  - Other: {}", other.join(", ")));
+                }
             }
 
             turn_summary.push_str(&format!(
-                ". Response summary: {}",
-                Self::truncate_text(&turn.assistant_response, 200)
+                "\n  - Response: {}",
+                Self::truncate_text(&turn.assistant_response, 300)
             ));
 
             summary_parts.push(turn_summary);
         }
 
-        format!(
-            "Previous conversation summary ({} turns compressed):\n{}",
+        // Add a cumulative context section
+        let mut context = format!(
+            "=== Conversation Summary ({} turns compressed) ===\n\n{}",
             turns.len(),
-            summary_parts.join("\n")
-        )
+            summary_parts.join("\n\n")
+        );
+
+        // Add cumulative file context
+        if !all_files_read.is_empty() {
+            context.push_str("\n\n=== Files Previously Read (content is in context) ===\n");
+            for file in all_files_read.iter().take(30) {
+                context.push_str(&format!("  - {}\n", file));
+            }
+            if all_files_read.len() > 30 {
+                context.push_str(&format!("  ... and {} more files\n", all_files_read.len() - 30));
+            }
+        }
+
+        if !all_files_written.is_empty() {
+            context.push_str("\n=== Files Previously Written ===\n");
+            for file in &all_files_written {
+                context.push_str(&format!("  - {}\n", file));
+            }
+        }
+
+        context
     }
 
     /// Truncate text with ellipsis
@@ -205,6 +269,8 @@ impl ConversationHistory {
     }
 
     /// Convert history to Rig Message format for the agent
+    /// Uses text summaries to preserve context without breaking Rig's internal tool call tracking
+    /// Note: We can't use proper ToolCall/ToolResult messages because Rig expects real API tool IDs
     pub fn to_messages(&self) -> Vec<Message> {
         use rig::completion::message::{Text, UserContent, AssistantContent};
         use rig::OneOrMany;
@@ -227,7 +293,7 @@ impl ConversationHistory {
             });
         }
 
-        // Add recent turns
+        // Add recent turns with tool call context as text (not as actual ToolCall messages)
         for turn in &self.turns {
             // User message
             messages.push(Message::User {
@@ -236,12 +302,30 @@ impl ConversationHistory {
                 })),
             });
 
-            // Assistant response (simplified - just the text response)
-            // Note: Tool calls are implicitly part of the response context
+            // Build assistant response that includes tool call context
+            let mut response_text = String::new();
+
+            // If there were tool calls, include them as text context
+            if !turn.tool_calls.is_empty() {
+                response_text.push_str("[Tools used in this turn:\n");
+                for tc in &turn.tool_calls {
+                    response_text.push_str(&format!(
+                        "  - {}({}) → {}\n",
+                        tc.tool_name,
+                        Self::truncate_text(&tc.args_summary, 50),
+                        Self::truncate_text(&tc.result_summary, 100)
+                    ));
+                }
+                response_text.push_str("]\n\n");
+            }
+
+            // Add the actual response
+            response_text.push_str(&turn.assistant_response);
+
             messages.push(Message::Assistant {
                 id: None,
                 content: OneOrMany::one(AssistantContent::Text(Text {
-                    text: turn.assistant_response.clone(),
+                    text: response_text,
                 })),
             });
         }
@@ -299,6 +383,7 @@ mod tests {
                     tool_name: "analyze".to_string(),
                     args_summary: "path: .".to_string(),
                     result_summary: "Found rust project".to_string(),
+                    tool_id: Some(format!("tool_{}", i)),
                 }],
             );
         }
