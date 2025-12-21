@@ -4,7 +4,7 @@ version = "0.26.0"
 edition = "2024"
 authors = ["Syncable Team"]
 description = "A Rust-based CLI that analyzes code repositories and generates Infrastructure as Code configurations"
-license = "MIT OR Apache-2.0"
+license = "GPL-3.0"
 repository = "https://github.com/syncable-dev/syncable-cli"
 keywords = ["iac", "infrastructure", "docker", "terraform", "cli"]
 categories = ["command-line-utilities", "development-tools"]
@@ -48,7 +48,7 @@ term_size = "0.3"
 # Vulnerability checking dependencies
 rustsec = "0.30"
 reqwest = { version = "0.12", features = ["json", "blocking"] }
-tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "sync"] }
+tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "sync", "process", "io-util"] }
 textwrap = "0.16"
 tempfile = "3"
 dirs = "6"
@@ -76,6 +76,9 @@ rig-core = { version = "0.26", features = ["derive"] }
 
 # Diff rendering for file confirmation UI
 similar = "2.6"
+
+# Dockerfile linting (hadolint-rs)
+nom = "7"                  # Parser combinators for Dockerfile parsing
 
 [dev-dependencies]
 assert_cmd = "2"

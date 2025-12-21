@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://crates.io/crates/syncable-cli"><img src="https://img.shields.io/crates/v/syncable-cli?style=flat-square&color=blue" alt="Crates.io"></a>
   <a href="https://crates.io/crates/syncable-cli"><img src="https://img.shields.io/crates/d/syncable-cli?style=flat-square" alt="Downloads"></a>
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-green.svg?style=flat-square" alt="License"></a>
+  <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPL%20v3-blue.svg?style=flat-square" alt="License"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Built%20with-Rust-orange?style=flat-square" alt="Rust"></a>
 </p>
 
@@ -241,7 +241,16 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 ## 📄 License
 
-MIT License — see [LICENSE](LICENSE) for details.
+This project is licensed under the **GNU General Public License v3.0** (GPL-3.0).
+
+See [LICENSE](LICENSE) for the full license text.
+
+### Third-Party Attributions
+
+The Dockerfile linting functionality (`src/analyzer/hadolint/`) is a Rust translation
+of [Hadolint](https://github.com/hadolint/hadolint), originally written in Haskell by
+Lukas Martinelli and contributors. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+for full attribution details.
 
 ---
 

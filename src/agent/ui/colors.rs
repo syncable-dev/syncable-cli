@@ -23,6 +23,13 @@ pub mod icons {
     pub const FOLDER: &str = "📁";
     pub const SECURITY: &str = "🔒";
     pub const SEARCH: &str = "🔍";
+    pub const DOCKER: &str = "🐳";
+    pub const LINT: &str = "📋";
+    pub const FIX: &str = "🔧";
+    pub const CRITICAL: &str = "🔴";
+    pub const HIGH: &str = "🟠";
+    pub const MEDIUM: &str = "🟡";
+    pub const LOW: &str = "🟢";
 }
 
 /// ANSI escape codes for direct terminal control
@@ -51,6 +58,15 @@ pub mod ansi {
     pub const GRAY: &str = "\x1b[38;5;245m";
     pub const WHITE: &str = "\x1b[38;5;255m";
     pub const SUCCESS: &str = "\x1b[38;5;114m"; // Green for success
+
+    // Hadolint/Docker specific colors (teal/docker-blue theme)
+    pub const DOCKER_BLUE: &str = "\x1b[38;5;39m";  // Docker brand blue
+    pub const TEAL: &str = "\x1b[38;5;30m";         // Teal for hadolint
+    pub const CRITICAL: &str = "\x1b[38;5;196m";   // Bright red
+    pub const HIGH: &str = "\x1b[38;5;208m";       // Orange
+    pub const MEDIUM: &str = "\x1b[38;5;220m";     // Yellow
+    pub const LOW: &str = "\x1b[38;5;114m";        // Green
+    pub const INFO_BLUE: &str = "\x1b[38;5;75m";   // Light blue for info
 }
 
 /// Format a tool name for display
