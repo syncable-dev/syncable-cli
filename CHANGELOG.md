@@ -106,6 +106,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.26.0](https://github.com/syncable-dev/syncable-cli/compare/v0.25.0...v0.26.0) - 2025-12-21
+
+### Added
+
+- updated agenet behavior for better tool calling and context mngmt
+
 ## [0.25.0](https://github.com/syncable-dev/syncable-cli/compare/v0.24.5...v0.25.0) - 2025-12-20
 
 ### Added
