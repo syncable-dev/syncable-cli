@@ -25,6 +25,7 @@ pub mod runtime;
 pub mod monorepo;
 pub mod docker_analyzer;
 pub mod display;
+pub mod hadolint;
 
 // Re-export dependency analysis types
 pub use dependency_parser::{
