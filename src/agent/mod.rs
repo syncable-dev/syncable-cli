@@ -99,8 +99,12 @@ pub type AgentResult<T> = Result<T, AgentError>;
 
 /// Get the system prompt for the agent based on query type
 fn get_system_prompt(project_path: &Path, query: Option<&str>) -> String {
-    // If query suggests generation (Docker, Terraform, Helm), use DevOps prompt
     if let Some(q) = query {
+        // First check if it's a code development task (highest priority)
+        if prompts::is_code_development_query(q) {
+            return prompts::get_code_development_prompt(project_path);
+        }
+        // Then check if it's DevOps generation (Docker, Terraform, Helm)
         if prompts::is_generation_query(q) {
             return prompts::get_devops_prompt(project_path);
         }
@@ -264,6 +268,7 @@ pub async fn run_interactive(
                         .tool(AnalyzeTool::new(project_path_buf.clone()))
                         .tool(SecurityScanTool::new(project_path_buf.clone()))
                         .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
+                        .tool(HadolintTool::new(project_path_buf.clone()))
                         .tool(ReadFileTool::new(project_path_buf.clone()))
                         .tool(ListDirectoryTool::new(project_path_buf.clone()));
 
@@ -312,6 +317,7 @@ pub async fn run_interactive(
                         .tool(AnalyzeTool::new(project_path_buf.clone()))
                         .tool(SecurityScanTool::new(project_path_buf.clone()))
                         .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
+                        .tool(HadolintTool::new(project_path_buf.clone()))
                         .tool(ReadFileTool::new(project_path_buf.clone()))
                         .tool(ListDirectoryTool::new(project_path_buf.clone()));
 
@@ -777,6 +783,7 @@ pub async fn run_query(
                 .tool(AnalyzeTool::new(project_path_buf.clone()))
                 .tool(SecurityScanTool::new(project_path_buf.clone()))
                 .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
+                .tool(HadolintTool::new(project_path_buf.clone()))
                 .tool(ReadFileTool::new(project_path_buf.clone()))
                 .tool(ListDirectoryTool::new(project_path_buf.clone()));
 
@@ -811,6 +818,7 @@ pub async fn run_query(
                 .tool(AnalyzeTool::new(project_path_buf.clone()))
                 .tool(SecurityScanTool::new(project_path_buf.clone()))
                 .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
+                .tool(HadolintTool::new(project_path_buf.clone()))
                 .tool(ReadFileTool::new(project_path_buf.clone()))
                 .tool(ListDirectoryTool::new(project_path_buf.clone()));
 

@@ -14,10 +14,11 @@ use rig::completion::ToolDefinition;
 use rig::tool::Tool;
 use serde::Deserialize;
 use serde_json::json;
-use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
 use std::sync::Arc;
+use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::process::Command;
+use tokio::sync::mpsc;
 
 /// Allowed command prefixes for security
 const ALLOWED_COMMANDS: &[&str] = &[
@@ -237,50 +238,92 @@ Use this to validate generated configurations:
         let mut stream_display = StreamingShellOutput::new(&args.command, timeout_secs);
         stream_display.render();
 
-        // Execute command with streaming output
+        // Execute command with async streaming output
         let mut child = Command::new("sh")
             .arg("-c")
             .arg(&args.command)
             .current_dir(&working_dir)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
             .spawn()
             .map_err(|e| ShellError(format!("Failed to spawn command: {}", e)))?;
 
-        // Read stdout and stderr in parallel, streaming output
+        // Take ownership of stdout/stderr for async reading
         let stdout = child.stdout.take();
         let stderr = child.stderr.take();
 
+        // Channel for streaming output lines from both stdout and stderr
+        let (tx, mut rx) = mpsc::channel::<(String, bool)>(100); // (line, is_stderr)
+
+        // Spawn task to read stdout
+        let tx_stdout = tx.clone();
+        let stdout_handle = if let Some(stdout) = stdout {
+            Some(tokio::spawn(async move {
+                let mut reader = BufReader::new(stdout).lines();
+                let mut content = String::new();
+                while let Ok(Some(line)) = reader.next_line().await {
+                    content.push_str(&line);
+                    content.push('\n');
+                    let _ = tx_stdout.send((line, false)).await;
+                }
+                content
+            }))
+        } else {
+            None
+        };
+
+        // Spawn task to read stderr
+        let tx_stderr = tx;
+        let stderr_handle = if let Some(stderr) = stderr {
+            Some(tokio::spawn(async move {
+                let mut reader = BufReader::new(stderr).lines();
+                let mut content = String::new();
+                while let Ok(Some(line)) = reader.next_line().await {
+                    content.push_str(&line);
+                    content.push('\n');
+                    let _ = tx_stderr.send((line, true)).await;
+                }
+                content
+            }))
+        } else {
+            None
+        };
+
+        // Process incoming lines and update display in real-time on the main task
+        // Use tokio::select! to handle both the receiver and the reader completion
         let mut stdout_content = String::new();
         let mut stderr_content = String::new();
 
-        // Read stdout
-        if let Some(stdout) = stdout {
-            let reader = BufReader::new(stdout);
-            for line in reader.lines() {
-                if let Ok(line) = line {
-                    stdout_content.push_str(&line);
-                    stdout_content.push('\n');
-                    stream_display.push_line(&line);
+        // Wait for readers while processing display updates
+        loop {
+            tokio::select! {
+                // Receive lines from either stdout or stderr
+                line_result = rx.recv() => {
+                    match line_result {
+                        Some((line, _is_stderr)) => {
+                            stream_display.push_line(&line);
+                        }
+                        None => {
+                            // Channel closed, all readers done
+                            break;
+                        }
+                    }
                 }
             }
         }
 
-        // Read stderr
-        if let Some(stderr) = stderr {
-            let reader = BufReader::new(stderr);
-            for line in reader.lines() {
-                if let Ok(line) = line {
-                    stderr_content.push_str(&line);
-                    stderr_content.push('\n');
-                    stream_display.push_line(&line);
-                }
-            }
+        // Collect final content from reader handles
+        if let Some(handle) = stdout_handle {
+            stdout_content = handle.await.unwrap_or_default();
+        }
+        if let Some(handle) = stderr_handle {
+            stderr_content = handle.await.unwrap_or_default();
         }
 
         // Wait for command to complete
         let status = child
             .wait()
+            .await
             .map_err(|e| ShellError(format!("Command execution failed: {}", e)))?;
 
         // Finalize display

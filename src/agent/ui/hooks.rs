@@ -421,6 +421,7 @@ fn print_tool_result(name: &str, args: &str, result: &str) -> (bool, Vec<String>
         "list_directory" => format_list_result(&parsed),
         "analyze_project" => format_analyze_result(&parsed),
         "security_scan" | "check_vulnerabilities" => format_security_result(&parsed),
+        "hadolint" => format_hadolint_result(&parsed),
         _ => (true, vec!["done".to_string()]),
     };
 
@@ -709,6 +710,177 @@ fn format_security_result(parsed: &Result<serde_json::Value, serde_json::Error>)
     } else {
         (false, vec!["parse error".to_string()])
     }
+}
+
+/// Format hadolint result - uses new priority-based format with Docker styling
+fn format_hadolint_result(parsed: &Result<serde_json::Value, serde_json::Error>) -> (bool, Vec<String>) {
+    if let Ok(v) = parsed {
+        let success = v.get("success").and_then(|s| s.as_bool()).unwrap_or(true);
+        let summary = v.get("summary");
+        let action_plan = v.get("action_plan");
+
+        let mut lines = Vec::new();
+
+        // Get total count
+        let total = summary
+            .and_then(|s| s.get("total"))
+            .and_then(|t| t.as_u64())
+            .unwrap_or(0);
+
+        // Show docker-themed header
+        if total == 0 {
+            lines.push(format!(
+                "{}🐳 Dockerfile OK - no issues found{}",
+                ansi::SUCCESS, ansi::RESET
+            ));
+            return (true, lines);
+        }
+
+        // Get priority counts
+        let critical = summary
+            .and_then(|s| s.get("by_priority"))
+            .and_then(|p| p.get("critical"))
+            .and_then(|c| c.as_u64())
+            .unwrap_or(0);
+        let high = summary
+            .and_then(|s| s.get("by_priority"))
+            .and_then(|p| p.get("high"))
+            .and_then(|h| h.as_u64())
+            .unwrap_or(0);
+        let medium = summary
+            .and_then(|s| s.get("by_priority"))
+            .and_then(|p| p.get("medium"))
+            .and_then(|m| m.as_u64())
+            .unwrap_or(0);
+        let low = summary
+            .and_then(|s| s.get("by_priority"))
+            .and_then(|p| p.get("low"))
+            .and_then(|l| l.as_u64())
+            .unwrap_or(0);
+
+        // Summary with priority breakdown
+        let mut priority_parts = Vec::new();
+        if critical > 0 {
+            priority_parts.push(format!("{}🔴 {} critical{}", ansi::CRITICAL, critical, ansi::RESET));
+        }
+        if high > 0 {
+            priority_parts.push(format!("{}🟠 {} high{}", ansi::HIGH, high, ansi::RESET));
+        }
+        if medium > 0 {
+            priority_parts.push(format!("{}🟡 {} medium{}", ansi::MEDIUM, medium, ansi::RESET));
+        }
+        if low > 0 {
+            priority_parts.push(format!("{}🟢 {} low{}", ansi::LOW, low, ansi::RESET));
+        }
+
+        let header_color = if critical > 0 {
+            ansi::CRITICAL
+        } else if high > 0 {
+            ansi::HIGH
+        } else {
+            ansi::DOCKER_BLUE
+        };
+
+        lines.push(format!(
+            "{}🐳 {} issue{} found: {}{}",
+            header_color,
+            total,
+            if total == 1 { "" } else { "s" },
+            priority_parts.join(" "),
+            ansi::RESET
+        ));
+
+        // Show critical and high priority issues (these are most important)
+        let mut shown = 0;
+        const MAX_PREVIEW: usize = 6;
+
+        // Critical issues first
+        if let Some(critical_issues) = action_plan
+            .and_then(|a| a.get("critical"))
+            .and_then(|c| c.as_array())
+        {
+            for issue in critical_issues.iter().take(MAX_PREVIEW - shown) {
+                lines.push(format_hadolint_issue(issue, "🔴", ansi::CRITICAL));
+                shown += 1;
+            }
+        }
+
+        // Then high priority
+        if shown < MAX_PREVIEW {
+            if let Some(high_issues) = action_plan
+                .and_then(|a| a.get("high"))
+                .and_then(|h| h.as_array())
+            {
+                for issue in high_issues.iter().take(MAX_PREVIEW - shown) {
+                    lines.push(format_hadolint_issue(issue, "🟠", ansi::HIGH));
+                    shown += 1;
+                }
+            }
+        }
+
+        // Show quick fix hint for most important issue
+        if let Some(quick_fixes) = v.get("quick_fixes").and_then(|q| q.as_array()) {
+            if let Some(first_fix) = quick_fixes.first().and_then(|f| f.as_str()) {
+                let truncated = if first_fix.len() > 70 {
+                    format!("{}...", &first_fix[..67])
+                } else {
+                    first_fix.to_string()
+                };
+                lines.push(format!(
+                    "{}  → Fix: {}{}",
+                    ansi::INFO_BLUE, truncated, ansi::RESET
+                ));
+            }
+        }
+
+        // Note about remaining issues
+        let remaining = total as usize - shown;
+        if remaining > 0 {
+            lines.push(format!(
+                "{}  +{} more issue{}{}",
+                ansi::GRAY,
+                remaining,
+                if remaining == 1 { "" } else { "s" },
+                ansi::RESET
+            ));
+        }
+
+        (success, lines)
+    } else {
+        (false, vec!["parse error".to_string()])
+    }
+}
+
+/// Format a single hadolint issue for display
+fn format_hadolint_issue(issue: &serde_json::Value, icon: &str, color: &str) -> String {
+    let code = issue.get("code").and_then(|c| c.as_str()).unwrap_or("?");
+    let message = issue.get("message").and_then(|m| m.as_str()).unwrap_or("?");
+    let line_num = issue.get("line").and_then(|l| l.as_u64()).unwrap_or(0);
+    let category = issue.get("category").and_then(|c| c.as_str()).unwrap_or("");
+
+    // Category badge
+    let badge = match category {
+        "security" => format!("{}[SEC]{}", ansi::CRITICAL, ansi::RESET),
+        "best-practice" => format!("{}[BP]{}", ansi::INFO_BLUE, ansi::RESET),
+        "deprecated" => format!("{}[DEP]{}", ansi::MEDIUM, ansi::RESET),
+        "performance" => format!("{}[PERF]{}", ansi::CYAN, ansi::RESET),
+        _ => String::new(),
+    };
+
+    // Truncate message
+    let msg_display = if message.len() > 50 {
+        format!("{}...", &message[..47])
+    } else {
+        message.to_string()
+    };
+
+    format!(
+        "{}{} L{}:{} {}{}[{}]{} {} {}",
+        color, icon, line_num, ansi::RESET,
+        ansi::DOCKER_BLUE, ansi::BOLD, code, ansi::RESET,
+        badge,
+        msg_display
+    )
 }
 
 // Legacy exports for compatibility
