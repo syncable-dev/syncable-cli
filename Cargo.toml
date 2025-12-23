@@ -39,7 +39,7 @@ rayon = "1.11"
 termcolor = "1"
 chrono = { version = "0.4", features = ["serde"] }
 colored = "3"
-crossterm = "0.28"  # Terminal raw mode for interactive input
+crossterm = "0.29"  # Terminal raw mode for interactive input
 inquire = "0.7"     # Interactive terminal prompts with autocomplete
 rustyline = "17"    # Readline-style input with completions
 prettytable = "0.10"
