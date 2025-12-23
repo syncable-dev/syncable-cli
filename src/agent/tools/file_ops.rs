@@ -440,13 +440,25 @@ impl Tool for WriteFileTool {
             name: Self::NAME.to_string(),
             description: r#"Write content to a file in the project. Creates the file if it doesn't exist, or overwrites if it does.
 
-Use this tool to:
+**IMPORTANT**: Use this tool IMMEDIATELY when the user asks you to:
+- Create ANY file (Dockerfile, .tf, .yaml, .md, .json, etc.)
+- Generate configuration files
+- Write documentation to a specific location
+- "Put content in" or "under" a directory
+- Save analysis results or findings
+- Document anything in a file
+
+**DO NOT** just describe what you would write - actually call this tool with the content.
+
+Use cases:
 - Generate Dockerfiles for applications
 - Create Terraform configuration files (.tf)
 - Write Helm chart templates and values
 - Create docker-compose.yml files
 - Generate CI/CD configuration files (.github/workflows, .gitlab-ci.yml)
 - Write Kubernetes manifests
+- Save analysis findings to markdown files
+- Create any text file the user requests
 
 The tool will create parent directories automatically if they don't exist."#.to_string(),
             parameters: json!({
@@ -687,13 +699,19 @@ impl Tool for WriteFilesTool {
             name: Self::NAME.to_string(),
             description: r#"Write multiple files at once. Ideal for creating complete infrastructure configurations.
 
-Use this tool when you need to create multiple related files together:
+**IMPORTANT**: Use this tool when you need to create multiple related files together.
+
+**USE THIS TOOL** (not just describe files) when the user asks for:
 - Complete Terraform modules (main.tf, variables.tf, outputs.tf, providers.tf)
 - Full Helm charts (Chart.yaml, values.yaml, templates/*.yaml)
 - Kubernetes manifests (deployment.yaml, service.yaml, configmap.yaml)
 - Multi-file docker-compose setups
+- Multiple documentation files in a directory
+- Any set of related files
 
-All files are written atomically - if any file fails, previously written files in the batch remain."#.to_string(),
+**DO NOT** just describe the files - actually call this tool to create them.
+
+All files are written atomically. Parent directories are created automatically."#.to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {

@@ -73,6 +73,7 @@ where
     fn on_tool_call(
         &self,
         tool_name: &str,
+        _tool_call_id: Option<String>,
         args: &str,
         _cancel: CancelSignal,
     ) -> impl std::future::Future<Output = ()> + Send {
@@ -104,6 +105,7 @@ where
     fn on_tool_result(
         &self,
         tool_name: &str,
+        _tool_call_id: Option<String>,
         args: &str,
         result: &str,
         _cancel: CancelSignal,
