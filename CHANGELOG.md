@@ -106,6 +106,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.27.0](https://github.com/syncable-dev/syncable-cli/compare/v0.26.1...v0.27.0) - 2025-12-23
+
+### Added
+
+- *(agent)* add extended thinking, conversation compaction, and UI improvements
+
+### Other
+
+- Merge branch 'main' into develop
+
 ## [0.26.1](https://github.com/syncable-dev/syncable-cli/compare/v0.26.0...v0.26.1) - 2025-12-21
 
 ### Added
