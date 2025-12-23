@@ -41,7 +41,7 @@ chrono = { version = "0.4", features = ["serde"] }
 colored = "3"
 crossterm = "0.28"  # Terminal raw mode for interactive input
 inquire = "0.7"     # Interactive terminal prompts with autocomplete
-rustyline = "15"    # Readline-style input with completions
+rustyline = "17"    # Readline-style input with completions
 prettytable = "0.10"
 term_size = "0.3"
 
