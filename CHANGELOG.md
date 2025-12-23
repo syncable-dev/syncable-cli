@@ -106,6 +106,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.27.1](https://github.com/syncable-dev/syncable-cli/compare/v0.27.0...v0.27.1) - 2025-12-23
+
+### Other
+
+- Merge pull request #230 from syncable-dev/develop
+- Merge pull request #226 from syncable-dev/dependabot/cargo/develop/serde_json-1.0.146
+- Merge pull request #227 from syncable-dev/dependabot/cargo/develop/rustyline-17.0.2
+- *(deps)* bump rustyline from 15.0.0 to 17.0.2
+
 ## [0.27.0](https://github.com/syncable-dev/syncable-cli/compare/v0.26.1...v0.27.0) - 2025-12-23
 
 ### Added
