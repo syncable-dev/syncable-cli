@@ -1,22 +1,20 @@
-//! Conversation history management with compaction support
+//! Conversation history management with forge-style compaction support
 //!
-//! This module provides conversation history storage and automatic compaction
-//! when the token count exceeds a configurable threshold, similar to gemini-cli.
+//! This module provides conversation history storage with intelligent compaction
+//! inspired by forge's context management approach:
+//! - Configurable thresholds (tokens, turns, messages)
+//! - Smart eviction strategy (protects tool-call/result adjacency)
+//! - Droppable message support for ephemeral content
+//! - Summary frame generation for compressed history
 
+use super::compact::{
+    CompactConfig, CompactThresholds, CompactionStrategy, ContextSummary, SummaryFrame,
+};
 use rig::completion::Message;
 use serde::{Deserialize, Serialize};
 
-/// Default threshold for compression as a fraction of context window (85%)
-pub const DEFAULT_COMPRESSION_THRESHOLD: f32 = 0.85;
-
-/// Fraction of history to preserve after compression (keep last 30%)
-pub const COMPRESSION_PRESERVE_FRACTION: f32 = 0.3;
-
 /// Rough token estimate: ~4 characters per token
 const CHARS_PER_TOKEN: usize = 4;
-
-/// Maximum context window tokens (conservative estimate for most models)
-const DEFAULT_MAX_CONTEXT_TOKENS: usize = 128_000;
 
 /// A conversation turn containing user input and assistant response
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -27,6 +25,11 @@ pub struct ConversationTurn {
     pub tool_calls: Vec<ToolCallRecord>,
     /// Estimated token count for this turn
     pub estimated_tokens: usize,
+    /// Whether this turn can be dropped entirely (ephemeral content)
+    /// Droppable turns are typically file reads or directory listings
+    /// that can be re-fetched if needed
+    #[serde(default)]
+    pub droppable: bool,
 }
 
 /// Record of a tool call for history tracking
@@ -38,19 +41,26 @@ pub struct ToolCallRecord {
     /// Tool call ID for proper message pairing (optional for backwards compat)
     #[serde(default)]
     pub tool_id: Option<String>,
+    /// Whether this tool result is droppable (ephemeral content like file reads)
+    #[serde(default)]
+    pub droppable: bool,
 }
 
-/// Conversation history manager with compaction support
+/// Conversation history manager with forge-style compaction support
 #[derive(Debug, Clone)]
 pub struct ConversationHistory {
     /// Full conversation turns
     turns: Vec<ConversationTurn>,
-    /// Compressed summary of older turns (if any)
-    compressed_summary: Option<String>,
+    /// Compressed summary using SummaryFrame (if any)
+    summary_frame: Option<SummaryFrame>,
     /// Total estimated tokens in history
     total_tokens: usize,
-    /// Maximum tokens before triggering compaction
-    compression_threshold_tokens: usize,
+    /// Compaction configuration
+    compact_config: CompactConfig,
+    /// Number of user turns (for threshold checking)
+    user_turn_count: usize,
+    /// Context summary for tracking file operations and decisions
+    context_summary: ContextSummary,
 }
 
 impl Default for ConversationHistory {
@@ -61,23 +71,44 @@ impl Default for ConversationHistory {
 
 impl ConversationHistory {
     pub fn new() -> Self {
-        let max_tokens = DEFAULT_MAX_CONTEXT_TOKENS;
         Self {
             turns: Vec::new(),
-            compressed_summary: None,
+            summary_frame: None,
             total_tokens: 0,
-            compression_threshold_tokens: (max_tokens as f32 * DEFAULT_COMPRESSION_THRESHOLD) as usize,
+            compact_config: CompactConfig::default(),
+            user_turn_count: 0,
+            context_summary: ContextSummary::new(),
         }
     }
 
-    /// Create with custom compression threshold
-    pub fn with_threshold(max_context_tokens: usize, threshold_fraction: f32) -> Self {
+    /// Create with custom compaction configuration
+    pub fn with_config(config: CompactConfig) -> Self {
         Self {
             turns: Vec::new(),
-            compressed_summary: None,
+            summary_frame: None,
             total_tokens: 0,
-            compression_threshold_tokens: (max_context_tokens as f32 * threshold_fraction) as usize,
+            compact_config: config,
+            user_turn_count: 0,
+            context_summary: ContextSummary::new(),
         }
+    }
+
+    /// Create with aggressive compaction for limited context windows
+    pub fn aggressive() -> Self {
+        Self::with_config(CompactConfig {
+            retention_window: 5,
+            eviction_window: 0.7,
+            thresholds: CompactThresholds::aggressive(),
+        })
+    }
+
+    /// Create with relaxed compaction for large context windows
+    pub fn relaxed() -> Self {
+        Self::with_config(CompactConfig {
+            retention_window: 20,
+            eviction_window: 0.5,
+            thresholds: CompactThresholds::relaxed(),
+        })
     }
 
     /// Estimate tokens in a string
@@ -86,27 +117,94 @@ impl ConversationHistory {
     }
 
     /// Add a new conversation turn
-    pub fn add_turn(&mut self, user_message: String, assistant_response: String, tool_calls: Vec<ToolCallRecord>) {
+    pub fn add_turn(
+        &mut self,
+        user_message: String,
+        assistant_response: String,
+        tool_calls: Vec<ToolCallRecord>,
+    ) {
+        // Determine if this turn is droppable based on tool calls
+        // Turns that only read files or list directories are droppable
+        let droppable = !tool_calls.is_empty()
+            && tool_calls.iter().all(|tc| {
+                matches!(
+                    tc.tool_name.as_str(),
+                    "read_file" | "list_directory" | "analyze_project"
+                )
+            });
+
         let turn_tokens = Self::estimate_tokens(&user_message)
             + Self::estimate_tokens(&assistant_response)
-            + tool_calls.iter().map(|tc| {
-                Self::estimate_tokens(&tc.tool_name)
-                + Self::estimate_tokens(&tc.args_summary)
-                + Self::estimate_tokens(&tc.result_summary)
-            }).sum::<usize>();
+            + tool_calls
+                .iter()
+                .map(|tc| {
+                    Self::estimate_tokens(&tc.tool_name)
+                        + Self::estimate_tokens(&tc.args_summary)
+                        + Self::estimate_tokens(&tc.result_summary)
+                })
+                .sum::<usize>();
 
         self.turns.push(ConversationTurn {
             user_message,
             assistant_response,
             tool_calls,
             estimated_tokens: turn_tokens,
+            droppable,
         });
         self.total_tokens += turn_tokens;
+        self.user_turn_count += 1;
     }
 
-    /// Check if compaction is needed
+    /// Add a turn with explicit droppable flag
+    pub fn add_turn_droppable(
+        &mut self,
+        user_message: String,
+        assistant_response: String,
+        tool_calls: Vec<ToolCallRecord>,
+        droppable: bool,
+    ) {
+        let turn_tokens = Self::estimate_tokens(&user_message)
+            + Self::estimate_tokens(&assistant_response)
+            + tool_calls
+                .iter()
+                .map(|tc| {
+                    Self::estimate_tokens(&tc.tool_name)
+                        + Self::estimate_tokens(&tc.args_summary)
+                        + Self::estimate_tokens(&tc.result_summary)
+                })
+                .sum::<usize>();
+
+        self.turns.push(ConversationTurn {
+            user_message,
+            assistant_response,
+            tool_calls,
+            estimated_tokens: turn_tokens,
+            droppable,
+        });
+        self.total_tokens += turn_tokens;
+        self.user_turn_count += 1;
+    }
+
+    /// Check if compaction is needed using forge-style thresholds
     pub fn needs_compaction(&self) -> bool {
-        self.total_tokens > self.compression_threshold_tokens
+        let last_is_user = self
+            .turns
+            .last()
+            .map(|t| !t.user_message.is_empty())
+            .unwrap_or(false);
+
+        self.compact_config.should_compact(
+            self.total_tokens,
+            self.user_turn_count,
+            self.turns.len(),
+            last_is_user,
+        )
+    }
+
+    /// Get the reason for compaction (for logging)
+    pub fn compaction_reason(&self) -> Option<String> {
+        self.compact_config
+            .compaction_reason(self.total_tokens, self.user_turn_count, self.turns.len())
     }
 
     /// Get current token count
@@ -119,181 +217,175 @@ impl ConversationHistory {
         self.turns.len()
     }
 
+    /// Get number of user turns
+    pub fn user_turn_count(&self) -> usize {
+        self.user_turn_count
+    }
+
     /// Clear all history
     pub fn clear(&mut self) {
         self.turns.clear();
-        self.compressed_summary = None;
+        self.summary_frame = None;
         self.total_tokens = 0;
+        self.user_turn_count = 0;
+        self.context_summary = ContextSummary::new();
     }
 
-    /// Perform compaction - summarize older turns and keep recent ones
+    /// Perform forge-style compaction with smart eviction
     /// Returns the summary that was created (for logging/display)
     pub fn compact(&mut self) -> Option<String> {
+        use super::compact::strategy::{MessageMeta, MessageRole};
+        use super::compact::summary::{
+            extract_assistant_action, extract_user_intent, ToolCallSummary, TurnSummary,
+        };
+
         if self.turns.len() < 2 {
             return None; // Nothing to compact
         }
 
-        // Calculate split point - keep last 30% of turns
-        let preserve_count = ((self.turns.len() as f32) * COMPRESSION_PRESERVE_FRACTION).ceil() as usize;
-        let preserve_count = preserve_count.max(1); // Keep at least 1 turn
-        let split_point = self.turns.len().saturating_sub(preserve_count);
+        // Build message metadata for strategy
+        let messages: Vec<MessageMeta> = self
+            .turns
+            .iter()
+            .enumerate()
+            .flat_map(|(turn_idx, turn)| {
+                let mut metas = vec![];
 
-        if split_point == 0 {
-            return None; // Nothing to compress
+                // User message
+                metas.push(MessageMeta {
+                    index: turn_idx * 2,
+                    role: MessageRole::User,
+                    droppable: turn.droppable,
+                    has_tool_call: false,
+                    is_tool_result: false,
+                    tool_id: None,
+                    token_count: Self::estimate_tokens(&turn.user_message),
+                });
+
+                // Assistant message (may have tool calls)
+                let has_tool_call = !turn.tool_calls.is_empty();
+                let tool_id = turn.tool_calls.first().and_then(|tc| tc.tool_id.clone());
+
+                metas.push(MessageMeta {
+                    index: turn_idx * 2 + 1,
+                    role: MessageRole::Assistant,
+                    droppable: turn.droppable,
+                    has_tool_call,
+                    is_tool_result: false,
+                    tool_id,
+                    token_count: Self::estimate_tokens(&turn.assistant_response),
+                });
+
+                metas
+            })
+            .collect();
+
+        // Use default strategy (evict 60% or retain 10, whichever is more conservative)
+        let strategy = CompactionStrategy::default();
+
+        // Calculate eviction range with tool-call safety
+        let range = strategy.calculate_eviction_range(&messages, self.compact_config.retention_window)?;
+
+        if range.is_empty() {
+            return None;
         }
 
-        // Create summary of older turns
-        let turns_to_compress = &self.turns[..split_point];
-        let summary = self.create_summary(turns_to_compress);
+        // Convert message indices to turn indices
+        let start_turn = range.start / 2;
+        let end_turn = (range.end + 1) / 2;
 
-        // Update compressed summary
-        let new_summary = if let Some(existing) = &self.compressed_summary {
-            format!("{}\n\n{}", existing, summary)
+        if start_turn >= end_turn || end_turn > self.turns.len() {
+            return None;
+        }
+
+        // Build context summary from turns to evict
+        let mut new_context = ContextSummary::new();
+
+        for (i, turn) in self.turns[start_turn..end_turn].iter().enumerate() {
+            let turn_summary = TurnSummary {
+                turn_number: start_turn + i + 1,
+                user_intent: extract_user_intent(&turn.user_message, 80),
+                assistant_action: extract_assistant_action(&turn.assistant_response, 100),
+                tool_calls: turn
+                    .tool_calls
+                    .iter()
+                    .map(|tc| ToolCallSummary {
+                        tool_name: tc.tool_name.clone(),
+                        args_summary: tc.args_summary.clone(),
+                        result_summary: truncate_text(&tc.result_summary, 100),
+                        success: !tc.result_summary.to_lowercase().contains("error"),
+                    })
+                    .collect(),
+                key_decisions: vec![], // Could extract from assistant response
+            };
+            new_context.add_turn(turn_summary);
+        }
+
+        // Merge with existing context summary
+        self.context_summary.merge(new_context);
+
+        // Generate summary frame
+        let new_frame = SummaryFrame::from_summary(&self.context_summary);
+
+        // Merge with existing frame if present
+        if let Some(existing) = &self.summary_frame {
+            let merged_content = format!("{}\n\n{}", existing.content, new_frame.content);
+            let merged_tokens = existing.token_count + new_frame.token_count;
+            self.summary_frame = Some(SummaryFrame {
+                content: merged_content,
+                token_count: merged_tokens,
+            });
         } else {
-            summary.clone()
-        };
-        self.compressed_summary = Some(new_summary);
+            self.summary_frame = Some(new_frame);
+        }
 
-        // Keep only recent turns
-        let preserved_turns: Vec<_> = self.turns[split_point..].to_vec();
+        // Keep only recent turns (non-evicted)
+        let preserved_turns: Vec<_> = self.turns[end_turn..].to_vec();
+        let evicted_count = end_turn - start_turn;
         self.turns = preserved_turns;
 
         // Recalculate token count
-        self.total_tokens = Self::estimate_tokens(self.compressed_summary.as_deref().unwrap_or(""))
+        self.total_tokens = self
+            .summary_frame
+            .as_ref()
+            .map(|f| f.token_count)
+            .unwrap_or(0)
             + self.turns.iter().map(|t| t.estimated_tokens).sum::<usize>();
 
-        Some(summary)
-    }
-
-    /// Create a text summary of conversation turns
-    /// Includes detailed tool call information to preserve context
-    fn create_summary(&self, turns: &[ConversationTurn]) -> String {
-        use std::collections::HashSet;
-
-        let mut summary_parts = Vec::new();
-        let mut all_files_read: HashSet<String> = HashSet::new();
-        let mut all_files_written: HashSet<String> = HashSet::new();
-
-        for (i, turn) in turns.iter().enumerate() {
-            let mut turn_summary = format!(
-                "Turn {}: User: {}",
-                i + 1,
-                Self::truncate_text(&turn.user_message, 150)
-            );
-
-            if !turn.tool_calls.is_empty() {
-                // Group tool calls by type for better summary
-                let mut reads = Vec::new();
-                let mut writes = Vec::new();
-                let mut other = Vec::new();
-
-                for tc in &turn.tool_calls {
-                    match tc.tool_name.as_str() {
-                        "read_file" => {
-                            reads.push(tc.args_summary.clone());
-                            all_files_read.insert(tc.args_summary.clone());
-                        }
-                        "write_file" | "write_files" => {
-                            writes.push(tc.args_summary.clone());
-                            all_files_written.insert(tc.args_summary.clone());
-                        }
-                        "list_directory" => {
-                            other.push(format!("listed {}", tc.args_summary));
-                        }
-                        _ => {
-                            other.push(format!("{}({})", tc.tool_name, Self::truncate_text(&tc.args_summary, 30)));
-                        }
-                    }
-                }
-
-                if !reads.is_empty() {
-                    turn_summary.push_str(&format!("\n  - Read {} files: {}",
-                        reads.len(),
-                        reads.iter().take(5).cloned().collect::<Vec<_>>().join(", ")
-                    ));
-                    if reads.len() > 5 {
-                        turn_summary.push_str(&format!(" (+{} more)", reads.len() - 5));
-                    }
-                }
-                if !writes.is_empty() {
-                    turn_summary.push_str(&format!("\n  - Wrote: {}", writes.join(", ")));
-                }
-                if !other.is_empty() {
-                    turn_summary.push_str(&format!("\n  - Other: {}", other.join(", ")));
-                }
-            }
-
-            turn_summary.push_str(&format!(
-                "\n  - Response: {}",
-                Self::truncate_text(&turn.assistant_response, 300)
-            ));
-
-            summary_parts.push(turn_summary);
-        }
-
-        // Add a cumulative context section
-        let mut context = format!(
-            "=== Conversation Summary ({} turns compressed) ===\n\n{}",
-            turns.len(),
-            summary_parts.join("\n\n")
-        );
-
-        // Add cumulative file context
-        if !all_files_read.is_empty() {
-            context.push_str("\n\n=== Files Previously Read (content is in context) ===\n");
-            for file in all_files_read.iter().take(30) {
-                context.push_str(&format!("  - {}\n", file));
-            }
-            if all_files_read.len() > 30 {
-                context.push_str(&format!("  ... and {} more files\n", all_files_read.len() - 30));
-            }
-        }
-
-        if !all_files_written.is_empty() {
-            context.push_str("\n=== Files Previously Written ===\n");
-            for file in &all_files_written {
-                context.push_str(&format!("  - {}\n", file));
-            }
-        }
-
-        context
-    }
-
-    /// Truncate text with ellipsis
-    fn truncate_text(text: &str, max_len: usize) -> String {
-        if text.len() <= max_len {
-            text.to_string()
-        } else {
-            format!("{}...", &text[..max_len.saturating_sub(3)])
-        }
+        Some(format!(
+            "Compacted {} turns ({} → {} tokens)",
+            evicted_count,
+            self.total_tokens + evicted_count * 500, // rough estimate of evicted tokens
+            self.total_tokens
+        ))
     }
 
     /// Convert history to Rig Message format for the agent
-    /// Uses text summaries to preserve context without breaking Rig's internal tool call tracking
-    /// Note: We can't use proper ToolCall/ToolResult messages because Rig expects real API tool IDs
+    /// Uses structured summary frames to preserve context
     pub fn to_messages(&self) -> Vec<Message> {
-        use rig::completion::message::{Text, UserContent, AssistantContent};
+        use rig::completion::message::{AssistantContent, Text, UserContent};
         use rig::OneOrMany;
 
         let mut messages = Vec::new();
 
-        // Add compressed summary as initial context if present
-        if let Some(summary) = &self.compressed_summary {
+        // Add summary frame as initial context if present
+        if let Some(frame) = &self.summary_frame {
             // Add as a user message with the summary, followed by acknowledgment
             messages.push(Message::User {
                 content: OneOrMany::one(UserContent::Text(Text {
-                    text: format!("[Previous conversation context]\n{}", summary),
+                    text: format!("[Previous conversation context]\n{}", frame.content),
                 })),
             });
             messages.push(Message::Assistant {
                 id: None,
                 content: OneOrMany::one(AssistantContent::Text(Text {
-                    text: "I understand the previous context. How can I help you continue?".to_string(),
+                    text: "I understand the previous context. I'll continue from where we left off."
+                        .to_string(),
                 })),
             });
         }
 
-        // Add recent turns with tool call context as text (not as actual ToolCall messages)
+        // Add recent turns with tool call context as text
         for turn in &self.turns {
             // User message
             messages.push(Message::User {
@@ -312,8 +404,8 @@ impl ConversationHistory {
                     response_text.push_str(&format!(
                         "  - {}({}) → {}\n",
                         tc.tool_name,
-                        Self::truncate_text(&tc.args_summary, 50),
-                        Self::truncate_text(&tc.result_summary, 100)
+                        truncate_text(&tc.args_summary, 50),
+                        truncate_text(&tc.result_summary, 100)
                     ));
                 }
                 response_text.push_str("]\n\n");
@@ -324,9 +416,7 @@ impl ConversationHistory {
 
             messages.push(Message::Assistant {
                 id: None,
-                content: OneOrMany::one(AssistantContent::Text(Text {
-                    text: response_text,
-                })),
+                content: OneOrMany::one(AssistantContent::Text(Text { text: response_text })),
             });
         }
 
@@ -335,15 +425,18 @@ impl ConversationHistory {
 
     /// Check if there's any history
     pub fn is_empty(&self) -> bool {
-        self.turns.is_empty() && self.compressed_summary.is_none()
+        self.turns.is_empty() && self.summary_frame.is_none()
     }
 
     /// Get a brief status string for display
     pub fn status(&self) -> String {
-        let compressed_info = if self.compressed_summary.is_some() {
-            " (with compressed history)"
+        let compressed_info = if self.summary_frame.is_some() {
+            format!(
+                " (+{} compacted)",
+                self.context_summary.turns_compacted
+            )
         } else {
-            ""
+            String::new()
         };
         format!(
             "{} turns, ~{} tokens{}",
@@ -351,6 +444,28 @@ impl ConversationHistory {
             self.total_tokens,
             compressed_info
         )
+    }
+
+    /// Get files that have been read during this session
+    pub fn files_read(&self) -> impl Iterator<Item = &str> {
+        self.context_summary.files_read.iter().map(|s| s.as_str())
+    }
+
+    /// Get files that have been written during this session
+    pub fn files_written(&self) -> impl Iterator<Item = &str> {
+        self.context_summary
+            .files_written
+            .iter()
+            .map(|s| s.as_str())
+    }
+}
+
+/// Helper to truncate text with ellipsis
+fn truncate_text(text: &str, max_len: usize) -> String {
+    if text.len() <= max_len {
+        text.to_string()
+    } else {
+        format!("{}...", &text[..max_len.saturating_sub(3)])
     }
 }
 
@@ -361,29 +476,72 @@ mod tests {
     #[test]
     fn test_add_turn() {
         let mut history = ConversationHistory::new();
-        history.add_turn(
-            "Hello".to_string(),
-            "Hi there!".to_string(),
-            vec![],
-        );
+        history.add_turn("Hello".to_string(), "Hi there!".to_string(), vec![]);
         assert_eq!(history.turn_count(), 1);
         assert!(!history.is_empty());
     }
 
     #[test]
+    fn test_droppable_detection() {
+        let mut history = ConversationHistory::new();
+
+        // Turn with only read_file should be droppable
+        history.add_turn(
+            "Read the file".to_string(),
+            "Here's the content".to_string(),
+            vec![ToolCallRecord {
+                tool_name: "read_file".to_string(),
+                args_summary: "src/main.rs".to_string(),
+                result_summary: "file content...".to_string(),
+                tool_id: Some("tool_1".to_string()),
+                droppable: true,
+            }],
+        );
+        assert!(history.turns[0].droppable);
+
+        // Turn with write_file should NOT be droppable
+        history.add_turn(
+            "Write the file".to_string(),
+            "Done".to_string(),
+            vec![ToolCallRecord {
+                tool_name: "write_file".to_string(),
+                args_summary: "src/new.rs".to_string(),
+                result_summary: "success".to_string(),
+                tool_id: Some("tool_2".to_string()),
+                droppable: false,
+            }],
+        );
+        assert!(!history.turns[1].droppable);
+    }
+
+    #[test]
     fn test_compaction() {
-        let mut history = ConversationHistory::with_threshold(1000, 0.1); // Low threshold
+        // Use aggressive config for easier testing
+        let mut history = ConversationHistory::with_config(CompactConfig {
+            retention_window: 2,
+            eviction_window: 0.6,
+            thresholds: CompactThresholds {
+                token_threshold: Some(500),
+                turn_threshold: Some(5),
+                message_threshold: Some(10),
+                on_turn_end: None,
+            },
+        });
 
         // Add many turns to trigger compaction
         for i in 0..10 {
             history.add_turn(
-                format!("Question {}", i),
-                format!("Answer {} with lots of detail to increase token count", i),
+                format!("Question {} with lots of text to increase token count", i),
+                format!(
+                    "Answer {} with lots of detail to increase token count even more",
+                    i
+                ),
                 vec![ToolCallRecord {
                     tool_name: "analyze".to_string(),
                     args_summary: "path: .".to_string(),
-                    result_summary: "Found rust project".to_string(),
+                    result_summary: "Found rust project with many files".to_string(),
                     tool_id: Some(format!("tool_{}", i)),
+                    droppable: false,
                 }],
             );
         }
@@ -392,6 +550,7 @@ mod tests {
             let summary = history.compact();
             assert!(summary.is_some());
             assert!(history.turn_count() < 10);
+            assert!(history.summary_frame.is_some());
         }
     }
 
@@ -415,5 +574,32 @@ mod tests {
         history.clear();
         assert!(history.is_empty());
         assert_eq!(history.token_count(), 0);
+    }
+
+    #[test]
+    fn test_compaction_reason() {
+        let mut history = ConversationHistory::with_config(CompactConfig {
+            retention_window: 2,
+            eviction_window: 0.6,
+            thresholds: CompactThresholds {
+                token_threshold: Some(100),
+                turn_threshold: Some(3),
+                message_threshold: Some(5),
+                on_turn_end: None,
+            },
+        });
+
+        // Add turns to exceed threshold
+        for i in 0..5 {
+            history.add_turn(
+                format!("Question {}", i),
+                format!("Answer {}", i),
+                vec![],
+            );
+        }
+
+        assert!(history.needs_compaction());
+        let reason = history.compaction_reason();
+        assert!(reason.is_some());
     }
 }

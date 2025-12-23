@@ -72,10 +72,16 @@ rand = "0.8"
 futures-util = "0.3"
 
 # Agent dependencies (using Rig - LLM application framework)
-rig-core = { version = "0.26", features = ["derive"] }
+rig-core = { version = "0.27", features = ["derive"] }
+rig-bedrock = "0.3"  # AWS Bedrock provider for Rig
 
 # Diff rendering for file confirmation UI
 similar = "2.6"
+
+# Markdown rendering and syntax highlighting
+termimad = "0.30"              # Terminal markdown rendering
+syntect = "5"                   # Syntax highlighting
+strip-ansi-escapes = "0.2"      # Strip ANSI codes for testing
 
 # Dockerfile linting (hadolint-rs)
 nom = "7"                  # Parser combinators for Dockerfile parsing
@@ -99,3 +105,9 @@ path = "examples/check_vulnerabilities.rs"
 [[example]]
 name = "security_analysis"
 path = "examples/security_analysis.rs"
+
+# Patch rig-bedrock to fix extended thinking support with tool use
+# The upstream version drops Reasoning blocks when a tool call is present.
+# See: patches/rig-bedrock/src/types/assistant_content.rs for the fix.
+[patch.crates-io]
+rig-bedrock = { path = "patches/rig-bedrock" }
