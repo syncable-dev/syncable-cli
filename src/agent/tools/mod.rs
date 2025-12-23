@@ -20,17 +20,24 @@
 //! ### Linting
 //! - `HadolintTool` - Native Dockerfile linting (best practices, security)
 //!
+//! ### Terraform
+//! - `TerraformFmtTool` - Format Terraform configuration files
+//! - `TerraformValidateTool` - Validate Terraform configurations
+//! - `TerraformInstallTool` - Install Terraform CLI (auto-detects OS)
+//!
 //! ### Shell
 //! - `ShellTool` - Execute validation commands (docker build, terraform validate, helm lint)
-
+//!
 mod analyze;
 mod file_ops;
 mod hadolint;
 mod security;
 mod shell;
+mod terraform;
 
 pub use analyze::AnalyzeTool;
 pub use file_ops::{ListDirectoryTool, ReadFileTool, WriteFileTool, WriteFilesTool};
 pub use hadolint::HadolintTool;
 pub use security::{SecurityScanTool, VulnerabilitiesTool};
 pub use shell::ShellTool;
+pub use terraform::{TerraformFmtTool, TerraformInstallTool, TerraformValidateTool};

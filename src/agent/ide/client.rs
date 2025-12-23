@@ -159,18 +159,40 @@ impl IdeClient {
     async fn read_connection_config(&self) -> Option<ConnectionConfig> {
         let temp_dir = env::temp_dir();
 
+        // Debug: show where we're looking
+        if cfg!(debug_assertions) || env::var("SYNCABLE_DEBUG").is_ok() {
+            eprintln!("[IDE Debug] Looking for port files in temp_dir: {:?}", temp_dir);
+        }
+
         // Try Syncable extension first - scan all port files, match by workspace
         let syncable_port_dir = temp_dir.join("syncable").join("ide");
+        if cfg!(debug_assertions) || env::var("SYNCABLE_DEBUG").is_ok() {
+            eprintln!("[IDE Debug] Checking Syncable dir: {:?} (exists: {})",
+                     syncable_port_dir, syncable_port_dir.exists());
+        }
         if let Some(config) = self.find_port_file_by_workspace(&syncable_port_dir, "syncable-ide-server") {
+            if cfg!(debug_assertions) || env::var("SYNCABLE_DEBUG").is_ok() {
+                eprintln!("[IDE Debug] Found Syncable config: port={}", config.port);
+            }
             return Some(config);
         }
 
         // Try Gemini CLI extension (for compatibility)
         let gemini_port_dir = temp_dir.join("gemini").join("ide");
+        if cfg!(debug_assertions) || env::var("SYNCABLE_DEBUG").is_ok() {
+            eprintln!("[IDE Debug] Checking Gemini dir: {:?} (exists: {})",
+                     gemini_port_dir, gemini_port_dir.exists());
+        }
         if let Some(config) = self.find_port_file_by_workspace(&gemini_port_dir, "gemini-ide-server") {
+            if cfg!(debug_assertions) || env::var("SYNCABLE_DEBUG").is_ok() {
+                eprintln!("[IDE Debug] Found Gemini config: port={}", config.port);
+            }
             return Some(config);
         }
 
+        if cfg!(debug_assertions) || env::var("SYNCABLE_DEBUG").is_ok() {
+            eprintln!("[IDE Debug] No port file found in either location");
+        }
         None
     }
 
@@ -178,14 +200,25 @@ impl IdeClient {
     fn find_port_file_by_workspace(&self, dir: &PathBuf, prefix: &str) -> Option<ConnectionConfig> {
         let entries = fs::read_dir(dir).ok()?;
 
+        let debug = cfg!(debug_assertions) || env::var("SYNCABLE_DEBUG").is_ok();
+
         for entry in entries.flatten() {
             let filename = entry.file_name().to_string_lossy().to_string();
             // Match any file starting with the prefix and ending with .json
             if filename.starts_with(prefix) && filename.ends_with(".json") {
+                if debug {
+                    eprintln!("[IDE Debug] Found port file: {:?}", entry.path());
+                }
                 if let Ok(content) = fs::read_to_string(entry.path()) {
                     if let Ok(config) = serde_json::from_str::<ConnectionConfig>(&content) {
+                        if debug {
+                            eprintln!("[IDE Debug] Config workspace_path: {:?}", config.workspace_path);
+                        }
                         if self.validate_workspace_path(&config.workspace_path) {
                             return Some(config);
+                        } else if debug {
+                            let cwd = env::current_dir().ok();
+                            eprintln!("[IDE Debug] Workspace path did not match cwd: {:?}", cwd);
                         }
                     }
                 }

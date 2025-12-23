@@ -1,9 +1,15 @@
 //! Beautiful response formatting for AI outputs
 //!
-//! Renders AI responses with Syncable's brand colors (purple/magenta theme)
-//! and nice markdown-like formatting.
+//! Renders AI responses with proper markdown support using termimad
+//! and syntax highlighting using syntect.
 
-// Note: colored crate is used in other modules, here we use custom ANSI codes
+use std::sync::Arc;
+use syntect::easy::HighlightLines;
+use syntect::highlighting::ThemeSet;
+use syntect::parsing::SyntaxSet;
+use syntect::util::as_24_bit_terminal_escaped;
+use termimad::crossterm::style::{Attribute, Color};
+use termimad::{CompoundStyle, LineStyle, MadSkin};
 
 /// Syncable brand colors using ANSI 256-color codes
 pub mod brand {
@@ -37,6 +43,190 @@ pub mod brand {
     pub const ITALIC: &str = "\x1b[3m";
 }
 
+/// Syntax highlighter with cached resources
+#[derive(Clone)]
+pub struct SyntaxHighlighter {
+    syntax_set: Arc<SyntaxSet>,
+    theme_set: Arc<ThemeSet>,
+}
+
+impl Default for SyntaxHighlighter {
+    fn default() -> Self {
+        Self {
+            syntax_set: Arc::new(SyntaxSet::load_defaults_newlines()),
+            theme_set: Arc::new(ThemeSet::load_defaults()),
+        }
+    }
+}
+
+impl SyntaxHighlighter {
+    /// Highlight code with the given language
+    pub fn highlight(&self, code: &str, lang: &str) -> String {
+        let syntax = self
+            .syntax_set
+            .find_syntax_by_token(lang)
+            .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text());
+        let theme = &self.theme_set.themes["base16-ocean.dark"];
+        let mut hl = HighlightLines::new(syntax, theme);
+
+        code.lines()
+            .filter_map(|line| hl.highlight_line(line, &self.syntax_set).ok())
+            .map(|ranges| format!("{}\x1b[0m", as_24_bit_terminal_escaped(&ranges, false)))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+}
+
+/// A code block extracted from markdown
+#[derive(Clone, Debug)]
+struct CodeBlock {
+    code: String,
+    lang: String,
+}
+
+/// Parses markdown and extracts code blocks for separate highlighting
+struct CodeBlockParser {
+    markdown: String,
+    blocks: Vec<CodeBlock>,
+}
+
+impl CodeBlockParser {
+    /// Extract code blocks from markdown content
+    fn parse(content: &str) -> Self {
+        let mut blocks = Vec::new();
+        let mut result = String::new();
+        let mut in_code_block = false;
+        let mut code_lines: Vec<&str> = Vec::new();
+        let mut current_lang = String::new();
+
+        for line in content.lines() {
+            if line.trim_start().starts_with("```") {
+                if in_code_block {
+                    // End of code block - store and add placeholder
+                    result.push_str(&format!("\x00{}\x00\n", blocks.len()));
+                    blocks.push(CodeBlock {
+                        code: code_lines.join("\n"),
+                        lang: current_lang.clone(),
+                    });
+                    code_lines.clear();
+                    current_lang.clear();
+                    in_code_block = false;
+                } else {
+                    // Start of code block
+                    current_lang = line.trim_start().strip_prefix("```").unwrap_or("").to_string();
+                    in_code_block = true;
+                }
+            } else if in_code_block {
+                code_lines.push(line);
+            } else {
+                result.push_str(line);
+                result.push('\n');
+            }
+        }
+
+        // Handle unclosed code block
+        if in_code_block && !code_lines.is_empty() {
+            result.push_str(&format!("\x00{}\x00\n", blocks.len()));
+            blocks.push(CodeBlock {
+                code: code_lines.join("\n"),
+                lang: current_lang,
+            });
+        }
+
+        Self { markdown: result, blocks }
+    }
+
+    /// Get the processed markdown with placeholders
+    fn markdown(&self) -> &str {
+        &self.markdown
+    }
+
+    /// Replace placeholders with highlighted code blocks
+    fn restore(&self, highlighter: &SyntaxHighlighter, mut rendered: String) -> String {
+        for (i, block) in self.blocks.iter().enumerate() {
+            // Just show syntax-highlighted code without language header
+            let highlighted = highlighter.highlight(&block.code, &block.lang);
+            let code_block = format!("\n{}\n", highlighted);
+            rendered = rendered.replace(&format!("\x00{i}\x00"), &code_block);
+        }
+        rendered
+    }
+}
+
+/// Markdown formatter with Syncable branding
+pub struct MarkdownFormat {
+    skin: MadSkin,
+    highlighter: SyntaxHighlighter,
+}
+
+impl Default for MarkdownFormat {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MarkdownFormat {
+    /// Create a new MarkdownFormat with Syncable brand colors
+    pub fn new() -> Self {
+        let mut skin = MadSkin::default();
+
+        // Inline code - cyan
+        skin.inline_code = CompoundStyle::new(Some(Color::Cyan), None, Default::default());
+
+        // Code blocks - will be replaced with syntax highlighted version
+        skin.code_block = LineStyle::new(
+            CompoundStyle::new(None, None, Default::default()),
+            Default::default(),
+        );
+
+        // Headers - purple theme with bold
+        let mut h1_style = CompoundStyle::new(Some(Color::Magenta), None, Default::default());
+        h1_style.add_attr(Attribute::Bold);
+        skin.headers[0] = LineStyle::new(h1_style.clone(), Default::default());
+        skin.headers[1] = LineStyle::new(h1_style.clone(), Default::default());
+
+        let h3_style = CompoundStyle::new(Some(Color::Magenta), None, Default::default());
+        skin.headers[2] = LineStyle::new(h3_style, Default::default());
+
+        // Bold - light purple with bold attribute
+        let mut bold_style = CompoundStyle::new(Some(Color::Magenta), None, Default::default());
+        bold_style.add_attr(Attribute::Bold);
+        skin.bold = bold_style;
+
+        // Italic
+        skin.italic = CompoundStyle::with_attr(Attribute::Italic);
+
+        // Strikethrough
+        let mut strikethrough = CompoundStyle::with_attr(Attribute::CrossedOut);
+        strikethrough.add_attr(Attribute::Dim);
+        skin.strikeout = strikethrough;
+
+        Self {
+            skin,
+            highlighter: SyntaxHighlighter::default(),
+        }
+    }
+
+    /// Render markdown content to a styled string for terminal display
+    pub fn render(&self, content: impl Into<String>) -> String {
+        let content = content.into();
+        let content = content.trim();
+
+        if content.is_empty() {
+            return String::new();
+        }
+
+        // Extract code blocks for separate highlighting
+        let parsed = CodeBlockParser::parse(content);
+
+        // Render with termimad
+        let rendered = self.skin.term_text(parsed.markdown()).to_string();
+
+        // Restore highlighted code blocks
+        parsed.restore(&self.highlighter, rendered).trim().to_string()
+    }
+}
+
 /// Response formatter with beautiful rendering
 pub struct ResponseFormatter;
 
@@ -48,8 +238,14 @@ impl ResponseFormatter {
         Self::print_header();
         println!();
 
-        // Parse and format the markdown content
-        Self::format_markdown(text);
+        // Render markdown with proper formatting (tables, code blocks, etc.)
+        let formatter = MarkdownFormat::new();
+        let rendered = formatter.render(text);
+
+        // Add indentation for all lines to fit within box
+        for line in rendered.lines() {
+            println!("  {}", line);
+        }
 
         // Print footer separator
         println!();
@@ -59,14 +255,15 @@ impl ResponseFormatter {
     /// Print the response header with Syncable styling
     fn print_header() {
         print!(
-            "{}{}╭─ {} Syncable AI {}{}",
+            "{}{}╭─ 🤖 Syncable AI ",
             brand::PURPLE,
-            brand::BOLD,
-            "🤖",
-            brand::RESET,
-            brand::DIM
+            brand::BOLD
         );
-        println!("─────────────────────────────────────────────────────╮{}", brand::RESET);
+        println!(
+            "{}─────────────────────────────────────────────────────╮{}",
+            brand::DIM,
+            brand::RESET
+        );
     }
 
     /// Print a separator line
@@ -77,236 +274,6 @@ impl ResponseFormatter {
             brand::RESET
         );
     }
-
-    /// Format and print markdown content with nice styling
-    fn format_markdown(text: &str) {
-        let mut in_code_block = false;
-        let mut code_lang = String::new();
-        let mut list_depth = 0;
-
-        for line in text.lines() {
-            let trimmed = line.trim();
-
-            // Handle code blocks
-            if trimmed.starts_with("```") {
-                if in_code_block {
-                    // End code block
-                    println!(
-                        "{}  └────────────────────────────────────────────────────────────┘{}",
-                        brand::DIM,
-                        brand::RESET
-                    );
-                    in_code_block = false;
-                    code_lang.clear();
-                } else {
-                    // Start code block
-                    code_lang = trimmed.strip_prefix("```").unwrap_or("").to_string();
-                    let lang_display = if code_lang.is_empty() {
-                        "code".to_string()
-                    } else {
-                        code_lang.clone()
-                    };
-                    println!(
-                        "{}  ┌─ {}{}{} ──────────────────────────────────────────────────────┐{}",
-                        brand::DIM,
-                        brand::CYAN,
-                        lang_display,
-                        brand::DIM,
-                        brand::RESET
-                    );
-                    in_code_block = true;
-                }
-                continue;
-            }
-
-            if in_code_block {
-                // Code content with syntax highlighting hint
-                println!("{}  │ {}{}{}  │", brand::DIM, brand::CYAN, line, brand::RESET);
-                continue;
-            }
-
-            // Handle headers
-            if let Some(header) = Self::parse_header(trimmed) {
-                Self::print_formatted_header(header.0, header.1);
-                continue;
-            }
-
-            // Handle bullet points
-            if let Some(bullet) = Self::parse_bullet(trimmed) {
-                Self::print_bullet(bullet.0, bullet.1, &mut list_depth);
-                continue;
-            }
-
-            // Handle bold and inline code in regular text
-            Self::print_formatted_text(line);
-        }
-    }
-
-    /// Parse header level and content
-    fn parse_header(line: &str) -> Option<(usize, &str)> {
-        if line.starts_with("### ") {
-            Some((3, line.strip_prefix("### ").unwrap()))
-        } else if line.starts_with("## ") {
-            Some((2, line.strip_prefix("## ").unwrap()))
-        } else if line.starts_with("# ") {
-            Some((1, line.strip_prefix("# ").unwrap()))
-        } else {
-            None
-        }
-    }
-
-    /// Print a formatted header
-    fn print_formatted_header(level: usize, content: &str) {
-        match level {
-            1 => {
-                println!();
-                println!(
-                    "{}{}  ▓▓ {} {}",
-                    brand::PURPLE,
-                    brand::BOLD,
-                    content.to_uppercase(),
-                    brand::RESET
-                );
-                println!(
-                    "{}  ════════════════════════════════════════════════════════{}",
-                    brand::PURPLE,
-                    brand::RESET
-                );
-            }
-            2 => {
-                println!();
-                println!(
-                    "{}{}  ▸ {} {}",
-                    brand::LIGHT_PURPLE,
-                    brand::BOLD,
-                    content,
-                    brand::RESET
-                );
-                println!(
-                    "{}  ────────────────────────────────────────────────────────{}",
-                    brand::DIM,
-                    brand::RESET
-                );
-            }
-            _ => {
-                println!();
-                println!(
-                    "{}{}  ◦ {} {}",
-                    brand::MAGENTA,
-                    brand::BOLD,
-                    content,
-                    brand::RESET
-                );
-            }
-        }
-    }
-
-    /// Parse bullet point
-    fn parse_bullet(line: &str) -> Option<(usize, &str)> {
-        let trimmed = line.trim_start();
-        let indent = line.len() - trimmed.len();
-        let depth = indent / 2;
-
-        if trimmed.starts_with("- ") {
-            Some((depth, trimmed.strip_prefix("- ").unwrap()))
-        } else if trimmed.starts_with("* ") {
-            Some((depth, trimmed.strip_prefix("* ").unwrap()))
-        } else if trimmed.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) 
-            && trimmed.chars().nth(1) == Some('.') 
-        {
-            Some((depth, trimmed.split_once(". ").map(|(_, rest)| rest).unwrap_or(trimmed)))
-        } else {
-            None
-        }
-    }
-
-    /// Print a bullet point with proper indentation
-    fn print_bullet(depth: usize, content: &str, _list_depth: &mut usize) {
-        let indent = "  ".repeat(depth + 1);
-        let bullet_char = match depth {
-            0 => "●",
-            1 => "○",
-            _ => "◦",
-        };
-        let bullet_color = match depth {
-            0 => brand::PURPLE,
-            1 => brand::MAGENTA,
-            _ => brand::DIM,
-        };
-
-        // Format the content with inline styles
-        let formatted = Self::format_inline(content);
-        println!("{}{}{} {}{}", indent, bullet_color, bullet_char, brand::TEXT, formatted);
-        print!("{}", brand::RESET);
-    }
-
-    /// Print formatted text with inline styles
-    fn print_formatted_text(line: &str) {
-        if line.trim().is_empty() {
-            println!();
-            return;
-        }
-
-        let formatted = Self::format_inline(line);
-        println!("{}  {}{}", brand::TEXT, formatted, brand::RESET);
-    }
-
-    /// Format inline markdown (bold, italic, code)
-    fn format_inline(text: &str) -> String {
-        let mut result = String::new();
-        let chars: Vec<char> = text.chars().collect();
-        let mut i = 0;
-
-        while i < chars.len() {
-            // Handle **bold**
-            if i + 1 < chars.len() && chars[i] == '*' && chars[i + 1] == '*' {
-                if let Some(end) = Self::find_closing(&chars, i + 2, "**") {
-                    let bold_text: String = chars[i + 2..end].iter().collect();
-                    result.push_str(brand::BOLD);
-                    result.push_str(brand::LIGHT_PURPLE);
-                    result.push_str(&bold_text);
-                    result.push_str(brand::RESET);
-                    result.push_str(brand::TEXT);
-                    i = end + 2;
-                    continue;
-                }
-            }
-
-            // Handle `code`
-            if chars[i] == '`' && (i + 1 >= chars.len() || chars[i + 1] != '`') {
-                if let Some(end) = chars[i + 1..].iter().position(|&c| c == '`') {
-                    let code_text: String = chars[i + 1..i + 1 + end].iter().collect();
-                    result.push_str(brand::CYAN);
-                    result.push_str("`");
-                    result.push_str(&code_text);
-                    result.push_str("`");
-                    result.push_str(brand::RESET);
-                    result.push_str(brand::TEXT);
-                    i = i + 2 + end;
-                    continue;
-                }
-            }
-
-            result.push(chars[i]);
-            i += 1;
-        }
-
-        result
-    }
-
-    /// Find closing marker
-    fn find_closing(chars: &[char], start: usize, marker: &str) -> Option<usize> {
-        let marker_chars: Vec<char> = marker.chars().collect();
-        let marker_len = marker_chars.len();
-
-        for i in start..=chars.len() - marker_len {
-            let matches = (0..marker_len).all(|j| chars[i + j] == marker_chars[j]);
-            if matches {
-                return Some(i);
-            }
-        }
-        None
-    }
 }
 
 /// Simple response printer for when we just want colored output
@@ -316,8 +283,9 @@ impl SimpleResponse {
     /// Print a simple AI response with minimal formatting
     pub fn print(text: &str) {
         println!();
-        println!("{}{}🤖 Syncable AI:{}", brand::PURPLE, brand::BOLD, brand::RESET);
-        println!("{}{}{}", brand::TEXT, text, brand::RESET);
+        println!("{}{} Syncable AI:{}", brand::PURPLE, brand::BOLD, brand::RESET);
+        let formatter = MarkdownFormat::new();
+        println!("{}", formatter.render(text));
         println!();
     }
 }
@@ -368,12 +336,11 @@ impl ToolProgress {
 
     /// Redraw the tool progress display
     fn redraw(&self) {
-        // Clear previous lines and redraw
         for tool in &self.tools_executed {
             let (icon, color) = match tool.status {
-                ToolStatus::Running => ("◐", brand::YELLOW),
-                ToolStatus::Success => ("✓", brand::SUCCESS),
-                ToolStatus::Error => ("✗", "\x1b[38;5;196m"),
+                ToolStatus::Running => ("", brand::YELLOW),
+                ToolStatus::Success => ("", brand::SUCCESS),
+                ToolStatus::Error => ("", "\x1b[38;5;196m"),
             };
             println!(
                 "  {} {}{}{} {}{}{}",
@@ -416,16 +383,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_header() {
-        assert_eq!(ResponseFormatter::parse_header("# Hello"), Some((1, "Hello")));
-        assert_eq!(ResponseFormatter::parse_header("## World"), Some((2, "World")));
-        assert_eq!(ResponseFormatter::parse_header("### Test"), Some((3, "Test")));
-        assert_eq!(ResponseFormatter::parse_header("Not a header"), None);
+    fn test_markdown_render_empty() {
+        let formatter = MarkdownFormat::new();
+        assert!(formatter.render("").is_empty());
     }
 
     #[test]
-    fn test_format_inline_bold() {
-        let result = ResponseFormatter::format_inline("This is **bold** text");
-        assert!(result.contains("bold"));
+    fn test_markdown_render_simple() {
+        let formatter = MarkdownFormat::new();
+        let result = formatter.render("Hello world");
+        assert!(!result.is_empty());
+    }
+
+    #[test]
+    fn test_code_block_extraction() {
+        let parsed = CodeBlockParser::parse("Hello\n```rust\nfn main() {}\n```\nWorld");
+        assert_eq!(parsed.blocks.len(), 1);
+        assert_eq!(parsed.blocks[0].lang, "rust");
+        assert_eq!(parsed.blocks[0].code, "fn main() {}");
+    }
+
+    #[test]
+    fn test_syntax_highlighter() {
+        let hl = SyntaxHighlighter::default();
+        let result = hl.highlight("fn main() {}", "rust");
+        // Should contain ANSI codes
+        assert!(result.contains("\x1b["));
     }
 }

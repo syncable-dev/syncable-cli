@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Main configuration structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,16 +78,116 @@ pub struct TelemetryConfig {
 /// Agent/Chat configuration
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AgentConfig {
-    /// OpenAI API key
+    /// OpenAI API key (legacy, use profiles instead)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub openai_api_key: Option<String>,
-    /// Anthropic API key
+    /// Anthropic API key (legacy, use profiles instead)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub anthropic_api_key: Option<String>,
-    /// Default provider (openai or anthropic)
+    /// AWS Bedrock configuration (legacy, use profiles instead)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bedrock: Option<BedrockConfig>,
+    /// AWS Bedrock configured flag (legacy)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bedrock_configured: Option<bool>,
+    /// Default provider (openai, anthropic, or bedrock)
     #[serde(default = "default_provider")]
     pub default_provider: String,
     /// Default model
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_model: Option<String>,
+
+    // --- Global Profile support ---
+    /// Named profiles containing all provider settings
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub profiles: HashMap<String, Profile>,
+    /// Currently active profile name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_profile: Option<String>,
+
+    // --- Legacy per-provider profiles (deprecated, kept for migration) ---
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub openai_profiles: HashMap<String, OpenAIProfile>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub openai_active_profile: Option<String>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub anthropic_profiles: HashMap<String, AnthropicProfile>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub anthropic_active_profile: Option<String>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub bedrock_profiles: HashMap<String, BedrockConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bedrock_active_profile: Option<String>,
+}
+
+/// A global profile containing settings for all providers
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Profile {
+    /// Description of this profile (e.g., "Work", "Personal")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Default provider for this profile
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_provider: Option<String>,
+    /// Default model for this profile
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_model: Option<String>,
+    /// OpenAI settings for this profile
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub openai: Option<OpenAIProfile>,
+    /// Anthropic settings for this profile
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub anthropic: Option<AnthropicProfile>,
+    /// Bedrock settings for this profile
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bedrock: Option<BedrockConfig>,
+}
+
+/// OpenAI profile configuration
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OpenAIProfile {
+    /// API key for this profile
+    pub api_key: String,
+    /// Optional description/label
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Preferred model for this profile
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_model: Option<String>,
+}
+
+/// Anthropic profile configuration
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AnthropicProfile {
+    /// API key for this profile
+    pub api_key: String,
+    /// Optional description/label
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Preferred model for this profile
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_model: Option<String>,
+}
+
+/// AWS Bedrock configuration
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct BedrockConfig {
+    /// AWS region (e.g., us-east-1, us-west-2)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub region: Option<String>,
+    /// AWS profile name from ~/.aws/credentials
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
+    /// AWS Access Key ID (alternative to profile)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub access_key_id: Option<String>,
+    /// AWS Secret Access Key (alternative to profile)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secret_access_key: Option<String>,
+    /// AWS Bearer Token for Bedrock (used by Bedrock API Gateway)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bearer_token: Option<String>,
+    /// Preferred model ID
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_model: Option<String>,
 }
