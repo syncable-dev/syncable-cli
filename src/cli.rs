@@ -236,8 +236,8 @@ pub enum Commands {
         #[arg(value_name = "PROJECT_PATH", default_value = ".")]
         path: PathBuf,
 
-        /// LLM provider to use
-        #[arg(long, value_enum, default_value = "openai")]
+        /// LLM provider to use (uses saved preference by default)
+        #[arg(long, value_enum, default_value = "auto")]
         provider: ChatProvider,
 
         /// Model to use (e.g., gpt-4o, claude-3-5-sonnet-latest, llama3.2)
@@ -356,12 +356,16 @@ pub enum SecurityScanMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
 pub enum ChatProvider {
     /// OpenAI (GPT-4o, GPT-4, etc.)
-    #[default]
     Openai,
     /// Anthropic (Claude 3)
     Anthropic,
+    /// AWS Bedrock (Claude via AWS)
+    Bedrock,
     /// Ollama (local LLM, no API key needed)
     Ollama,
+    /// Use saved default from config file
+    #[default]
+    Auto,
 }
 
 impl Cli {

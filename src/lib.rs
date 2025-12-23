@@ -107,23 +107,50 @@ pub async fn run_command(command: Commands) -> Result<()> {
         Commands::Chat { path, provider, model, query } => {
             use agent::ProviderType;
             use cli::ChatProvider;
+            use config::load_agent_config;
 
             let project_path = path.canonicalize().unwrap_or(path);
-            let provider_type = match provider {
-                ChatProvider::Openai => ProviderType::OpenAI,
-                ChatProvider::Anthropic => ProviderType::Anthropic,
+
+            // Load saved config for Auto mode
+            let agent_config = load_agent_config();
+
+            // Determine provider - use saved default if Auto
+            let (provider_type, effective_model) = match provider {
+                ChatProvider::Openai => (ProviderType::OpenAI, model),
+                ChatProvider::Anthropic => (ProviderType::Anthropic, model),
+                ChatProvider::Bedrock => (ProviderType::Bedrock, model),
                 ChatProvider::Ollama => {
                     eprintln!("Ollama support coming soon. Using OpenAI as fallback.");
-                    ProviderType::OpenAI
+                    (ProviderType::OpenAI, model)
+                }
+                ChatProvider::Auto => {
+                    // Load from saved config
+                    let saved_provider = match agent_config.default_provider.as_str() {
+                        "openai" => ProviderType::OpenAI,
+                        "anthropic" => ProviderType::Anthropic,
+                        "bedrock" => ProviderType::Bedrock,
+                        _ => ProviderType::OpenAI, // Fallback
+                    };
+                    // Use saved model if no explicit model provided
+                    let saved_model = if model.is_some() {
+                        model
+                    } else {
+                        agent_config.default_model.clone()
+                    };
+                    (saved_provider, saved_model)
                 }
             };
 
+            // Load API key/credentials from config to environment
+            // This is essential for Bedrock bearer token auth!
+            agent::session::ChatSession::load_api_key_to_env(provider_type);
+
             if let Some(q) = query {
-                let response = agent::run_query(&project_path, &q, provider_type, model).await?;
+                let response = agent::run_query(&project_path, &q, provider_type, effective_model).await?;
                 println!("{}", response);
                 Ok(())
             } else {
-                agent::run_interactive(&project_path, provider_type, model).await?;
+                agent::run_interactive(&project_path, provider_type, effective_model).await?;
                 Ok(())
             }
         }

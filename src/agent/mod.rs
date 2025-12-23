@@ -31,6 +31,7 @@
 //! - `/exit` - Exit the chat
 
 pub mod commands;
+pub mod compact;
 pub mod history;
 pub mod ide;
 pub mod prompts;
@@ -59,6 +60,7 @@ pub enum ProviderType {
     #[default]
     OpenAI,
     Anthropic,
+    Bedrock,
 }
 
 impl std::fmt::Display for ProviderType {
@@ -66,6 +68,7 @@ impl std::fmt::Display for ProviderType {
         match self {
             ProviderType::OpenAI => write!(f, "openai"),
             ProviderType::Anthropic => write!(f, "anthropic"),
+            ProviderType::Bedrock => write!(f, "bedrock"),
         }
     }
 }
@@ -77,7 +80,8 @@ impl std::str::FromStr for ProviderType {
         match s.to_lowercase().as_str() {
             "openai" => Ok(ProviderType::OpenAI),
             "anthropic" => Ok(ProviderType::Anthropic),
-            _ => Err(format!("Unknown provider: {}", s)),
+            "bedrock" | "aws" | "aws-bedrock" => Ok(ProviderType::Bedrock),
+            _ => Err(format!("Unknown provider: {}. Use: openai, anthropic, or bedrock", s)),
         }
     }
 }
@@ -269,6 +273,9 @@ pub async fn run_interactive(
                         .tool(SecurityScanTool::new(project_path_buf.clone()))
                         .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
                         .tool(HadolintTool::new(project_path_buf.clone()))
+                        .tool(TerraformFmtTool::new(project_path_buf.clone()))
+                        .tool(TerraformValidateTool::new(project_path_buf.clone()))
+                        .tool(TerraformInstallTool::new())
                         .tool(ReadFileTool::new(project_path_buf.clone()))
                         .tool(ListDirectoryTool::new(project_path_buf.clone()));
 
@@ -310,6 +317,13 @@ pub async fn run_interactive(
                 }
                 ProviderType::Anthropic => {
                     let client = anthropic::Client::from_env();
+
+                    // TODO: Extended thinking for Claude is disabled because rig-bedrock/rig-anthropic
+                    // don't properly handle thinking blocks in multi-turn conversations with tool use.
+                    // When thinking is enabled, ALL assistant messages must start with thinking blocks
+                    // BEFORE tool_use blocks, but rig doesn't preserve/replay these.
+                    // See: forge/crates/forge_services/src/provider/bedrock/provider.rs for reference impl.
+
                     let mut builder = client
                         .agent(&session.model)
                         .preamble(&preamble)
@@ -318,6 +332,9 @@ pub async fn run_interactive(
                         .tool(SecurityScanTool::new(project_path_buf.clone()))
                         .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
                         .tool(HadolintTool::new(project_path_buf.clone()))
+                        .tool(TerraformFmtTool::new(project_path_buf.clone()))
+                        .tool(TerraformValidateTool::new(project_path_buf.clone()))
+                        .tool(TerraformInstallTool::new())
                         .tool(ReadFileTool::new(project_path_buf.clone()))
                         .tool(ListDirectoryTool::new(project_path_buf.clone()));
 
@@ -348,6 +365,68 @@ pub async fn run_interactive(
                     // Allow up to 50 tool call turns for complex generation tasks
                     // Use hook to display tool calls as they happen
                     // Pass conversation history for context continuity
+                    agent.prompt(&current_input)
+                        .with_history(&mut chat_history)
+                        .with_hook(hook.clone())
+                        .multi_turn(50)
+                        .await
+                }
+                ProviderType::Bedrock => {
+                    // Bedrock provider via rig-bedrock - same pattern as OpenAI/Anthropic
+                    let client = rig_bedrock::client::Client::from_env();
+
+                    // Extended thinking for Claude models via Bedrock
+                    // This enables Claude to show its reasoning process before responding.
+                    // Requires patched rig-bedrock that preserves Reasoning blocks with tool calls.
+                    let thinking_params = serde_json::json!({
+                        "thinking": {
+                            "type": "enabled",
+                            "budget_tokens": 8000
+                        }
+                    });
+
+                    let mut builder = client
+                        .agent(&session.model)
+                        .preamble(&preamble)
+                        .max_tokens(16000)  // Higher for thinking + response
+                        .tool(AnalyzeTool::new(project_path_buf.clone()))
+                        .tool(SecurityScanTool::new(project_path_buf.clone()))
+                        .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
+                        .tool(HadolintTool::new(project_path_buf.clone()))
+                        .tool(TerraformFmtTool::new(project_path_buf.clone()))
+                        .tool(TerraformValidateTool::new(project_path_buf.clone()))
+                        .tool(TerraformInstallTool::new())
+                        .tool(ReadFileTool::new(project_path_buf.clone()))
+                        .tool(ListDirectoryTool::new(project_path_buf.clone()));
+
+                    // Add generation tools if this is a generation query
+                    if is_generation {
+                        // Create file tools with IDE client if connected
+                        let (write_file_tool, write_files_tool) = if let Some(ref client) = ide_client {
+                            (
+                                WriteFileTool::new(project_path_buf.clone())
+                                    .with_ide_client(client.clone()),
+                                WriteFilesTool::new(project_path_buf.clone())
+                                    .with_ide_client(client.clone()),
+                            )
+                        } else {
+                            (
+                                WriteFileTool::new(project_path_buf.clone()),
+                                WriteFilesTool::new(project_path_buf.clone()),
+                            )
+                        };
+                        builder = builder
+                            .tool(write_file_tool)
+                            .tool(write_files_tool)
+                            .tool(ShellTool::new(project_path_buf.clone()));
+                    }
+
+                    // Add thinking params for extended reasoning
+                    builder = builder.additional_params(thinking_params);
+
+                    let agent = builder.build();
+
+                    // Use same multi-turn pattern as OpenAI/Anthropic
                     agent.prompt(&current_input)
                         .with_history(&mut chat_history)
                         .with_hook(hook.clone())
@@ -611,6 +690,11 @@ async fn extract_tool_calls_from_hook(hook: &ToolDisplayHook) -> Vec<ToolCallRec
             result_summary: result,
             // Generate a unique tool ID for proper message pairing
             tool_id: Some(format!("tool_{}_{}", tc.name, i)),
+            // Mark read-only tools as droppable (their results can be re-fetched)
+            droppable: matches!(
+                tc.name.as_str(),
+                "read_file" | "list_directory" | "analyze_project"
+            ),
         }
     }).collect()
 }
@@ -784,6 +868,9 @@ pub async fn run_query(
                 .tool(SecurityScanTool::new(project_path_buf.clone()))
                 .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
                 .tool(HadolintTool::new(project_path_buf.clone()))
+                .tool(TerraformFmtTool::new(project_path_buf.clone()))
+                .tool(TerraformValidateTool::new(project_path_buf.clone()))
+                .tool(TerraformInstallTool::new())
                 .tool(ReadFileTool::new(project_path_buf.clone()))
                 .tool(ListDirectoryTool::new(project_path_buf.clone()));
 
@@ -809,7 +896,11 @@ pub async fn run_query(
         }
         ProviderType::Anthropic => {
             let client = anthropic::Client::from_env();
-            let model_name = model.as_deref().unwrap_or("claude-sonnet-4-20250514");
+            let model_name = model.as_deref().unwrap_or("claude-sonnet-4-5-20250929");
+
+            // TODO: Extended thinking for Claude is disabled because rig doesn't properly
+            // handle thinking blocks in multi-turn conversations with tool use.
+            // See: forge/crates/forge_services/src/provider/bedrock/provider.rs for reference.
 
             let mut builder = client
                 .agent(model_name)
@@ -819,6 +910,9 @@ pub async fn run_query(
                 .tool(SecurityScanTool::new(project_path_buf.clone()))
                 .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
                 .tool(HadolintTool::new(project_path_buf.clone()))
+                .tool(TerraformFmtTool::new(project_path_buf.clone()))
+                .tool(TerraformValidateTool::new(project_path_buf.clone()))
+                .tool(TerraformInstallTool::new())
                 .tool(ReadFileTool::new(project_path_buf.clone()))
                 .tool(ListDirectoryTool::new(project_path_buf.clone()));
 
@@ -831,6 +925,51 @@ pub async fn run_query(
             }
 
             let agent = builder.build();
+
+            agent
+                .prompt(query)
+                .multi_turn(50)
+                .await
+                .map_err(|e| AgentError::ProviderError(e.to_string()))
+        }
+        ProviderType::Bedrock => {
+            // Bedrock provider via rig-bedrock - same pattern as Anthropic
+            let client = rig_bedrock::client::Client::from_env();
+            let model_name = model.as_deref().unwrap_or("global.anthropic.claude-sonnet-4-5-20250929-v1:0");
+
+            // Extended thinking for Claude via Bedrock
+            let thinking_params = serde_json::json!({
+                "thinking": {
+                    "type": "enabled",
+                    "budget_tokens": 8000
+                }
+            });
+
+            let mut builder = client
+                .agent(model_name)
+                .preamble(&preamble)
+                .max_tokens(16000)  // Higher for thinking + response
+                .tool(AnalyzeTool::new(project_path_buf.clone()))
+                .tool(SecurityScanTool::new(project_path_buf.clone()))
+                .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
+                .tool(HadolintTool::new(project_path_buf.clone()))
+                .tool(TerraformFmtTool::new(project_path_buf.clone()))
+                .tool(TerraformValidateTool::new(project_path_buf.clone()))
+                .tool(TerraformInstallTool::new())
+                .tool(ReadFileTool::new(project_path_buf.clone()))
+                .tool(ListDirectoryTool::new(project_path_buf.clone()));
+
+            // Add generation tools if this is a generation query
+            if is_generation {
+                builder = builder
+                    .tool(WriteFileTool::new(project_path_buf.clone()))
+                    .tool(WriteFilesTool::new(project_path_buf.clone()))
+                    .tool(ShellTool::new(project_path_buf.clone()));
+            }
+
+            let agent = builder
+                .additional_params(thinking_params)
+                .build();
 
             agent
                 .prompt(query)

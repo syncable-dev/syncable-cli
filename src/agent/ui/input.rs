@@ -650,16 +650,10 @@ pub fn read_input_with_file_picker(prompt: &str, project_path: &PathBuf) -> Inpu
                         }
                     }
                     KeyCode::Char('c') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
-                        if !state.text.is_empty() {
-                            // Clear input
-                            state.text.clear();
-                            state.cursor = 0;
-                            state.close_suggestions();
-                        } else {
-                            print!("\r\n");
-                            let _ = stdout.flush();
-                            break InputResult::Cancel;
-                        }
+                        // Ctrl+C always exits (consistent with standard CLI behavior)
+                        print!("\r\n");
+                        let _ = stdout.flush();
+                        break InputResult::Cancel;
                     }
                     KeyCode::Char('d') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
                         print!("\r\n");

@@ -488,7 +488,9 @@ async fn run() -> syncable_cli::Result<()> {
             let provider_str = match provider {
                 ChatProvider::Openai => "openai",
                 ChatProvider::Anthropic => "anthropic",
+                ChatProvider::Bedrock => "bedrock",
                 ChatProvider::Ollama => "ollama",
+                ChatProvider::Auto => "auto",
             };
             properties.insert("provider".to_string(), json!(provider_str));
             

@@ -61,6 +61,18 @@ pub const SLASH_COMMANDS: &[SlashCommand] = &[
         auto_execute: true,
     },
     SlashCommand {
+        name: "reset",
+        alias: Some("r"),
+        description: "Reset provider credentials",
+        auto_execute: true,
+    },
+    SlashCommand {
+        name: "profile",
+        alias: None,
+        description: "Manage provider profiles (multiple configs)",
+        auto_execute: true,
+    },
+    SlashCommand {
         name: "exit",
         alias: Some("q"),
         description: "Exit the chat",
