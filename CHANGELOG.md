@@ -106,6 +106,227 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.26.1](https://github.com/syncable-dev/syncable-cli/compare/v0.26.0...v0.26.1) - 2025-12-21
+
+### Added
+
+- *(hadolint)* add native Rust Dockerfile linter with GPL-3.0 license
+
+### Other
+
+- Merge pull request #221 from syncable-dev/develop
+
+## [0.26.0](https://github.com/syncable-dev/syncable-cli/compare/v0.25.0...v0.26.0) - 2025-12-21
+
+### Added
+
+- updated agenet behavior for better tool calling and context mngmt
+
+## [0.25.0](https://github.com/syncable-dev/syncable-cli/compare/v0.24.5...v0.25.0) - 2025-12-20
+
+### Added
+
+- fixed security scan context share
+
+### Other
+
+- *(@ reference)* updated session logic with "@" ref
+
+## [0.24.5](https://github.com/syncable-dev/syncable-cli/compare/v0.24.4...v0.24.5) - 2025-12-19
+
+### Other
+
+- Merge pull request #215 from syncable-dev/develop
+- Merge pull request #145 from syncable-dev/dependabot/cargo/develop/rayon-1.11.0
+
+## [0.24.4](https://github.com/syncable-dev/syncable-cli/compare/v0.24.3...v0.24.4) - 2025-12-19
+
+### Added
+
+- feat(ROADMAP updates) Updated Roadmap to reflect current progress
+
+### Other
+
+- bug(newline broken) Fixed a broken UI for file/folder search
+
+## [0.24.3](https://github.com/syncable-dev/syncable-cli/compare/v0.24.2...v0.24.3) - 2025-12-19
+
+### Added
+
+- updated with logo
+
+### Other
+
+- update ROADMAP with completed features and cleaner structure
+
+## [0.24.2](https://github.com/syncable-dev/syncable-cli/compare/v0.24.1...v0.24.2) - 2025-12-19
+
+### Added
+
+- *(agent)* enhance input handling with multi-line support and keyboard shortcuts
+
+### Other
+
+- Merge pull request #209 from syncable-dev/develop
+- redesign README with AI Agent focus and improved engagement
+
+## [0.24.1](https://github.com/syncable-dev/syncable-cli/compare/v0.24.0...v0.24.1) - 2025-12-18
+
+### Added
+
+- *(agent)* add @ file picker for context file selection
+
+### Other
+
+- Merge pull request #207 from syncable-dev/develop
+
+## [0.24.0](https://github.com/syncable-dev/syncable-cli/compare/v0.23.1...v0.24.0) - 2025-12-18
+
+### Added
+
+- updated Agent dockerfile generation alongside the Syncable Cli Companion, allowing for IDE to show diff and change suggestions from the cli agent
+
+## [0.23.1](https://github.com/syncable-dev/syncable-cli/compare/v0.23.0...v0.23.1) - 2025-12-17
+
+### Added
+
+- Add Syncable IDE Companion VS Code extension
+
+### Other
+
+- Merge branch 'main' into release-plz-2025-12-17T22-17-01Z
+- release v0.23.0
+- Merge pull request #202 from syncable-dev/develop
+
+## [0.23.0](https://github.com/syncable-dev/syncable-cli/compare/v0.22.3...v0.23.0) - 2025-12-17
+
+### Added
+
+- Add Syncable IDE Companion VS Code extension
+- VS Code extension Syncable Cli Companion
+
+### Other
+
+- Merge pull request #202 from syncable-dev/develop
+- Merge pull request #201 from syncable-dev/develop
+- Merge branch 'develop' of github.com:syncable-dev/syncable-cli into develop
+
+## [0.22.3](https://github.com/syncable-dev/syncable-cli/compare/v0.22.2...v0.22.3) - 2025-12-17
+
+### Other
+
+- update Cargo.lock dependencies
+
+## [0.22.2](https://github.com/syncable-dev/syncable-cli/compare/v0.22.1...v0.22.2) - 2025-12-17
+
+### Added
+
+- updated with banner, for Syncable Platform
+
+## [0.22.1](https://github.com/syncable-dev/syncable-cli/compare/v0.22.0...v0.22.1) - 2025-12-17
+
+### Other
+
+- Merge pull request #193 from syncable-dev/develop
+
+## [0.22.0](https://github.com/syncable-dev/syncable-cli/compare/v0.21.0...v0.22.0) - 2025-12-17
+
+### Added
+
+- Syncable Cli Agent now includes thinking and more smooth ui processing.
+
+## [0.21.0](https://github.com/syncable-dev/syncable-cli/compare/v0.20.0...v0.21.0) - 2025-12-16
+
+### Added
+
+- updated agent layer, with better ui for interactivness
+
+### Other
+
+- Merge pull request #189 from syncable-dev/develop
+
+## [0.20.0](https://github.com/syncable-dev/syncable-cli/compare/v0.19.0...v0.20.0) - 2025-12-16
+
+### Added
+
+- updated syncable-cli
+
+### Other
+
+- Merge pull request #187 from syncable-dev/develop
+
+## [0.19.0](https://github.com/syncable-dev/syncable-cli/compare/v0.18.6...v0.19.0) - 2025-12-16
+
+### Added
+
+- Add AI agent layer with Rig framework and harden framework detection
+
+### Other
+
+- Merge pull request #185 from syncable-dev/develop
+
+## [0.18.6](https://github.com/syncable-dev/syncable-cli/compare/v0.18.5...v0.18.6) - 2025-11-22
+
+### Added
+
+- updated framework detection
+
+## [0.18.5](https://github.com/syncable-dev/syncable-cli/compare/v0.18.4...v0.18.5) - 2025-09-29
+
+### Other
+
+- update Cargo.lock dependencies
+
+## [0.18.4](https://github.com/syncable-dev/syncable-cli/compare/v0.18.3...v0.18.4) - 2025-09-29
+
+### Other
+
+- update Cargo.lock dependencies
+
+## [0.18.3](https://github.com/syncable-dev/syncable-cli/compare/v0.18.2...v0.18.3) - 2025-09-12
+
+### Added
+
+- Removed Update Banner on json outputs
+
+## [0.18.2](https://github.com/syncable-dev/syncable-cli/compare/v0.18.1...v0.18.2) - 2025-09-11
+
+### Added
+
+- fixed vulnerability scan for js and analyzer
+
+## [0.18.1](https://github.com/syncable-dev/syncable-cli/compare/v0.18.0...v0.18.1) - 2025-09-11
+
+### Added
+
+- testing analyze
+
+## [0.18.0](https://github.com/syncable-dev/syncable-cli/compare/v0.17.0...v0.18.0) - 2025-09-11
+
+### Added
+
+- improved analyzer from false positives of voltagen and expo issues
+
+### Other
+
+- Merge pull request #159 from syncable-dev/develop
+
+## [0.17.0](https://github.com/syncable-dev/syncable-cli/compare/v0.16.0...v0.17.0) - 2025-09-11
+
+### Added
+
+- test trigger
+- improved telemtry and removed dublets
+
+### Fixed
+
+- .qodor folder for some reason wasn't corectly ignored
+
+### Other
+
+- added privacy-policy for telemetry
+- fixed vulnerabilities output for different languages
+
 ## [0.12.1](https://github.com/syncable-dev/syncable-cli/compare/v0.12.0...v0.12.1) - 2025-07-09
 
 ### Other
