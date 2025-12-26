@@ -10,7 +10,7 @@
 use crate::agent::ui::colors::ansi;
 use colored::Colorize;
 use rig::agent::CancelSignal;
-use rig::completion::{CompletionModel, CompletionResponse, Message};
+use rig::completion::{CompletionModel, CompletionResponse, Message, Usage};
 use rig::message::{AssistantContent, Reasoning};
 use std::io::{self, Write};
 use std::sync::Arc;
@@ -32,6 +32,28 @@ pub struct ToolCallState {
     pub status_ok: bool,
 }
 
+/// Accumulated usage from API responses
+#[derive(Debug, Default, Clone)]
+pub struct AccumulatedUsage {
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub total_tokens: u64,
+}
+
+impl AccumulatedUsage {
+    /// Add usage from a completion response
+    pub fn add(&mut self, usage: &Usage) {
+        self.input_tokens += usage.input_tokens;
+        self.output_tokens += usage.output_tokens;
+        self.total_tokens += usage.total_tokens;
+    }
+
+    /// Check if we have any actual usage data
+    pub fn has_data(&self) -> bool {
+        self.input_tokens > 0 || self.output_tokens > 0 || self.total_tokens > 0
+    }
+}
+
 /// Shared state for the display
 #[derive(Debug, Default)]
 pub struct DisplayState {
@@ -39,6 +61,8 @@ pub struct DisplayState {
     pub agent_messages: Vec<String>,
     pub current_tool_index: Option<usize>,
     pub last_expandable_index: Option<usize>,
+    /// Accumulated token usage from API responses
+    pub usage: AccumulatedUsage,
 }
 
 /// A hook that shows Claude Code style tool execution
@@ -57,6 +81,18 @@ impl ToolDisplayHook {
     /// Get the shared state for external access
     pub fn state(&self) -> Arc<Mutex<DisplayState>> {
         self.state.clone()
+    }
+
+    /// Get accumulated usage (blocks on lock)
+    pub async fn get_usage(&self) -> AccumulatedUsage {
+        let state = self.state.lock().await;
+        state.usage.clone()
+    }
+
+    /// Reset usage counter (e.g., at start of a new request batch)
+    pub async fn reset_usage(&self) {
+        let mut state = self.state.lock().await;
+        state.usage = AccumulatedUsage::default();
     }
 }
 
@@ -146,6 +182,9 @@ where
     ) -> impl std::future::Future<Output = ()> + Send {
         let state = self.state.clone();
 
+        // Capture usage from response for token tracking
+        let usage = response.usage.clone();
+
         // Check if response contains tool calls - if so, any text is "thinking"
         // If no tool calls, this is the final response - don't show as thinking
         let has_tool_calls = response.choice.iter().any(|content| {
@@ -187,6 +226,12 @@ where
             .collect();
 
         async move {
+            // Accumulate usage tokens from this response
+            {
+                let mut s = state.lock().await;
+                s.usage.add(&usage);
+            }
+
             // First, show reasoning content if available (GPT-5.2 thinking)
             if !reasoning_parts.is_empty() {
                 let thinking_text = reasoning_parts.join("\n");

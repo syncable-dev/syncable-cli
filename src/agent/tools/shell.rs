@@ -7,9 +7,17 @@
 //! - Kubernetes dry-run
 //!
 //! Includes interactive confirmation before execution and streaming output display.
+//!
+//! ## Output Truncation
+//!
+//! Shell outputs are truncated using prefix/suffix strategy:
+//! - First 200 lines + last 200 lines are kept
+//! - Middle content is summarized with line count
+//! - Long lines (>2000 chars) are truncated
 
 use crate::agent::ui::confirmation::{confirm_shell_command, AllowedCommands, ConfirmationResult};
 use crate::agent::ui::shell_output::StreamingShellOutput;
+use super::truncation::{truncate_shell_output, TruncationLimits};
 use rig::completion::ToolDefinition;
 use rig::tool::Tool;
 use serde::Deserialize;
@@ -51,6 +59,47 @@ const ALLOWED_COMMANDS: &[&str] = &[
     "shellcheck",
 ];
 
+/// Read-only commands allowed in plan mode
+/// These commands only read/analyze and don't modify the filesystem
+const READ_ONLY_COMMANDS: &[&str] = &[
+    // File listing/reading
+    "ls",
+    "cat",
+    "head",
+    "tail",
+    "less",
+    "more",
+    "wc",
+    "file",
+    // Search/find
+    "grep",
+    "find",
+    "locate",
+    "which",
+    "whereis",
+    // Git read-only
+    "git status",
+    "git log",
+    "git diff",
+    "git show",
+    "git branch",
+    "git remote",
+    "git tag",
+    // Directory navigation
+    "pwd",
+    "tree",
+    // System info
+    "uname",
+    "env",
+    "printenv",
+    "echo",
+    // Code analysis
+    "hadolint",
+    "tflint",
+    "yamllint",
+    "shellcheck",
+];
+
 #[derive(Debug, Deserialize)]
 pub struct ShellArgs {
     /// The command to execute
@@ -72,6 +121,8 @@ pub struct ShellTool {
     allowed_commands: Arc<AllowedCommands>,
     /// Whether to require confirmation before executing commands
     require_confirmation: bool,
+    /// Whether in read-only mode (plan mode) - only allows read-only commands
+    read_only: bool,
 }
 
 impl ShellTool {
@@ -80,6 +131,7 @@ impl ShellTool {
             project_path,
             allowed_commands: Arc::new(AllowedCommands::new()),
             require_confirmation: true,
+            read_only: false,
         }
     }
 
@@ -89,6 +141,7 @@ impl ShellTool {
             project_path,
             allowed_commands,
             require_confirmation: true,
+            read_only: false,
         }
     }
 
@@ -98,11 +151,69 @@ impl ShellTool {
         self
     }
 
+    /// Enable read-only mode (for plan mode) - only allows read-only commands
+    pub fn with_read_only(mut self, read_only: bool) -> Self {
+        self.read_only = read_only;
+        self
+    }
+
     fn is_command_allowed(&self, command: &str) -> bool {
         let trimmed = command.trim();
         ALLOWED_COMMANDS.iter().any(|allowed| {
             trimmed.starts_with(allowed) || trimmed == *allowed
         })
+    }
+
+    /// Check if a command is read-only (safe for plan mode)
+    fn is_read_only_command(&self, command: &str) -> bool {
+        let trimmed = command.trim();
+
+        // Block output redirection (writes to files)
+        if trimmed.contains(" > ") || trimmed.contains(" >> ") {
+            return false;
+        }
+
+        // Block dangerous commands explicitly
+        let dangerous = ["rm ", "rm\t", "rmdir", "mv ", "cp ", "mkdir ", "touch ", "chmod ", "chown ", "npm install", "yarn install", "pnpm install"];
+        for d in dangerous {
+            if trimmed.contains(d) {
+                return false;
+            }
+        }
+
+        // Split on && and || to check each command in chain
+        // Also split on | for pipes
+        let separators = ["&&", "||", "|", ";"];
+        let mut parts: Vec<&str> = vec![trimmed];
+        for sep in separators {
+            parts = parts.iter()
+                .flat_map(|p| p.split(sep))
+                .collect();
+        }
+
+        // Each part must be a read-only command
+        for part in parts {
+            let part = part.trim();
+            if part.is_empty() {
+                continue;
+            }
+
+            // Skip "cd" commands - they don't modify anything
+            if part.starts_with("cd ") || part == "cd" {
+                continue;
+            }
+
+            // Check if this part starts with a read-only command
+            let is_allowed = READ_ONLY_COMMANDS.iter().any(|allowed| {
+                part.starts_with(allowed) || part == *allowed
+            });
+
+            if !is_allowed {
+                return false;
+            }
+        }
+
+        true
     }
 
     fn validate_working_dir(&self, dir: &Option<String>) -> Result<PathBuf, ShellError> {
@@ -179,12 +290,27 @@ Use this to validate generated configurations:
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        // Validate command is allowed
-        if !self.is_command_allowed(&args.command) {
-            return Err(ShellError(format!(
-                "Command not allowed. Allowed commands are: {}",
-                ALLOWED_COMMANDS.join(", ")
-            )));
+        // In read-only mode (plan mode), only allow read-only commands
+        if self.read_only {
+            if !self.is_read_only_command(&args.command) {
+                let result = json!({
+                    "error": true,
+                    "reason": "Plan mode is active - only read-only commands allowed",
+                    "blocked_command": args.command,
+                    "allowed_commands": READ_ONLY_COMMANDS,
+                    "hint": "Exit plan mode (Shift+Tab) to run write commands"
+                });
+                return serde_json::to_string_pretty(&result)
+                    .map_err(|e| ShellError(format!("Failed to serialize: {}", e)));
+            }
+        } else {
+            // Validate command is allowed (standard mode)
+            if !self.is_command_allowed(&args.command) {
+                return Err(ShellError(format!(
+                    "Command not allowed. Allowed commands are: {}",
+                    ALLOWED_COMMANDS.join(", ")
+                )));
+            }
         }
 
         // Validate and get working directory
@@ -329,35 +455,22 @@ Use this to validate generated configurations:
         // Finalize display
         stream_display.finish(status.success(), status.code());
 
-        // Truncate output if too long
-        const MAX_OUTPUT: usize = 10000;
-        let stdout_truncated = if stdout_content.len() > MAX_OUTPUT {
-            format!(
-                "{}...\n[Output truncated, {} total bytes]",
-                &stdout_content[..MAX_OUTPUT],
-                stdout_content.len()
-            )
-        } else {
-            stdout_content
-        };
-
-        let stderr_truncated = if stderr_content.len() > MAX_OUTPUT {
-            format!(
-                "{}...\n[Output truncated, {} total bytes]",
-                &stderr_content[..MAX_OUTPUT],
-                stderr_content.len()
-            )
-        } else {
-            stderr_content
-        };
+        // Apply smart truncation: prefix + suffix strategy
+        // This keeps the first N and last M lines, hiding the middle
+        let limits = TruncationLimits::default();
+        let truncated = truncate_shell_output(&stdout_content, &stderr_content, &limits);
 
         let result = json!({
             "command": args.command,
             "working_dir": working_dir_str,
             "exit_code": status.code(),
             "success": status.success(),
-            "stdout": stdout_truncated,
-            "stderr": stderr_truncated
+            "stdout": truncated.stdout,
+            "stderr": truncated.stderr,
+            "stdout_total_lines": truncated.stdout_total_lines,
+            "stderr_total_lines": truncated.stderr_total_lines,
+            "stdout_truncated": truncated.stdout_truncated,
+            "stderr_truncated": truncated.stderr_truncated
         });
 
         serde_json::to_string_pretty(&result)

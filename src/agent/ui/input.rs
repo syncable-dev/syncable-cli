@@ -26,6 +26,8 @@ pub enum InputResult {
     Cancel,
     /// User wants to exit
     Exit,
+    /// User toggled planning mode (Shift+Tab)
+    TogglePlanMode,
 }
 
 /// Suggestion item
@@ -56,10 +58,12 @@ struct InputState {
     rendered_lines: usize,
     /// Number of wrapped lines the input text occupied in last render
     prev_wrapped_lines: usize,
+    /// Whether in plan mode (shows ★ indicator)
+    plan_mode: bool,
 }
 
 impl InputState {
-    fn new(project_path: PathBuf) -> Self {
+    fn new(project_path: PathBuf, plan_mode: bool) -> Self {
         Self {
             text: String::new(),
             cursor: 0,
@@ -70,6 +74,7 @@ impl InputState {
             project_path,
             rendered_lines: 0,
             prev_wrapped_lines: 1,
+            plan_mode,
         }
     }
 
@@ -475,8 +480,9 @@ fn render(state: &mut InputState, prompt: &str, stdout: &mut io::Stdout) -> io::
     let (term_width, _) = terminal::size().unwrap_or((80, 24));
     let term_width = term_width as usize;
 
-    // Calculate prompt length
-    let prompt_len = prompt.len() + 1; // +1 for space
+    // Calculate prompt length (include ★ prefix if in plan mode)
+    let mode_prefix_len = if state.plan_mode { 2 } else { 0 }; // "★ " = 2 chars
+    let prompt_len = prompt.len() + 1 + mode_prefix_len; // +1 for space after prompt
 
     // Move up to clear previous rendered lines, then to column 0
     if state.prev_wrapped_lines > 1 {
@@ -487,10 +493,14 @@ fn render(state: &mut InputState, prompt: &str, stdout: &mut io::Stdout) -> io::
     // Clear from cursor to end of screen
     execute!(stdout, Clear(ClearType::FromCursorDown))?;
 
-    // Print prompt and input text
+    // Print prompt and input text with mode indicator if in plan mode
     // In raw mode, \n doesn't return to column 0, so we need \r\n
     let display_text = state.text.replace('\n', "\r\n");
-    print!("{}{}{} {}", ansi::SUCCESS, prompt, ansi::RESET, display_text);
+    if state.plan_mode {
+        print!("{}★{} {}{}{} {}", ansi::ORANGE, ansi::RESET, ansi::SUCCESS, prompt, ansi::RESET, display_text);
+    } else {
+        print!("{}{}{} {}", ansi::SUCCESS, prompt, ansi::RESET, display_text);
+    }
     stdout.flush()?;
 
     // Calculate how many lines the text spans (counting newlines + wrapping)
@@ -587,7 +597,8 @@ fn clear_suggestions(num_lines: usize, stdout: &mut io::Stdout) -> io::Result<()
 }
 
 /// Read user input with Claude Code-style @ file picker
-pub fn read_input_with_file_picker(prompt: &str, project_path: &PathBuf) -> InputResult {
+/// If `plan_mode` is true, shows the plan mode indicator below the prompt
+pub fn read_input_with_file_picker(prompt: &str, project_path: &PathBuf, plan_mode: bool) -> InputResult {
     let mut stdout = io::stdout();
 
     // Enable raw mode
@@ -598,12 +609,16 @@ pub fn read_input_with_file_picker(prompt: &str, project_path: &PathBuf) -> Inpu
     // Enable bracketed paste mode to detect paste vs keypress
     let _ = execute!(stdout, EnableBracketedPaste);
 
-    // Print initial prompt and capture start row for absolute positioning
-    print!("{}{}{} ", ansi::SUCCESS, prompt, ansi::RESET);
+    // Print prompt with mode indicator inline (no separate line)
+    if plan_mode {
+        print!("{}★{} {}{}{} ", ansi::ORANGE, ansi::RESET, ansi::SUCCESS, prompt, ansi::RESET);
+    } else {
+        print!("{}{}{} ", ansi::SUCCESS, prompt, ansi::RESET);
+    }
     let _ = stdout.flush();
 
     // Create state after printing prompt so start_row is correct
-    let mut state = InputState::new(project_path.clone());
+    let mut state = InputState::new(project_path.clone(), plan_mode);
 
     let result = loop {
         match event::read() {
@@ -639,6 +654,12 @@ pub fn read_input_with_file_picker(prompt: &str, project_path: &PathBuf) -> Inpu
                         if state.showing_suggestions && state.selected >= 0 {
                             state.accept_selection();
                         }
+                    }
+                    KeyCode::BackTab => {
+                        // Shift+Tab toggles planning mode
+                        print!("\r\n");
+                        let _ = stdout.flush();
+                        break InputResult::TogglePlanMode;
                     }
                     KeyCode::Esc => {
                         if state.showing_suggestions {

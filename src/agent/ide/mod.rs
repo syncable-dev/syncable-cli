@@ -9,3 +9,4 @@ pub mod client;
 
 pub use client::{IdeClient, DiffResult, IdeError};
 pub use detect::{IdeInfo, detect_ide, get_ide_process_info};
+pub use types::{Diagnostic, DiagnosticSeverity, DiagnosticsResponse};
