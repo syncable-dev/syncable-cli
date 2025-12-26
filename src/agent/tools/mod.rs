@@ -52,9 +52,9 @@ mod truncation;
 pub use truncation::TruncationLimits;
 
 pub use analyze::AnalyzeTool;
+pub use dclint::DclintTool;
 pub use diagnostics::DiagnosticsTool;
 pub use file_ops::{ListDirectoryTool, ReadFileTool, WriteFileTool, WriteFilesTool};
-pub use dclint::DclintTool;
 pub use hadolint::HadolintTool;
 pub use plan::{PlanCreateTool, PlanListTool, PlanNextTool, PlanUpdateTool};
 pub use security::{SecurityScanTool, VulnerabilitiesTool};
