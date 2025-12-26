@@ -73,6 +73,12 @@ pub const SLASH_COMMANDS: &[SlashCommand] = &[
         auto_execute: true,
     },
     SlashCommand {
+        name: "plans",
+        alias: None,
+        description: "Show incomplete plans and continue",
+        auto_execute: true,
+    },
+    SlashCommand {
         name: "exit",
         alias: Some("q"),
         description: "Exit the chat",
@@ -80,13 +86,32 @@ pub const SLASH_COMMANDS: &[SlashCommand] = &[
     },
 ];
 
+/// Whether a token count is actual (from API) or approximate (estimated)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TokenCountType {
+    /// Actual count from API response
+    Actual,
+    /// Approximate count estimated from character count (~chars/4)
+    #[default]
+    Approximate,
+}
+
 /// Token usage statistics for /cost command
+/// Tracks actual vs approximate tokens similar to Forge
 #[derive(Debug, Default, Clone)]
 pub struct TokenUsage {
     /// Total prompt/input tokens
     pub prompt_tokens: u64,
-    /// Total completion/output tokens  
+    /// Total completion/output tokens
     pub completion_tokens: u64,
+    /// Cache read tokens (prompt caching)
+    pub cache_read_tokens: u64,
+    /// Cache creation tokens (prompt caching)
+    pub cache_creation_tokens: u64,
+    /// Thinking/reasoning tokens (extended thinking models)
+    pub thinking_tokens: u64,
+    /// Whether the counts are actual or approximate
+    pub count_type: TokenCountType,
     /// Number of requests made
     pub request_count: u64,
     /// Session start time
@@ -101,21 +126,98 @@ impl TokenUsage {
         }
     }
 
-    /// Add tokens from a request
-    pub fn add_request(&mut self, prompt: u64, completion: u64) {
+    /// Add actual tokens from API response
+    pub fn add_actual(&mut self, input: u64, output: u64) {
+        self.prompt_tokens += input;
+        self.completion_tokens += output;
+        self.request_count += 1;
+        // If we have any actual counts, mark as actual
+        if input > 0 || output > 0 {
+            self.count_type = TokenCountType::Actual;
+        }
+    }
+
+    /// Add actual tokens with cache and thinking info
+    pub fn add_actual_extended(
+        &mut self,
+        input: u64,
+        output: u64,
+        cache_read: u64,
+        cache_creation: u64,
+        thinking: u64,
+    ) {
+        self.prompt_tokens += input;
+        self.completion_tokens += output;
+        self.cache_read_tokens += cache_read;
+        self.cache_creation_tokens += cache_creation;
+        self.thinking_tokens += thinking;
+        self.request_count += 1;
+        self.count_type = TokenCountType::Actual;
+    }
+
+    /// Add estimated tokens (when API doesn't return actual counts)
+    /// Only updates if we don't already have actual counts for this session
+    pub fn add_estimated(&mut self, prompt: u64, completion: u64) {
         self.prompt_tokens += prompt;
         self.completion_tokens += completion;
         self.request_count += 1;
+        // Keep as Approximate unless we've received actual counts
+    }
+
+    /// Legacy method for compatibility - adds estimated tokens
+    pub fn add_request(&mut self, prompt: u64, completion: u64) {
+        self.add_estimated(prompt, completion);
     }
 
     /// Estimate token count from text (rough approximation: ~4 chars per token)
+    /// Matches Forge's approach: char_count.div_ceil(4)
     pub fn estimate_tokens(text: &str) -> u64 {
-        (text.len() as f64 / 4.0).ceil() as u64
+        text.len().div_ceil(4) as u64
     }
 
-    /// Get total tokens
+    /// Get total tokens (input + output, excluding cache/thinking)
     pub fn total_tokens(&self) -> u64 {
         self.prompt_tokens + self.completion_tokens
+    }
+
+    /// Get total tokens including cache reads (effective context size)
+    pub fn total_with_cache(&self) -> u64 {
+        self.prompt_tokens + self.completion_tokens + self.cache_read_tokens
+    }
+
+    /// Format total tokens for display (with ~ prefix if approximate)
+    pub fn format_total(&self) -> String {
+        match self.count_type {
+            TokenCountType::Actual => format!("{}", self.total_tokens()),
+            TokenCountType::Approximate => format!("~{}", self.total_tokens()),
+        }
+    }
+
+    /// Get a short display string like Forge: "~1.2k" or "15k"
+    pub fn format_compact(&self) -> String {
+        let total = self.total_tokens();
+        let prefix = match self.count_type {
+            TokenCountType::Actual => "",
+            TokenCountType::Approximate => "~",
+        };
+
+        if total >= 1_000_000 {
+            format!("{}{:.1}M", prefix, total as f64 / 1_000_000.0)
+        } else if total >= 1_000 {
+            format!("{}{:.1}k", prefix, total as f64 / 1_000.0)
+        } else {
+            format!("{}{}", prefix, total)
+        }
+    }
+
+    /// Check if we have cache hits (prompt caching is working)
+    pub fn has_cache_hits(&self) -> bool {
+        self.cache_read_tokens > 0
+    }
+
+    /// Check if we have thinking tokens (extended thinking enabled)
+    pub fn has_thinking(&self) -> bool {
+        self.thinking_tokens > 0
     }
 
     /// Get session duration
@@ -151,13 +253,19 @@ impl TokenUsage {
         let duration = self.session_duration();
         let (input_cost, output_cost, total_cost) = self.estimate_cost(model);
 
+        // Determine accuracy indicator
+        let accuracy_note = match self.count_type {
+            TokenCountType::Actual => format!("{}actual counts{}", ansi::SUCCESS, ansi::RESET),
+            TokenCountType::Approximate => format!("{}~approximate{}", ansi::DIM, ansi::RESET),
+        };
+
         println!();
         println!("  {}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{}", ansi::PURPLE, ansi::RESET);
         println!("  {}💰 Session Cost & Usage{}", ansi::PURPLE, ansi::RESET);
         println!("  {}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{}", ansi::PURPLE, ansi::RESET);
         println!();
         println!("  {}Model:{} {}", ansi::DIM, ansi::RESET, model);
-        println!("  {}Duration:{} {:02}:{:02}:{:02}", 
+        println!("  {}Duration:{} {:02}:{:02}:{:02}",
             ansi::DIM, ansi::RESET,
             duration.as_secs() / 3600,
             (duration.as_secs() % 3600) / 60,
@@ -165,17 +273,47 @@ impl TokenUsage {
         );
         println!("  {}Requests:{} {}", ansi::DIM, ansi::RESET, self.request_count);
         println!();
-        println!("  {}Tokens:{}", ansi::CYAN, ansi::RESET);
-        println!("    Input:  {:>10} tokens", self.prompt_tokens);
-        println!("    Output: {:>10} tokens", self.completion_tokens);
-        println!("    {}Total:  {:>10} tokens{}", ansi::BOLD, self.total_tokens(), ansi::RESET);
+        println!("  {}Tokens{} ({}){}:", ansi::CYAN, ansi::RESET, accuracy_note, ansi::RESET);
+        println!("    Input:    {:>10} tokens", self.prompt_tokens);
+        println!("    Output:   {:>10} tokens", self.completion_tokens);
+
+        // Show cache tokens if present
+        if self.cache_read_tokens > 0 || self.cache_creation_tokens > 0 {
+            println!();
+            println!("  {}Cache:{}", ansi::CYAN, ansi::RESET);
+            if self.cache_read_tokens > 0 {
+                println!("    Read:     {:>10} tokens {}(saved){}", self.cache_read_tokens, ansi::SUCCESS, ansi::RESET);
+            }
+            if self.cache_creation_tokens > 0 {
+                println!("    Created:  {:>10} tokens", self.cache_creation_tokens);
+            }
+        }
+
+        // Show thinking tokens if present
+        if self.thinking_tokens > 0 {
+            println!();
+            println!("  {}Thinking:{}", ansi::CYAN, ansi::RESET);
+            println!("    Reasoning:{:>10} tokens", self.thinking_tokens);
+        }
+
+        println!();
+        println!("    {}Total:    {:>10} tokens{}", ansi::BOLD, self.format_total(), ansi::RESET);
         println!();
         println!("  {}Estimated Cost:{}", ansi::SUCCESS, ansi::RESET);
         println!("    Input:  ${:.4}", input_cost);
         println!("    Output: ${:.4}", output_cost);
         println!("    {}Total:  ${:.4}{}", ansi::BOLD, total_cost, ansi::RESET);
         println!();
-        println!("  {}(Estimates based on public API pricing){}", ansi::DIM, ansi::RESET);
+
+        // Show note about accuracy
+        match self.count_type {
+            TokenCountType::Actual => {
+                println!("  {}(Based on actual API usage){}", ansi::DIM, ansi::RESET);
+            }
+            TokenCountType::Approximate => {
+                println!("  {}(Estimates based on ~4 chars/token){}", ansi::DIM, ansi::RESET);
+            }
+        }
         println!();
     }
 }

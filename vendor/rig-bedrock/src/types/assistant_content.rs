@@ -17,6 +17,19 @@ pub struct AwsConverseOutput(pub InternalConverseOutput);
 impl TryFrom<AwsConverseOutput> for completion::CompletionResponse<AwsConverseOutput> {
     type Error = CompletionError;
 
+    /// Converts AWS Bedrock Converse API output to a Rig CompletionResponse.
+    ///
+    /// This preserves ALL content blocks from the assistant response including:
+    /// - Text content
+    /// - ToolCall/ToolUse blocks
+    /// - Reasoning blocks (for extended thinking)
+    ///
+    /// When extended thinking is enabled, Claude returns content in order:
+    /// [Reasoning, ToolCall] or [Reasoning, Text]
+    ///
+    /// AWS Bedrock requires that when replaying conversation history with thinking enabled,
+    /// assistant messages MUST start with thinking/reasoning blocks before any tool_use blocks.
+    /// By preserving the full choice, we ensure proper conversation history replay.
     fn try_from(value: AwsConverseOutput) -> Result<Self, Self::Error> {
         let message: RigMessage = value
             .to_owned()
@@ -51,14 +64,6 @@ impl TryFrom<AwsConverseOutput> for completion::CompletionResponse<AwsConverseOu
             })
             .unwrap_or_default();
 
-        // FIX: Return the full choice as-is, preserving ALL content blocks including Reasoning.
-        // The original code incorrectly rebuilt the response with ONLY the tool call, dropping
-        // Reasoning blocks. This caused extended thinking to fail when tool calls were present.
-        //
-        // When Claude's extended thinking is enabled, the response contains:
-        //   [Reasoning, ToolCall] or [Reasoning, Text]
-        // Both must be preserved for proper conversation history replay.
-        // This matches how the Anthropic provider handles responses.
         Ok(completion::CompletionResponse {
             choice,
             usage,
@@ -102,6 +107,42 @@ impl TryFrom<aws_bedrock::ContentBlock> for RigAssistantContent {
     }
 }
 
+/// Sanitize tool name to match Bedrock's required pattern: [a-zA-Z0-9_-]+
+/// Invalid characters are replaced with underscores.
+/// This handles cases where the model hallucinates invalid tool names like "$FUNCTION_NAME".
+fn sanitize_tool_name(name: &str) -> String {
+    if name.is_empty() {
+        return "unknown_tool".to_string();
+    }
+
+    let sanitized: String = name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+
+    // Log warning if name was sanitized
+    if sanitized != name {
+        tracing::warn!(
+            original_name = %name,
+            sanitized_name = %sanitized,
+            "Tool name contained invalid characters and was sanitized for Bedrock API"
+        );
+    }
+
+    // Ensure the result isn't empty after sanitization
+    if sanitized.is_empty() || sanitized.chars().all(|c| c == '_') {
+        return "unknown_tool".to_string();
+    }
+
+    sanitized
+}
+
 impl TryFrom<RigAssistantContent> for aws_bedrock::ContentBlock {
     type Error = CompletionError;
 
@@ -109,11 +150,13 @@ impl TryFrom<RigAssistantContent> for aws_bedrock::ContentBlock {
         match value.0 {
             AssistantContent::Text(text) => Ok(aws_bedrock::ContentBlock::Text(text.text)),
             AssistantContent::ToolCall(tool_call) => {
+                // Sanitize tool name to match Bedrock's pattern: [a-zA-Z0-9_-]+
+                let sanitized_name = sanitize_tool_name(&tool_call.function.name);
                 let doc: AwsDocument = tool_call.function.arguments.into();
                 Ok(aws_bedrock::ContentBlock::ToolUse(
                     aws_bedrock::ToolUseBlock::builder()
                         .tool_use_id(tool_call.id)
-                        .name(tool_call.function.name)
+                        .name(sanitized_name)
                         .input(doc.0)
                         .build()
                         .map_err(|e| CompletionError::ProviderError(e.to_string()))?,
@@ -308,5 +351,116 @@ mod tests {
             }
             _ => panic!("Expected ContentBlock::ReasoningContent"),
         }
+    }
+
+    #[test]
+    fn aws_converse_output_preserves_reasoning_with_tool_call() {
+        // Test that when extended thinking is enabled and Claude returns both
+        // Reasoning and ToolCall, BOTH are preserved in the response.
+        // This is critical for AWS Bedrock's requirement that assistant messages
+        // must start with thinking blocks when thinking is enabled.
+
+        // Build a message with both Reasoning and ToolUse content blocks
+        let reasoning_block = aws_bedrock::ReasoningTextBlock::builder()
+            .text("Let me think about this...")
+            .signature("sig_test_123")
+            .build()
+            .unwrap();
+
+        let tool_use_block = aws_bedrock::ToolUseBlock::builder()
+            .tool_use_id("tool_123")
+            .name("analyze_project")
+            .input(aws_smithy_types::Document::Object(std::collections::HashMap::new()))
+            .build()
+            .unwrap();
+
+        let message = aws_bedrock::Message::builder()
+            .role(aws_bedrock::ConversationRole::Assistant)
+            .content(aws_bedrock::ContentBlock::ReasoningContent(
+                aws_bedrock::ReasoningContentBlock::ReasoningText(reasoning_block),
+            ))
+            .content(aws_bedrock::ContentBlock::ToolUse(tool_use_block))
+            .build()
+            .unwrap();
+
+        let output = aws_bedrock::ConverseOutput::Message(message);
+        let converse_output =
+            aws_sdk_bedrockruntime::operation::converse::ConverseOutput::builder()
+                .output(output)
+                .stop_reason(aws_bedrock::StopReason::ToolUse)
+                .build()
+                .unwrap();
+
+        let converse_output: Result<InternalConverseOutput, TypeConversionError> =
+            converse_output.try_into();
+        assert!(converse_output.is_ok());
+
+        let completion: Result<completion::CompletionResponse<AwsConverseOutput>, _> =
+            AwsConverseOutput(converse_output.unwrap()).try_into();
+        assert!(completion.is_ok());
+
+        let completion = completion.unwrap();
+
+        // Verify we have BOTH content blocks preserved
+        let contents: Vec<_> = completion.choice.iter().collect();
+        assert_eq!(contents.len(), 2, "Expected both Reasoning and ToolCall to be preserved");
+
+        // First should be Reasoning
+        match &contents[0] {
+            AssistantContent::Reasoning(reasoning) => {
+                assert_eq!(reasoning.reasoning, vec!["Let me think about this..."]);
+                assert_eq!(reasoning.signature, Some("sig_test_123".to_string()));
+            }
+            _ => panic!("Expected first content to be Reasoning, got {:?}", contents[0]),
+        }
+
+        // Second should be ToolCall
+        match &contents[1] {
+            AssistantContent::ToolCall(tool_call) => {
+                assert_eq!(tool_call.id, "tool_123");
+                assert_eq!(tool_call.function.name, "analyze_project");
+            }
+            _ => panic!("Expected second content to be ToolCall, got {:?}", contents[1]),
+        }
+    }
+
+    #[test]
+    fn test_sanitize_tool_name_valid() {
+        use super::sanitize_tool_name;
+
+        // Valid names should pass through unchanged
+        assert_eq!(sanitize_tool_name("read_file"), "read_file");
+        assert_eq!(sanitize_tool_name("analyze-project"), "analyze-project");
+        assert_eq!(sanitize_tool_name("tool123"), "tool123");
+        assert_eq!(sanitize_tool_name("My_Tool-Name_123"), "My_Tool-Name_123");
+    }
+
+    #[test]
+    fn test_sanitize_tool_name_invalid_chars() {
+        use super::sanitize_tool_name;
+
+        // Invalid characters should be replaced with underscores
+        assert_eq!(sanitize_tool_name("$FUNCTION_NAME"), "_FUNCTION_NAME");
+        assert_eq!(sanitize_tool_name("tool.name"), "tool_name");
+        assert_eq!(sanitize_tool_name("tool name"), "tool_name");
+        assert_eq!(sanitize_tool_name("tool@name#test"), "tool_name_test");
+        assert_eq!(sanitize_tool_name("hello/world"), "hello_world");
+    }
+
+    #[test]
+    fn test_sanitize_tool_name_edge_cases() {
+        use super::sanitize_tool_name;
+
+        // Empty string
+        assert_eq!(sanitize_tool_name(""), "unknown_tool");
+
+        // All invalid characters
+        assert_eq!(sanitize_tool_name("$@#!"), "unknown_tool");
+
+        // Single valid character
+        assert_eq!(sanitize_tool_name("a"), "a");
+
+        // Unicode characters get replaced
+        assert_eq!(sanitize_tool_name("tøøl"), "t__l");
     }
 }

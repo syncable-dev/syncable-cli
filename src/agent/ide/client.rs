@@ -498,6 +498,64 @@ impl IdeClient {
         }
     }
 
+    /// Get diagnostics from the IDE's language servers
+    ///
+    /// This queries the IDE for all diagnostic messages (errors, warnings, etc.)
+    /// from the active language servers (rust-analyzer, ESLint, TypeScript, etc.)
+    ///
+    /// If `file_path` is provided, returns diagnostics only for that file.
+    /// Otherwise returns all diagnostics across the workspace.
+    pub async fn get_diagnostics(&self, file_path: Option<&str>) -> Result<DiagnosticsResponse, IdeError> {
+        if !self.is_connected() {
+            return Err(IdeError::ConnectionFailed("Not connected to IDE".to_string()));
+        }
+
+        let params = serde_json::to_value(ToolCallParams {
+            name: "getDiagnostics".to_string(),
+            arguments: serde_json::to_value(GetDiagnosticsArgs {
+                uri: file_path.map(|p| format!("file://{}", p)),
+            })
+            .unwrap(),
+        })
+        .unwrap();
+
+        let response = self.send_request("tools/call", params).await?;
+
+        // Parse the response
+        if let Some(result) = response.result {
+            if let Ok(tool_result) = serde_json::from_value::<ToolCallResult>(result) {
+                // Look for the text content with diagnostics
+                for content in tool_result.content {
+                    if content.content_type == "text" {
+                        if let Some(text) = content.text {
+                            // Try to parse as DiagnosticsResponse
+                            if let Ok(diag_response) = serde_json::from_str::<DiagnosticsResponse>(&text) {
+                                return Ok(diag_response);
+                            }
+                            // Try parsing as raw array of diagnostics
+                            if let Ok(diagnostics) = serde_json::from_str::<Vec<Diagnostic>>(&text) {
+                                let total_errors = diagnostics.iter().filter(|d| d.severity == DiagnosticSeverity::Error).count() as u32;
+                                let total_warnings = diagnostics.iter().filter(|d| d.severity == DiagnosticSeverity::Warning).count() as u32;
+                                return Ok(DiagnosticsResponse {
+                                    diagnostics,
+                                    total_errors,
+                                    total_warnings,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // No diagnostics found - return empty response
+        Ok(DiagnosticsResponse {
+            diagnostics: Vec::new(),
+            total_errors: 0,
+            total_warnings: 0,
+        })
+    }
+
     /// Disconnect from the IDE
     pub async fn disconnect(&mut self) {
         // Close any pending diffs

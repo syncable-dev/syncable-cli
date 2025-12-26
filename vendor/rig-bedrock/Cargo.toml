@@ -1,0 +1,26 @@
+[package]
+name = "rig-bedrock"
+version = "0.3.9"
+edition = "2024"
+license = "MIT"
+readme = "README.md"
+description = "AWS Bedrock model provider for Rig integration (vendored with extended thinking fix)"
+
+[dependencies]
+async-stream = "0.3"
+aws-config = { version = "1", features = ["behavior-version-latest"] }
+aws-sdk-bedrockruntime = "1"
+aws-smithy-types = "1"
+base64 = "0.22"
+rig-core = { version = "0.27", default-features = false, features = ["image"] }
+schemars = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+anyhow = "1"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+tracing-subscriber = "0.3"
