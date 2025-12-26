@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
 
-use crate::analyzer::dclint::{lint, lint_file, DclintConfig, LintResult, Severity, RuleCategory};
+use crate::analyzer::dclint::{DclintConfig, LintResult, RuleCategory, Severity, lint, lint_file};
 
 /// Arguments for the dclint tool
 #[derive(Debug, Deserialize)]
@@ -83,21 +83,43 @@ impl DclintTool {
     /// Get actionable fix recommendation for a rule
     fn get_fix_recommendation(code: &str) -> &'static str {
         match code {
-            "DCL001" => "Remove either the 'build' or 'image' field, or add 'pull_policy' if both are intentional.",
-            "DCL002" => "Use unique container names for each service, or remove explicit container_name to use auto-generated names.",
-            "DCL003" => "Use different host ports for each service, or bind to different interfaces (e.g., 127.0.0.1:8080:80).",
+            "DCL001" => {
+                "Remove either the 'build' or 'image' field, or add 'pull_policy' if both are intentional."
+            }
+            "DCL002" => {
+                "Use unique container names for each service, or remove explicit container_name to use auto-generated names."
+            }
+            "DCL003" => {
+                "Use different host ports for each service, or bind to different interfaces (e.g., 127.0.0.1:8080:80)."
+            }
             "DCL004" => "Remove quotes from volume paths. YAML doesn't require quotes for paths.",
-            "DCL005" => "Add explicit interface binding, e.g., '127.0.0.1:8080:80' instead of '8080:80' for local-only access.",
-            "DCL006" => "Remove the 'version' field. Docker Compose now infers the version automatically.",
+            "DCL005" => {
+                "Add explicit interface binding, e.g., '127.0.0.1:8080:80' instead of '8080:80' for local-only access."
+            }
+            "DCL006" => {
+                "Remove the 'version' field. Docker Compose now infers the version automatically."
+            }
             "DCL007" => "Add 'name: myproject' at the top level for explicit project naming.",
-            "DCL008" => "Quote port mappings to prevent YAML parsing issues, e.g., \"8080:80\" instead of 8080:80.",
-            "DCL009" => "Use lowercase container names with only letters, numbers, hyphens, and underscores.",
-            "DCL010" => "Sort dependencies alphabetically for better readability and easier merges.",
-            "DCL011" => "Use explicit version tags (e.g., nginx:1.25) instead of implicit latest or untagged images.",
-            "DCL012" => "Reorder service keys to follow convention: image, build, container_name, ports, volumes, environment, etc.",
+            "DCL008" => {
+                "Quote port mappings to prevent YAML parsing issues, e.g., \"8080:80\" instead of 8080:80."
+            }
+            "DCL009" => {
+                "Use lowercase container names with only letters, numbers, hyphens, and underscores."
+            }
+            "DCL010" => {
+                "Sort dependencies alphabetically for better readability and easier merges."
+            }
+            "DCL011" => {
+                "Use explicit version tags (e.g., nginx:1.25) instead of implicit latest or untagged images."
+            }
+            "DCL012" => {
+                "Reorder service keys to follow convention: image, build, container_name, ports, volumes, environment, etc."
+            }
             "DCL013" => "Sort port mappings alphabetically/numerically for consistency.",
             "DCL014" => "Sort services alphabetically for better navigation and easier merges.",
-            "DCL015" => "Reorder top-level keys: name, services, networks, volumes, configs, secrets.",
+            "DCL015" => {
+                "Reorder top-level keys: name, services, networks, volumes, configs, secrets."
+            }
             _ => "Review the rule documentation for specific guidance.",
         }
     }
@@ -123,7 +145,10 @@ impl DclintTool {
                 "DCL015" => "top-level-properties-order-rule",
                 _ => return String::new(),
             };
-            format!("https://github.com/zavoloklom/docker-compose-linter/blob/main/docs/rules/{}.md", rule_name)
+            format!(
+                "https://github.com/zavoloklom/docker-compose-linter/blob/main/docs/rules/{}.md",
+                rule_name
+            )
         } else {
             String::new()
         }
@@ -132,41 +157,54 @@ impl DclintTool {
     /// Format result optimized for agent decision-making
     fn format_result(result: &LintResult, filename: &str) -> String {
         // Categorize and enrich failures
-        let enriched_failures: Vec<serde_json::Value> = result.failures.iter().map(|f| {
-            let code = f.code.as_str();
-            let priority = Self::get_priority(f.severity, f.category);
+        let enriched_failures: Vec<serde_json::Value> = result
+            .failures
+            .iter()
+            .map(|f| {
+                let code = f.code.as_str();
+                let priority = Self::get_priority(f.severity, f.category);
 
-            json!({
-                "code": code,
-                "ruleName": f.rule_name,
-                "severity": f.severity.as_str(),
-                "priority": priority,
-                "category": f.category.as_str(),
-                "message": f.message,
-                "line": f.line,
-                "column": f.column,
-                "fixable": f.fixable,
-                "fix": Self::get_fix_recommendation(code),
-                "docs": Self::get_rule_url(code),
+                json!({
+                    "code": code,
+                    "ruleName": f.rule_name,
+                    "severity": f.severity.as_str(),
+                    "priority": priority,
+                    "category": f.category.as_str(),
+                    "message": f.message,
+                    "line": f.line,
+                    "column": f.column,
+                    "fixable": f.fixable,
+                    "fix": Self::get_fix_recommendation(code),
+                    "docs": Self::get_rule_url(code),
+                })
             })
-        }).collect();
+            .collect();
 
         // Group by priority for agent decision ordering
-        let critical: Vec<_> = enriched_failures.iter()
+        let critical: Vec<_> = enriched_failures
+            .iter()
             .filter(|f| f["priority"] == "critical")
-            .cloned().collect();
-        let high: Vec<_> = enriched_failures.iter()
+            .cloned()
+            .collect();
+        let high: Vec<_> = enriched_failures
+            .iter()
             .filter(|f| f["priority"] == "high")
-            .cloned().collect();
-        let medium: Vec<_> = enriched_failures.iter()
+            .cloned()
+            .collect();
+        let medium: Vec<_> = enriched_failures
+            .iter()
             .filter(|f| f["priority"] == "medium")
-            .cloned().collect();
-        let low: Vec<_> = enriched_failures.iter()
+            .cloned()
+            .collect();
+        let low: Vec<_> = enriched_failures
+            .iter()
             .filter(|f| f["priority"] == "low")
-            .cloned().collect();
+            .cloned()
+            .collect();
 
         // Group by category for thematic fixes
-        let mut by_category: std::collections::HashMap<&str, Vec<_>> = std::collections::HashMap::new();
+        let mut by_category: std::collections::HashMap<&str, Vec<_>> =
+            std::collections::HashMap::new();
         for f in &enriched_failures {
             let cat = f["category"].as_str().unwrap_or("other");
             by_category.entry(cat).or_default().push(f.clone());
@@ -188,7 +226,10 @@ impl DclintTool {
         };
 
         // Count fixable issues
-        let fixable_count = enriched_failures.iter().filter(|f| f["fixable"] == true).count();
+        let fixable_count = enriched_failures
+            .iter()
+            .filter(|f| f["fixable"] == true)
+            .count();
 
         // Build agent-optimized output
         let mut output = json!({
@@ -222,14 +263,18 @@ impl DclintTool {
 
         // Add quick fixes summary for agent
         if !enriched_failures.is_empty() {
-            let quick_fixes: Vec<String> = enriched_failures.iter()
+            let quick_fixes: Vec<String> = enriched_failures
+                .iter()
                 .filter(|f| f["priority"] == "critical" || f["priority"] == "high")
                 .take(5)
-                .map(|f| format!("Line {}: {} - {}",
-                    f["line"],
-                    f["code"].as_str().unwrap_or(""),
-                    f["fix"].as_str().unwrap_or("")
-                ))
+                .map(|f| {
+                    format!(
+                        "Line {}: {} - {}",
+                        f["line"],
+                        f["code"].as_str().unwrap_or(""),
+                        f["fix"].as_str().unwrap_or("")
+                    )
+                })
                 .collect();
 
             if !quick_fixes.is_empty() {
@@ -364,12 +409,15 @@ mod tests {
         let tool = DclintTool::new(temp_dir());
         let args = DclintArgs {
             compose_file: None,
-            content: Some(r#"
+            content: Some(
+                r#"
 services:
   web:
     build: .
     image: nginx:latest
-"#.to_string()),
+"#
+                .to_string(),
+            ),
             ignore: vec![],
             threshold: None,
             fix: false,
@@ -392,12 +440,15 @@ services:
         let tool = DclintTool::new(temp_dir());
         let args = DclintArgs {
             compose_file: None,
-            content: Some(r#"
+            content: Some(
+                r#"
 version: "3.8"
 services:
   web:
     image: nginx:latest
-"#.to_string()),
+"#
+                .to_string(),
+            ),
             ignore: vec!["DCL006".to_string(), "DCL011".to_string()],
             threshold: None,
             fix: false,
@@ -424,14 +475,18 @@ services:
         let temp = temp_dir().join("dclint_test");
         fs::create_dir_all(&temp).unwrap();
         let compose_file = temp.join("docker-compose.yml");
-        fs::write(&compose_file, r#"
+        fs::write(
+            &compose_file,
+            r#"
 name: myproject
 services:
   web:
     image: nginx:1.25
     ports:
       - "8080:80"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let tool = DclintTool::new(temp.clone());
         let args = DclintArgs {
@@ -481,7 +536,17 @@ services:
         assert!(parsed["success"].as_bool().unwrap_or(false));
         assert!(parsed["decision_context"].is_string());
         // Should not have critical or high priority issues
-        assert_eq!(parsed["summary"]["by_priority"]["critical"].as_u64().unwrap_or(99), 0);
-        assert_eq!(parsed["summary"]["by_priority"]["high"].as_u64().unwrap_or(99), 0);
+        assert_eq!(
+            parsed["summary"]["by_priority"]["critical"]
+                .as_u64()
+                .unwrap_or(99),
+            0
+        );
+        assert_eq!(
+            parsed["summary"]["by_priority"]["high"]
+                .as_u64()
+                .unwrap_or(99),
+            0
+        );
     }
 }
