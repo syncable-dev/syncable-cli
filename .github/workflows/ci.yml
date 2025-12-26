@@ -60,8 +60,13 @@ jobs:
   security:
     name: Security Audit
     runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # Only fail on actual vulnerabilities, not unmaintained warnings
+          ignore: RUSTSEC-2020-0163,RUSTSEC-2024-0320,RUSTSEC-2025-0057,RUSTSEC-2025-0074,RUSTSEC-2025-0075,RUSTSEC-2025-0080,RUSTSEC-2025-0081,RUSTSEC-2025-0098,RUSTSEC-2025-0104,RUSTSEC-2025-0134
