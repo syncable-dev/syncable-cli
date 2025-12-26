@@ -604,20 +604,37 @@ fn extract_environment_from_filename(path: &PathBuf) -> Option<String> {
     if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
         let filename_lower = filename.to_lowercase();
 
-        // Extract environment from patterns like "dockerfile.dev", "docker-compose.prod.yml"
-        if let Some(dot_pos) = filename_lower.rfind('.') {
-            let before_ext = &filename_lower[..dot_pos];
+        // Helper to map env shorthand to full name
+        let map_env = |env: &str| -> Option<String> {
+            match env {
+                "dev" | "development" | "local" => Some("development".to_string()),
+                "prod" | "production" => Some("production".to_string()),
+                "test" | "testing" => Some("test".to_string()),
+                "stage" | "staging" => Some("staging".to_string()),
+                _ if env.len() <= 10 && !env.is_empty() => Some(env.to_string()),
+                _ => None,
+            }
+        };
+
+        // Handle patterns like "docker-compose.prod.yml" (env between two dots)
+        if let Some(last_dot) = filename_lower.rfind('.') {
+            let before_ext = &filename_lower[..last_dot];
             if let Some(env_dot_pos) = before_ext.rfind('.') {
                 let env = &before_ext[env_dot_pos + 1..];
+                if let Some(result) = map_env(env) {
+                    return Some(result);
+                }
+            }
+        }
 
-                // Common environment names
-                match env {
-                    "dev" | "development" | "local" => return Some("development".to_string()),
-                    "prod" | "production" => return Some("production".to_string()),
-                    "test" | "testing" => return Some("test".to_string()),
-                    "stage" | "staging" => return Some("staging".to_string()),
-                    _ if env.len() <= 10 => return Some(env.to_string()), // Reasonable env name length
-                    _ => {}
+        // Handle patterns like "Dockerfile.dev" (env is the extension itself)
+        if let Some(dot_pos) = filename_lower.rfind('.') {
+            let ext = &filename_lower[dot_pos + 1..];
+            // Only if the base is dockerfile/docker-compose related
+            let base = &filename_lower[..dot_pos];
+            if base.contains("dockerfile") || base.contains("docker-compose") || base == "compose" {
+                if let Some(result) = map_env(ext) {
+                    return Some(result);
                 }
             }
         }
