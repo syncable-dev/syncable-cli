@@ -7,10 +7,18 @@
 //! - Listing directories (ListDirectoryTool)
 //!
 //! File write operations include interactive diff confirmation before applying changes.
+//!
+//! ## Truncation Limits
+//!
+//! Tool outputs are truncated to prevent context overflow:
+//! - File reads: Max 2000 lines (use start_line/end_line for specific sections)
+//! - Directory listings: Max 500 entries
+//! - Long lines: Truncated at 2000 characters
 
 use crate::agent::ide::IdeClient;
 use crate::agent::ui::confirmation::ConfirmationResult;
 use crate::agent::ui::diff::{confirm_file_write, confirm_file_write_with_ide};
+use super::truncation::{truncate_file_content, truncate_dir_listing, TruncationLimits};
 use rig::completion::ToolDefinition;
 use rig::tool::Tool;
 use serde::{Deserialize, Serialize};
@@ -104,7 +112,7 @@ impl Tool for ReadFileTool {
 
         let metadata = fs::metadata(&file_path)
             .map_err(|e| ReadFileError(format!("Cannot read file: {}", e)))?;
-        
+
         const MAX_SIZE: u64 = 1024 * 1024;
         if metadata.len() > MAX_SIZE {
             return Ok(json!({
@@ -116,10 +124,11 @@ impl Tool for ReadFileTool {
             .map_err(|e| ReadFileError(format!("Failed to read file: {}", e)))?;
 
         let output = if let Some(start) = args.start_line {
+            // User requested specific line range - respect it exactly
             let lines: Vec<&str> = content.lines().collect();
             let start_idx = (start as usize).saturating_sub(1);
             let end_idx = args.end_line.map(|e| (e as usize).min(lines.len())).unwrap_or(lines.len());
-            
+
             if start_idx >= lines.len() {
                 return Ok(json!({
                     "error": format!("Start line {} exceeds file length ({})", start, lines.len())
@@ -142,10 +151,16 @@ impl Tool for ReadFileTool {
                 "content": selected.join("\n")
             })
         } else {
+            // Full file read - apply truncation to prevent context overflow
+            let limits = TruncationLimits::default();
+            let truncated = truncate_file_content(&content, &limits);
+
             json!({
                 "file": args.path,
-                "total_lines": content.lines().count(),
-                "content": content
+                "total_lines": truncated.total_lines,
+                "lines_returned": truncated.returned_lines,
+                "truncated": truncated.was_truncated,
+                "content": truncated.content
             })
         };
 
@@ -285,11 +300,26 @@ impl Tool for ListDirectoryTool {
         let mut entries = Vec::new();
         self.list_entries(&dir_path, &dir_path, recursive, 0, 3, &mut entries)?;
 
-        let result = json!({
-            "path": path_str,
-            "entries": entries,
-            "total_count": entries.len()
-        });
+        // Apply truncation to prevent context overflow
+        let limits = TruncationLimits::default();
+        let truncated = truncate_dir_listing(entries, limits.max_dir_entries);
+
+        let result = if truncated.was_truncated {
+            json!({
+                "path": path_str,
+                "entries": truncated.entries,
+                "entries_returned": truncated.entries.len(),
+                "total_count": truncated.total_entries,
+                "truncated": true,
+                "note": format!("Showing first {} of {} entries. Use a more specific path to see others.", truncated.entries.len(), truncated.total_entries)
+            })
+        } else {
+            json!({
+                "path": path_str,
+                "entries": truncated.entries,
+                "total_count": truncated.total_entries
+            })
+        };
 
         serde_json::to_string_pretty(&result)
             .map_err(|e| ListDirectoryError(format!("Failed to serialize: {}", e)))
@@ -530,27 +560,42 @@ The tool will create parent directories automatically if they don't exist."#.to_
                     self.allowed_patterns.allow(pattern);
                 }
                 ConfirmationResult::Modify(feedback) => {
-                    // Return feedback to the agent
+                    // Return feedback to the agent - make it VERY clear to stop
                     let result = json!({
                         "cancelled": true,
+                        "STOP": "Do NOT create this file or any similar files. Wait for user instruction.",
                         "reason": "User requested changes",
                         "user_feedback": feedback,
-                        "original_path": args.path
+                        "original_path": args.path,
+                        "action_required": "Read the user_feedback and respond accordingly. Do NOT try to create alternative files."
                     });
                     return serde_json::to_string_pretty(&result)
                         .map_err(|e| WriteFileError(format!("Failed to serialize: {}", e)));
                 }
                 ConfirmationResult::Cancel => {
-                    // User cancelled
+                    // User cancelled - make it absolutely clear to stop
                     let result = json!({
                         "cancelled": true,
+                        "STOP": "User has rejected this operation. Do NOT create this file or any alternative files.",
                         "reason": "User cancelled the operation",
-                        "original_path": args.path
+                        "original_path": args.path,
+                        "action_required": "Stop creating files. Ask the user what they want instead."
                     });
                     return serde_json::to_string_pretty(&result)
                         .map_err(|e| WriteFileError(format!("Failed to serialize: {}", e)));
                 }
             }
+        } else {
+            // Auto-accept mode: show the diff without requiring confirmation
+            use crate::agent::ui::diff::{render_diff, render_new_file};
+            use colored::Colorize;
+
+            if let Some(old) = &old_content {
+                render_diff(old, &args.content, &args.path);
+            } else {
+                render_new_file(&args.content, &args.path);
+            }
+            println!("  {} Auto-accepted", "✓".green());
         }
 
         // Create parent directories if needed
@@ -748,7 +793,6 @@ All files are written atomically. Parent directories are created automatically."
         let mut results = Vec::new();
         let mut total_bytes = 0usize;
         let mut total_lines = 0usize;
-        let mut skipped_files = Vec::new();
 
         for file in &args.files {
             let requested_path = PathBuf::from(&file.path);
@@ -806,21 +850,44 @@ All files are written atomically. Parent directories are created automatically."
                         self.allowed_patterns.allow(pattern);
                     }
                     ConfirmationResult::Modify(feedback) => {
-                        skipped_files.push(json!({
-                            "path": file.path,
+                        // User provided feedback - stop ALL remaining files immediately
+                        let result = json!({
+                            "cancelled": true,
+                            "STOP": "User provided feedback. Stop creating all remaining files in this batch.",
                             "reason": "User requested changes",
-                            "feedback": feedback
-                        }));
-                        continue;
+                            "user_feedback": feedback,
+                            "skipped_file": file.path,
+                            "files_written_before_cancel": results.len(),
+                            "action_required": "Read the user_feedback. Do NOT continue with remaining files."
+                        });
+                        return serde_json::to_string_pretty(&result)
+                            .map_err(|e| WriteFilesError(format!("Failed to serialize: {}", e)));
                     }
                     ConfirmationResult::Cancel => {
-                        skipped_files.push(json!({
-                            "path": file.path,
-                            "reason": "User cancelled"
-                        }));
-                        continue;
+                        // User cancelled - stop ALL remaining files immediately
+                        let result = json!({
+                            "cancelled": true,
+                            "STOP": "User cancelled. Stop creating all files immediately.",
+                            "reason": "User cancelled the operation",
+                            "skipped_file": file.path,
+                            "files_written_before_cancel": results.len(),
+                            "action_required": "Stop all file creation. Ask the user what they want instead."
+                        });
+                        return serde_json::to_string_pretty(&result)
+                            .map_err(|e| WriteFilesError(format!("Failed to serialize: {}", e)));
                     }
                 }
+            } else {
+                // Auto-accept mode: show the diff without requiring confirmation
+                use crate::agent::ui::diff::{render_diff, render_new_file};
+                use colored::Colorize;
+
+                if let Some(old) = &old_content {
+                    render_diff(old, &file.content, &file.path);
+                } else {
+                    render_new_file(&file.content, &file.path);
+                }
+                println!("  {} Auto-accepted", "✓".green());
             }
 
             // Create parent directories if needed
@@ -850,25 +917,15 @@ All files are written atomically. Parent directories are created automatically."
             }));
         }
 
-        let result = if skipped_files.is_empty() {
-            json!({
-                "success": true,
-                "files_written": results.len(),
-                "total_lines": total_lines,
-                "total_bytes": total_bytes,
-                "files": results
-            })
-        } else {
-            json!({
-                "success": results.len() > 0,
-                "files_written": results.len(),
-                "files_skipped": skipped_files.len(),
-                "total_lines": total_lines,
-                "total_bytes": total_bytes,
-                "files": results,
-                "skipped": skipped_files
-            })
-        };
+        // If we get here, all files were written successfully
+        // (cancellations return early with immediate stop message)
+        let result = json!({
+            "success": true,
+            "files_written": results.len(),
+            "total_lines": total_lines,
+            "total_bytes": total_bytes,
+            "files": results
+        });
 
         serde_json::to_string_pretty(&result)
             .map_err(|e| WriteFilesError(format!("Failed to serialize: {}", e)))

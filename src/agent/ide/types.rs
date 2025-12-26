@@ -173,3 +173,75 @@ pub struct CloseDiffArgs {
     #[serde(rename = "suppressNotification", skip_serializing_if = "Option::is_none")]
     pub suppress_notification: Option<bool>,
 }
+
+/// Get diagnostics request arguments
+#[derive(Debug, Serialize)]
+pub struct GetDiagnosticsArgs {
+    /// Optional file URI to get diagnostics for. If not provided, gets all diagnostics.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uri: Option<String>,
+}
+
+/// Diagnostic severity levels (matches VS Code DiagnosticSeverity)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+pub enum DiagnosticSeverity {
+    Error = 0,
+    Warning = 1,
+    Information = 2,
+    Hint = 3,
+}
+
+impl DiagnosticSeverity {
+    pub fn from_number(n: u8) -> Self {
+        match n {
+            0 => Self::Error,
+            1 => Self::Warning,
+            2 => Self::Information,
+            _ => Self::Hint,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Error => "error",
+            Self::Warning => "warning",
+            Self::Information => "info",
+            Self::Hint => "hint",
+        }
+    }
+}
+
+/// A diagnostic message from the language server
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Diagnostic {
+    /// The file path where the diagnostic occurred
+    pub file: String,
+    /// Line number (1-based)
+    pub line: u32,
+    /// Column number (1-based)
+    pub column: u32,
+    /// End line number (1-based)
+    #[serde(rename = "endLine")]
+    pub end_line: Option<u32>,
+    /// End column number (1-based)
+    #[serde(rename = "endColumn")]
+    pub end_column: Option<u32>,
+    /// Severity level
+    pub severity: DiagnosticSeverity,
+    /// The diagnostic message
+    pub message: String,
+    /// Source of the diagnostic (e.g., "rust-analyzer", "eslint")
+    #[serde(default)]
+    pub source: Option<String>,
+    /// Diagnostic code
+    #[serde(default)]
+    pub code: Option<String>,
+}
+
+/// Response from getDiagnostics
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct DiagnosticsResponse {
+    pub diagnostics: Vec<Diagnostic>,
+    pub total_errors: u32,
+    pub total_warnings: u32,
+}

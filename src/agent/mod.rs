@@ -38,7 +38,6 @@ pub mod prompts;
 pub mod session;
 pub mod tools;
 pub mod ui;
-
 use colored::Colorize;
 use history::{ConversationHistory, ToolCallRecord};
 use ide::IdeClient;
@@ -47,7 +46,7 @@ use rig::{
     completion::Prompt,
     providers::{anthropic, openai},
 };
-use session::ChatSession;
+use session::{ChatSession, PlanMode};
 use commands::TokenUsage;
 use std::path::Path;
 use std::sync::Arc;
@@ -101,8 +100,13 @@ pub enum AgentError {
 
 pub type AgentResult<T> = Result<T, AgentError>;
 
-/// Get the system prompt for the agent based on query type
-fn get_system_prompt(project_path: &Path, query: Option<&str>) -> String {
+/// Get the system prompt for the agent based on query type and plan mode
+fn get_system_prompt(project_path: &Path, query: Option<&str>, plan_mode: PlanMode) -> String {
+    // In planning mode, use the read-only exploration prompt
+    if plan_mode.is_planning() {
+        return prompts::get_planning_prompt(project_path);
+    }
+
     if let Some(q) = query {
         // First check if it's a code development task (highest priority)
         if prompts::is_code_development_query(q) {
@@ -169,16 +173,51 @@ pub async fn run_interactive(
 
     session.print_banner();
 
+    // Raw Rig messages for multi-turn - preserves Reasoning blocks for thinking
+    // Our ConversationHistory only stores text summaries, but rig needs full Message structure
+    let mut raw_chat_history: Vec<rig::completion::Message> = Vec::new();
+
+    // Pending input for auto-continue after plan creation
+    let mut pending_input: Option<String> = None;
+    // Auto-accept mode for plan execution (skips write confirmations)
+    let mut auto_accept_writes = false;
+
     loop {
         // Show conversation status if we have history
         if !conversation_history.is_empty() {
             println!("{}", format!("  💬 Context: {}", conversation_history.status()).dimmed());
         }
 
-        // Read user input
-        let input = match session.read_input() {
-            Ok(input) => input,
-            Err(_) => break,
+        // Check for pending input (from plan menu selection)
+        let input = if let Some(pending) = pending_input.take() {
+            // Show what we're executing
+            println!("{} {}", "→".cyan(), pending.dimmed());
+            pending
+        } else {
+            // New user turn - reset auto-accept mode from previous plan execution
+            auto_accept_writes = false;
+
+            // Read user input (returns InputResult)
+            let input_result = match session.read_input() {
+                Ok(result) => result,
+                Err(_) => break,
+            };
+
+            // Handle the input result
+            match input_result {
+                ui::InputResult::Submit(text) => ChatSession::process_submitted_text(&text),
+                ui::InputResult::Cancel | ui::InputResult::Exit => break,
+                ui::InputResult::TogglePlanMode => {
+                    // Toggle planning mode - minimal feedback, no extra newlines
+                    let new_mode = session.toggle_plan_mode();
+                    if new_mode.is_planning() {
+                        println!("{}", "★ plan mode".yellow());
+                    } else {
+                        println!("{}", "▶ standard mode".green());
+                    }
+                    continue;
+                }
+            }
         };
 
         if input.is_empty() {
@@ -190,6 +229,7 @@ pub async fn run_interactive(
             // Special handling for /clear to also clear conversation history
             if input.trim().to_lowercase() == "/clear" || input.trim().to_lowercase() == "/c" {
                 conversation_history.clear();
+                raw_chat_history.clear();
             }
             match session.process_command(&input) {
                 Ok(true) => continue,
@@ -212,6 +252,26 @@ pub async fn run_interactive(
             println!("{}", "  📦 Compacting conversation history...".dimmed());
             if let Some(summary) = conversation_history.compact() {
                 println!("{}", format!("  ✓ Compressed {} turns", summary.matches("Turn").count()).dimmed());
+            }
+        }
+
+        // Pre-request check: estimate if we're approaching context limit
+        // Check raw_chat_history (actual messages) not conversation_history
+        // because conversation_history may be out of sync
+        let estimated_input_tokens = estimate_raw_history_tokens(&raw_chat_history)
+            + input.len() / 4  // New input
+            + 5000; // System prompt overhead estimate
+
+        if estimated_input_tokens > 150_000 {
+            println!("{}", "  ⚠ Large context detected. Pre-truncating...".yellow());
+
+            let old_count = raw_chat_history.len();
+            // Keep last 20 messages when approaching limit
+            if raw_chat_history.len() > 20 {
+                let drain_count = raw_chat_history.len() - 20;
+                raw_chat_history.drain(0..drain_count);
+                conversation_history.clear(); // Stay in sync
+                println!("{}", format!("  ✓ Truncated {} → {} messages", old_count, raw_chat_history.len()).dimmed());
             }
         }
 
@@ -242,12 +302,13 @@ pub async fn run_interactive(
             let hook = ToolDisplayHook::new();
 
             let project_path_buf = session.project_path.clone();
-            // Select prompt based on query type (analysis vs generation)
-            let preamble = get_system_prompt(&session.project_path, Some(&current_input));
+            // Select prompt based on query type (analysis vs generation) and plan mode
+            let preamble = get_system_prompt(&session.project_path, Some(&current_input), session.plan_mode);
             let is_generation = prompts::is_generation_query(&current_input);
+            let is_planning = session.plan_mode.is_planning();
 
-            // Convert conversation history to Rig Message format
-            let mut chat_history = conversation_history.to_messages();
+            // Note: using raw_chat_history directly which preserves Reasoning blocks
+            // This is needed for extended thinking to work with multi-turn conversations
 
             let response = match session.provider {
                 ProviderType::OpenAI => {
@@ -279,10 +340,16 @@ pub async fn run_interactive(
                         .tool(ReadFileTool::new(project_path_buf.clone()))
                         .tool(ListDirectoryTool::new(project_path_buf.clone()));
 
-                    // Add generation tools if this is a generation query
-                    if is_generation {
-                        // Create file tools with IDE client if connected
-                        let (write_file_tool, write_files_tool) = if let Some(ref client) = ide_client {
+                    // Add tools based on mode
+                    if is_planning {
+                        // Plan mode: read-only shell + plan creation tools
+                        builder = builder
+                            .tool(ShellTool::new(project_path_buf.clone()).with_read_only(true))
+                            .tool(PlanCreateTool::new(project_path_buf.clone()))
+                            .tool(PlanListTool::new(project_path_buf.clone()));
+                    } else if is_generation {
+                        // Standard mode + generation query: all tools including file writes and plan execution
+                        let (mut write_file_tool, mut write_files_tool) = if let Some(ref client) = ide_client {
                             (
                                 WriteFileTool::new(project_path_buf.clone())
                                     .with_ide_client(client.clone()),
@@ -295,10 +362,18 @@ pub async fn run_interactive(
                                 WriteFilesTool::new(project_path_buf.clone()),
                             )
                         };
+                        // Disable confirmations if auto-accept mode is enabled (from plan menu)
+                        if auto_accept_writes {
+                            write_file_tool = write_file_tool.without_confirmation();
+                            write_files_tool = write_files_tool.without_confirmation();
+                        }
                         builder = builder
                             .tool(write_file_tool)
                             .tool(write_files_tool)
-                            .tool(ShellTool::new(project_path_buf.clone()));
+                            .tool(ShellTool::new(project_path_buf.clone()))
+                            .tool(PlanListTool::new(project_path_buf.clone()))
+                            .tool(PlanNextTool::new(project_path_buf.clone()))
+                            .tool(PlanUpdateTool::new(project_path_buf.clone()));
                     }
 
                     if let Some(params) = reasoning_params {
@@ -310,7 +385,7 @@ pub async fn run_interactive(
                     // Use hook to display tool calls as they happen
                     // Pass conversation history for context continuity
                     agent.prompt(&current_input)
-                        .with_history(&mut chat_history)
+                        .with_history(&mut raw_chat_history)
                         .with_hook(hook.clone())
                         .multi_turn(50)
                         .await
@@ -338,10 +413,16 @@ pub async fn run_interactive(
                         .tool(ReadFileTool::new(project_path_buf.clone()))
                         .tool(ListDirectoryTool::new(project_path_buf.clone()));
 
-                    // Add generation tools if this is a generation query
-                    if is_generation {
-                        // Create file tools with IDE client if connected
-                        let (write_file_tool, write_files_tool) = if let Some(ref client) = ide_client {
+                    // Add tools based on mode
+                    if is_planning {
+                        // Plan mode: read-only shell + plan creation tools
+                        builder = builder
+                            .tool(ShellTool::new(project_path_buf.clone()).with_read_only(true))
+                            .tool(PlanCreateTool::new(project_path_buf.clone()))
+                            .tool(PlanListTool::new(project_path_buf.clone()));
+                    } else if is_generation {
+                        // Standard mode + generation query: all tools including file writes and plan execution
+                        let (mut write_file_tool, mut write_files_tool) = if let Some(ref client) = ide_client {
                             (
                                 WriteFileTool::new(project_path_buf.clone())
                                     .with_ide_client(client.clone()),
@@ -354,10 +435,18 @@ pub async fn run_interactive(
                                 WriteFilesTool::new(project_path_buf.clone()),
                             )
                         };
+                        // Disable confirmations if auto-accept mode is enabled (from plan menu)
+                        if auto_accept_writes {
+                            write_file_tool = write_file_tool.without_confirmation();
+                            write_files_tool = write_files_tool.without_confirmation();
+                        }
                         builder = builder
                             .tool(write_file_tool)
                             .tool(write_files_tool)
-                            .tool(ShellTool::new(project_path_buf.clone()));
+                            .tool(ShellTool::new(project_path_buf.clone()))
+                            .tool(PlanListTool::new(project_path_buf.clone()))
+                            .tool(PlanNextTool::new(project_path_buf.clone()))
+                            .tool(PlanUpdateTool::new(project_path_buf.clone()));
                     }
 
                     let agent = builder.build();
@@ -366,7 +455,7 @@ pub async fn run_interactive(
                     // Use hook to display tool calls as they happen
                     // Pass conversation history for context continuity
                     agent.prompt(&current_input)
-                        .with_history(&mut chat_history)
+                        .with_history(&mut raw_chat_history)
                         .with_hook(hook.clone())
                         .multi_turn(50)
                         .await
@@ -377,7 +466,9 @@ pub async fn run_interactive(
 
                     // Extended thinking for Claude models via Bedrock
                     // This enables Claude to show its reasoning process before responding.
-                    // Requires patched rig-bedrock that preserves Reasoning blocks with tool calls.
+                    // Requires vendored rig-bedrock that preserves Reasoning blocks with tool calls.
+                    // Extended thinking budget - reduced to help with rate limits
+                    // 8000 is enough for most tasks, increase to 16000 for complex analysis
                     let thinking_params = serde_json::json!({
                         "thinking": {
                             "type": "enabled",
@@ -388,7 +479,7 @@ pub async fn run_interactive(
                     let mut builder = client
                         .agent(&session.model)
                         .preamble(&preamble)
-                        .max_tokens(16000)  // Higher for thinking + response
+                        .max_tokens(64000)  // Max output tokens for Claude Sonnet on Bedrock
                         .tool(AnalyzeTool::new(project_path_buf.clone()))
                         .tool(SecurityScanTool::new(project_path_buf.clone()))
                         .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
@@ -399,10 +490,16 @@ pub async fn run_interactive(
                         .tool(ReadFileTool::new(project_path_buf.clone()))
                         .tool(ListDirectoryTool::new(project_path_buf.clone()));
 
-                    // Add generation tools if this is a generation query
-                    if is_generation {
-                        // Create file tools with IDE client if connected
-                        let (write_file_tool, write_files_tool) = if let Some(ref client) = ide_client {
+                    // Add tools based on mode
+                    if is_planning {
+                        // Plan mode: read-only shell + plan creation tools
+                        builder = builder
+                            .tool(ShellTool::new(project_path_buf.clone()).with_read_only(true))
+                            .tool(PlanCreateTool::new(project_path_buf.clone()))
+                            .tool(PlanListTool::new(project_path_buf.clone()));
+                    } else if is_generation {
+                        // Standard mode + generation query: all tools including file writes and plan execution
+                        let (mut write_file_tool, mut write_files_tool) = if let Some(ref client) = ide_client {
                             (
                                 WriteFileTool::new(project_path_buf.clone())
                                     .with_ide_client(client.clone()),
@@ -415,10 +512,18 @@ pub async fn run_interactive(
                                 WriteFilesTool::new(project_path_buf.clone()),
                             )
                         };
+                        // Disable confirmations if auto-accept mode is enabled (from plan menu)
+                        if auto_accept_writes {
+                            write_file_tool = write_file_tool.without_confirmation();
+                            write_files_tool = write_files_tool.without_confirmation();
+                        }
                         builder = builder
                             .tool(write_file_tool)
                             .tool(write_files_tool)
-                            .tool(ShellTool::new(project_path_buf.clone()));
+                            .tool(ShellTool::new(project_path_buf.clone()))
+                            .tool(PlanListTool::new(project_path_buf.clone()))
+                            .tool(PlanNextTool::new(project_path_buf.clone()))
+                            .tool(PlanUpdateTool::new(project_path_buf.clone()));
                     }
 
                     // Add thinking params for extended reasoning
@@ -428,7 +533,7 @@ pub async fn run_interactive(
 
                     // Use same multi-turn pattern as OpenAI/Anthropic
                     agent.prompt(&current_input)
-                        .with_history(&mut chat_history)
+                        .with_history(&mut raw_chat_history)
                         .with_hook(hook.clone())
                         .multi_turn(50)
                         .await
@@ -441,10 +546,33 @@ pub async fn run_interactive(
                     println!();
                     ResponseFormatter::print_response(&text);
 
-                    // Track token usage (estimate since Rig doesn't expose exact counts)
-                    let prompt_tokens = TokenUsage::estimate_tokens(&input);
-                    let completion_tokens = TokenUsage::estimate_tokens(&text);
-                    session.token_usage.add_request(prompt_tokens, completion_tokens);
+                    // Track token usage - use actual from hook if available, else estimate
+                    let hook_usage = hook.get_usage().await;
+                    if hook_usage.has_data() {
+                        // Use actual token counts from API response
+                        session.token_usage.add_actual(hook_usage.input_tokens, hook_usage.output_tokens);
+                    } else {
+                        // Fall back to estimation when API doesn't provide usage
+                        let prompt_tokens = TokenUsage::estimate_tokens(&input);
+                        let completion_tokens = TokenUsage::estimate_tokens(&text);
+                        session.token_usage.add_estimated(prompt_tokens, completion_tokens);
+                    }
+                    // Reset hook usage for next request batch
+                    hook.reset_usage().await;
+
+                    // Show context indicator like Forge: [model/~tokens]
+                    let model_short = session.model.split('/').last()
+                        .unwrap_or(&session.model)
+                        .split(':').next()
+                        .unwrap_or(&session.model);
+                    println!();
+                    println!(
+                        "  {}[{}/{}]{}",
+                        ui::colors::ansi::DIM,
+                        model_short,
+                        session.token_usage.format_compact(),
+                        ui::colors::ansi::RESET
+                    );
 
                     // Extract tool calls from the hook state for history tracking
                     let tool_calls = extract_tool_calls_from_hook(&hook).await;
@@ -457,7 +585,7 @@ pub async fn run_interactive(
                     }
 
                     // Add to conversation history with tool call records
-                    conversation_history.add_turn(input.clone(), text.clone(), tool_calls);
+                    conversation_history.add_turn(input.clone(), text.clone(), tool_calls.clone());
 
                     // Check if this heavy turn requires immediate compaction
                     // This helps prevent context overflow in subsequent requests
@@ -470,8 +598,53 @@ pub async fn run_interactive(
 
                     // Also update legacy session history for compatibility
                     session.history.push(("user".to_string(), input.clone()));
-                    session.history.push(("assistant".to_string(), text));
-                    succeeded = true;
+                    session.history.push(("assistant".to_string(), text.clone()));
+
+                    // Check if plan_create was called - show interactive menu
+                    if let Some(plan_info) = find_plan_create_call(&tool_calls) {
+                        println!(); // Space before menu
+
+                        // Show the plan action menu (don't switch modes yet - let user choose)
+                        match ui::show_plan_action_menu(&plan_info.0, plan_info.1) {
+                            ui::PlanActionResult::ExecuteAutoAccept => {
+                                // Now switch to standard mode for execution
+                                if session.plan_mode.is_planning() {
+                                    session.plan_mode = session.plan_mode.toggle();
+                                }
+                                auto_accept_writes = true;
+                                pending_input = Some(format!(
+                                    "Execute the plan at '{}'. Use plan_next to get tasks and execute them in order. Auto-accept all file writes.",
+                                    plan_info.0
+                                ));
+                                succeeded = true;
+                            }
+                            ui::PlanActionResult::ExecuteWithReview => {
+                                // Now switch to standard mode for execution
+                                if session.plan_mode.is_planning() {
+                                    session.plan_mode = session.plan_mode.toggle();
+                                }
+                                pending_input = Some(format!(
+                                    "Execute the plan at '{}'. Use plan_next to get tasks and execute them in order.",
+                                    plan_info.0
+                                ));
+                                succeeded = true;
+                            }
+                            ui::PlanActionResult::ChangePlan(feedback) => {
+                                // Stay in plan mode for modifications
+                                pending_input = Some(format!(
+                                    "Please modify the plan at '{}'. User feedback: {}",
+                                    plan_info.0, feedback
+                                ));
+                                succeeded = true;
+                            }
+                            ui::PlanActionResult::Cancel => {
+                                // Just complete normally, don't execute
+                                succeeded = true;
+                            }
+                        }
+                    } else {
+                        succeeded = true;
+                    }
                 }
                 Err(e) => {
                     let err_str = e.to_string();
@@ -556,12 +729,56 @@ pub async fn run_interactive(
                         // Brief delay before continuation
                         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                         continue; // Continue the loop without incrementing retry_attempt
-                    } else if err_str.contains("rate") || err_str.contains("Rate") || err_str.contains("429") {
+                    } else if err_str.contains("rate") || err_str.contains("Rate") || err_str.contains("429")
+                        || err_str.contains("Too many tokens") || err_str.contains("please wait")
+                        || err_str.contains("throttl") || err_str.contains("Throttl") {
                         eprintln!("{}", "⚠ Rate limited by API provider.".yellow());
-                        // Wait before retry for rate limits
+                        // Wait before retry for rate limits (longer wait for "too many tokens")
                         retry_attempt += 1;
-                        eprintln!("{}", format!("  Waiting 5 seconds before retry ({}/{})...", retry_attempt, MAX_RETRIES).dimmed());
-                        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                        let wait_secs = if err_str.contains("Too many tokens") { 30 } else { 5 };
+                        eprintln!("{}", format!("  Waiting {} seconds before retry ({}/{})...", wait_secs, retry_attempt, MAX_RETRIES).dimmed());
+                        tokio::time::sleep(tokio::time::Duration::from_secs(wait_secs)).await;
+                    } else if is_input_too_long_error(&err_str) {
+                        // Context too large - truncate raw_chat_history directly
+                        // NOTE: We truncate raw_chat_history (actual messages) not conversation_history
+                        // because conversation_history may be empty/stale during errors
+                        eprintln!("{}", "⚠ Context too large for model. Truncating history...".yellow());
+
+                        let old_token_count = estimate_raw_history_tokens(&raw_chat_history);
+                        let old_msg_count = raw_chat_history.len();
+
+                        // Strategy: Keep only the last N messages (user/assistant pairs)
+                        // More aggressive truncation on each retry: 10 → 6 → 4 messages
+                        let keep_count = match retry_attempt {
+                            0 => 10,
+                            1 => 6,
+                            _ => 4,
+                        };
+
+                        if raw_chat_history.len() > keep_count {
+                            // Drain older messages, keep the most recent ones
+                            let drain_count = raw_chat_history.len() - keep_count;
+                            raw_chat_history.drain(0..drain_count);
+                        }
+
+                        let new_token_count = estimate_raw_history_tokens(&raw_chat_history);
+                        eprintln!("{}", format!(
+                            "  ✓ Truncated: {} messages (~{} tokens) → {} messages (~{} tokens)",
+                            old_msg_count, old_token_count, raw_chat_history.len(), new_token_count
+                        ).green());
+
+                        // Also clear conversation_history to stay in sync
+                        conversation_history.clear();
+
+                        // Retry with truncated context
+                        retry_attempt += 1;
+                        if retry_attempt < MAX_RETRIES {
+                            eprintln!("{}", format!("  → Retrying with truncated context ({}/{})...", retry_attempt, MAX_RETRIES).dimmed());
+                            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                        } else {
+                            eprintln!("{}", "Context still too large after truncation. Try /clear to reset.".red());
+                            break;
+                        }
                     } else if is_truncation_error(&err_str) {
                         // Truncation error - try intelligent continuation
                         let completed_tools = extract_tool_calls_from_hook(&hook).await;
@@ -715,12 +932,139 @@ fn truncate_string(s: &str, max_len: usize) -> String {
     }
 }
 
+/// Estimate token count from raw rig Messages
+/// This is used for context length management to prevent "input too long" errors.
+/// Estimates ~4 characters per token.
+fn estimate_raw_history_tokens(messages: &[rig::completion::Message]) -> usize {
+    use rig::completion::message::{AssistantContent, UserContent};
+
+    messages.iter().map(|msg| -> usize {
+        match msg {
+            rig::completion::Message::User { content } => {
+                content.iter().map(|c| -> usize {
+                    match c {
+                        UserContent::Text(t) => t.text.len() / 4,
+                        _ => 100, // Estimate for images/documents
+                    }
+                }).sum::<usize>()
+            }
+            rig::completion::Message::Assistant { content, .. } => {
+                content.iter().map(|c| -> usize {
+                    match c {
+                        AssistantContent::Text(t) => t.text.len() / 4,
+                        AssistantContent::ToolCall(tc) => {
+                            // arguments is serde_json::Value, convert to string for length estimate
+                            let args_len = tc.function.arguments.to_string().len();
+                            (tc.function.name.len() + args_len) / 4
+                        }
+                        _ => 100,
+                    }
+                }).sum::<usize>()
+            }
+        }
+    }).sum()
+}
+
+/// Find a plan_create tool call in the list and extract plan info
+/// Returns (plan_path, task_count) if found
+fn find_plan_create_call(tool_calls: &[ToolCallRecord]) -> Option<(String, usize)> {
+    for tc in tool_calls {
+        if tc.tool_name == "plan_create" {
+            // Try to parse the result_summary as JSON to extract plan_path
+            // Note: result_summary may be truncated, so we have multiple fallbacks
+            let plan_path = if let Ok(result) = serde_json::from_str::<serde_json::Value>(&tc.result_summary) {
+                result.get("plan_path")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            } else {
+                None
+            };
+
+            // If JSON parsing failed, find the most recently created plan file
+            // This is more reliable than trying to reconstruct the path from truncated args
+            let plan_path = plan_path.unwrap_or_else(|| {
+                find_most_recent_plan_file().unwrap_or_else(|| "plans/plan.md".to_string())
+            });
+
+            // Count tasks by reading the plan file directly
+            let task_count = count_tasks_in_plan_file(&plan_path).unwrap_or(0);
+
+            return Some((plan_path, task_count));
+        }
+    }
+    None
+}
+
+/// Find the most recently created plan file in the plans directory
+fn find_most_recent_plan_file() -> Option<String> {
+    let plans_dir = std::env::current_dir().ok()?.join("plans");
+    if !plans_dir.exists() {
+        return None;
+    }
+
+    let mut newest: Option<(std::path::PathBuf, std::time::SystemTime)> = None;
+
+    for entry in std::fs::read_dir(&plans_dir).ok()?.flatten() {
+        let path = entry.path();
+        if path.extension().map(|e| e == "md").unwrap_or(false) {
+            if let Ok(metadata) = entry.metadata() {
+                if let Ok(modified) = metadata.modified() {
+                    if newest.as_ref().map(|(_, t)| modified > *t).unwrap_or(true) {
+                        newest = Some((path, modified));
+                    }
+                }
+            }
+        }
+    }
+
+    newest.map(|(path, _)| {
+        // Return relative path
+        path.strip_prefix(std::env::current_dir().unwrap_or_default())
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|_| path.display().to_string())
+    })
+}
+
+/// Count tasks (checkbox items) in a plan file
+fn count_tasks_in_plan_file(plan_path: &str) -> Option<usize> {
+    use regex::Regex;
+
+    // Try both relative and absolute paths
+    let path = std::path::Path::new(plan_path);
+    let content = if path.exists() {
+        std::fs::read_to_string(path).ok()?
+    } else {
+        // Try with current directory
+        std::fs::read_to_string(std::env::current_dir().ok()?.join(plan_path)).ok()?
+    };
+
+    // Count task checkboxes: - [ ], - [x], - [~], - [!]
+    let task_regex = Regex::new(r"^\s*-\s*\[[ x~!]\]").ok()?;
+    let count = content.lines()
+        .filter(|line| task_regex.is_match(line))
+        .count();
+
+    Some(count)
+}
+
 /// Check if an error is a truncation/JSON parsing error that can be recovered via continuation
 fn is_truncation_error(err_str: &str) -> bool {
     err_str.contains("JsonError")
         || err_str.contains("EOF while parsing")
         || err_str.contains("JSON")
         || err_str.contains("unexpected end")
+}
+
+/// Check if error is "input too long" - context exceeds model limit
+/// This happens when conversation history grows beyond what the model can handle.
+/// Recovery: compact history and retry with reduced context.
+fn is_input_too_long_error(err_str: &str) -> bool {
+    err_str.contains("too long")
+        || err_str.contains("Too long")
+        || err_str.contains("context length")
+        || err_str.contains("maximum context")
+        || err_str.contains("exceeds the model")
+        || err_str.contains("Input is too long")
 }
 
 /// Build a continuation prompt that tells the AI what work was completed
@@ -840,7 +1184,8 @@ pub async fn run_query(
 
     let project_path_buf = project_path.to_path_buf();
     // Select prompt based on query type (analysis vs generation)
-    let preamble = get_system_prompt(project_path, Some(query));
+    // For single queries (non-interactive), always use standard mode
+    let preamble = get_system_prompt(project_path, Some(query), PlanMode::default());
     let is_generation = prompts::is_generation_query(query);
 
     match provider {
@@ -941,14 +1286,14 @@ pub async fn run_query(
             let thinking_params = serde_json::json!({
                 "thinking": {
                     "type": "enabled",
-                    "budget_tokens": 8000
+                    "budget_tokens": 16000
                 }
             });
 
             let mut builder = client
                 .agent(model_name)
                 .preamble(&preamble)
-                .max_tokens(16000)  // Higher for thinking + response
+                .max_tokens(64000)  // Max output tokens for Claude Sonnet on Bedrock
                 .tool(AnalyzeTool::new(project_path_buf.clone()))
                 .tool(SecurityScanTool::new(project_path_buf.clone()))
                 .tool(VulnerabilitiesTool::new(project_path_buf.clone()))

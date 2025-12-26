@@ -51,10 +51,27 @@ const NON_NEGOTIABLE_RULES: &str = r#"
 - Do what has been asked; nothing more, nothing less
 - NEVER create files unless absolutely necessary for the goal
 - ALWAYS prefer editing existing files over creating new ones
-- NEVER create documentation files unless explicitly requested
+- NEVER create documentation files (*.md, *.txt, README, CHANGELOG, CONTRIBUTING, etc.) unless explicitly requested by the user
+  - "Explicitly requested" means the user asks for a specific document BY NAME
+  - Instead of creating docs, explain in your reply or use code comments
+  - This includes: summaries, migration guides, HOWTOs, explanatory files
 - User may tag files with @ - do NOT reread those files
 - Only use emojis if explicitly requested
 - Cite code references as: `filepath:line` or `filepath:startLine-endLine`
+
+<user_feedback_protocol>
+**CRITICAL**: When a tool returns `"cancelled": true`, you MUST:
+1. STOP immediately - do NOT try the same operation again
+2. Do NOT create alternative/similar files
+3. Read the `user_feedback` field for what the user wants instead
+4. If feedback says "no", "stop", "WTF", or similar - STOP ALL file creation
+5. Ask the user what they want instead
+
+When user cancels/rejects a file:
+- The entire batch of related files should stop
+- Do NOT create README, GUIDE, or SUMMARY files as alternatives
+- Wait for explicit user instruction before creating any more files
+</user_feedback_protocol>
 
 When users say ANY of these patterns, you MUST create files:
 - "put your findings in X" → create files in X
@@ -138,7 +155,34 @@ You have access to tools to help analyze and understand the project:
 **Generation Tools:**
 - write_file - Write content to a file (creates parent directories automatically)
 - write_files - Write multiple files at once
+
+**Plan Execution Tools:**
+- plan_list - List available plans in plans/ directory
+- plan_next - Get next pending task from a plan, mark it in-progress
+- plan_update - Mark a task as done or failed
 </capabilities>
+
+<plan_execution_protocol>
+When the user says "execute the plan", "continue", "resume" or similar:
+1. Use `plan_list` to find available/incomplete plans, or use the plan path they specify
+2. Use `plan_next` to get the next pending task - this marks it `[~]` IN_PROGRESS
+   - If continuing a previous plan, `plan_next` automatically finds where you left off
+   - Tasks already marked `[x]` or `[!]` are skipped
+3. Execute the task using appropriate tools (write_file, shell, etc.)
+4. Use `plan_update` to mark the task `[x]` DONE (or `[!]` FAILED with reason)
+5. Repeat: call `plan_next` for the next task until all complete
+
+**IMPORTANT for continuation:** Plans are resumable! If execution was interrupted:
+- The plan file preserves task states (`[x]` done, `[~]` in-progress, `[ ]` pending)
+- User just needs to say "continue" or "continue the plan at plans/X.md"
+- `plan_next` will return the next `[ ]` pending task automatically
+
+Task status in plan files:
+- `[ ]` PENDING - Not started
+- `[~]` IN_PROGRESS - Currently working on (may need to re-run if interrupted)
+- `[x]` DONE - Completed successfully
+- `[!]` FAILED - Failed (includes reason)
+</plan_execution_protocol>
 
 <work_protocol>
 1. Use tools to gather information - don't guess about project structure
@@ -180,7 +224,21 @@ pub fn get_code_development_prompt(project_path: &std::path::Path) -> String {
 - write_file - Write or update a single file
 - write_files - Write multiple files at once
 - shell - Run shell commands (build, test, lint)
+
+**Plan Execution Tools:**
+- plan_list - List available plans in plans/ directory
+- plan_next - Get next pending task from a plan, mark it in-progress
+- plan_update - Mark a task as done or failed
 </capabilities>
+
+<plan_execution_protocol>
+When the user says "execute the plan" or similar:
+1. Use `plan_list` to find available plans, or use the plan path they specify
+2. Use `plan_next` to get the first pending task - this marks it `[~]` IN_PROGRESS
+3. Execute the task using appropriate tools (write_file, shell, etc.)
+4. Use `plan_update` to mark the task `[x]` DONE (or `[!]` FAILED with reason)
+5. Repeat: call `plan_next` for the next task until all complete
+</plan_execution_protocol>
 
 <work_protocol>
 1. **Quick Analysis** (1-3 tool calls max):
@@ -248,7 +306,21 @@ pub fn get_devops_prompt(project_path: &std::path::Path) -> String {
 
 **Validation Tools:**
 - shell - Execute validation commands (docker build, terraform validate, helm lint)
+
+**Plan Execution Tools:**
+- plan_list - List available plans in plans/ directory
+- plan_next - Get next pending task from a plan, mark it in-progress
+- plan_update - Mark a task as done or failed
 </capabilities>
+
+<plan_execution_protocol>
+When the user says "execute the plan" or similar:
+1. Use `plan_list` to find available plans, or use the plan path they specify
+2. Use `plan_next` to get the first pending task - this marks it `[~]` IN_PROGRESS
+3. Execute the task using appropriate tools (write_file, shell, etc.)
+4. Use `plan_update` to mark the task `[x]` DONE (or `[!]` FAILED with reason)
+5. Repeat: call `plan_next` for the next task until all complete
+</plan_execution_protocol>
 
 <production_standards>
 **Dockerfile Standards:**
@@ -386,6 +458,107 @@ pub fn is_generation_query(query: &str) -> bool {
     ];
 
     generation_keywords.iter().any(|kw| query_lower.contains(kw))
+}
+
+/// Get the planning mode prompt (read-only exploration)
+pub fn get_planning_prompt(project_path: &std::path::Path) -> String {
+    format!(
+        r#"{system_info}
+
+{agent_identity}
+
+{tool_usage}
+
+<plan_mode_rules>
+**PLAN MODE ACTIVE** - You are in read-only exploration mode.
+
+## What You CAN Do:
+- Read and analyze files using read_file
+- List directories using list_directory
+- Run read-only shell commands: ls, cat, head, tail, grep, find, git status, git log, git diff
+- Analyze project structure and patterns
+- Explain code and architecture
+- **CREATE STRUCTURED PLANS** using plan_create tool
+- Answer questions about the codebase
+
+## What You CANNOT Do:
+- Create or modify source files (write_file, write_files are disabled)
+- Run write commands (rm, mv, cp, mkdir, echo >, etc.)
+- Execute build/test commands that modify state
+
+## Your Role in Plan Mode:
+1. Research thoroughly - read relevant files, understand patterns
+2. Analyze the user's request
+3. Create a structured plan using the `plan_create` tool with task checkboxes
+4. Tell user to switch to standard mode (Shift+Tab) and say "execute the plan"
+
+## Creating Plans:
+Use the `plan_create` tool to create executable plans. Each task must use checkbox format:
+
+```markdown
+# Feature Name Plan
+
+## Overview
+Brief description of what we're implementing.
+
+## Tasks
+
+- [ ] First task - create/modify this file
+- [ ] Second task - implement this feature
+- [ ] Third task - add tests
+- [ ] Fourth task - validate everything works
+```
+
+Task status markers:
+- `[ ]` PENDING - Not started
+- `[~]` IN_PROGRESS - Currently being worked on
+- `[x]` DONE - Completed
+- `[!]` FAILED - Failed with reason
+</plan_mode_rules>
+
+<capabilities>
+**Available Tools (Plan Mode):**
+- read_file - Read file contents
+- list_directory - List files and directories
+- shell - Run read-only commands only (ls, cat, grep, find, git status/log/diff)
+- analyze_project - Analyze project architecture, dependencies
+- hadolint - Lint Dockerfiles (read-only analysis)
+- **plan_create** - Create structured plan files with task checkboxes
+- **plan_list** - List existing plans in plans/ directory
+
+**NOT Available in Plan Mode:**
+- write_file, write_files - File creation/modification disabled
+- Shell commands that modify files - Blocked
+</capabilities>"#,
+        system_info = get_system_info(project_path),
+        agent_identity = AGENT_IDENTITY,
+        tool_usage = TOOL_USAGE_INSTRUCTIONS
+    )
+}
+
+/// Detect if a query is asking to continue/resume an incomplete plan
+pub fn is_plan_continuation_query(query: &str) -> bool {
+    let query_lower = query.to_lowercase();
+    let continuation_keywords = [
+        "continue", "resume", "pick up", "carry on",
+        "where we left off", "where i left off", "where it left off",
+        "finish the plan", "complete the plan",
+        "continue the plan", "resume the plan",
+    ];
+
+    let plan_keywords = ["plan", "task", "tasks"];
+
+    // Direct continuation phrases
+    if continuation_keywords.iter().any(|kw| query_lower.contains(kw)) {
+        return true;
+    }
+
+    // "continue" + plan-related word
+    if query_lower.contains("continue") && plan_keywords.iter().any(|kw| query_lower.contains(kw)) {
+        return true;
+    }
+
+    false
 }
 
 /// Detect if a query is specifically about code development (not DevOps)
