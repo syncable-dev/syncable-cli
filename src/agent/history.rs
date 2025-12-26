@@ -111,8 +111,9 @@ impl ConversationHistory {
         })
     }
 
-    /// Estimate tokens in a string
-    fn estimate_tokens(text: &str) -> usize {
+    /// Estimate tokens in a string (~4 characters per token)
+    /// Public so it can be used for pre-request context size estimation
+    pub fn estimate_tokens(text: &str) -> usize {
         text.len() / CHARS_PER_TOKEN
     }
 
@@ -358,6 +359,25 @@ impl ConversationHistory {
             self.total_tokens + evicted_count * 500, // rough estimate of evicted tokens
             self.total_tokens
         ))
+    }
+
+    /// Emergency compaction - more aggressive than normal
+    /// Used when "input too long" error occurs and we need to reduce context urgently.
+    /// Temporarily switches to aggressive config, compacts, then restores original.
+    pub fn emergency_compact(&mut self) -> Option<String> {
+        // Switch to aggressive config temporarily
+        let original_config = self.compact_config.clone();
+        self.compact_config = CompactConfig {
+            retention_window: 3,  // Keep only 3 most recent turns
+            eviction_window: 0.9, // Evict 90% of context
+            thresholds: CompactThresholds::aggressive(),
+        };
+
+        let result = self.compact();
+
+        // Restore original config
+        self.compact_config = original_config;
+        result
     }
 
     /// Convert history to Rig Message format for the agent

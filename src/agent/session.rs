@@ -18,6 +18,108 @@ use std::path::Path;
 
 const ROBOT: &str = "🤖";
 
+/// Information about an incomplete plan
+#[derive(Debug, Clone)]
+pub struct IncompletePlan {
+    pub path: String,
+    pub filename: String,
+    pub done: usize,
+    pub pending: usize,
+    pub total: usize,
+}
+
+/// Find incomplete plans in the plans/ directory
+pub fn find_incomplete_plans(project_path: &std::path::Path) -> Vec<IncompletePlan> {
+    use regex::Regex;
+
+    let plans_dir = project_path.join("plans");
+    if !plans_dir.exists() {
+        return Vec::new();
+    }
+
+    let task_regex = Regex::new(r"^\s*-\s*\[([ x~!])\]").unwrap();
+    let mut incomplete = Vec::new();
+
+    if let Ok(entries) = std::fs::read_dir(&plans_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().map(|e| e == "md").unwrap_or(false) {
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    let mut done = 0;
+                    let mut pending = 0;
+                    let mut in_progress = 0;
+
+                    for line in content.lines() {
+                        if let Some(caps) = task_regex.captures(line) {
+                            match caps.get(1).map(|m| m.as_str()) {
+                                Some("x") => done += 1,
+                                Some(" ") => pending += 1,
+                                Some("~") => in_progress += 1,
+                                Some("!") => done += 1, // Failed counts as "attempted"
+                                _ => {}
+                            }
+                        }
+                    }
+
+                    let total = done + pending + in_progress;
+                    if total > 0 && (pending > 0 || in_progress > 0) {
+                        let rel_path = path.strip_prefix(project_path)
+                            .map(|p| p.display().to_string())
+                            .unwrap_or_else(|_| path.display().to_string());
+
+                        incomplete.push(IncompletePlan {
+                            path: rel_path,
+                            filename: path.file_name()
+                                .map(|n| n.to_string_lossy().to_string())
+                                .unwrap_or_default(),
+                            done,
+                            pending: pending + in_progress,
+                            total,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // Sort by most recently modified (newest first)
+    incomplete.sort_by(|a, b| b.filename.cmp(&a.filename));
+    incomplete
+}
+
+/// Planning mode state - toggles between standard and plan mode
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PlanMode {
+    /// Standard mode - all tools available, normal operation
+    #[default]
+    Standard,
+    /// Planning mode - read-only exploration, no file modifications
+    Planning,
+}
+
+impl PlanMode {
+    /// Toggle between Standard and Planning mode
+    pub fn toggle(&self) -> Self {
+        match self {
+            PlanMode::Standard => PlanMode::Planning,
+            PlanMode::Planning => PlanMode::Standard,
+        }
+    }
+
+    /// Check if in planning mode
+    pub fn is_planning(&self) -> bool {
+        matches!(self, PlanMode::Planning)
+    }
+
+    /// Get display name for the mode
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            PlanMode::Standard => "standard mode",
+            PlanMode::Planning => "plan mode",
+        }
+    }
+}
+
 /// Available models per provider
 pub fn get_available_models(provider: ProviderType) -> Vec<(&'static str, &'static str)> {
     match provider {
@@ -50,6 +152,8 @@ pub struct ChatSession {
     pub project_path: std::path::PathBuf,
     pub history: Vec<(String, String)>, // (role, content)
     pub token_usage: TokenUsage,
+    /// Current planning mode state
+    pub plan_mode: PlanMode,
 }
 
 impl ChatSession {
@@ -59,14 +163,26 @@ impl ChatSession {
             ProviderType::Anthropic => "claude-sonnet-4-5-20250929".to_string(),
             ProviderType::Bedrock => "global.anthropic.claude-sonnet-4-5-20250929-v1:0".to_string(),
         };
-        
+
         Self {
             provider,
             model: model.unwrap_or(default_model),
             project_path: project_path.to_path_buf(),
             history: Vec::new(),
             token_usage: TokenUsage::new(),
+            plan_mode: PlanMode::default(),
         }
+    }
+
+    /// Toggle planning mode and return the new mode
+    pub fn toggle_plan_mode(&mut self) -> PlanMode {
+        self.plan_mode = self.plan_mode.toggle();
+        self.plan_mode
+    }
+
+    /// Check if currently in planning mode
+    pub fn is_planning(&self) -> bool {
+        self.plan_mode.is_planning()
     }
 
     /// Check if API key is configured for a provider (env var OR config file)
@@ -1000,6 +1116,47 @@ impl ChatSession {
         Ok(())
     }
 
+    /// Handle /plans command - show incomplete plans and offer to continue
+    pub fn handle_plans_command(&self) -> AgentResult<()> {
+        let incomplete = find_incomplete_plans(&self.project_path);
+
+        if incomplete.is_empty() {
+            println!("\n{}", "No incomplete plans found.".dimmed());
+            println!("{}", "Create a plan using plan mode (Shift+Tab) and the plan_create tool.".dimmed());
+            return Ok(());
+        }
+
+        println!("\n{}", "📋 Incomplete Plans".cyan().bold());
+        println!();
+
+        for (i, plan) in incomplete.iter().enumerate() {
+            let progress = format!("{}/{}", plan.done, plan.total);
+            let percent = if plan.total > 0 {
+                (plan.done as f64 / plan.total as f64 * 100.0) as usize
+            } else {
+                0
+            };
+
+            println!(
+                "  {} {} {} ({} - {}%)",
+                format!("[{}]", i + 1).cyan(),
+                plan.filename.white().bold(),
+                format!("({} pending)", plan.pending).yellow(),
+                progress.dimmed(),
+                percent
+            );
+            println!("      {}", plan.path.dimmed());
+        }
+
+        println!();
+        println!("{}", "To continue a plan, say:".dimmed());
+        println!("  {}", "\"continue the plan at plans/FILENAME.md\"".cyan());
+        println!("  {}", "or just \"continue\" to resume the most recent one".cyan());
+        println!();
+
+        Ok(())
+    }
+
     /// List all profiles
     fn list_profiles(&self, config: &crate::config::types::AgentConfig) {
         let active = config.active_profile.as_deref();
@@ -1122,6 +1279,36 @@ impl ChatSession {
             "  {}",
             "Your AI-powered code analysis assistant".dimmed()
         );
+
+        // Check for incomplete plans and show a hint
+        let incomplete_plans = find_incomplete_plans(&self.project_path);
+        if !incomplete_plans.is_empty() {
+            println!();
+            if incomplete_plans.len() == 1 {
+                let plan = &incomplete_plans[0];
+                println!(
+                    "  {} {} ({}/{} done)",
+                    "📋 Incomplete plan:".yellow(),
+                    plan.filename.white(),
+                    plan.done,
+                    plan.total
+                );
+                println!(
+                    "     {} \"{}\" {}",
+                    "→".cyan(),
+                    "continue".cyan().bold(),
+                    "to resume".dimmed()
+                );
+            } else {
+                println!(
+                    "  {} {} incomplete plans found. Use {} to see them.",
+                    "📋".yellow(),
+                    incomplete_plans.len(),
+                    "/plans".cyan()
+                );
+            }
+        }
+
         println!();
         println!(
             "  {} Type your questions. Use {} to exit.\n",
@@ -1168,6 +1355,9 @@ impl ChatSession {
             }
             "/profile" => {
                 self.handle_profile_command()?;
+            }
+            "/plans" => {
+                self.handle_plans_command()?;
             }
             _ => {
                 if cmd.starts_with('/') {
@@ -1218,26 +1408,26 @@ impl ChatSession {
 
     /// Read user input with prompt - with interactive file picker support
     /// Uses custom terminal handling for @ file references and / commands
-    pub fn read_input(&self) -> io::Result<String> {
-        use crate::agent::ui::input::{read_input_with_file_picker, InputResult};
+    /// Returns InputResult which the main loop should handle
+    pub fn read_input(&self) -> io::Result<crate::agent::ui::input::InputResult> {
+        use crate::agent::ui::input::read_input_with_file_picker;
 
-        match read_input_with_file_picker("You:", &self.project_path) {
-            InputResult::Submit(text) => {
-                let trimmed = text.trim();
-                // Handle case where full suggestion was submitted (e.g., "/model        Description")
-                // Extract just the command if it looks like a suggestion format
-                if trimmed.starts_with('/') && trimmed.contains("  ") {
-                    // This looks like a suggestion format, extract just the command
-                    if let Some(cmd) = trimmed.split_whitespace().next() {
-                        return Ok(cmd.to_string());
-                    }
-                }
-                // Strip @ prefix from file references before sending to AI
-                // The @ is for UI autocomplete, but the AI should see just the path
-                Ok(Self::strip_file_references(trimmed))
+        Ok(read_input_with_file_picker("You:", &self.project_path, self.plan_mode.is_planning()))
+    }
+
+    /// Process a submitted input text - strips @ references and handles suggestion format
+    pub fn process_submitted_text(text: &str) -> String {
+        let trimmed = text.trim();
+        // Handle case where full suggestion was submitted (e.g., "/model        Description")
+        // Extract just the command if it looks like a suggestion format
+        if trimmed.starts_with('/') && trimmed.contains("  ") {
+            // This looks like a suggestion format, extract just the command
+            if let Some(cmd) = trimmed.split_whitespace().next() {
+                return cmd.to_string();
             }
-            InputResult::Cancel => Ok("exit".to_string()),  // Ctrl+C exits
-            InputResult::Exit => Ok("exit".to_string()),
         }
+        // Strip @ prefix from file references before sending to AI
+        // The @ is for UI autocomplete, but the AI should see just the path
+        Self::strip_file_references(trimmed)
     }
 }
