@@ -33,26 +33,6 @@
 
 **Stop copy-pasting Dockerfiles from Stack Overflow.** Syncable CLI is an AI-powered assistant that understands your codebase and generates production-ready infrastructure — Dockerfiles, Kubernetes manifests, Terraform configs, and CI/CD pipelines — tailored specifically to your project.
 
-```bash
-$ sync-ctl chat
-🤖 Syncable Agent powered by Claude
-
-You: Create a production Dockerfile for this project
-
-Agent: I've analyzed your Express.js + TypeScript project. Here's an optimized
-multi-stage Dockerfile with:
-  ✓ Non-root user for security
-  ✓ Layer caching for faster builds
-  ✓ Health checks configured
-  ✓ Production dependencies only
-
-[Creates Dockerfile with VS Code diff view]
-
-You: Now add Redis caching and create a docker-compose
-
-Agent: I'll add Redis to your stack and create a compose file...
-```
-
 <p align="center">
   <img src="syncable-cli-demo.gif" alt="Syncable CLI Demo" width="800" />
 </p>
