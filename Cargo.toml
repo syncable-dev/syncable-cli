@@ -108,6 +108,6 @@ path = "examples/security_analysis.rs"
 
 # Patch rig-bedrock to fix extended thinking support with tool use
 # The upstream version drops Reasoning blocks when a tool call is present.
-# See: patches/rig-bedrock/src/types/assistant_content.rs for the fix.
+# See: vendor/rig-bedrock/src/types/assistant_content.rs for the fix.
 [patch.crates-io]
-rig-bedrock = { path = "patches/rig-bedrock" }
+rig-bedrock = { path = "vendor/rig-bedrock" }
