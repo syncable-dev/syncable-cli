@@ -256,7 +256,7 @@ impl ToolDetector {
                         );
                         return ToolStatus {
                             available: true,
-                            path: Some(tool_path_exe),
+                            path: Some(tool_path_exe.clone()),
                             execution_path: Some(tool_path_exe), // Use full path for execution
                             version: Some(version),
                             installation_source: source,
