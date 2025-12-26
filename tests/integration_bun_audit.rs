@@ -170,6 +170,7 @@ async fn test_multi_runtime_project_priority() {
 }
 
 #[tokio::test]
+#[ignore] // Requires external tools (npm audit, pip-audit, cargo audit, go) to be installed
 async fn test_vulnerability_checking_with_mixed_languages() {
     let temp_dir = TempDir::new().unwrap();
     let project_path = temp_dir.path();
