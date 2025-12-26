@@ -106,6 +106,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.28.0](https://github.com/syncable-dev/syncable-cli/compare/v0.27.2...v0.28.0) - 2025-12-26
+
+### Added
+
+- updated .gitignore
+- *(agent)* add plan mode, plan resumption, and context overflow fixes
+
+### Other
+
+- Merge pull request #238 from syncable-dev/develop
+- bug(wrong ref for rig-bedrocks) wrong referenced rig-bedrock package
+- Merge branch 'develop' of github.com:syncable-dev/syncable-cli into develop
+
 ## [0.27.2](https://github.com/syncable-dev/syncable-cli/compare/v0.27.1...v0.27.2) - 2025-12-23
 
 ### Other
