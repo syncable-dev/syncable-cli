@@ -1,13 +1,13 @@
 //! # Tool Installation Strategies
-//! 
+//!
 //! Language-specific installers for development and security tools
 
 pub mod common;
-pub mod rust;
-pub mod javascript;
-pub mod python;
 pub mod go;
 pub mod java;
+pub mod javascript;
+pub mod python;
+pub mod rust;
 
 pub use common::InstallationStrategy;
 

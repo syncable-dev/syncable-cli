@@ -7,5 +7,5 @@
 pub mod dockerfile;
 pub mod instruction;
 
-pub use dockerfile::{parse_dockerfile, ParseError};
+pub use dockerfile::{ParseError, parse_dockerfile};
 pub use instruction::*;

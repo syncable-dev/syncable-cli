@@ -4,7 +4,7 @@
 //! large layers due to /var/log/lastlog growing.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{simple_rule, SimpleRule};
+use crate::analyzer::hadolint::rules::{SimpleRule, simple_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
@@ -22,8 +22,11 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
                                 // Check if -l or --no-log-init flag is present
                                 // Also check combined flags like -lm
                                 let has_l_flag = cmd.arguments.iter().any(|a| {
-                                    a == "-l" || a == "--no-log-init" ||
-                                    (a.starts_with('-') && !a.starts_with("--") && a.contains('l'))
+                                    a == "-l"
+                                        || a == "--no-log-init"
+                                        || (a.starts_with('-')
+                                            && !a.starts_with("--")
+                                            && a.contains('l'))
                                 });
                                 !has_l_flag
                             } else {
@@ -43,8 +46,8 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::hadolint::lint::{lint, LintResult};
     use crate::analyzer::hadolint::config::HadolintConfig;
+    use crate::analyzer::hadolint::lint::{LintResult, lint};
 
     fn lint_dockerfile(content: &str) -> LintResult {
         lint(content, &HadolintConfig::default())

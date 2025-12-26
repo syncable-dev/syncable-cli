@@ -1,8 +1,8 @@
+use super::common::InstallationUtils;
 use crate::analyzer::tool_management::ToolDetector;
 use crate::error::Result;
-use super::common::InstallationUtils;
-use std::collections::HashMap;
 use log::{info, warn};
+use std::collections::HashMap;
 
 /// Install govulncheck for Go vulnerability scanning
 pub fn install_govulncheck(
@@ -12,14 +12,14 @@ pub fn install_govulncheck(
     if tool_detector.detect_tool("govulncheck").available {
         return Ok(());
     }
-    
+
     info!("🔧 Installing govulncheck for Go vulnerability scanning...");
-    
-    let success = InstallationUtils::execute_command("go", &[
-        "install", 
-        "golang.org/x/vuln/cmd/govulncheck@latest"
-    ])?;
-    
+
+    let success = InstallationUtils::execute_command(
+        "go",
+        &["install", "golang.org/x/vuln/cmd/govulncheck@latest"],
+    )?;
+
     if success {
         info!("✅ govulncheck installed successfully");
         installed_tools.insert("govulncheck".to_string(), true);
@@ -29,6 +29,6 @@ pub fn install_govulncheck(
         warn!("❌ Failed to install govulncheck");
         warn!("📦 Please install Go from https://golang.org/ first");
     }
-    
+
     Ok(())
 }

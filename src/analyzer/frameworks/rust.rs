@@ -1,5 +1,5 @@
-use super::{LanguageFrameworkDetector, TechnologyRule, FrameworkDetectionUtils};
-use crate::analyzer::{DetectedTechnology, DetectedLanguage, TechnologyCategory, LibraryType};
+use super::{FrameworkDetectionUtils, LanguageFrameworkDetector, TechnologyRule};
+use crate::analyzer::{DetectedLanguage, DetectedTechnology, LibraryType, TechnologyCategory};
 use crate::error::Result;
 
 pub struct RustFrameworkDetector;
@@ -7,20 +7,24 @@ pub struct RustFrameworkDetector;
 impl LanguageFrameworkDetector for RustFrameworkDetector {
     fn detect_frameworks(&self, language: &DetectedLanguage) -> Result<Vec<DetectedTechnology>> {
         let rules = get_rust_technology_rules();
-        
+
         // Combine main and dev dependencies for comprehensive detection
-        let all_deps: Vec<String> = language.main_dependencies.iter()
+        let all_deps: Vec<String> = language
+            .main_dependencies
+            .iter()
             .chain(language.dev_dependencies.iter())
             .cloned()
             .collect();
-        
+
         let technologies = FrameworkDetectionUtils::detect_technologies_by_dependencies(
-            &rules, &all_deps, language.confidence
+            &rules,
+            &all_deps,
+            language.confidence,
         );
-        
+
         Ok(technologies)
     }
-    
+
     fn supported_languages(&self) -> Vec<&'static str> {
         vec!["Rust"]
     }
@@ -239,7 +243,6 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // ASYNC RUNTIMES
         TechnologyRule {
             name: "Tokio".to_string(),
@@ -274,7 +277,6 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // HTTP CLIENTS & SERVERS
         TechnologyRule {
             name: "reqwest".to_string(),
@@ -309,7 +311,6 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // ERROR HANDLING
         TechnologyRule {
             name: "anyhow".to_string(),
@@ -355,7 +356,6 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // SERIALIZATION
         TechnologyRule {
             name: "Serde".to_string(),
@@ -412,7 +412,6 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // CLI FRAMEWORKS
         TechnologyRule {
             name: "clap".to_string(),
@@ -458,7 +457,6 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // LOGGING AND TRACING
         TechnologyRule {
             name: "tracing".to_string(),
@@ -515,7 +513,6 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // TESTING
         TechnologyRule {
             name: "rstest".to_string(),
@@ -561,7 +558,6 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // DATABASE
         TechnologyRule {
             name: "Diesel".to_string(),
@@ -589,7 +585,11 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             name: "SeaORM".to_string(),
             category: TechnologyCategory::Database,
             confidence: 0.90,
-            dependency_patterns: vec!["sea-orm".to_string(), "sea-orm-migration".to_string(), "sea-orm-cli".to_string()],
+            dependency_patterns: vec![
+                "sea-orm".to_string(),
+                "sea-orm-migration".to_string(),
+                "sea-orm-cli".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -607,7 +607,6 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // CRYPTOGRAPHY & SECURITY
         TechnologyRule {
             name: "ring".to_string(),
@@ -675,7 +674,6 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // DATE/TIME
         TechnologyRule {
             name: "chrono".to_string(),
@@ -699,7 +697,6 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // WASM
         TechnologyRule {
             name: "wasm-bindgen".to_string(),
@@ -734,7 +731,6 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // GAME DEVELOPMENT
         TechnologyRule {
             name: "Bevy".to_string(),
@@ -758,7 +754,6 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // TEMPLATING
         TechnologyRule {
             name: "handlebars".to_string(),
@@ -793,7 +788,6 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // MATH/SCIENCE
         TechnologyRule {
             name: "ndarray".to_string(),
@@ -817,7 +811,6 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // IMAGE PROCESSING
         TechnologyRule {
             name: "image".to_string(),
@@ -830,7 +823,6 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // PARSING
         TechnologyRule {
             name: "nom".to_string(),
@@ -854,7 +846,6 @@ fn get_rust_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // COMPRESSION
         TechnologyRule {
             name: "flate2".to_string(),

@@ -4,7 +4,7 @@
 //! (URL download or auto-extraction from remote archives).
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{simple_rule, SimpleRule};
+use crate::analyzer::hadolint::rules::{SimpleRule, simple_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
@@ -19,9 +19,9 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
                     // ADD is acceptable if:
                     // 1. Source is a URL (ADD auto-downloads)
                     // 2. Source is a local tar archive (ADD auto-extracts)
-                    args.sources.iter().all(|src| {
-                        is_url(src) || is_archive(src)
-                    })
+                    args.sources
+                        .iter()
+                        .all(|src| is_url(src) || is_archive(src))
                 }
                 _ => true,
             }
@@ -42,8 +42,19 @@ fn is_archive(src: &str) -> bool {
     }
 
     let archive_extensions = [
-        ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz",
-        ".tar.zst", ".tar.lz", ".tar.lzma", ".gz", ".bz2", ".xz"
+        ".tar",
+        ".tar.gz",
+        ".tgz",
+        ".tar.bz2",
+        ".tbz2",
+        ".tar.xz",
+        ".txz",
+        ".tar.zst",
+        ".tar.lz",
+        ".tar.lzma",
+        ".gz",
+        ".bz2",
+        ".xz",
     ];
 
     let lower = src.to_lowercase();
@@ -53,8 +64,8 @@ fn is_archive(src: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::hadolint::lint::{lint, LintResult};
     use crate::analyzer::hadolint::config::HadolintConfig;
+    use crate::analyzer::hadolint::lint::{LintResult, lint};
 
     fn lint_dockerfile(content: &str) -> LintResult {
         lint(content, &HadolintConfig::default())
@@ -68,7 +79,8 @@ mod tests {
 
     #[test]
     fn test_add_url() {
-        let result = lint_dockerfile("FROM ubuntu:20.04\nADD https://example.com/file.tar.gz /tmp/");
+        let result =
+            lint_dockerfile("FROM ubuntu:20.04\nADD https://example.com/file.tar.gz /tmp/");
         assert!(!result.failures.iter().any(|f| f.code.as_str() == "DL3021"));
     }
 

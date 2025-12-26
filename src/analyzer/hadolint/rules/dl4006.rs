@@ -4,7 +4,7 @@
 //! to ensure the entire pipeline fails if any command fails.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{simple_rule, SimpleRule};
+use crate::analyzer::hadolint::rules::{SimpleRule, simple_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 

@@ -19,4 +19,4 @@ resource "docker_container" "app" {
   }
 }"#;
     Ok(terraform.to_string())
-} 
+}

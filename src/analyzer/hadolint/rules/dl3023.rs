@@ -3,11 +3,12 @@
 //! A COPY instruction cannot reference the current stage as the source.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{custom_rule, CustomRule, RuleState};
+use crate::analyzer::hadolint::rules::{CustomRule, RuleState, custom_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
-pub fn rule() -> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&ParsedShell>) + Send + Sync> {
+pub fn rule()
+-> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&ParsedShell>) + Send + Sync> {
     custom_rule(
         "DL3023",
         Severity::Error,
@@ -29,11 +30,15 @@ pub fn rule() -> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&P
                 Instruction::Copy(_, flags) => {
                     if let Some(from) = &flags.from {
                         // Check if referencing current stage
-                        let is_current_alias = state.data.get_string("current_stage")
+                        let is_current_alias = state
+                            .data
+                            .get_string("current_stage")
                             .map(|s| s == from)
                             .unwrap_or(false);
 
-                        let is_current_index = from.parse::<i64>().ok()
+                        let is_current_index = from
+                            .parse::<i64>()
+                            .ok()
                             .map(|n| n == state.data.get_int("current_stage_index"))
                             .unwrap_or(false);
 
@@ -56,8 +61,8 @@ pub fn rule() -> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&P
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::hadolint::lint::{lint, LintResult};
     use crate::analyzer::hadolint::config::HadolintConfig;
+    use crate::analyzer::hadolint::lint::{LintResult, lint};
 
     fn lint_dockerfile(content: &str) -> LintResult {
         lint(content, &HadolintConfig::default())
@@ -65,24 +70,20 @@ mod tests {
 
     #[test]
     fn test_copy_from_same_stage() {
-        let result = lint_dockerfile(
-            "FROM node:18 AS builder\nCOPY --from=builder /app /app"
-        );
+        let result = lint_dockerfile("FROM node:18 AS builder\nCOPY --from=builder /app /app");
         assert!(result.failures.iter().any(|f| f.code.as_str() == "DL3023"));
     }
 
     #[test]
     fn test_copy_from_same_index() {
-        let result = lint_dockerfile(
-            "FROM node:18\nCOPY --from=0 /app /app"
-        );
+        let result = lint_dockerfile("FROM node:18\nCOPY --from=0 /app /app");
         assert!(result.failures.iter().any(|f| f.code.as_str() == "DL3023"));
     }
 
     #[test]
     fn test_copy_from_different_stage() {
         let result = lint_dockerfile(
-            "FROM node:18 AS builder\nRUN npm ci\nFROM node:18-alpine\nCOPY --from=builder /app /app"
+            "FROM node:18 AS builder\nRUN npm ci\nFROM node:18-alpine\nCOPY --from=builder /app /app",
         );
         assert!(!result.failures.iter().any(|f| f.code.as_str() == "DL3023"));
     }

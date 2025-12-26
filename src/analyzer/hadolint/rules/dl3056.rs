@@ -3,7 +3,7 @@
 //! The source label should contain a valid URL.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{simple_rule, SimpleRule};
+use crate::analyzer::hadolint::rules::{SimpleRule, simple_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
@@ -12,20 +12,18 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
         "DL3056",
         Severity::Warning,
         "Label `org.opencontainers.image.source` is not a valid URL.",
-        |instr, _shell| {
-            match instr {
-                Instruction::Label(pairs) => {
-                    for (key, value) in pairs {
-                        if key == "org.opencontainers.image.source" {
-                            if !is_valid_url(value) {
-                                return false;
-                            }
+        |instr, _shell| match instr {
+            Instruction::Label(pairs) => {
+                for (key, value) in pairs {
+                    if key == "org.opencontainers.image.source" {
+                        if !is_valid_url(value) {
+                            return false;
                         }
                     }
-                    true
                 }
-                _ => true,
+                true
             }
+            _ => true,
         },
     )
 }
@@ -42,8 +40,8 @@ fn is_valid_url(url: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::hadolint::lint::{lint, LintResult};
     use crate::analyzer::hadolint::config::HadolintConfig;
+    use crate::analyzer::hadolint::lint::{LintResult, lint};
 
     fn lint_dockerfile(content: &str) -> LintResult {
         lint(content, &HadolintConfig::default())
@@ -51,13 +49,17 @@ mod tests {
 
     #[test]
     fn test_valid_url() {
-        let result = lint_dockerfile("FROM ubuntu:20.04\nLABEL org.opencontainers.image.source=\"https://github.com/example/repo\"");
+        let result = lint_dockerfile(
+            "FROM ubuntu:20.04\nLABEL org.opencontainers.image.source=\"https://github.com/example/repo\"",
+        );
         assert!(!result.failures.iter().any(|f| f.code.as_str() == "DL3056"));
     }
 
     #[test]
     fn test_invalid_url() {
-        let result = lint_dockerfile("FROM ubuntu:20.04\nLABEL org.opencontainers.image.source=\"not-a-url\"");
+        let result = lint_dockerfile(
+            "FROM ubuntu:20.04\nLABEL org.opencontainers.image.source=\"not-a-url\"",
+        );
         assert!(result.failures.iter().any(|f| f.code.as_str() == "DL3056"));
     }
 }

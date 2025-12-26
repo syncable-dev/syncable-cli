@@ -74,10 +74,7 @@ pub enum CompactionStrategy {
 impl Default for CompactionStrategy {
     fn default() -> Self {
         // Default: evict 60% or retain last 10, whichever is more conservative
-        Self::Min(
-            Box::new(Self::Evict(0.6)),
-            Box::new(Self::Retain(10)),
-        )
+        Self::Min(Box::new(Self::Evict(0.6)), Box::new(Self::Retain(10)))
     }
 }
 
@@ -125,9 +122,7 @@ impl CompactionStrategy {
                 let evict_count = (total as f64 * fraction).floor() as usize;
                 total.saturating_sub(retention_window).min(evict_count)
             }
-            Self::Retain(keep) => {
-                total.saturating_sub(*keep.max(&retention_window))
-            }
+            Self::Retain(keep) => total.saturating_sub(*keep.max(&retention_window)),
             Self::Min(a, b) => {
                 let end_a = a.calculate_raw_end(total, retention_window);
                 let end_b = b.calculate_raw_end(total, retention_window);
@@ -175,9 +170,7 @@ impl CompactionStrategy {
             // Find the tool result with matching ID
             if let Some(tool_id) = &last_evicted.tool_id {
                 for i in end..messages.len().min(end + 5) {
-                    if messages[i].is_tool_result
-                        && messages[i].tool_id.as_ref() == Some(tool_id)
-                    {
+                    if messages[i].is_tool_result && messages[i].tool_id.as_ref() == Some(tool_id) {
                         // Found matching result - extend eviction to include it
                         end = i + 1;
                         break;
@@ -287,7 +280,7 @@ mod tests {
             (MessageRole::System, false, false),
             (MessageRole::User, false, false),
             (MessageRole::Assistant, true, false), // has tool call
-            (MessageRole::Tool, false, true),       // tool result
+            (MessageRole::Tool, false, true),      // tool result
             (MessageRole::Assistant, false, false),
             (MessageRole::User, false, false),
             (MessageRole::Assistant, false, false),
@@ -315,7 +308,7 @@ mod tests {
             (MessageRole::System, false, false),
             (MessageRole::User, false, false),
             (MessageRole::Assistant, false, false),
-            (MessageRole::User, false, false),  // droppable
+            (MessageRole::User, false, false), // droppable
             (MessageRole::Assistant, false, false),
         ]);
         messages[3].droppable = true;
@@ -339,9 +332,7 @@ mod tests {
         // Retain(5) would evict 5, keeping 5
         // Min should be more conservative = evict less = end at 5
 
-        let messages = make_messages(&vec![
-            (MessageRole::Assistant, false, false); 10
-        ]);
+        let messages = make_messages(&vec![(MessageRole::Assistant, false, false); 10]);
 
         let range = strategy.calculate_eviction_range(&messages, 3);
         assert!(range.is_some());

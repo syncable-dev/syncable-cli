@@ -1,5 +1,5 @@
 //! # Analyzer Module
-//! 
+//!
 //! This module provides project analysis capabilities for detecting:
 //! - Programming languages and their versions
 //! - Frameworks and libraries
@@ -12,58 +12,56 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+pub mod context;
+pub mod dclint;
 pub mod dependency_parser;
+pub mod display;
+pub mod docker_analyzer;
 pub mod framework_detector;
 pub mod frameworks;
-pub mod language_detector;
-pub mod context;
-pub mod vulnerability;
-pub mod security_analyzer;
-pub mod security;
-pub mod tool_management;
-pub mod runtime;
-pub mod monorepo;
-pub mod docker_analyzer;
-pub mod display;
 pub mod hadolint;
+pub mod language_detector;
+pub mod monorepo;
+pub mod runtime;
+pub mod security;
+pub mod security_analyzer;
+pub mod tool_management;
+pub mod vulnerability;
 
 // Re-export dependency analysis types
-pub use dependency_parser::{
-    DependencyInfo, DependencyAnalysis, DetailedDependencyMap
-};
+pub use dependency_parser::{DependencyAnalysis, DependencyInfo, DetailedDependencyMap};
 
 // Re-export security analysis types
 pub use security_analyzer::{
-    SecurityAnalyzer, SecurityReport, SecurityFinding, SecuritySeverity,
-    SecurityCategory, ComplianceStatus, SecurityAnalysisConfig
+    ComplianceStatus, SecurityAnalysisConfig, SecurityAnalyzer, SecurityCategory, SecurityFinding,
+    SecurityReport, SecuritySeverity,
 };
 
 // Re-export security analysis types
-pub use security::{
-    SecretPatternManager
-};
+pub use security::SecretPatternManager;
 pub use security::config::SecurityConfigPreset;
 
 // Re-export tool management types
-pub use tool_management::{ToolInstaller, ToolDetector, ToolStatus, InstallationSource};
+pub use tool_management::{InstallationSource, ToolDetector, ToolInstaller, ToolStatus};
 
 // Re-export runtime detection types
-pub use runtime::{RuntimeDetector, JavaScriptRuntime, PackageManager, RuntimeDetectionResult, DetectionConfidence};
+pub use runtime::{
+    DetectionConfidence, JavaScriptRuntime, PackageManager, RuntimeDetectionResult, RuntimeDetector,
+};
 
 // Re-export vulnerability checking types
-pub use vulnerability::{VulnerabilityChecker, VulnerabilityInfo, VulnerabilityReport, VulnerableDependency};
 pub use vulnerability::types::VulnerabilitySeverity as VulnSeverity;
+pub use vulnerability::{
+    VulnerabilityChecker, VulnerabilityInfo, VulnerabilityReport, VulnerableDependency,
+};
 
 // Re-export monorepo analysis types
-pub use monorepo::{
-    MonorepoDetectionConfig, analyze_monorepo, analyze_monorepo_with_config
-};
+pub use monorepo::{MonorepoDetectionConfig, analyze_monorepo, analyze_monorepo_with_config};
 
 // Re-export Docker analysis types
 pub use docker_analyzer::{
-    DockerAnalysis, DockerfileInfo, ComposeFileInfo, DockerService, 
-    OrchestrationPattern, NetworkingConfig, DockerEnvironment,
-    analyze_docker_infrastructure
+    ComposeFileInfo, DockerAnalysis, DockerEnvironment, DockerService, DockerfileInfo,
+    NetworkingConfig, OrchestrationPattern, analyze_docker_infrastructure,
 };
 
 /// Represents a detected programming language
@@ -363,18 +361,18 @@ pub enum ArchitecturePattern {
 }
 
 /// Analyzes a project directory to detect languages, frameworks, and dependencies.
-/// 
+///
 /// # Arguments
 /// * `path` - The root directory of the project to analyze
-/// 
+///
 /// # Returns
 /// A `ProjectAnalysis` containing detected components or an error
-/// 
+///
 /// # Examples
 /// ```no_run
 /// use syncable_cli::analyzer::analyze_project;
 /// use std::path::Path;
-/// 
+///
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let analysis = analyze_project(Path::new("./my-project"))?;
 /// println!("Languages: {:?}", analysis.languages);
@@ -386,36 +384,39 @@ pub fn analyze_project(path: &Path) -> Result<ProjectAnalysis> {
 }
 
 /// Analyzes a project with custom configuration
-pub fn analyze_project_with_config(path: &Path, config: &AnalysisConfig) -> Result<ProjectAnalysis> {
+pub fn analyze_project_with_config(
+    path: &Path,
+    config: &AnalysisConfig,
+) -> Result<ProjectAnalysis> {
     let start_time = std::time::Instant::now();
-    
+
     // Validate project path
     let project_root = crate::common::file_utils::validate_project_path(path)?;
-    
+
     log::info!("Starting analysis of project: {}", project_root.display());
-    
+
     // Collect project files
     let files = crate::common::file_utils::collect_project_files(&project_root, config)?;
     log::debug!("Found {} files to analyze", files.len());
-    
+
     // Perform parallel analysis
     let languages = language_detector::detect_languages(&files, config)?;
     let frameworks = framework_detector::detect_frameworks(&project_root, &languages, config)?;
     let dependencies = dependency_parser::parse_dependencies(&project_root, &languages, config)?;
     let context = context::analyze_context(&project_root, &languages, &frameworks, config)?;
-    
+
     // Analyze Docker infrastructure
     let docker_analysis = analyze_docker_infrastructure(&project_root).ok();
-    
+
     let duration = start_time.elapsed();
     let confidence = calculate_confidence_score(&languages, &frameworks);
-    
+
     #[allow(deprecated)]
     let analysis = ProjectAnalysis {
         project_root,
         languages,
         technologies: frameworks.clone(), // New field with proper technology classification
-        frameworks, // Backward compatibility
+        frameworks,                       // Backward compatibility
         dependencies,
         entry_points: context.entry_points,
         ports: context.ports,
@@ -433,7 +434,7 @@ pub fn analyze_project_with_config(path: &Path, config: &AnalysisConfig) -> Resu
             confidence_score: confidence,
         },
     };
-    
+
     log::info!("Analysis completed in {}ms", duration.as_millis());
     Ok(analysis)
 }
@@ -446,55 +447,52 @@ fn calculate_confidence_score(
     if languages.is_empty() {
         return 0.0;
     }
-    
-    let lang_confidence: f32 = languages.iter().map(|l| l.confidence).sum::<f32>() / languages.len() as f32;
+
+    let lang_confidence: f32 =
+        languages.iter().map(|l| l.confidence).sum::<f32>() / languages.len() as f32;
     let framework_confidence: f32 = if frameworks.is_empty() {
         0.5 // Neutral score if no frameworks detected
     } else {
         frameworks.iter().map(|f| f.confidence).sum::<f32>() / frameworks.len() as f32
     };
-    
+
     (lang_confidence * 0.7 + framework_confidence * 0.3).min(1.0)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_confidence_calculation() {
-        let languages = vec![
-            DetectedLanguage {
-                name: "Rust".to_string(),
-                version: Some("1.70.0".to_string()),
-                confidence: 0.9,
-                files: vec![],
-                main_dependencies: vec!["serde".to_string(), "tokio".to_string()],
-                dev_dependencies: vec!["assert_cmd".to_string()],
-                package_manager: Some("cargo".to_string()),
-            }
-        ];
-        
-        let technologies = vec![
-            DetectedTechnology {
-                name: "Actix Web".to_string(),
-                version: Some("4.0".to_string()),
-                category: TechnologyCategory::BackendFramework,
-                confidence: 0.8,
-                requires: vec!["serde".to_string(), "tokio".to_string()],
-                conflicts_with: vec![],
-                is_primary: true,
-                file_indicators: vec![],
-            }
-        ];
-        
+        let languages = vec![DetectedLanguage {
+            name: "Rust".to_string(),
+            version: Some("1.70.0".to_string()),
+            confidence: 0.9,
+            files: vec![],
+            main_dependencies: vec!["serde".to_string(), "tokio".to_string()],
+            dev_dependencies: vec!["assert_cmd".to_string()],
+            package_manager: Some("cargo".to_string()),
+        }];
+
+        let technologies = vec![DetectedTechnology {
+            name: "Actix Web".to_string(),
+            version: Some("4.0".to_string()),
+            category: TechnologyCategory::BackendFramework,
+            confidence: 0.8,
+            requires: vec!["serde".to_string(), "tokio".to_string()],
+            conflicts_with: vec![],
+            is_primary: true,
+            file_indicators: vec![],
+        }];
+
         let frameworks = technologies.clone(); // For backward compatibility
-        
+
         let score = calculate_confidence_score(&languages, &frameworks);
         assert!(score > 0.8);
         assert!(score <= 1.0);
     }
-    
+
     #[test]
     fn test_empty_analysis() {
         let languages = vec![];
@@ -502,4 +500,4 @@ mod tests {
         let score = calculate_confidence_score(&languages, &frameworks);
         assert_eq!(score, 0.0);
     }
-} 
+}

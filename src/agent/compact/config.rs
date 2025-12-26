@@ -162,10 +162,14 @@ impl CompactConfig {
         if let Some(true) = self.thresholds.on_turn_end {
             if last_is_user {
                 // Only trigger if we're also close to other thresholds
-                let near_token = self.thresholds.token_threshold
+                let near_token = self
+                    .thresholds
+                    .token_threshold
                     .map(|t| token_count >= t / 2)
                     .unwrap_or(false);
-                let near_turn = self.thresholds.turn_threshold
+                let near_turn = self
+                    .thresholds
+                    .turn_threshold
                     .map(|t| turn_count >= t / 2)
                     .unwrap_or(false);
 
@@ -187,19 +191,28 @@ impl CompactConfig {
     ) -> Option<String> {
         if let Some(threshold) = self.thresholds.token_threshold {
             if token_count >= threshold {
-                return Some(format!("token count ({}) >= threshold ({})", token_count, threshold));
+                return Some(format!(
+                    "token count ({}) >= threshold ({})",
+                    token_count, threshold
+                ));
             }
         }
 
         if let Some(threshold) = self.thresholds.turn_threshold {
             if turn_count >= threshold {
-                return Some(format!("turn count ({}) >= threshold ({})", turn_count, threshold));
+                return Some(format!(
+                    "turn count ({}) >= threshold ({})",
+                    turn_count, threshold
+                ));
             }
         }
 
         if let Some(threshold) = self.thresholds.message_threshold {
             if message_count >= threshold {
-                return Some(format!("message count ({}) >= threshold ({})", message_count, threshold));
+                return Some(format!(
+                    "message count ({}) >= threshold ({})",
+                    message_count, threshold
+                ));
             }
         }
 

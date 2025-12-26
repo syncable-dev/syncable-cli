@@ -1,5 +1,5 @@
-use super::{LanguageFrameworkDetector, TechnologyRule, FrameworkDetectionUtils};
-use crate::analyzer::{DetectedTechnology, DetectedLanguage, TechnologyCategory, LibraryType};
+use super::{FrameworkDetectionUtils, LanguageFrameworkDetector, TechnologyRule};
+use crate::analyzer::{DetectedLanguage, DetectedTechnology, LibraryType, TechnologyCategory};
 use crate::error::Result;
 use std::fs;
 use std::path::Path;
@@ -9,21 +9,26 @@ pub struct JavaScriptFrameworkDetector;
 impl LanguageFrameworkDetector for JavaScriptFrameworkDetector {
     fn detect_frameworks(&self, language: &DetectedLanguage) -> Result<Vec<DetectedTechnology>> {
         let rules = get_js_technology_rules();
-        
+
         // New: Enhanced detection using file-based approach first
         let mut technologies = detect_frameworks_from_files(language, &rules)?;
-        
+
         // Combine main and dev dependencies for comprehensive detection
-        let all_deps: Vec<String> = language.main_dependencies.iter()
+        let all_deps: Vec<String> = language
+            .main_dependencies
+            .iter()
             .chain(language.dev_dependencies.iter())
             .cloned()
             .collect();
-        
+
         // Enhanced detection: analyze actual source files for usage patterns
         if let Some(enhanced_techs) = detect_technologies_from_source_files(language, &rules) {
             // Merge with file-based detection, preferring higher confidence scores
             for enhanced_tech in enhanced_techs {
-                if let Some(existing) = technologies.iter_mut().find(|t| t.name == enhanced_tech.name) {
+                if let Some(existing) = technologies
+                    .iter_mut()
+                    .find(|t| t.name == enhanced_tech.name)
+                {
                     // Use higher confidence between file-based and source file analysis
                     if enhanced_tech.confidence > existing.confidence {
                         existing.confidence = enhanced_tech.confidence;
@@ -34,12 +39,14 @@ impl LanguageFrameworkDetector for JavaScriptFrameworkDetector {
                 }
             }
         }
-        
+
         // Fallback to dependency-based detection
         let dependency_based_techs = FrameworkDetectionUtils::detect_technologies_by_dependencies(
-            &rules, &all_deps, language.confidence
+            &rules,
+            &all_deps,
+            language.confidence,
         );
-        
+
         // Merge dependency-based detections with higher confidence scores
         for dep_tech in dependency_based_techs {
             if let Some(existing) = technologies.iter_mut().find(|t| t.name == dep_tech.name) {
@@ -52,31 +59,34 @@ impl LanguageFrameworkDetector for JavaScriptFrameworkDetector {
                 technologies.push(dep_tech);
             }
         }
-        
+
         Ok(technologies)
     }
-    
+
     fn supported_languages(&self) -> Vec<&'static str> {
         vec!["JavaScript", "TypeScript", "JavaScript/TypeScript"]
     }
 }
 
 /// New: Enhanced detection that analyzes project files for framework indicators
-fn detect_frameworks_from_files(language: &DetectedLanguage, rules: &[TechnologyRule]) -> Result<Vec<DetectedTechnology>> {
+fn detect_frameworks_from_files(
+    language: &DetectedLanguage,
+    rules: &[TechnologyRule],
+) -> Result<Vec<DetectedTechnology>> {
     let mut detected = Vec::new();
-    
+
     // Check for configuration files first (highest priority)
     if let Some(config_detections) = detect_by_config_files(language, rules) {
         detected.extend(config_detections);
     }
-    
+
     // If no config-based detections, check project structure (medium priority)
     if detected.is_empty() {
         if let Some(structure_detections) = detect_by_project_structure(language, rules) {
             detected.extend(structure_detections);
         }
     }
-    
+
     // Check source code patterns (lower priority)
     if let Some(source_detections) = detect_by_source_patterns(language, rules) {
         // Merge with existing detections, preferring higher confidence
@@ -90,26 +100,38 @@ fn detect_frameworks_from_files(language: &DetectedLanguage, rules: &[Technology
             }
         }
     }
-    
+
     Ok(detected)
 }
 
 /// New: Detect frameworks by checking for framework-specific configuration files
-fn detect_by_config_files(language: &DetectedLanguage, rules: &[TechnologyRule]) -> Option<Vec<DetectedTechnology>> {
+fn detect_by_config_files(
+    language: &DetectedLanguage,
+    rules: &[TechnologyRule],
+) -> Option<Vec<DetectedTechnology>> {
     let mut detected = Vec::new();
-    
+
     // Check each file in the project for config files
     for file_path in &language.files {
         if let Some(file_name) = file_path.file_name().and_then(|n| n.to_str()) {
             // Check for Expo config files
-            if file_name == "app.json" || file_name == "app.config.js" || file_name == "app.config.ts" {
+            if file_name == "app.json"
+                || file_name == "app.config.js"
+                || file_name == "app.config.ts"
+            {
                 // For app.config files, we need to check the content to distinguish between Expo and TanStack Start
                 // But for testing purposes, we'll make assumptions based on file names and dependencies
                 if file_name == "app.config.js" || file_name == "app.config.ts" {
                     // Check if we have Expo dependencies
-                    let has_expo_deps = language.main_dependencies.iter().any(|dep| dep == "expo" || dep == "react-native");
-                    let has_tanstack_deps = language.main_dependencies.iter().any(|dep| dep.contains("tanstack") || dep.contains("vinxi"));
-                    
+                    let has_expo_deps = language
+                        .main_dependencies
+                        .iter()
+                        .any(|dep| dep == "expo" || dep == "react-native");
+                    let has_tanstack_deps = language
+                        .main_dependencies
+                        .iter()
+                        .any(|dep| dep.contains("tanstack") || dep.contains("vinxi"));
+
                     if has_expo_deps && !has_tanstack_deps {
                         if let Some(expo_rule) = rules.iter().find(|r| r.name == "Expo") {
                             detected.push(DetectedTechnology {
@@ -124,7 +146,9 @@ fn detect_by_config_files(language: &DetectedLanguage, rules: &[TechnologyRule])
                             });
                         }
                     } else if has_tanstack_deps && !has_expo_deps {
-                        if let Some(tanstack_rule) = rules.iter().find(|r| r.name == "Tanstack Start") {
+                        if let Some(tanstack_rule) =
+                            rules.iter().find(|r| r.name == "Tanstack Start")
+                        {
                             detected.push(DetectedTechnology {
                                 name: tanstack_rule.name.clone(),
                                 version: None,
@@ -185,7 +209,10 @@ fn detect_by_config_files(language: &DetectedLanguage, rules: &[TechnologyRule])
                 }
             }
             // Check for Encore config files
-            else if file_name == "encore.app" || file_name == "encore.service.ts" || file_name == "encore.service.js" {
+            else if file_name == "encore.app"
+                || file_name == "encore.service.ts"
+                || file_name == "encore.service.js"
+            {
                 if let Some(encore_rule) = rules.iter().find(|r| r.name == "Encore") {
                     detected.push(DetectedTechnology {
                         name: encore_rule.name.clone(),
@@ -201,7 +228,7 @@ fn detect_by_config_files(language: &DetectedLanguage, rules: &[TechnologyRule])
             }
         }
     }
-    
+
     if detected.is_empty() {
         None
     } else {
@@ -210,7 +237,10 @@ fn detect_by_config_files(language: &DetectedLanguage, rules: &[TechnologyRule])
 }
 
 /// New: Detect frameworks by analyzing project structure
-fn detect_by_project_structure(language: &DetectedLanguage, rules: &[TechnologyRule]) -> Option<Vec<DetectedTechnology>> {
+fn detect_by_project_structure(
+    language: &DetectedLanguage,
+    rules: &[TechnologyRule],
+) -> Option<Vec<DetectedTechnology>> {
     let mut detected = Vec::new();
     let mut has_android_dir = false;
     let mut has_ios_dir = false;
@@ -239,7 +269,10 @@ fn detect_by_project_structure(language: &DetectedLanguage, rules: &[TechnologyR
             // Check for Next.js structure
             else if has_path_component(parent, "pages") {
                 has_pages_dir = true;
-            } else if has_path_component(parent, "app") && !file_name.contains("app.config") && !file_name.contains("encore.app") {
+            } else if has_path_component(parent, "app")
+                && !file_name.contains("app.config")
+                && !file_name.contains("encore.app")
+            {
                 has_app_dir = true;
             }
             // Check for TanStack Start structure
@@ -263,16 +296,29 @@ fn detect_by_project_structure(language: &DetectedLanguage, rules: &[TechnologyR
             if file_name.starts_with("next.config.") {
                 has_next_config = true;
             }
-            if file_name == "app.config.ts" || file_name == "app.config.js" || file_name.starts_with("vinxi.config") {
+            if file_name == "app.config.ts"
+                || file_name == "app.config.js"
+                || file_name.starts_with("vinxi.config")
+            {
                 has_tanstack_config = true;
             }
         }
     }
 
     // Check if we have Expo dependencies
-    let has_expo_deps = language.main_dependencies.iter().any(|dep| dep == "expo" || dep == "react-native");
-    let has_next_dep = language.main_dependencies.iter().any(|dep| dep == "next" || dep.starts_with("next@"));
-    let has_tanstack_dep = language.main_dependencies.iter().any(|dep| dep.contains("tanstack/react-start") || dep.contains("tanstack-start") || dep.contains("vinxi"));
+    let has_expo_deps = language
+        .main_dependencies
+        .iter()
+        .any(|dep| dep == "expo" || dep == "react-native");
+    let has_next_dep = language
+        .main_dependencies
+        .iter()
+        .any(|dep| dep == "next" || dep.starts_with("next@"));
+    let has_tanstack_dep = language.main_dependencies.iter().any(|dep| {
+        dep.contains("tanstack/react-start")
+            || dep.contains("tanstack-start")
+            || dep.contains("vinxi")
+    });
 
     // Determine frameworks based on structure
     if has_encore_app_file || has_encore_service_files {
@@ -346,7 +392,7 @@ fn detect_by_project_structure(language: &DetectedLanguage, rules: &[TechnologyR
             });
         }
     }
-    
+
     if detected.is_empty() {
         None
     } else {
@@ -366,18 +412,26 @@ fn has_app_routes(path: &Path) -> bool {
         .components()
         .map(|c| c.as_os_str().to_string_lossy().to_string())
         .collect();
-    components.windows(2).any(|w| w[0] == "app" && w[1] == "routes")
+    components
+        .windows(2)
+        .any(|w| w[0] == "app" && w[1] == "routes")
 }
 
 /// New: Detect frameworks by analyzing source code patterns
-fn detect_by_source_patterns(language: &DetectedLanguage, rules: &[TechnologyRule]) -> Option<Vec<DetectedTechnology>> {
+fn detect_by_source_patterns(
+    language: &DetectedLanguage,
+    rules: &[TechnologyRule],
+) -> Option<Vec<DetectedTechnology>> {
     let mut detected = Vec::new();
-    
+
     // Analyze files for usage patterns
     for file_path in &language.files {
         if let Ok(content) = std::fs::read_to_string(file_path) {
             // Check for Expo source patterns
-            if content.contains("expo") && (content.contains("from 'expo'") || content.contains("import {") && content.contains("registerRootComponent")) {
+            if content.contains("expo")
+                && (content.contains("from 'expo'")
+                    || content.contains("import {") && content.contains("registerRootComponent"))
+            {
                 if let Some(expo_rule) = rules.iter().find(|r| r.name == "Expo") {
                     detected.push(DetectedTechnology {
                         name: expo_rule.name.clone(),
@@ -391,7 +445,7 @@ fn detect_by_source_patterns(language: &DetectedLanguage, rules: &[TechnologyRul
                     });
                 }
             }
-            
+
             // Check for Next.js source patterns
             if content.contains("next/") {
                 if let Some(nextjs_rule) = rules.iter().find(|r| r.name == "Next.js") {
@@ -407,7 +461,7 @@ fn detect_by_source_patterns(language: &DetectedLanguage, rules: &[TechnologyRul
                     });
                 }
             }
-            
+
             // Check for TanStack Router patterns
             if content.contains("@tanstack/react-router") && content.contains("createFileRoute") {
                 if let Some(tanstack_rule) = rules.iter().find(|r| r.name == "Tanstack Start") {
@@ -423,7 +477,7 @@ fn detect_by_source_patterns(language: &DetectedLanguage, rules: &[TechnologyRul
                     });
                 }
             }
-            
+
             // Check for React Router patterns
             if content.contains("react-router") && content.contains("BrowserRouter") {
                 if let Some(rr_rule) = rules.iter().find(|r| r.name == "React Router v7") {
@@ -441,7 +495,7 @@ fn detect_by_source_patterns(language: &DetectedLanguage, rules: &[TechnologyRul
             }
         }
     }
-    
+
     if detected.is_empty() {
         None
     } else {
@@ -450,11 +504,12 @@ fn detect_by_source_patterns(language: &DetectedLanguage, rules: &[TechnologyRul
 }
 
 /// Enhanced detection that analyzes actual source files for technology usage patterns
-fn detect_technologies_from_source_files(language: &DetectedLanguage, rules: &[TechnologyRule]) -> Option<Vec<DetectedTechnology>> {
-    
-    
+fn detect_technologies_from_source_files(
+    language: &DetectedLanguage,
+    rules: &[TechnologyRule],
+) -> Option<Vec<DetectedTechnology>> {
     let mut detected = Vec::new();
-    
+
     // Analyze files for usage patterns
     for file_path in &language.files {
         if let Ok(content) = fs::read_to_string(file_path) {
@@ -473,7 +528,7 @@ fn detect_technologies_from_source_files(language: &DetectedLanguage, rules: &[T
                     });
                 }
             }
-            
+
             // Analyze Prisma usage patterns
             if let Some(prisma_confidence) = analyze_prisma_usage(&content, file_path) {
                 if let Some(prisma_rule) = rules.iter().find(|r| r.name == "Prisma") {
@@ -489,7 +544,7 @@ fn detect_technologies_from_source_files(language: &DetectedLanguage, rules: &[T
                     });
                 }
             }
-            
+
             // Analyze Encore usage patterns
             if let Some(encore_confidence) = analyze_encore_usage(&content, file_path) {
                 if let Some(encore_rule) = rules.iter().find(|r| r.name == "Encore") {
@@ -505,7 +560,7 @@ fn detect_technologies_from_source_files(language: &DetectedLanguage, rules: &[T
                     });
                 }
             }
-            
+
             // Analyze Tanstack Start usage patterns
             if let Some(tanstack_confidence) = analyze_tanstack_start_usage(&content, file_path) {
                 if let Some(tanstack_rule) = rules.iter().find(|r| r.name == "Tanstack Start") {
@@ -515,7 +570,12 @@ fn detect_technologies_from_source_files(language: &DetectedLanguage, rules: &[T
                         category: TechnologyCategory::MetaFramework,
                         confidence: tanstack_confidence,
                         requires: vec!["React".to_string()],
-                        conflicts_with: vec!["Next.js".to_string(), "React Router v7".to_string(), "SvelteKit".to_string(), "Nuxt.js".to_string()],
+                        conflicts_with: vec![
+                            "Next.js".to_string(),
+                            "React Router v7".to_string(),
+                            "SvelteKit".to_string(),
+                            "Nuxt.js".to_string(),
+                        ],
                         is_primary: true,
                         file_indicators: tanstack_rule.file_indicators.clone(),
                     });
@@ -523,7 +583,7 @@ fn detect_technologies_from_source_files(language: &DetectedLanguage, rules: &[T
             }
         }
     }
-    
+
     if detected.is_empty() {
         None
     } else {
@@ -535,50 +595,60 @@ fn detect_technologies_from_source_files(language: &DetectedLanguage, rules: &[T
 fn analyze_drizzle_usage(content: &str, file_path: &Path) -> Option<f32> {
     let file_name = file_path.file_name()?.to_string_lossy();
     let mut confidence: f32 = 0.0;
-    
+
     // High confidence indicators
     if content.contains("drizzle-orm") {
         confidence += 0.3;
     }
-    
+
     // Schema file patterns (very high confidence)
-    if file_name.contains("schema") || file_name.contains("db.ts") || file_name.contains("database") {
-        if content.contains("pgTable") || content.contains("mysqlTable") || content.contains("sqliteTable") {
+    if file_name.contains("schema") || file_name.contains("db.ts") || file_name.contains("database")
+    {
+        if content.contains("pgTable")
+            || content.contains("mysqlTable")
+            || content.contains("sqliteTable")
+        {
             confidence += 0.4;
         }
         if content.contains("pgEnum") || content.contains("relations") {
             confidence += 0.3;
         }
     }
-    
+
     // Drizzle-specific imports
-    if content.contains("from 'drizzle-orm/pg-core'") || 
-       content.contains("from 'drizzle-orm/mysql-core'") ||
-       content.contains("from 'drizzle-orm/sqlite-core'") {
+    if content.contains("from 'drizzle-orm/pg-core'")
+        || content.contains("from 'drizzle-orm/mysql-core'")
+        || content.contains("from 'drizzle-orm/sqlite-core'")
+    {
         confidence += 0.3;
     }
-    
+
     // Drizzle query patterns
-    if content.contains("db.select()") || content.contains("db.insert()") || 
-       content.contains("db.update()") || content.contains("db.delete()") {
+    if content.contains("db.select()")
+        || content.contains("db.insert()")
+        || content.contains("db.update()")
+        || content.contains("db.delete()")
+    {
         confidence += 0.2;
     }
-    
+
     // Configuration patterns
-    if content.contains("drizzle(") && (content.contains("connectionString") || content.contains("postgres(")) {
+    if content.contains("drizzle(")
+        && (content.contains("connectionString") || content.contains("postgres("))
+    {
         confidence += 0.2;
     }
-    
+
     // Migration patterns
     if content.contains("drizzle.config") || file_name.contains("migrate") {
         confidence += 0.2;
     }
-    
+
     // Prepared statements
     if content.contains(".prepare()") && content.contains("drizzle") {
         confidence += 0.1;
     }
-    
+
     if confidence > 0.0 {
         Some(confidence.min(1.0_f32))
     } else {
@@ -591,40 +661,43 @@ fn analyze_prisma_usage(content: &str, file_path: &Path) -> Option<f32> {
     let file_name = file_path.file_name()?.to_string_lossy();
     let mut confidence: f32 = 0.0;
     let mut has_prisma_import = false;
-    
+
     // Only detect Prisma if there are actual Prisma-specific imports
     if content.contains("@prisma/client") || content.contains("from '@prisma/client'") {
         confidence += 0.4;
         has_prisma_import = true;
     }
-    
+
     // Prisma schema files (very specific)
     if file_name == "schema.prisma" {
-        if content.contains("model ") || content.contains("generator ") || content.contains("datasource ") {
+        if content.contains("model ")
+            || content.contains("generator ")
+            || content.contains("datasource ")
+        {
             confidence += 0.6;
             has_prisma_import = true;
         }
     }
-    
+
     // Only check for client usage if we have confirmed Prisma imports
     if has_prisma_import {
         // Prisma client instantiation (very specific)
         if content.contains("new PrismaClient") || content.contains("PrismaClient()") {
             confidence += 0.3;
         }
-        
+
         // Prisma-specific query patterns (only if we know it's Prisma)
-        if content.contains("prisma.") && (
-            content.contains(".findUnique(") || 
-            content.contains(".findFirst(") || 
-            content.contains(".upsert(") ||
-            content.contains(".$connect()") ||
-            content.contains(".$disconnect()")
-        ) {
+        if content.contains("prisma.")
+            && (content.contains(".findUnique(")
+                || content.contains(".findFirst(")
+                || content.contains(".upsert(")
+                || content.contains(".$connect()")
+                || content.contains(".$disconnect()"))
+        {
             confidence += 0.2;
         }
     }
-    
+
     // Only return confidence if we have actual Prisma indicators
     if confidence > 0.0 && has_prisma_import {
         Some(confidence.min(1.0_f32))
@@ -637,56 +710,58 @@ fn analyze_prisma_usage(content: &str, file_path: &Path) -> Option<f32> {
 fn analyze_encore_usage(content: &str, file_path: &Path) -> Option<f32> {
     let file_name = file_path.file_name()?.to_string_lossy();
     let mut confidence: f32 = 0.0;
-    
+
     // Skip generated files (like Encore client code)
     if content.contains("// Code generated by the Encore") || content.contains("DO NOT EDIT") {
         return None;
     }
-    
+
     // Skip client-only files (generated or consumption only)
     if file_name.contains("client.ts") || file_name.contains("client.js") {
         return None;
     }
-    
+
     // Only detect Encore when there are actual service development patterns
     let mut has_service_patterns = false;
-    
+
     // Service definition files (high confidence for actual Encore development)
     if file_name.contains("encore.service") || file_name.contains("service.ts") {
         confidence += 0.4;
         has_service_patterns = true;
     }
-    
+
     // API endpoint definitions (indicates actual Encore service development)
-    if content.contains("encore.dev/api") && (content.contains("export") || content.contains("api.")) {
+    if content.contains("encore.dev/api")
+        && (content.contains("export") || content.contains("api."))
+    {
         confidence += 0.4;
         has_service_patterns = true;
     }
-    
+
     // Database service patterns (actual Encore service code)
     if content.contains("SQLDatabase") && content.contains("encore.dev") {
         confidence += 0.3;
         has_service_patterns = true;
     }
-    
+
     // Secret configuration (actual Encore service code)
     if content.contains("secret(") && content.contains("encore.dev/config") {
         confidence += 0.3;
         has_service_patterns = true;
     }
-    
+
     // PubSub service patterns (actual Encore service code)
     if content.contains("Topic") && content.contains("encore.dev/pubsub") {
         confidence += 0.3;
         has_service_patterns = true;
     }
-    
+
     // Cron job patterns (actual Encore service code)
     if content.contains("cron") && content.contains("encore.dev") {
         confidence += 0.2;
         has_service_patterns = true;
     }
-    
+
     // Only return confidence if we have actual service development patterns
     if confidence > 0.0 && has_service_patterns {
         Some(confidence.min(1.0_f32))
@@ -700,7 +775,7 @@ fn analyze_tanstack_start_usage(content: &str, file_path: &Path) -> Option<f32> 
     let file_name = file_path.file_name()?.to_string_lossy();
     let mut confidence: f32 = 0.0;
     let mut has_start_patterns = false;
-    
+
     // Configuration files (high confidence)
     if file_name == "app.config.ts" || file_name == "app.config.js" {
         if content.contains("@tanstack/react-start") || content.contains("tanstack") {
@@ -708,9 +783,10 @@ fn analyze_tanstack_start_usage(content: &str, file_path: &Path) -> Option<f32> 
             has_start_patterns = true;
         }
     }
-    
+
     // Router configuration patterns (very high confidence)
-    if file_name.contains("router.") && (file_name.ends_with(".ts") || file_name.ends_with(".tsx")) {
+    if file_name.contains("router.") && (file_name.ends_with(".ts") || file_name.ends_with(".tsx"))
+    {
         if content.contains("createRouter") && content.contains("@tanstack/react-router") {
             confidence += 0.4;
             has_start_patterns = true;
@@ -720,15 +796,17 @@ fn analyze_tanstack_start_usage(content: &str, file_path: &Path) -> Option<f32> 
             has_start_patterns = true;
         }
     }
-    
+
     // Server entry point patterns
     if file_name == "ssr.tsx" || file_name == "ssr.ts" {
-        if content.contains("createStartHandler") || content.contains("@tanstack/react-start/server") {
+        if content.contains("createStartHandler")
+            || content.contains("@tanstack/react-start/server")
+        {
             confidence += 0.5;
             has_start_patterns = true;
         }
     }
-    
+
     // Client entry point patterns
     if file_name == "client.tsx" || file_name == "client.ts" {
         if content.contains("StartClient") && content.contains("@tanstack/react-start") {
@@ -740,7 +818,7 @@ fn analyze_tanstack_start_usage(content: &str, file_path: &Path) -> Option<f32> 
             has_start_patterns = true;
         }
     }
-    
+
     // Root route patterns (in app/routes/__root.tsx)
     if file_name == "__root.tsx" || file_name == "__root.ts" {
         if content.contains("createRootRoute") && content.contains("@tanstack/react-router") {
@@ -752,7 +830,7 @@ fn analyze_tanstack_start_usage(content: &str, file_path: &Path) -> Option<f32> 
             has_start_patterns = true;
         }
     }
-    
+
     // Route files with createFileRoute
     if file_path.to_string_lossy().contains("routes/") {
         if content.contains("createFileRoute") && content.contains("@tanstack/react-router") {
@@ -760,25 +838,25 @@ fn analyze_tanstack_start_usage(content: &str, file_path: &Path) -> Option<f32> 
             has_start_patterns = true;
         }
     }
-    
+
     // Server functions (key Tanstack Start feature)
     if content.contains("createServerFn") && content.contains("@tanstack/react-start") {
         confidence += 0.4;
         has_start_patterns = true;
     }
-    
+
     // Import patterns specific to Tanstack Start
     if content.contains("from '@tanstack/react-start'") {
         confidence += 0.3;
         has_start_patterns = true;
     }
-    
+
     // Vinxi configuration patterns
     if file_name == "vinxi.config.ts" || file_name == "vinxi.config.js" {
         confidence += 0.2;
         has_start_patterns = true;
     }
-    
+
     // Only return confidence if we have actual Tanstack Start patterns
     if confidence > 0.0 && has_start_patterns {
         Some(confidence.min(1.0_f32))
@@ -797,10 +875,21 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             confidence: 0.95,
             dependency_patterns: vec!["next".to_string()],
             requires: vec!["React".to_string()],
-            conflicts_with: vec!["Tanstack Start".to_string(), "React Router v7".to_string(), "SvelteKit".to_string(), "Nuxt.js".to_string(), "Expo".to_string()],
+            conflicts_with: vec![
+                "Tanstack Start".to_string(),
+                "React Router v7".to_string(),
+                "SvelteKit".to_string(),
+                "Nuxt.js".to_string(),
+                "Expo".to_string(),
+            ],
             is_primary_indicator: true,
             alternative_names: vec!["nextjs".to_string()],
-            file_indicators: vec!["next.config.js".to_string(), "next.config.ts".to_string(), "pages/".to_string(), "app/".to_string()],
+            file_indicators: vec![
+                "next.config.js".to_string(),
+                "next.config.ts".to_string(),
+                "pages/".to_string(),
+                "app/".to_string(),
+            ],
         },
         TechnologyRule {
             name: "Tanstack Start".to_string(),
@@ -808,18 +897,39 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             confidence: 0.95,
             dependency_patterns: vec!["@tanstack/react-start".to_string()],
             requires: vec!["React".to_string()],
-            conflicts_with: vec!["Next.js".to_string(), "React Router v7".to_string(), "SvelteKit".to_string(), "Nuxt.js".to_string()],
+            conflicts_with: vec![
+                "Next.js".to_string(),
+                "React Router v7".to_string(),
+                "SvelteKit".to_string(),
+                "Nuxt.js".to_string(),
+            ],
             is_primary_indicator: true,
             alternative_names: vec!["tanstack-start".to_string(), "TanStack Start".to_string()],
-            file_indicators: vec!["app.config.ts".to_string(), "app.config.js".to_string(), "app/routes/".to_string(), "vite.config.ts".to_string()],
+            file_indicators: vec![
+                "app.config.ts".to_string(),
+                "app.config.js".to_string(),
+                "app/routes/".to_string(),
+                "vite.config.ts".to_string(),
+            ],
         },
         TechnologyRule {
             name: "React Router v7".to_string(),
             category: TechnologyCategory::MetaFramework,
             confidence: 0.95,
-            dependency_patterns: vec!["react-router".to_string(), "react-dom".to_string(), "react-router-dom".to_string()],
+            dependency_patterns: vec![
+                "react-router".to_string(),
+                "react-dom".to_string(),
+                "react-router-dom".to_string(),
+            ],
             requires: vec!["React".to_string()],
-            conflicts_with: vec!["Next.js".to_string(), "Tanstack Start".to_string(), "SvelteKit".to_string(), "Nuxt.js".to_string(), "React Native".to_string(), "Expo".to_string()],
+            conflicts_with: vec![
+                "Next.js".to_string(),
+                "Tanstack Start".to_string(),
+                "SvelteKit".to_string(),
+                "Nuxt.js".to_string(),
+                "React Native".to_string(),
+                "Expo".to_string(),
+            ],
             is_primary_indicator: true,
             alternative_names: vec!["remix".to_string(), "react-router".to_string()],
             file_indicators: vec![],
@@ -830,7 +940,12 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             confidence: 0.95,
             dependency_patterns: vec!["@sveltejs/kit".to_string()],
             requires: vec!["Svelte".to_string()],
-            conflicts_with: vec!["Next.js".to_string(), "Tanstack Start".to_string(), "React Router v7".to_string(), "Nuxt.js".to_string()],
+            conflicts_with: vec![
+                "Next.js".to_string(),
+                "Tanstack Start".to_string(),
+                "React Router v7".to_string(),
+                "Nuxt.js".to_string(),
+            ],
             is_primary_indicator: true,
             alternative_names: vec!["svelte-kit".to_string()],
             file_indicators: vec![],
@@ -841,7 +956,12 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             confidence: 0.95,
             dependency_patterns: vec!["nuxt".to_string(), "@nuxt/core".to_string()],
             requires: vec!["Vue.js".to_string()],
-            conflicts_with: vec!["Next.js".to_string(), "Tanstack Start".to_string(), "React Router v7".to_string(), "SvelteKit".to_string()],
+            conflicts_with: vec![
+                "Next.js".to_string(),
+                "Tanstack Start".to_string(),
+                "React Router v7".to_string(),
+                "SvelteKit".to_string(),
+            ],
             is_primary_indicator: true,
             alternative_names: vec!["nuxtjs".to_string()],
             file_indicators: vec![],
@@ -863,12 +983,16 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             confidence: 0.95,
             dependency_patterns: vec!["solid-start".to_string()],
             requires: vec!["SolidJS".to_string()],
-            conflicts_with: vec!["Next.js".to_string(), "Tanstack Start".to_string(), "React Router v7".to_string(), "SvelteKit".to_string()],
+            conflicts_with: vec![
+                "Next.js".to_string(),
+                "Tanstack Start".to_string(),
+                "React Router v7".to_string(),
+                "SvelteKit".to_string(),
+            ],
             is_primary_indicator: true,
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // MOBILE FRAMEWORKS (React Native/Expo)
         TechnologyRule {
             name: "React Native".to_string(),
@@ -876,23 +1000,46 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             confidence: 0.95,
             dependency_patterns: vec!["react-native".to_string()],
             requires: vec!["React".to_string()],
-            conflicts_with: vec!["Next.js".to_string(), "React Router v7".to_string(), "SvelteKit".to_string(), "Nuxt.js".to_string(), "Tanstack Start".to_string()],
+            conflicts_with: vec![
+                "Next.js".to_string(),
+                "React Router v7".to_string(),
+                "SvelteKit".to_string(),
+                "Nuxt.js".to_string(),
+                "Tanstack Start".to_string(),
+            ],
             is_primary_indicator: true,
             alternative_names: vec!["reactnative".to_string()],
-            file_indicators: vec!["react-native.config.js".to_string(), "android/".to_string(), "ios/".to_string()],
+            file_indicators: vec![
+                "react-native.config.js".to_string(),
+                "android/".to_string(),
+                "ios/".to_string(),
+            ],
         },
         TechnologyRule {
             name: "Expo".to_string(),
             category: TechnologyCategory::MetaFramework,
             confidence: 1.0,
-            dependency_patterns: vec!["expo".to_string(), "expo-router".to_string(), "@expo/vector-icons".to_string()],
+            dependency_patterns: vec![
+                "expo".to_string(),
+                "expo-router".to_string(),
+                "@expo/vector-icons".to_string(),
+            ],
             requires: vec!["React Native".to_string()],
-            conflicts_with: vec!["Next.js".to_string(), "React Router v7".to_string(), "SvelteKit".to_string(), "Nuxt.js".to_string(), "Tanstack Start".to_string()],
+            conflicts_with: vec![
+                "Next.js".to_string(),
+                "React Router v7".to_string(),
+                "SvelteKit".to_string(),
+                "Nuxt.js".to_string(),
+                "Tanstack Start".to_string(),
+            ],
             is_primary_indicator: true,
             alternative_names: vec![],
-            file_indicators: vec!["app.json".to_string(), "app.config.js".to_string(), "app.config.ts".to_string()],
+            file_indicators: vec![
+                "app.json".to_string(),
+                "app.config.js".to_string(),
+                "app.config.ts".to_string(),
+            ],
         },
-        
         // FRONTEND FRAMEWORKS (Provide structure)
         TechnologyRule {
             name: "Angular".to_string(),
@@ -916,7 +1063,6 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // UI LIBRARIES (Not frameworks!)
         TechnologyRule {
             name: "React".to_string(),
@@ -962,7 +1108,6 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec!["htmx".to_string()],
             file_indicators: vec![],
         },
-        
         // BACKEND FRAMEWORKS
         TechnologyRule {
             name: "Express.js".to_string(),
@@ -1028,9 +1173,12 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             conflicts_with: vec!["Next.js".to_string()],
             is_primary_indicator: true,
             alternative_names: vec!["encore-ts-starter".to_string()],
-            file_indicators: vec!["encore.app".to_string(), "encore.service.ts".to_string(), "encore.service.js".to_string()],
+            file_indicators: vec![
+                "encore.app".to_string(),
+                "encore.service.ts".to_string(),
+                "encore.service.js".to_string(),
+            ],
         },
-        
         // BUILD TOOLS (Not frameworks!)
         TechnologyRule {
             name: "Vite".to_string(),
@@ -1054,7 +1202,6 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // DATABASE/ORM (Important for Docker/infrastructure setup, migrations, etc.)
         TechnologyRule {
             name: "Prisma".to_string(),
@@ -1104,7 +1251,13 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             name: "MikroORM".to_string(),
             category: TechnologyCategory::Database,
             confidence: 0.90,
-            dependency_patterns: vec!["@mikro-orm/core".to_string(), "@mikro-orm/postgresql".to_string(), "@mikro-orm/mysql".to_string(), "@mikro-orm/sqlite".to_string(), "@mikro-orm/mongodb".to_string()],
+            dependency_patterns: vec![
+                "@mikro-orm/core".to_string(),
+                "@mikro-orm/postgresql".to_string(),
+                "@mikro-orm/mysql".to_string(),
+                "@mikro-orm/sqlite".to_string(),
+                "@mikro-orm/mongodb".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -1159,7 +1312,12 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             name: "Waterline".to_string(),
             category: TechnologyCategory::Database,
             confidence: 0.85,
-            dependency_patterns: vec!["waterline".to_string(), "sails-mysql".to_string(), "sails-postgresql".to_string(), "sails-disk".to_string()],
+            dependency_patterns: vec![
+                "waterline".to_string(),
+                "sails-mysql".to_string(),
+                "sails-postgresql".to_string(),
+                "sails-disk".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -1177,7 +1335,6 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec!["knexjs".to_string()],
             file_indicators: vec![],
         },
-        
         // RUNTIMES (Important for IaC - determines base images, package managers)
         TechnologyRule {
             name: "Node.js".to_string(),
@@ -1227,7 +1384,11 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             name: "Cloudflare Workers".to_string(),
             category: TechnologyCategory::Runtime,
             confidence: 0.90,
-            dependency_patterns: vec!["@cloudflare/workers-types".to_string(), "@cloudflare/vitest-pool-workers".to_string(), "wrangler".to_string()],
+            dependency_patterns: vec![
+                "@cloudflare/workers-types".to_string(),
+                "@cloudflare/vitest-pool-workers".to_string(),
+                "wrangler".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -1238,7 +1399,10 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             name: "Vercel Edge Runtime".to_string(),
             category: TechnologyCategory::Runtime,
             confidence: 0.90,
-            dependency_patterns: vec!["@vercel/edge-runtime".to_string(), "@edge-runtime/vm".to_string()],
+            dependency_patterns: vec![
+                "@vercel/edge-runtime".to_string(),
+                "@edge-runtime/vm".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -1289,7 +1453,6 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // TESTING (Keep minimal - only major frameworks that affect build process)
         TechnologyRule {
             name: "Jest".to_string(),
@@ -1314,4 +1477,4 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             file_indicators: vec![],
         },
     ]
-} 
+}

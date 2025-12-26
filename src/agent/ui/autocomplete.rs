@@ -4,8 +4,8 @@
 //! - Slash command suggestions when user types "/"
 //! - File path suggestions when user types "@"
 
-use inquire::autocompletion::{Autocomplete, Replacement};
 use crate::agent::commands::SLASH_COMMANDS;
+use inquire::autocompletion::{Autocomplete, Replacement};
 use std::path::PathBuf;
 
 /// Autocomplete provider for slash commands and file references
@@ -58,7 +58,13 @@ impl SlashCommandAutocomplete {
         for (i, c) in input.char_indices().rev() {
             if c == '@' {
                 // Check if it's at the start or after a space
-                if i == 0 || input.chars().nth(i - 1).map(|c| c.is_whitespace()).unwrap_or(false) {
+                if i == 0
+                    || input
+                        .chars()
+                        .nth(i - 1)
+                        .map(|c| c.is_whitespace())
+                        .unwrap_or(false)
+                {
                     return Some(i);
                 }
             }
@@ -71,7 +77,10 @@ impl SlashCommandAutocomplete {
         if let Some(at_pos) = self.find_at_trigger(input) {
             let after_at = &input[at_pos + 1..];
             // Get everything until next space or end
-            let filter: String = after_at.chars().take_while(|c| !c.is_whitespace()).collect();
+            let filter: String = after_at
+                .chars()
+                .take_while(|c| !c.is_whitespace())
+                .collect();
             return Some(filter);
         }
         None
@@ -83,7 +92,13 @@ impl SlashCommandAutocomplete {
         let filter_lower = filter.to_lowercase();
 
         // Walk directory tree (limited depth)
-        self.walk_dir(&self.project_path.clone(), &filter_lower, &mut results, 0, 4);
+        self.walk_dir(
+            &self.project_path.clone(),
+            &filter_lower,
+            &mut results,
+            0,
+            4,
+        );
 
         // Sort by relevance (exact matches first, then by length)
         results.sort_by(|a, b| {
@@ -101,13 +116,30 @@ impl SlashCommandAutocomplete {
     }
 
     /// Recursively walk directory for matching files
-    fn walk_dir(&self, dir: &PathBuf, filter: &str, results: &mut Vec<String>, depth: usize, max_depth: usize) {
+    fn walk_dir(
+        &self,
+        dir: &PathBuf,
+        filter: &str,
+        results: &mut Vec<String>,
+        depth: usize,
+        max_depth: usize,
+    ) {
         if depth > max_depth || results.len() >= 20 {
             return;
         }
 
         // Skip common non-relevant directories
-        let skip_dirs = ["node_modules", ".git", "target", "__pycache__", ".venv", "venv", "dist", "build", ".next"];
+        let skip_dirs = [
+            "node_modules",
+            ".git",
+            "target",
+            "__pycache__",
+            ".venv",
+            "venv",
+            "dist",
+            "build",
+            ".next",
+        ];
 
         let entries = match std::fs::read_dir(dir) {
             Ok(e) => e,
@@ -119,7 +151,10 @@ impl SlashCommandAutocomplete {
             let file_name = entry.file_name().to_string_lossy().to_string();
 
             // Skip hidden files/dirs (except .env, .gitignore, etc.)
-            if file_name.starts_with('.') && !file_name.starts_with(".env") && !file_name.starts_with(".git") {
+            if file_name.starts_with('.')
+                && !file_name.starts_with(".env")
+                && !file_name.starts_with(".git")
+            {
                 continue;
             }
 
@@ -129,12 +164,16 @@ impl SlashCommandAutocomplete {
                 }
             } else {
                 // Get relative path from project root
-                let rel_path = path.strip_prefix(&self.project_path)
+                let rel_path = path
+                    .strip_prefix(&self.project_path)
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_else(|_| file_name.clone());
 
                 // Match against filter
-                if filter.is_empty() || rel_path.to_lowercase().contains(filter) || file_name.to_lowercase().contains(filter) {
+                if filter.is_empty()
+                    || rel_path.to_lowercase().contains(filter)
+                    || file_name.to_lowercase().contains(filter)
+                {
                     results.push(rel_path);
                 }
             }
@@ -149,7 +188,8 @@ impl Autocomplete for SlashCommandAutocomplete {
             self.mode = AutocompleteMode::File;
             self.cached_files = self.search_files(&filter);
 
-            let suggestions: Vec<String> = self.cached_files
+            let suggestions: Vec<String> = self
+                .cached_files
                 .iter()
                 .map(|f| format!("@{}", f))
                 .collect();
@@ -163,20 +203,28 @@ impl Autocomplete for SlashCommandAutocomplete {
             let filter = input.trim_start_matches('/').to_lowercase();
 
             // Store the command names for use in get_completion
-            self.filtered_commands = SLASH_COMMANDS.iter()
+            self.filtered_commands = SLASH_COMMANDS
+                .iter()
                 .filter(|cmd| {
-                    cmd.name.to_lowercase().starts_with(&filter) ||
-                    cmd.alias.map(|a| a.to_lowercase().starts_with(&filter)).unwrap_or(false)
+                    cmd.name.to_lowercase().starts_with(&filter)
+                        || cmd
+                            .alias
+                            .map(|a| a.to_lowercase().starts_with(&filter))
+                            .unwrap_or(false)
                 })
                 .take(6)
                 .map(|cmd| cmd.name)
                 .collect();
 
             // Return formatted suggestions for display
-            let suggestions: Vec<String> = SLASH_COMMANDS.iter()
+            let suggestions: Vec<String> = SLASH_COMMANDS
+                .iter()
                 .filter(|cmd| {
-                    cmd.name.to_lowercase().starts_with(&filter) ||
-                    cmd.alias.map(|a| a.to_lowercase().starts_with(&filter)).unwrap_or(false)
+                    cmd.name.to_lowercase().starts_with(&filter)
+                        || cmd
+                            .alias
+                            .map(|a| a.to_lowercase().starts_with(&filter))
+                            .unwrap_or(false)
                 })
                 .take(6)
                 .map(|cmd| format!("/{:<12} {}", cmd.name, cmd.description))

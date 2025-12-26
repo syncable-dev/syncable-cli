@@ -111,7 +111,10 @@ pub fn show_plan_action_menu(plan_path: &str, task_count: usize) -> PlanActionRe
                 println!("{}", "→ Will execute plan with auto-accept".green());
                 PlanActionResult::ExecuteAutoAccept
             } else if answer == options[1] {
-                println!("{}", "→ Will execute plan with review for each change".yellow());
+                println!(
+                    "{}",
+                    "→ Will execute plan with review for each change".yellow()
+                );
                 PlanActionResult::ExecuteWithReview
             } else {
                 // User wants to change the plan

@@ -1,10 +1,10 @@
 //! # Core Security Analysis Types
-//! 
+//!
 //! Base types and functionality shared across all security analyzers.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
 
 /// Security finding severity levels
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -86,13 +86,16 @@ pub struct ComplianceStatus {
 pub trait SecurityAnalyzer {
     type Config;
     type Error: std::error::Error;
-    
+
     /// Analyze a project for security issues
-    fn analyze_project(&self, project_root: &std::path::Path) -> Result<SecurityReport, Self::Error>;
-    
+    fn analyze_project(
+        &self,
+        project_root: &std::path::Path,
+    ) -> Result<SecurityReport, Self::Error>;
+
     /// Get the analyzer's configuration
     fn config(&self) -> &Self::Config;
-    
+
     /// Get supported file extensions for this analyzer
     fn supported_extensions(&self) -> Vec<&'static str>;
-} 
+}

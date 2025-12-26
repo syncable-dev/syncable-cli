@@ -16,4 +16,4 @@ pub fn display_json_view_to_string(analysis: &MonorepoAnalysis) -> String {
         Ok(json) => json,
         Err(e) => format!("Error serializing to JSON: {}", e),
     }
-} 
+}

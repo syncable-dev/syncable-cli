@@ -4,11 +4,12 @@
 //! Pick one to reduce image size.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{custom_rule, CustomRule, RuleState};
+use crate::analyzer::hadolint::rules::{CustomRule, RuleState, custom_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
-pub fn rule() -> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&ParsedShell>) + Send + Sync> {
+pub fn rule()
+-> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&ParsedShell>) + Send + Sync> {
     custom_rule(
         "DL3047",
         Severity::Info,
@@ -34,7 +35,8 @@ pub fn rule() -> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&P
                         }
 
                         // Report if both are now seen and not already reported
-                        let seen_both = state.data.get_bool("seen_wget") && state.data.get_bool("seen_curl");
+                        let seen_both =
+                            state.data.get_bool("seen_wget") && state.data.get_bool("seen_curl");
                         let already_reported = state.data.get_bool("reported_dl3047");
 
                         if seen_both && !already_reported {
@@ -57,8 +59,8 @@ pub fn rule() -> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&P
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::hadolint::lint::{lint, LintResult};
     use crate::analyzer::hadolint::config::HadolintConfig;
+    use crate::analyzer::hadolint::lint::{LintResult, lint};
 
     fn lint_dockerfile(content: &str) -> LintResult {
         lint(content, &HadolintConfig::default())
@@ -79,7 +81,7 @@ mod tests {
     #[test]
     fn test_both_wget_and_curl() {
         let result = lint_dockerfile(
-            "FROM ubuntu:20.04\nRUN wget https://example.com/file1\nRUN curl -O https://example.com/file2"
+            "FROM ubuntu:20.04\nRUN wget https://example.com/file1\nRUN curl -O https://example.com/file2",
         );
         assert!(result.failures.iter().any(|f| f.code.as_str() == "DL3047"));
     }
@@ -87,7 +89,7 @@ mod tests {
     #[test]
     fn test_both_in_same_run() {
         let result = lint_dockerfile(
-            "FROM ubuntu:20.04\nRUN wget https://a.com/f && curl -O https://b.com/g"
+            "FROM ubuntu:20.04\nRUN wget https://a.com/f && curl -O https://b.com/g",
         );
         assert!(result.failures.iter().any(|f| f.code.as_str() == "DL3047"));
     }
@@ -96,7 +98,7 @@ mod tests {
     fn test_different_stages() {
         // Different stages should track separately
         let result = lint_dockerfile(
-            "FROM ubuntu:20.04 AS stage1\nRUN wget https://a.com/f\nFROM ubuntu:20.04 AS stage2\nRUN curl https://b.com/g"
+            "FROM ubuntu:20.04 AS stage1\nRUN wget https://a.com/f\nFROM ubuntu:20.04 AS stage2\nRUN curl https://b.com/g",
         );
         assert!(!result.failures.iter().any(|f| f.code.as_str() == "DL3047"));
     }

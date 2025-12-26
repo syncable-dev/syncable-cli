@@ -54,32 +54,25 @@ impl TtyFormatter {
     }
 
     fn reset(&self) -> &'static str {
-        if self.colors {
-            "\x1b[0m"
-        } else {
-            ""
-        }
+        if self.colors { "\x1b[0m" } else { "" }
     }
 
     fn dim(&self) -> &'static str {
-        if self.colors {
-            "\x1b[2m"
-        } else {
-            ""
-        }
+        if self.colors { "\x1b[2m" } else { "" }
     }
 
     fn bold(&self) -> &'static str {
-        if self.colors {
-            "\x1b[1m"
-        } else {
-            ""
-        }
+        if self.colors { "\x1b[1m" } else { "" }
     }
 }
 
 impl Formatter for TtyFormatter {
-    fn format<W: Write>(&self, result: &LintResult, filename: &str, writer: &mut W) -> std::io::Result<()> {
+    fn format<W: Write>(
+        &self,
+        result: &LintResult,
+        filename: &str,
+        writer: &mut W,
+    ) -> std::io::Result<()> {
         if result.failures.is_empty() {
             return Ok(());
         }
@@ -92,20 +85,10 @@ impl Formatter for TtyFormatter {
 
             // Format: filename:line severity: [code] message
             if self.show_filename {
-                write!(
-                    writer,
-                    "{}{}{}{}:{}",
-                    bold, filename, reset, dim, reset
-                )?;
+                write!(writer, "{}{}{}{}:{}", bold, filename, reset, dim, reset)?;
             }
 
-            write!(
-                writer,
-                "{}{}{} ",
-                dim,
-                failure.line,
-                reset
-            )?;
+            write!(writer, "{}{}{} ", dim, failure.line, reset)?;
 
             // Severity badge
             let severity_str = match failure.severity {
@@ -116,28 +99,36 @@ impl Formatter for TtyFormatter {
                 Severity::Ignore => "ignore",
             };
 
-            write!(
-                writer,
-                "{}{}{}",
-                color, severity_str, reset
-            )?;
+            write!(writer, "{}{}{}", color, severity_str, reset)?;
 
             // Rule code
-            write!(
-                writer,
-                " {}{}{}: ",
-                dim, failure.code, reset
-            )?;
+            write!(writer, " {}{}{}: ", dim, failure.code, reset)?;
 
             // Message
             writeln!(writer, "{}", failure.message)?;
         }
 
         // Summary line
-        let error_count = result.failures.iter().filter(|f| f.severity == Severity::Error).count();
-        let warning_count = result.failures.iter().filter(|f| f.severity == Severity::Warning).count();
-        let info_count = result.failures.iter().filter(|f| f.severity == Severity::Info).count();
-        let style_count = result.failures.iter().filter(|f| f.severity == Severity::Style).count();
+        let error_count = result
+            .failures
+            .iter()
+            .filter(|f| f.severity == Severity::Error)
+            .count();
+        let warning_count = result
+            .failures
+            .iter()
+            .filter(|f| f.severity == Severity::Warning)
+            .count();
+        let info_count = result
+            .failures
+            .iter()
+            .filter(|f| f.severity == Severity::Info)
+            .count();
+        let style_count = result
+            .failures
+            .iter()
+            .filter(|f| f.severity == Severity::Style)
+            .count();
 
         writeln!(writer)?;
 

@@ -351,18 +351,20 @@ impl AddArgs {
 
     /// Check if any source is a URL.
     pub fn has_url(&self) -> bool {
-        self.sources.iter().any(|s| s.starts_with("http://") || s.starts_with("https://"))
+        self.sources
+            .iter()
+            .any(|s| s.starts_with("http://") || s.starts_with("https://"))
     }
 
     /// Check if any source appears to be an archive.
     pub fn has_archive(&self) -> bool {
         const ARCHIVE_EXTENSIONS: &[&str] = &[
-            ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz",
-            ".zip", ".gz", ".bz2", ".xz", ".Z", ".lz", ".lzma",
+            ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz", ".zip", ".gz",
+            ".bz2", ".xz", ".Z", ".lz", ".lzma",
         ];
-        self.sources.iter().any(|s| {
-            ARCHIVE_EXTENSIONS.iter().any(|ext| s.ends_with(ext))
-        })
+        self.sources
+            .iter()
+            .any(|s| ARCHIVE_EXTENSIONS.iter().any(|ext| s.ends_with(ext)))
     }
 }
 
@@ -533,7 +535,10 @@ mod tests {
 
         let exec = Arguments::List(vec!["apt-get".to_string(), "update".to_string()]);
         assert!(exec.is_exec_form());
-        assert_eq!(exec.as_list(), Some(&["apt-get".to_string(), "update".to_string()][..]));
+        assert_eq!(
+            exec.as_list(),
+            Some(&["apt-get".to_string(), "update".to_string()][..])
+        );
     }
 
     #[test]

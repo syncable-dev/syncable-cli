@@ -4,7 +4,7 @@
 //! and Dockerfiles.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{simple_rule, SimpleRule};
+use crate::analyzer::hadolint::rules::{SimpleRule, simple_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
@@ -13,17 +13,15 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
         "DL3027",
         Severity::Warning,
         "Do not use apt as it is meant to be an end-user tool, use apt-get or apt-cache instead",
-        |instr, shell| {
-            match instr {
-                Instruction::Run(_) => {
-                    if let Some(shell) = shell {
-                        !shell.any_command(|cmd| cmd.name == "apt")
-                    } else {
-                        true
-                    }
+        |instr, shell| match instr {
+            Instruction::Run(_) => {
+                if let Some(shell) = shell {
+                    !shell.any_command(|cmd| cmd.name == "apt")
+                } else {
+                    true
                 }
-                _ => true,
             }
+            _ => true,
         },
     )
 }

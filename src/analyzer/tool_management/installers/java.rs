@@ -1,8 +1,8 @@
+use super::common::InstallationUtils;
 use crate::analyzer::tool_management::ToolDetector;
 use crate::error::Result;
-use super::common::InstallationUtils;
-use std::collections::HashMap;
 use log::{info, warn};
+use std::collections::HashMap;
 
 /// Install grype for Java/Kotlin vulnerability scanning
 pub fn install_grype(
@@ -12,12 +12,12 @@ pub fn install_grype(
     if tool_detector.detect_tool("grype").available {
         return Ok(());
     }
-    
+
     info!("🔧 Installing grype for vulnerability scanning...");
-    
+
     // Try platform-specific installation methods
     let os = std::env::consts::OS;
-    
+
     match os {
         "macos" => {
             if InstallationUtils::is_command_available("brew") {
@@ -44,7 +44,7 @@ pub fn install_grype(
         }
         _ => {}
     }
-    
+
     warn!("❌ Automatic installation failed. Please install manually:");
     if cfg!(windows) {
         warn!("   • Download from: https://github.com/anchore/grype/releases");
@@ -54,6 +54,6 @@ pub fn install_grype(
         warn!("   • Linux: snap install grype");
         warn!("   • Download: https://github.com/anchore/grype/releases");
     }
-    
+
     Ok(())
 }

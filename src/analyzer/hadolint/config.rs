@@ -114,15 +114,15 @@ impl HadolintConfig {
 
     /// Load config from a YAML file.
     pub fn from_yaml_file(path: &Path) -> Result<Self, ConfigError> {
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| ConfigError::IoError(e.to_string()))?;
+        let content =
+            std::fs::read_to_string(path).map_err(|e| ConfigError::IoError(e.to_string()))?;
         Self::from_yaml_str(&content)
     }
 
     /// Load config from a YAML string.
     pub fn from_yaml_str(yaml: &str) -> Result<Self, ConfigError> {
-        let value: serde_yaml::Value = serde_yaml::from_str(yaml)
-            .map_err(|e| ConfigError::ParseError(e.to_string()))?;
+        let value: serde_yaml::Value =
+            serde_yaml::from_str(yaml).map_err(|e| ConfigError::ParseError(e.to_string()))?;
 
         let mut config = Self::default();
 
@@ -216,10 +216,7 @@ impl HadolintConfig {
     /// 3. XDG config directory
     /// 4. Home directory
     pub fn find_and_load() -> Option<Self> {
-        let search_paths = [
-            ".hadolint.yaml",
-            ".hadolint.yml",
-        ];
+        let search_paths = [".hadolint.yaml", ".hadolint.yml"];
 
         for path in &search_paths {
             let path = Path::new(path);
@@ -361,8 +358,7 @@ strict-labels: true
 
     #[test]
     fn test_effective_severity() {
-        let config = HadolintConfig::default()
-            .ignore("DL3008".to_string());
+        let config = HadolintConfig::default().ignore("DL3008".to_string());
 
         assert!(config.is_rule_ignored(&RuleCode::new("DL3008")));
         assert!(!config.is_rule_ignored(&RuleCode::new("DL3009")));

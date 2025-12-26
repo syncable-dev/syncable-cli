@@ -113,7 +113,11 @@ impl CodeBlockParser {
                     in_code_block = false;
                 } else {
                     // Start of code block
-                    current_lang = line.trim_start().strip_prefix("```").unwrap_or("").to_string();
+                    current_lang = line
+                        .trim_start()
+                        .strip_prefix("```")
+                        .unwrap_or("")
+                        .to_string();
                     in_code_block = true;
                 }
             } else if in_code_block {
@@ -133,7 +137,10 @@ impl CodeBlockParser {
             });
         }
 
-        Self { markdown: result, blocks }
+        Self {
+            markdown: result,
+            blocks,
+        }
     }
 
     /// Get the processed markdown with placeholders
@@ -223,7 +230,10 @@ impl MarkdownFormat {
         let rendered = self.skin.term_text(parsed.markdown()).to_string();
 
         // Restore highlighted code blocks
-        parsed.restore(&self.highlighter, rendered).trim().to_string()
+        parsed
+            .restore(&self.highlighter, rendered)
+            .trim()
+            .to_string()
     }
 }
 
@@ -254,11 +264,7 @@ impl ResponseFormatter {
 
     /// Print the response header with Syncable styling
     fn print_header() {
-        print!(
-            "{}{}╭─ 🤖 Syncable AI ",
-            brand::PURPLE,
-            brand::BOLD
-        );
+        print!("{}{}╭─ 🤖 Syncable AI ", brand::PURPLE, brand::BOLD);
         println!(
             "{}─────────────────────────────────────────────────────╮{}",
             brand::DIM,
@@ -283,7 +289,12 @@ impl SimpleResponse {
     /// Print a simple AI response with minimal formatting
     pub fn print(text: &str) {
         println!();
-        println!("{}{} Syncable AI:{}", brand::PURPLE, brand::BOLD, brand::RESET);
+        println!(
+            "{}{} Syncable AI:{}",
+            brand::PURPLE,
+            brand::BOLD,
+            brand::RESET
+        );
         let formatter = MarkdownFormat::new();
         println!("{}", formatter.render(text));
         println!();
@@ -329,7 +340,11 @@ impl ToolProgress {
     /// Mark the last tool as complete
     pub fn tool_complete(&mut self, success: bool) {
         if let Some(tool) = self.tools_executed.last_mut() {
-            tool.status = if success { ToolStatus::Success } else { ToolStatus::Error };
+            tool.status = if success {
+                ToolStatus::Success
+            } else {
+                ToolStatus::Error
+            };
         }
         self.redraw();
     }
@@ -358,7 +373,8 @@ impl ToolProgress {
     /// Print final summary after all tools complete
     pub fn print_summary(&self) {
         if !self.tools_executed.is_empty() {
-            let success_count = self.tools_executed
+            let success_count = self
+                .tools_executed
                 .iter()
                 .filter(|t| matches!(t.status, ToolStatus::Success))
                 .count();

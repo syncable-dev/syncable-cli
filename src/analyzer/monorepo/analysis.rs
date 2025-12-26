@@ -1,5 +1,5 @@
 use crate::analyzer::{
-    analyze_project_with_config, AnalysisConfig, AnalysisMetadata, MonorepoAnalysis, ProjectInfo,
+    AnalysisConfig, AnalysisMetadata, MonorepoAnalysis, ProjectInfo, analyze_project_with_config,
 };
 use crate::common::file_utils;
 use crate::error::Result;
@@ -14,7 +14,11 @@ use super::summary::generate_technology_summary;
 
 /// Detects if a path contains a monorepo and analyzes all projects within it
 pub fn analyze_monorepo(path: &Path) -> Result<MonorepoAnalysis> {
-    analyze_monorepo_with_config(path, &MonorepoDetectionConfig::default(), &AnalysisConfig::default())
+    analyze_monorepo_with_config(
+        path,
+        &MonorepoDetectionConfig::default(),
+        &AnalysisConfig::default(),
+    )
 }
 
 /// Analyzes a monorepo with custom configuration
@@ -41,14 +45,19 @@ pub fn analyze_monorepo_with_config(
     if is_monorepo && potential_projects.len() > 1 {
         // Analyze each project separately
         for project_path in potential_projects {
-            if let Ok(project_info) = analyze_individual_project(&root_path, &project_path, analysis_config) {
+            if let Ok(project_info) =
+                analyze_individual_project(&root_path, &project_path, analysis_config)
+            {
                 projects.push(project_info);
             }
         }
 
         // If we didn't find multiple valid projects, treat as single project
         if projects.len() <= 1 {
-            log::info!("Detected potential monorepo but only found {} valid project(s), treating as single project", projects.len());
+            log::info!(
+                "Detected potential monorepo but only found {} valid project(s), treating as single project",
+                projects.len()
+            );
             projects.clear();
             let single_analysis = analyze_project_with_config(&root_path, analysis_config)?;
             projects.push(ProjectInfo {
@@ -77,7 +86,10 @@ pub fn analyze_monorepo_with_config(
         timestamp: Utc::now().to_rfc3339(),
         analyzer_version: env!("CARGO_PKG_VERSION").to_string(),
         analysis_duration_ms: duration.as_millis() as u64,
-        files_analyzed: projects.iter().map(|p| p.analysis.analysis_metadata.files_analyzed).sum(),
+        files_analyzed: projects
+            .iter()
+            .map(|p| p.analysis.analysis_metadata.files_analyzed)
+            .sum(),
         confidence_score: calculate_overall_confidence(&projects),
     };
 
@@ -99,7 +111,8 @@ fn analyze_individual_project(
     log::debug!("Analyzing individual project: {}", project_path.display());
 
     let analysis = analyze_project_with_config(project_path, config)?;
-    let relative_path = project_path.strip_prefix(root_path)
+    let relative_path = project_path
+        .strip_prefix(root_path)
         .unwrap_or(project_path)
         .to_path_buf();
 
@@ -112,4 +125,4 @@ fn analyze_individual_project(
         project_category: category,
         analysis,
     })
-} 
+}

@@ -6,7 +6,8 @@ use std::collections::HashSet;
 /// Helper function to create a regex with proper error handling
 pub fn create_regex(pattern: &str) -> Result<Regex> {
     Regex::new(pattern).map_err(|e| {
-        AnalysisError::InvalidStructure(format!("Invalid regex pattern '{}': {}", pattern, e)).into()
+        AnalysisError::InvalidStructure(format!("Invalid regex pattern '{}': {}", pattern, e))
+            .into()
     })
 }
 
@@ -48,4 +49,4 @@ pub fn get_script_description(name: &str) -> Option<String> {
         "format" => Some("Format code".to_string()),
         _ => None,
     }
-} 
+}

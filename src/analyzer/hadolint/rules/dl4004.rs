@@ -4,11 +4,12 @@
 //! only the last one takes effect.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{custom_rule, CustomRule, RuleState};
+use crate::analyzer::hadolint::rules::{CustomRule, RuleState, custom_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
-pub fn rule() -> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&ParsedShell>) + Send + Sync> {
+pub fn rule()
+-> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&ParsedShell>) + Send + Sync> {
     custom_rule(
         "DL4004",
         Severity::Error,

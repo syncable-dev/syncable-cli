@@ -4,7 +4,7 @@
 pub fn visual_width(s: &str) -> usize {
     let mut width = 0;
     let mut chars = s.chars().peekable();
-    
+
     while let Some(ch) = chars.next() {
         if ch == '\x1b' {
             // Skip ANSI escape sequence
@@ -22,7 +22,7 @@ pub fn visual_width(s: &str) -> usize {
             width += char_width(ch);
         }
     }
-    
+
     width
 }
 
@@ -85,7 +85,7 @@ pub fn truncate_to_width(s: &str, max_width: usize) -> String {
     if current_visual_width <= max_width {
         return s.to_string();
     }
-    
+
     // For strings with ANSI codes, we need to be more careful
     if s.contains('\x1b') {
         // Simple approach: strip ANSI codes, truncate, then re-apply if needed
@@ -93,7 +93,7 @@ pub fn truncate_to_width(s: &str, max_width: usize) -> String {
         if visual_width(&stripped) <= max_width {
             return s.to_string();
         }
-        
+
         // Truncate the stripped version
         let mut result = String::new();
         let mut width = 0;
@@ -108,11 +108,11 @@ pub fn truncate_to_width(s: &str, max_width: usize) -> String {
         }
         return result;
     }
-    
+
     // No ANSI codes - simple truncation
     let mut result = String::new();
     let mut width = 0;
-    
+
     for ch in s.chars() {
         let ch_width = char_width(ch);
         if width + ch_width > max_width.saturating_sub(3) {
@@ -122,7 +122,7 @@ pub fn truncate_to_width(s: &str, max_width: usize) -> String {
         result.push(ch);
         width += ch_width;
     }
-    
+
     result
 }
 
@@ -130,7 +130,7 @@ pub fn truncate_to_width(s: &str, max_width: usize) -> String {
 pub fn strip_ansi_codes(s: &str) -> String {
     let mut result = String::new();
     let mut chars = s.chars().peekable();
-    
+
     while let Some(ch) = chars.next() {
         if ch == '\x1b' {
             // Skip ANSI escape sequence
@@ -146,38 +146,41 @@ pub fn strip_ansi_codes(s: &str) -> String {
             result.push(ch);
         }
     }
-    
+
     result
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_visual_width_basic() {
         assert_eq!(visual_width("hello"), 5);
         assert_eq!(visual_width(""), 0);
         assert_eq!(visual_width("123"), 3);
     }
-    
+
     #[test]
     fn test_visual_width_with_ansi() {
         assert_eq!(visual_width("\x1b[31mhello\x1b[0m"), 5);
         assert_eq!(visual_width("\x1b[1;32mtest\x1b[0m"), 4);
     }
-    
+
     #[test]
     fn test_truncate_to_width() {
         assert_eq!(truncate_to_width("hello world", 5), "he...");
         assert_eq!(truncate_to_width("hello", 10), "hello");
         assert_eq!(truncate_to_width("hello world", 8), "hello...");
     }
-    
+
     #[test]
     fn test_strip_ansi_codes() {
         assert_eq!(strip_ansi_codes("\x1b[31mhello\x1b[0m"), "hello");
         assert_eq!(strip_ansi_codes("plain text"), "plain text");
-        assert_eq!(strip_ansi_codes("\x1b[1;32mgreen\x1b[0m text"), "green text");
+        assert_eq!(
+            strip_ansi_codes("\x1b[1;32mgreen\x1b[0m text"),
+            "green text"
+        );
     }
-} 
+}

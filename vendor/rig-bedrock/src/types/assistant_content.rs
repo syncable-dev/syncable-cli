@@ -370,7 +370,9 @@ mod tests {
         let tool_use_block = aws_bedrock::ToolUseBlock::builder()
             .tool_use_id("tool_123")
             .name("analyze_project")
-            .input(aws_smithy_types::Document::Object(std::collections::HashMap::new()))
+            .input(aws_smithy_types::Document::Object(
+                std::collections::HashMap::new(),
+            ))
             .build()
             .unwrap();
 
@@ -403,7 +405,11 @@ mod tests {
 
         // Verify we have BOTH content blocks preserved
         let contents: Vec<_> = completion.choice.iter().collect();
-        assert_eq!(contents.len(), 2, "Expected both Reasoning and ToolCall to be preserved");
+        assert_eq!(
+            contents.len(),
+            2,
+            "Expected both Reasoning and ToolCall to be preserved"
+        );
 
         // First should be Reasoning
         match &contents[0] {
@@ -411,7 +417,10 @@ mod tests {
                 assert_eq!(reasoning.reasoning, vec!["Let me think about this..."]);
                 assert_eq!(reasoning.signature, Some("sig_test_123".to_string()));
             }
-            _ => panic!("Expected first content to be Reasoning, got {:?}", contents[0]),
+            _ => panic!(
+                "Expected first content to be Reasoning, got {:?}",
+                contents[0]
+            ),
         }
 
         // Second should be ToolCall
@@ -420,7 +429,10 @@ mod tests {
                 assert_eq!(tool_call.id, "tool_123");
                 assert_eq!(tool_call.function.name, "analyze_project");
             }
-            _ => panic!("Expected second content to be ToolCall, got {:?}", contents[1]),
+            _ => panic!(
+                "Expected second content to be ToolCall, got {:?}",
+                contents[1]
+            ),
         }
     }
 

@@ -92,8 +92,13 @@ impl InputState {
 
         // Check if we should trigger completion
         if c == '@' {
-            let valid_trigger = self.cursor == 1 ||
-                self.text.chars().nth(self.cursor - 2).map(|c| c.is_whitespace()).unwrap_or(false);
+            let valid_trigger = self.cursor == 1
+                || self
+                    .text
+                    .chars()
+                    .nth(self.cursor - 2)
+                    .map(|c| c.is_whitespace())
+                    .unwrap_or(false);
             if valid_trigger {
                 self.completion_start = Some(self.cursor - 1);
                 self.refresh_suggestions();
@@ -202,7 +207,8 @@ impl InputState {
 
     /// Convert character position to byte position
     fn char_to_byte_pos(&self, char_pos: usize) -> usize {
-        self.text.char_indices()
+        self.text
+            .char_indices()
             .nth(char_pos)
             .map(|(i, _)| i)
             .unwrap_or(self.text.len())
@@ -213,7 +219,11 @@ impl InputState {
         self.completion_start.map(|start| {
             let filter_start = start + 1; // Skip the @ or /
             if filter_start <= self.cursor {
-                self.text.chars().skip(filter_start).take(self.cursor - filter_start).collect()
+                self.text
+                    .chars()
+                    .skip(filter_start)
+                    .take(self.cursor - filter_start)
+                    .collect()
             } else {
                 String::new()
             }
@@ -223,7 +233,8 @@ impl InputState {
     /// Refresh suggestions based on current filter
     fn refresh_suggestions(&mut self) {
         let filter = self.get_filter().unwrap_or_default();
-        let trigger = self.completion_start
+        let trigger = self
+            .completion_start
             .and_then(|pos| self.text.chars().nth(pos));
 
         self.suggestions = match trigger {
@@ -241,15 +252,19 @@ impl InputState {
         let mut results = Vec::new();
         let filter_lower = filter.to_lowercase();
 
-        self.walk_dir(&self.project_path.clone(), &filter_lower, &mut results, 0, 4);
+        self.walk_dir(
+            &self.project_path.clone(),
+            &filter_lower,
+            &mut results,
+            0,
+            4,
+        );
 
         // Sort: directories first, then by path length
-        results.sort_by(|a, b| {
-            match (a.is_dir, b.is_dir) {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => a.value.len().cmp(&b.value.len()),
-            }
+        results.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.value.len().cmp(&b.value.len()),
         });
 
         results.truncate(8);
@@ -257,12 +272,29 @@ impl InputState {
     }
 
     /// Walk directory tree for matching files
-    fn walk_dir(&self, dir: &PathBuf, filter: &str, results: &mut Vec<Suggestion>, depth: usize, max_depth: usize) {
+    fn walk_dir(
+        &self,
+        dir: &PathBuf,
+        filter: &str,
+        results: &mut Vec<Suggestion>,
+        depth: usize,
+        max_depth: usize,
+    ) {
         if depth > max_depth || results.len() >= 20 {
             return;
         }
 
-        let skip_dirs = ["node_modules", ".git", "target", "__pycache__", ".venv", "venv", "dist", "build", ".next"];
+        let skip_dirs = [
+            "node_modules",
+            ".git",
+            "target",
+            "__pycache__",
+            ".venv",
+            "venv",
+            "dist",
+            "build",
+            ".next",
+        ];
 
         let entries = match std::fs::read_dir(dir) {
             Ok(e) => e,
@@ -274,17 +306,24 @@ impl InputState {
             let file_name = entry.file_name().to_string_lossy().to_string();
 
             // Skip hidden files (except some)
-            if file_name.starts_with('.') && !file_name.starts_with(".env") && file_name != ".gitignore" {
+            if file_name.starts_with('.')
+                && !file_name.starts_with(".env")
+                && file_name != ".gitignore"
+            {
                 continue;
             }
 
-            let rel_path = path.strip_prefix(&self.project_path)
+            let rel_path = path
+                .strip_prefix(&self.project_path)
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|_| file_name.clone());
 
             let is_dir = path.is_dir();
 
-            if filter.is_empty() || rel_path.to_lowercase().contains(filter) || file_name.to_lowercase().contains(filter) {
+            if filter.is_empty()
+                || rel_path.to_lowercase().contains(filter)
+                || file_name.to_lowercase().contains(filter)
+            {
                 let display = if is_dir {
                     format!("{}/", rel_path)
                 } else {
@@ -307,10 +346,14 @@ impl InputState {
     fn search_commands(&self, filter: &str) -> Vec<Suggestion> {
         let filter_lower = filter.to_lowercase();
 
-        SLASH_COMMANDS.iter()
+        SLASH_COMMANDS
+            .iter()
             .filter(|cmd| {
-                cmd.name.to_lowercase().starts_with(&filter_lower) ||
-                cmd.alias.map(|a| a.to_lowercase().starts_with(&filter_lower)).unwrap_or(false)
+                cmd.name.to_lowercase().starts_with(&filter_lower)
+                    || cmd
+                        .alias
+                        .map(|a| a.to_lowercase().starts_with(&filter_lower))
+                        .unwrap_or(false)
             })
             .take(8)
             .map(|cmd| Suggestion {
@@ -486,7 +529,10 @@ fn render(state: &mut InputState, prompt: &str, stdout: &mut io::Stdout) -> io::
 
     // Move up to clear previous rendered lines, then to column 0
     if state.prev_wrapped_lines > 1 {
-        execute!(stdout, cursor::MoveUp((state.prev_wrapped_lines - 1) as u16))?;
+        execute!(
+            stdout,
+            cursor::MoveUp((state.prev_wrapped_lines - 1) as u16)
+        )?;
     }
     execute!(stdout, cursor::MoveToColumn(0))?;
 
@@ -497,9 +543,23 @@ fn render(state: &mut InputState, prompt: &str, stdout: &mut io::Stdout) -> io::
     // In raw mode, \n doesn't return to column 0, so we need \r\n
     let display_text = state.text.replace('\n', "\r\n");
     if state.plan_mode {
-        print!("{}★{} {}{}{} {}", ansi::ORANGE, ansi::RESET, ansi::SUCCESS, prompt, ansi::RESET, display_text);
+        print!(
+            "{}★{} {}{}{} {}",
+            ansi::ORANGE,
+            ansi::RESET,
+            ansi::SUCCESS,
+            prompt,
+            ansi::RESET,
+            display_text
+        );
     } else {
-        print!("{}{}{} {}", ansi::SUCCESS, prompt, ansi::RESET, display_text);
+        print!(
+            "{}{}{} {}",
+            ansi::SUCCESS,
+            prompt,
+            ansi::RESET,
+            display_text
+        );
     }
     stdout.flush()?;
 
@@ -534,18 +594,40 @@ fn render(state: &mut InputState, prompt: &str, stdout: &mut io::Stdout) -> io::
 
             if is_selected {
                 if suggestion.is_dir {
-                    print!("  {}{} {}{}\r\n", ansi::CYAN, prefix, suggestion.display, ansi::RESET);
+                    print!(
+                        "  {}{} {}{}\r\n",
+                        ansi::CYAN,
+                        prefix,
+                        suggestion.display,
+                        ansi::RESET
+                    );
                 } else {
-                    print!("  {}{} {}{}\r\n", ansi::WHITE, prefix, suggestion.display, ansi::RESET);
+                    print!(
+                        "  {}{} {}{}\r\n",
+                        ansi::WHITE,
+                        prefix,
+                        suggestion.display,
+                        ansi::RESET
+                    );
                 }
             } else {
-                print!("  {}{} {}{}\r\n", ansi::DIM, prefix, suggestion.display, ansi::RESET);
+                print!(
+                    "  {}{} {}{}\r\n",
+                    ansi::DIM,
+                    prefix,
+                    suggestion.display,
+                    ansi::RESET
+                );
             }
             lines_rendered += 1;
         }
 
         // Print hint
-        print!("  {}[↑↓ navigate, Enter select, Esc cancel]{}\r\n", ansi::DIM, ansi::RESET);
+        print!(
+            "  {}[↑↓ navigate, Enter select, Esc cancel]{}\r\n",
+            ansi::DIM,
+            ansi::RESET
+        );
         lines_rendered += 1;
     }
 
@@ -586,10 +668,7 @@ fn clear_suggestions(num_lines: usize, stdout: &mut io::Stdout) -> io::Result<()
     if num_lines > 0 {
         // Save position, clear lines below, restore
         for _ in 0..num_lines {
-            execute!(stdout,
-                cursor::MoveDown(1),
-                Clear(ClearType::CurrentLine)
-            )?;
+            execute!(stdout, cursor::MoveDown(1), Clear(ClearType::CurrentLine))?;
         }
         execute!(stdout, MoveUp(num_lines as u16))?;
     }
@@ -598,7 +677,11 @@ fn clear_suggestions(num_lines: usize, stdout: &mut io::Stdout) -> io::Result<()
 
 /// Read user input with Claude Code-style @ file picker
 /// If `plan_mode` is true, shows the plan mode indicator below the prompt
-pub fn read_input_with_file_picker(prompt: &str, project_path: &PathBuf, plan_mode: bool) -> InputResult {
+pub fn read_input_with_file_picker(
+    prompt: &str,
+    project_path: &PathBuf,
+    plan_mode: bool,
+) -> InputResult {
     let mut stdout = io::stdout();
 
     // Enable raw mode
@@ -611,7 +694,14 @@ pub fn read_input_with_file_picker(prompt: &str, project_path: &PathBuf, plan_mo
 
     // Print prompt with mode indicator inline (no separate line)
     if plan_mode {
-        print!("{}★{} {}{}{} ", ansi::ORANGE, ansi::RESET, ansi::SUCCESS, prompt, ansi::RESET);
+        print!(
+            "{}★{} {}{}{} ",
+            ansi::ORANGE,
+            ansi::RESET,
+            ansi::SUCCESS,
+            prompt,
+            ansi::RESET
+        );
     } else {
         print!("{}{}{} ", ansi::SUCCESS, prompt, ansi::RESET);
     }
@@ -636,8 +726,9 @@ pub fn read_input_with_file_picker(prompt: &str, project_path: &PathBuf, plan_mo
                 match key_event.code {
                     KeyCode::Enter => {
                         // Shift+Enter or Alt+Enter inserts newline instead of submitting
-                        if key_event.modifiers.contains(KeyModifiers::SHIFT) ||
-                           key_event.modifiers.contains(KeyModifiers::ALT) {
+                        if key_event.modifiers.contains(KeyModifiers::SHIFT)
+                            || key_event.modifiers.contains(KeyModifiers::ALT)
+                        {
                             state.insert_char('\n');
                         } else if state.showing_suggestions && state.selected >= 0 {
                             // Accept selection, don't submit
@@ -707,11 +798,15 @@ pub fn read_input_with_file_picker(prompt: &str, project_path: &PathBuf, plan_mo
                     KeyCode::Right => {
                         state.cursor_right();
                     }
-                    KeyCode::Home | KeyCode::Char('a') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                    KeyCode::Home | KeyCode::Char('a')
+                        if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
+                    {
                         state.cursor_home();
                         state.close_suggestions();
                     }
-                    KeyCode::End | KeyCode::Char('e') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                    KeyCode::End | KeyCode::Char('e')
+                        if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
+                    {
                         state.cursor_end();
                     }
                     // Ctrl+U - Clear entire input
@@ -723,8 +818,10 @@ pub fn read_input_with_file_picker(prompt: &str, project_path: &PathBuf, plan_mo
                         state.delete_to_line_start();
                     }
                     // Ctrl+Shift+Backspace - Delete to beginning of current line (cross-platform)
-                    KeyCode::Backspace if key_event.modifiers.contains(KeyModifiers::CONTROL)
-                        && key_event.modifiers.contains(KeyModifiers::SHIFT) => {
+                    KeyCode::Backspace
+                        if key_event.modifiers.contains(KeyModifiers::CONTROL)
+                            && key_event.modifiers.contains(KeyModifiers::SHIFT) =>
+                    {
                         state.delete_to_line_start();
                     }
                     // Cmd+Backspace (Mac) - Delete to beginning of current line (if terminal passes it)
@@ -760,7 +857,8 @@ pub fn read_input_with_file_picker(prompt: &str, project_path: &PathBuf, plan_mo
 
                 // Only render if no more events are pending (batches rapid input like paste)
                 // This prevents thousands of renders during paste operations
-                let should_render = !event::poll(std::time::Duration::from_millis(0)).unwrap_or(false);
+                let should_render =
+                    !event::poll(std::time::Duration::from_millis(0)).unwrap_or(false);
                 if should_render {
                     state.rendered_lines = render(&mut state, prompt, &mut stdout).unwrap_or(0);
                 }

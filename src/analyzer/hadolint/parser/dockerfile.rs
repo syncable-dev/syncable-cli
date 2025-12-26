@@ -3,13 +3,13 @@
 //! Parses Dockerfile content into an AST of `InstructionPos` elements.
 
 use nom::{
+    IResult,
     branch::alt,
     bytes::complete::{tag, tag_no_case, take_till, take_while},
     character::complete::{char, space0, space1},
     combinator::opt,
     multi::separated_list0,
     sequence::{pair, preceded, tuple},
-    IResult,
 };
 
 use super::instruction::*;
@@ -167,7 +167,11 @@ fn parse_from(input: &str) -> IResult<&str, Instruction> {
     ))(input)?;
 
     // Parse image reference into components
-    let base_image = parse_image_reference(image_ref, platform.map(|s| s.to_string()), alias.map(|s| ImageAlias::new(s)));
+    let base_image = parse_image_reference(
+        image_ref,
+        platform.map(|s| s.to_string()),
+        alias.map(|s| ImageAlias::new(s)),
+    );
 
     Ok((input, Instruction::From(base_image)))
 }
@@ -411,10 +415,8 @@ fn parse_arguments(input: &str) -> IResult<&str, Arguments> {
 fn parse_json_array(input: &str) -> IResult<&str, Vec<String>> {
     let (input, _) = char('[')(input)?;
     let (input, _) = space0(input)?;
-    let (input, items) = separated_list0(
-        tuple((space0, char(','), space0)),
-        parse_json_string,
-    )(input)?;
+    let (input, items) =
+        separated_list0(tuple((space0, char(','), space0)), parse_json_string)(input)?;
     let (input, _) = space0(input)?;
     let (input, _) = char(']')(input)?;
     Ok((input, items))
@@ -451,7 +453,10 @@ fn parse_json_string(input: &str) -> IResult<&str, String> {
         }
     }
 
-    Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Char)))
+    Err(nom::Err::Error(nom::error::Error::new(
+        input,
+        nom::error::ErrorKind::Char,
+    )))
 }
 
 /// Parse COPY instruction.
@@ -519,13 +524,19 @@ fn parse_copy_args(input: &str) -> IResult<&str, CopyArgs> {
     let parts: Vec<&str> = input.split_whitespace().collect();
     if parts.len() >= 2 {
         let dest = parts.last().unwrap().to_string();
-        let sources: Vec<String> = parts[..parts.len() - 1].iter().map(|s| s.to_string()).collect();
+        let sources: Vec<String> = parts[..parts.len() - 1]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
         Ok(("", CopyArgs::new(sources, dest)))
     } else if parts.len() == 1 {
         // Single argument - treat as both source and dest
         Ok(("", CopyArgs::new(vec![parts[0].to_string()], parts[0])))
     } else {
-        Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Space)))
+        Err(nom::Err::Error(nom::error::Error::new(
+            input,
+            nom::error::ErrorKind::Space,
+        )))
     }
 }
 
@@ -606,7 +617,9 @@ fn parse_key_value_pairs(input: &str) -> Vec<(String, String)> {
 
     while !remaining.is_empty() {
         // Find key
-        let key_end = remaining.find(|c: char| c == '=' || c.is_whitespace()).unwrap_or(remaining.len());
+        let key_end = remaining
+            .find(|c: char| c == '=' || c.is_whitespace())
+            .unwrap_or(remaining.len());
         if key_end == 0 {
             remaining = remaining.trim_start();
             continue;
@@ -627,7 +640,9 @@ fn parse_key_value_pairs(input: &str) -> Vec<(String, String)> {
                 val.to_string()
             } else {
                 // Unquoted value
-                let end = remaining.find(|c: char| c.is_whitespace()).unwrap_or(remaining.len());
+                let end = remaining
+                    .find(|c: char| c.is_whitespace())
+                    .unwrap_or(remaining.len());
                 let val = &remaining[..end];
                 remaining = &remaining[end..];
                 val.to_string()
@@ -690,15 +705,21 @@ fn parse_expose(input: &str) -> IResult<&str, Instruction> {
 fn parse_port_spec(s: &str) -> Option<Port> {
     let parts: Vec<&str> = s.split('/').collect();
     let port_num: u16 = parts[0].parse().ok()?;
-    let protocol = parts.get(1).map(|p| {
-        if p.eq_ignore_ascii_case("udp") {
-            PortProtocol::Udp
-        } else {
-            PortProtocol::Tcp
-        }
-    }).unwrap_or(PortProtocol::Tcp);
+    let protocol = parts
+        .get(1)
+        .map(|p| {
+            if p.eq_ignore_ascii_case("udp") {
+                PortProtocol::Udp
+            } else {
+                PortProtocol::Tcp
+            }
+        })
+        .unwrap_or(PortProtocol::Tcp);
 
-    Some(Port { number: port_num, protocol })
+    Some(Port {
+        number: port_num,
+        protocol,
+    })
 }
 
 /// Parse ARG instruction.
@@ -800,22 +821,34 @@ fn parse_healthcheck(input: &str) -> IResult<&str, Instruction> {
         remaining = remaining.trim_start();
         if remaining.starts_with("--interval=") {
             let value_start = 11;
-            let value_end = remaining[value_start..].find(' ').map(|i| value_start + i).unwrap_or(remaining.len());
+            let value_end = remaining[value_start..]
+                .find(' ')
+                .map(|i| value_start + i)
+                .unwrap_or(remaining.len());
             interval = Some(remaining[value_start..value_end].to_string());
             remaining = &remaining[value_end..];
         } else if remaining.starts_with("--timeout=") {
             let value_start = 10;
-            let value_end = remaining[value_start..].find(' ').map(|i| value_start + i).unwrap_or(remaining.len());
+            let value_end = remaining[value_start..]
+                .find(' ')
+                .map(|i| value_start + i)
+                .unwrap_or(remaining.len());
             timeout = Some(remaining[value_start..value_end].to_string());
             remaining = &remaining[value_end..];
         } else if remaining.starts_with("--start-period=") {
             let value_start = 15;
-            let value_end = remaining[value_start..].find(' ').map(|i| value_start + i).unwrap_or(remaining.len());
+            let value_end = remaining[value_start..]
+                .find(' ')
+                .map(|i| value_start + i)
+                .unwrap_or(remaining.len());
             start_period = Some(remaining[value_start..value_end].to_string());
             remaining = &remaining[value_end..];
         } else if remaining.starts_with("--retries=") {
             let value_start = 10;
-            let value_end = remaining[value_start..].find(' ').map(|i| value_start + i).unwrap_or(remaining.len());
+            let value_end = remaining[value_start..]
+                .find(' ')
+                .map(|i| value_start + i)
+                .unwrap_or(remaining.len());
             retries = remaining[value_start..value_end].parse().ok();
             remaining = &remaining[value_end..];
         } else {
@@ -831,13 +864,16 @@ fn parse_healthcheck(input: &str) -> IResult<&str, Instruction> {
 
     let (_, arguments) = parse_arguments(remaining)?;
 
-    Ok(("", Instruction::Healthcheck(HealthCheck::Cmd {
-        cmd: arguments,
-        interval,
-        timeout,
-        start_period,
-        retries,
-    })))
+    Ok((
+        "",
+        Instruction::Healthcheck(HealthCheck::Cmd {
+            cmd: arguments,
+            interval,
+            timeout,
+            start_period,
+            retries,
+        }),
+    ))
 }
 
 /// Parse ONBUILD instruction.
