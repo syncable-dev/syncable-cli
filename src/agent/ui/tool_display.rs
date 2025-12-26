@@ -218,7 +218,7 @@ pub fn print_tool_group_header(count: usize) {
 // ============================================================================
 
 /// Forge-style tool display that shows:
-/// ```
+/// ```text
 /// ● tool_name(arg1=value1, arg2=value2)
 ///   └ Running...
 /// ```
@@ -271,7 +271,7 @@ impl ForgeToolDisplay {
     }
 
     /// Print tool start in forge style
-    /// ```
+    /// ```text
     /// ● tool_name(args)
     ///   └ Running...
     /// ```
