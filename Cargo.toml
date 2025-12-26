@@ -73,7 +73,7 @@ futures-util = "0.3"
 
 # Agent dependencies (using Rig - LLM application framework)
 rig-core = { version = "0.27", features = ["derive"] }
-rig-bedrock = { path = "vendor/rig-bedrock" }  # Vendored with fix for extended thinking + tool calls
+rig-bedrock = { version = "0.3", path = "vendor/rig-bedrock" }  # Vendored with fix for extended thinking + tool calls
 
 # Diff rendering for file confirmation UI
 similar = "2.6"
@@ -110,4 +110,4 @@ path = "examples/security_analysis.rs"
 # The upstream version drops Reasoning blocks when a tool call is present.
 # See: vendor/rig-bedrock/src/types/assistant_content.rs for the fix.
 [patch.crates-io]
-rig-bedrock = { path = "vendor/rig-bedrock" }
+rig-bedrock = { version = "0.3", path = "vendor/rig-bedrock" }
