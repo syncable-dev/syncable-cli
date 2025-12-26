@@ -1,6 +1,6 @@
 [package]
 name = "syncable-cli"
-version = "0.16.0"
+version = "0.26.1"
 edition = "2024"
 authors = ["Syncable Team"]
 description = "A Rust-based CLI that analyzes code repositories and generates Infrastructure as Code configurations"
@@ -39,9 +39,9 @@ rayon = "1.11"
 termcolor = "1"
 chrono = { version = "0.4", features = ["serde"] }
 colored = "3"
-crossterm = "0.28"  # Terminal raw mode for interactive input
+crossterm = "0.29"  # Terminal raw mode for interactive input
 inquire = "0.7"     # Interactive terminal prompts with autocomplete
-rustyline = "15"    # Readline-style input with completions
+rustyline = "17"    # Readline-style input with completions
 prettytable = "0.10"
 term_size = "0.3"
 
@@ -105,3 +105,9 @@ path = "examples/check_vulnerabilities.rs"
 [[example]]
 name = "security_analysis"
 path = "examples/security_analysis.rs"
+
+# Patch rig-bedrock to fix extended thinking support with tool use
+# The upstream version drops Reasoning blocks when a tool call is present.
+# See: patches/rig-bedrock/src/types/assistant_content.rs for the fix.
+[patch.crates-io]
+rig-bedrock = { path = "patches/rig-bedrock" }
