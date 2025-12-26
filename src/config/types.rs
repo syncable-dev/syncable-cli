@@ -233,9 +233,7 @@ impl Default for Config {
                 overwrite_existing: false,
                 create_backup: true,
             },
-            telemetry: TelemetryConfig {
-                enabled: true,
-            },
+            telemetry: TelemetryConfig { enabled: true },
             agent: AgentConfig::default(),
         }
     }

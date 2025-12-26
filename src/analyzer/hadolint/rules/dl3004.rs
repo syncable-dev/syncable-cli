@@ -4,7 +4,7 @@
 //! by default, and using it indicates a misunderstanding of Docker.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{simple_rule, SimpleRule};
+use crate::analyzer::hadolint::rules::{SimpleRule, simple_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
@@ -13,17 +13,15 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
         "DL3004",
         Severity::Error,
         "Do not use sudo as it leads to unpredictable behavior. Use a tool like gosu to enforce root",
-        |instr, shell| {
-            match instr {
-                Instruction::Run(_) => {
-                    if let Some(shell) = shell {
-                        !shell.any_command(|cmd| cmd.name == "sudo")
-                    } else {
-                        true
-                    }
+        |instr, shell| match instr {
+            Instruction::Run(_) => {
+                if let Some(shell) = shell {
+                    !shell.any_command(|cmd| cmd.name == "sudo")
+                } else {
+                    true
                 }
-                _ => true,
             }
+            _ => true,
         },
     )
 }

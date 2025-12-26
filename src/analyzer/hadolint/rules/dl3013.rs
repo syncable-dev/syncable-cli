@@ -4,7 +4,7 @@
 //! reproducible builds.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{simple_rule, SimpleRule};
+use crate::analyzer::hadolint::rules::{SimpleRule, simple_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
@@ -57,7 +57,8 @@ fn pip_packages(shell: &ParsedShell) -> Vec<String> {
 /// Check if pip uses a requirements file.
 fn uses_requirements_file(shell: &ParsedShell) -> bool {
     shell.any_command(|cmd| {
-        cmd.is_pip_install() && (cmd.has_any_flag(&["r", "requirement"]) || cmd.has_flag("constraint"))
+        cmd.is_pip_install()
+            && (cmd.has_any_flag(&["r", "requirement"]) || cmd.has_flag("constraint"))
     })
 }
 

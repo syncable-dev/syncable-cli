@@ -112,11 +112,7 @@ impl StreamingShellOutput {
                 line.clone()
             };
 
-            println!(
-                "  {} {}",
-                prefix.dimmed(),
-                display
-            );
+            println!("  {} {}", prefix.dimmed(), display);
         }
         // Note: Removed the "Running..." status line - elapsed time is shown in header
     }
@@ -127,7 +123,11 @@ impl StreamingShellOutput {
             let mut stdout = io::stdout();
             // Move cursor up and clear lines
             for _ in 0..self.lines_rendered {
-                let _ = execute!(stdout, cursor::MoveUp(1), terminal::Clear(terminal::ClearType::CurrentLine));
+                let _ = execute!(
+                    stdout,
+                    cursor::MoveUp(1),
+                    terminal::Clear(terminal::ClearType::CurrentLine)
+                );
             }
         }
     }

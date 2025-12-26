@@ -6,7 +6,7 @@ pub mod config;
 pub mod error;
 pub mod generator;
 pub mod handlers;
-pub mod telemetry;  // Add telemetry module
+pub mod telemetry; // Add telemetry module
 
 // Re-export commonly used types and functions
 pub use analyzer::{ProjectAnalysis, analyze_project};
@@ -14,7 +14,7 @@ use cli::Commands;
 pub use error::{IaCGeneratorError, Result};
 pub use generator::{generate_compose, generate_dockerfile, generate_terraform};
 pub use handlers::*;
-pub use telemetry::{TelemetryClient, TelemetryConfig, UserId};  // Re-export telemetry types
+pub use telemetry::{TelemetryClient, TelemetryConfig, UserId}; // Re-export telemetry types
 
 /// The current version of the CLI tool
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -104,7 +104,12 @@ pub async fn run_command(command: Commands) -> Result<()> {
             .map(|_| ()) // Map Result<String> to Result<()>
         }
         Commands::Tools { command } => handlers::handle_tools(command).await,
-        Commands::Chat { path, provider, model, query } => {
+        Commands::Chat {
+            path,
+            provider,
+            model,
+            query,
+        } => {
             use agent::ProviderType;
             use cli::ChatProvider;
             use config::load_agent_config;
@@ -146,7 +151,8 @@ pub async fn run_command(command: Commands) -> Result<()> {
             agent::session::ChatSession::load_api_key_to_env(provider_type);
 
             if let Some(q) = query {
-                let response = agent::run_query(&project_path, &q, provider_type, effective_model).await?;
+                let response =
+                    agent::run_query(&project_path, &q, provider_type, effective_model).await?;
                 println!("{}", response);
                 Ok(())
             } else {

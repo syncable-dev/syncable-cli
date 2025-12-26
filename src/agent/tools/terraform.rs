@@ -43,7 +43,10 @@ pub fn get_installation_instructions() -> (&'static str, &'static str, Vec<&'sta
         (
             "macOS",
             "Install Terraform using Homebrew",
-            vec!["brew tap hashicorp/tap", "brew install hashicorp/tap/terraform"],
+            vec![
+                "brew tap hashicorp/tap",
+                "brew install hashicorp/tap/terraform",
+            ],
         )
     }
 
@@ -428,7 +431,12 @@ impl TerraformValidateTool {
         }
     }
 
-    fn format_result(&self, validation_output: &str, success: bool, init_output: Option<&str>) -> String {
+    fn format_result(
+        &self,
+        validation_output: &str,
+        success: bool,
+        init_output: Option<&str>,
+    ) -> String {
         // Try to parse JSON output from terraform validate -json
         if let Ok(tf_json) = serde_json::from_str::<serde_json::Value>(validation_output) {
             let valid = tf_json["valid"].as_bool().unwrap_or(false);

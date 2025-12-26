@@ -43,7 +43,9 @@ pub fn render_diff(old_content: &str, new_content: &str, filename: &str) {
     let header = format!(" {} ", filename);
     let header_len = header.len();
     let left_dashes = (inner_width.saturating_sub(header_len)) / 2;
-    let right_dashes = inner_width.saturating_sub(header_len).saturating_sub(left_dashes);
+    let right_dashes = inner_width
+        .saturating_sub(header_len)
+        .saturating_sub(left_dashes);
 
     println!(
         "{}{}{}{}{}",
@@ -129,7 +131,9 @@ pub fn render_new_file(content: &str, filename: &str) {
     let header = format!(" {} (new file) ", filename);
     let header_len = header.len();
     let left_dashes = (inner_width.saturating_sub(header_len)) / 2;
-    let right_dashes = inner_width.saturating_sub(header_len).saturating_sub(left_dashes);
+    let right_dashes = inner_width
+        .saturating_sub(header_len)
+        .saturating_sub(left_dashes);
 
     println!(
         "{}{}{}{}{}",

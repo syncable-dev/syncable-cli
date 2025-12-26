@@ -60,13 +60,13 @@ pub mod ansi {
     pub const SUCCESS: &str = "\x1b[38;5;114m"; // Green for success
 
     // Hadolint/Docker specific colors (teal/docker-blue theme)
-    pub const DOCKER_BLUE: &str = "\x1b[38;5;39m";  // Docker brand blue
-    pub const TEAL: &str = "\x1b[38;5;30m";         // Teal for hadolint
-    pub const CRITICAL: &str = "\x1b[38;5;196m";   // Bright red
-    pub const HIGH: &str = "\x1b[38;5;208m";       // Orange
-    pub const MEDIUM: &str = "\x1b[38;5;220m";     // Yellow
-    pub const LOW: &str = "\x1b[38;5;114m";        // Green
-    pub const INFO_BLUE: &str = "\x1b[38;5;75m";   // Light blue for info
+    pub const DOCKER_BLUE: &str = "\x1b[38;5;39m"; // Docker brand blue
+    pub const TEAL: &str = "\x1b[38;5;30m"; // Teal for hadolint
+    pub const CRITICAL: &str = "\x1b[38;5;196m"; // Bright red
+    pub const HIGH: &str = "\x1b[38;5;208m"; // Orange
+    pub const MEDIUM: &str = "\x1b[38;5;220m"; // Yellow
+    pub const LOW: &str = "\x1b[38;5;114m"; // Green
+    pub const INFO_BLUE: &str = "\x1b[38;5;75m"; // Light blue for info
 }
 
 /// Format a tool name for display
@@ -96,11 +96,7 @@ pub fn format_elapsed(seconds: u64) -> String {
 
 /// Format a thinking/reasoning message
 pub fn format_thinking(subject: &str) -> String {
-    format!(
-        "{} {}",
-        icons::THINKING,
-        subject.cyan().italic()
-    )
+    format!("{} {}", icons::THINKING, subject.cyan().italic())
 }
 
 /// Format an info message

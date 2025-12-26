@@ -3,8 +3,8 @@
 //! Calls the external shellcheck binary to get detailed shell script analysis.
 //! Requires shellcheck to be installed on the system.
 
-use std::process::Command;
 use serde::Deserialize;
+use std::process::Command;
 
 /// A ShellCheck warning/error.
 #[derive(Debug, Clone, Deserialize)]
@@ -51,10 +51,13 @@ pub fn run_shellcheck(script: &str, shell: &str) -> Vec<ShellCheckComment> {
         .args([
             "--format=json",
             &format!("--shell={}", shell),
-            "-e", "2187", // Exclude ash shell warning
-            "-e", "1090", // Exclude source directive warning
-            "-e", "1091", // Exclude source directive warning
-            "-",          // Read from stdin
+            "-e",
+            "2187", // Exclude ash shell warning
+            "-e",
+            "1090", // Exclude source directive warning
+            "-e",
+            "1091", // Exclude source directive warning
+            "-",    // Read from stdin
         ])
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
@@ -104,10 +107,7 @@ pub fn is_shellcheck_available() -> bool {
 
 /// Get the shellcheck version if available.
 pub fn shellcheck_version() -> Option<String> {
-    let output = Command::new("shellcheck")
-        .arg("--version")
-        .output()
-        .ok()?;
+    let output = Command::new("shellcheck").arg("--version").output().ok()?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
 
@@ -157,7 +157,10 @@ echo $foo
 
         // Should have at least one warning about unquoted variable
         let has_sc2086 = comments.iter().any(|c| c.code == 2086);
-        assert!(has_sc2086 || comments.is_empty(), "Expected SC2086 warning or empty (if shellcheck behaves differently)");
+        assert!(
+            has_sc2086 || comments.is_empty(),
+            "Expected SC2086 warning or empty (if shellcheck behaves differently)"
+        );
     }
 
     #[test]

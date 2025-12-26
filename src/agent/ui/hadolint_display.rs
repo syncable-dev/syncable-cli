@@ -151,7 +151,13 @@ impl HadolintDisplay {
         }
 
         // Critical and High priority issues with details
-        Self::print_priority_section(&mut handle, result, "critical", "Critical Issues", ansi::CRITICAL);
+        Self::print_priority_section(
+            &mut handle,
+            result,
+            "critical",
+            "Critical Issues",
+            ansi::CRITICAL,
+        );
         Self::print_priority_section(&mut handle, result, "high", "High Priority", ansi::HIGH);
 
         // Optionally show medium (collapsed)
@@ -228,13 +234,7 @@ impl HadolintDisplay {
 
                 // Show fix recommendation
                 if let Some(fix) = issue["fix"].as_str() {
-                    let _ = writeln!(
-                        handle,
-                        "       {}→ {}{}",
-                        ansi::INFO_BLUE,
-                        fix,
-                        ansi::RESET
-                    );
+                    let _ = writeln!(handle, "       {}→ {}{}", ansi::INFO_BLUE, fix, ansi::RESET);
                 }
             }
 
@@ -265,8 +265,12 @@ impl HadolintDisplay {
                     ansi::RESET
                 )
             } else {
-                let critical = parsed["summary"]["by_priority"]["critical"].as_u64().unwrap_or(0);
-                let high = parsed["summary"]["by_priority"]["high"].as_u64().unwrap_or(0);
+                let critical = parsed["summary"]["by_priority"]["critical"]
+                    .as_u64()
+                    .unwrap_or(0);
+                let high = parsed["summary"]["by_priority"]["high"]
+                    .as_u64()
+                    .unwrap_or(0);
 
                 if critical > 0 {
                     format!(

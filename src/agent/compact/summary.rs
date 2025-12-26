@@ -139,7 +139,11 @@ impl SummaryFrame {
         content.push_str(&format!(
             "This summary covers {} conversation turn{}.\n",
             summary.turns_compacted,
-            if summary.turns_compacted == 1 { "" } else { "s" }
+            if summary.turns_compacted == 1 {
+                ""
+            } else {
+                "s"
+            }
         ));
 
         // Tool usage summary
@@ -274,7 +278,10 @@ impl SummaryFrame {
         content.push_str("</conversation_summary>");
 
         let token_count = content.len() / 4;
-        Self { content, token_count }
+        Self {
+            content,
+            token_count,
+        }
     }
 }
 

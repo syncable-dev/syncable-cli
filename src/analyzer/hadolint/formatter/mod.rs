@@ -66,7 +66,12 @@ impl OutputFormat {
 /// Trait for formatting lint results.
 pub trait Formatter {
     /// Format the lint result and write to the given writer.
-    fn format<W: Write>(&self, result: &LintResult, filename: &str, writer: &mut W) -> std::io::Result<()>;
+    fn format<W: Write>(
+        &self,
+        result: &LintResult,
+        filename: &str,
+        writer: &mut W,
+    ) -> std::io::Result<()>;
 
     /// Format the lint result to a string.
     fn format_to_string(&self, result: &LintResult, filename: &str) -> String {
@@ -94,7 +99,11 @@ pub fn format_result<W: Write>(
 }
 
 /// Format a lint result to a string using the specified output format.
-pub fn format_result_to_string(result: &LintResult, filename: &str, format: OutputFormat) -> String {
+pub fn format_result_to_string(
+    result: &LintResult,
+    filename: &str,
+    format: OutputFormat,
+) -> String {
     let mut buf = Vec::new();
     format_result(result, filename, format, &mut buf).unwrap_or_default();
     String::from_utf8(buf).unwrap_or_default()

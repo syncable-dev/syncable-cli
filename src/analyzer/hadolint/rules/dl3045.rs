@@ -4,11 +4,12 @@
 //! predictable behavior.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{custom_rule, CustomRule, RuleState};
+use crate::analyzer::hadolint::rules::{CustomRule, RuleState, custom_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
-pub fn rule() -> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&ParsedShell>) + Send + Sync> {
+pub fn rule()
+-> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&ParsedShell>) + Send + Sync> {
     custom_rule(
         "DL3045",
         Severity::Warning,
@@ -17,20 +18,26 @@ pub fn rule() -> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&P
             match instr {
                 Instruction::From(base) => {
                     // Track current stage
-                    let stage_name = base.alias.as_ref()
+                    let stage_name = base
+                        .alias
+                        .as_ref()
                         .map(|a| a.as_str().to_string())
                         .unwrap_or_else(|| base.image.name.clone());
                     state.data.set_string("current_stage", &stage_name);
 
                     // Check if parent stage had WORKDIR set
-                    let parent_had_workdir = state.data.set_contains("stages_with_workdir", &base.image.name);
+                    let parent_had_workdir = state
+                        .data
+                        .set_contains("stages_with_workdir", &base.image.name);
                     if parent_had_workdir {
                         state.data.insert_to_set("stages_with_workdir", &stage_name);
                     }
                 }
                 Instruction::Workdir(_) => {
                     // Mark current stage as having WORKDIR set
-                    let stage = state.data.get_string("current_stage")
+                    let stage = state
+                        .data
+                        .get_string("current_stage")
                         .map(|s| s.to_string())
                         .unwrap_or_else(|| "__none__".to_string());
                     state.data.insert_to_set("stages_with_workdir", &stage);
@@ -39,9 +46,13 @@ pub fn rule() -> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&P
                     let dest = &args.dest;
 
                     // Check if current stage has WORKDIR set
-                    let has_workdir = state.data.get_string("current_stage")
+                    let has_workdir = state
+                        .data
+                        .get_string("current_stage")
                         .map(|s| state.data.set_contains("stages_with_workdir", s))
-                        .unwrap_or_else(|| state.data.set_contains("stages_with_workdir", "__none__"));
+                        .unwrap_or_else(|| {
+                            state.data.set_contains("stages_with_workdir", "__none__")
+                        });
 
                     // Skip check if WORKDIR is set
                     if has_workdir {

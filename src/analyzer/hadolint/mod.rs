@@ -50,6 +50,6 @@ pub mod types;
 
 // Re-export main types and functions
 pub use config::HadolintConfig;
-pub use formatter::{format_result, format_result_to_string, Formatter, OutputFormat};
-pub use lint::{lint, lint_file, LintResult};
+pub use formatter::{Formatter, OutputFormat, format_result, format_result_to_string};
+pub use lint::{LintResult, lint, lint_file};
 pub use types::{CheckFailure, RuleCode, Severity};

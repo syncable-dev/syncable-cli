@@ -37,7 +37,12 @@ fn severity_to_checkstyle(severity: Severity) -> &'static str {
 }
 
 impl Formatter for CheckstyleFormatter {
-    fn format<W: Write>(&self, result: &LintResult, filename: &str, writer: &mut W) -> std::io::Result<()> {
+    fn format<W: Write>(
+        &self,
+        result: &LintResult,
+        filename: &str,
+        writer: &mut W,
+    ) -> std::io::Result<()> {
         writeln!(writer, r#"<?xml version="1.0" encoding="UTF-8"?>"#)?;
         writeln!(writer, r#"<checkstyle version="4.3">"#)?;
 

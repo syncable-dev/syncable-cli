@@ -3,10 +3,8 @@ use std::process::{Command, Output};
 
 /// Execute a command safely and return the output
 pub fn execute_command(cmd: &str, args: &[&str]) -> Result<Output> {
-    let output = Command::new(cmd)
-        .args(args)
-        .output()?;
-    
+    let output = Command::new(cmd).args(args).output()?;
+
     Ok(output)
 }
 
@@ -17,10 +15,11 @@ pub fn is_command_available(cmd: &str) -> bool {
         .arg("--version")
         .output()
         .map(|o| o.status.success())
-        .unwrap_or(false) {
+        .unwrap_or(false)
+    {
         return true;
     }
-    
+
     // On Windows, also try with .exe extension
     if cfg!(windows) && !cmd.ends_with(".exe") {
         let cmd_with_exe = format!("{}.exe", cmd);
@@ -30,6 +29,6 @@ pub fn is_command_available(cmd: &str) -> bool {
             .map(|o| o.status.success())
             .unwrap_or(false);
     }
-    
+
     false
-} 
+}

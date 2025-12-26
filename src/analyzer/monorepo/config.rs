@@ -37,4 +37,4 @@ impl Default for MonorepoDetectionConfig {
             ],
         }
     }
-} 
+}

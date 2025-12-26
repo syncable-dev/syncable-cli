@@ -3,7 +3,7 @@
 //! The created label should contain a valid RFC3339 date.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{simple_rule, SimpleRule};
+use crate::analyzer::hadolint::rules::{SimpleRule, simple_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
@@ -12,20 +12,18 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
         "DL3051",
         Severity::Warning,
         "Label `org.opencontainers.image.created` is empty or not a valid RFC3339 date.",
-        |instr, _shell| {
-            match instr {
-                Instruction::Label(pairs) => {
-                    for (key, value) in pairs {
-                        if key == "org.opencontainers.image.created" {
-                            if value.is_empty() || !is_valid_rfc3339(value) {
-                                return false;
-                            }
+        |instr, _shell| match instr {
+            Instruction::Label(pairs) => {
+                for (key, value) in pairs {
+                    if key == "org.opencontainers.image.created" {
+                        if value.is_empty() || !is_valid_rfc3339(value) {
+                            return false;
                         }
                     }
-                    true
                 }
-                _ => true,
+                true
             }
+            _ => true,
         },
     )
 }
@@ -45,11 +43,21 @@ fn is_valid_rfc3339(date: &str) -> bool {
     }
 
     // YYYY-MM-DD
-    if !chars[0..4].iter().all(|c| c.is_ascii_digit()) { return false; }
-    if chars[4] != '-' { return false; }
-    if !chars[5..7].iter().all(|c| c.is_ascii_digit()) { return false; }
-    if chars[7] != '-' { return false; }
-    if !chars[8..10].iter().all(|c| c.is_ascii_digit()) { return false; }
+    if !chars[0..4].iter().all(|c| c.is_ascii_digit()) {
+        return false;
+    }
+    if chars[4] != '-' {
+        return false;
+    }
+    if !chars[5..7].iter().all(|c| c.is_ascii_digit()) {
+        return false;
+    }
+    if chars[7] != '-' {
+        return false;
+    }
+    if !chars[8..10].iter().all(|c| c.is_ascii_digit()) {
+        return false;
+    }
 
     // T separator
     if chars.get(10) != Some(&'T') && chars.get(10) != Some(&'t') {
@@ -57,12 +65,24 @@ fn is_valid_rfc3339(date: &str) -> bool {
     }
 
     // HH:MM:SS
-    if chars.len() < 19 { return false; }
-    if !chars[11..13].iter().all(|c| c.is_ascii_digit()) { return false; }
-    if chars[13] != ':' { return false; }
-    if !chars[14..16].iter().all(|c| c.is_ascii_digit()) { return false; }
-    if chars[16] != ':' { return false; }
-    if !chars[17..19].iter().all(|c| c.is_ascii_digit()) { return false; }
+    if chars.len() < 19 {
+        return false;
+    }
+    if !chars[11..13].iter().all(|c| c.is_ascii_digit()) {
+        return false;
+    }
+    if chars[13] != ':' {
+        return false;
+    }
+    if !chars[14..16].iter().all(|c| c.is_ascii_digit()) {
+        return false;
+    }
+    if chars[16] != ':' {
+        return false;
+    }
+    if !chars[17..19].iter().all(|c| c.is_ascii_digit()) {
+        return false;
+    }
 
     // Timezone (Z or +/-HH:MM)
     if chars.len() == 20 && chars[19] == 'Z' {
@@ -97,8 +117,8 @@ fn is_valid_rfc3339(date: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::hadolint::lint::{lint, LintResult};
     use crate::analyzer::hadolint::config::HadolintConfig;
+    use crate::analyzer::hadolint::lint::{LintResult, lint};
 
     fn lint_dockerfile(content: &str) -> LintResult {
         lint(content, &HadolintConfig::default())
@@ -106,19 +126,24 @@ mod tests {
 
     #[test]
     fn test_valid_date() {
-        let result = lint_dockerfile("FROM ubuntu:20.04\nLABEL org.opencontainers.image.created=\"2023-01-15T14:30:00Z\"");
+        let result = lint_dockerfile(
+            "FROM ubuntu:20.04\nLABEL org.opencontainers.image.created=\"2023-01-15T14:30:00Z\"",
+        );
         assert!(!result.failures.iter().any(|f| f.code.as_str() == "DL3051"));
     }
 
     #[test]
     fn test_empty_date() {
-        let result = lint_dockerfile("FROM ubuntu:20.04\nLABEL org.opencontainers.image.created=\"\"");
+        let result =
+            lint_dockerfile("FROM ubuntu:20.04\nLABEL org.opencontainers.image.created=\"\"");
         assert!(result.failures.iter().any(|f| f.code.as_str() == "DL3051"));
     }
 
     #[test]
     fn test_invalid_date() {
-        let result = lint_dockerfile("FROM ubuntu:20.04\nLABEL org.opencontainers.image.created=\"not-a-date\"");
+        let result = lint_dockerfile(
+            "FROM ubuntu:20.04\nLABEL org.opencontainers.image.created=\"not-a-date\"",
+        );
         assert!(result.failures.iter().any(|f| f.code.as_str() == "DL3051"));
     }
 }

@@ -1,9 +1,9 @@
+use log::{debug, info};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime};
-use serde::{Deserialize, Serialize};
-use log::{debug, info};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolStatus {
@@ -54,76 +54,89 @@ impl ToolDetector {
     pub fn new() -> Self {
         Self::with_config(ToolDetectionConfig::default())
     }
-    
+
     pub fn with_config(config: ToolDetectionConfig) -> Self {
         Self {
             cache: HashMap::new(),
             config,
         }
     }
-    
+
     /// Detect tool availability with caching
     pub fn detect_tool(&mut self, tool_name: &str) -> ToolStatus {
         if !self.config.enable_cache {
             return self.detect_tool_real_time(tool_name);
         }
-        
+
         // Check cache first
         if let Some(cached) = self.cache.get(tool_name) {
             if cached.last_checked.elapsed().unwrap_or(Duration::MAX) < self.config.cache_ttl {
-                debug!("Using cached status for {}: available={}", tool_name, cached.available);
+                debug!(
+                    "Using cached status for {}: available={}",
+                    tool_name, cached.available
+                );
                 return cached.clone();
             }
         }
-        
+
         // Perform real detection
         let status = self.detect_tool_real_time(tool_name);
-        debug!("Real-time detection for {}: available={}, path={:?}", 
-               tool_name, status.available, status.path);
+        debug!(
+            "Real-time detection for {}: available={}, path={:?}",
+            tool_name, status.available, status.path
+        );
         self.cache.insert(tool_name.to_string(), status.clone());
         status
     }
-    
+
     /// Detect all vulnerability scanning tools for given languages
-    pub fn detect_all_vulnerability_tools(&mut self, languages: &[crate::analyzer::dependency_parser::Language]) -> HashMap<String, ToolStatus> {
+    pub fn detect_all_vulnerability_tools(
+        &mut self,
+        languages: &[crate::analyzer::dependency_parser::Language],
+    ) -> HashMap<String, ToolStatus> {
         let mut results = HashMap::new();
-        
+
         for language in languages {
             let tool_names = self.get_tools_for_language(language);
-            
+
             for tool_name in tool_names {
                 if !results.contains_key(tool_name) {
                     results.insert(tool_name.to_string(), self.detect_tool(tool_name));
                 }
             }
         }
-        
+
         results
     }
-    
-    fn get_tools_for_language(&self, language: &crate::analyzer::dependency_parser::Language) -> Vec<&'static str> {
+
+    fn get_tools_for_language(
+        &self,
+        language: &crate::analyzer::dependency_parser::Language,
+    ) -> Vec<&'static str> {
         match language {
             crate::analyzer::dependency_parser::Language::Rust => vec!["cargo-audit"],
-            crate::analyzer::dependency_parser::Language::JavaScript | 
-            crate::analyzer::dependency_parser::Language::TypeScript => vec!["bun", "npm", "yarn", "pnpm"],
+            crate::analyzer::dependency_parser::Language::JavaScript
+            | crate::analyzer::dependency_parser::Language::TypeScript => {
+                vec!["bun", "npm", "yarn", "pnpm"]
+            }
             crate::analyzer::dependency_parser::Language::Python => vec!["pip-audit"],
             crate::analyzer::dependency_parser::Language::Go => vec!["govulncheck"],
-            crate::analyzer::dependency_parser::Language::Java | 
-            crate::analyzer::dependency_parser::Language::Kotlin => vec!["grype"],
+            crate::analyzer::dependency_parser::Language::Java
+            | crate::analyzer::dependency_parser::Language::Kotlin => vec!["grype"],
             _ => vec![],
         }
     }
-    
+
     /// Clear the cache to force fresh detection
     pub fn clear_cache(&mut self) {
         self.cache.clear();
     }
-    
+
     /// Detect bun specifically with multiple alternatives
     pub fn detect_bun(&mut self) -> ToolStatus {
         self.detect_tool_with_alternatives("bun", &["bun", "bunx"])
     }
-    
+
     /// Detect all JavaScript package managers
     pub fn detect_js_package_managers(&mut self) -> HashMap<String, ToolStatus> {
         let mut managers = HashMap::new();
@@ -133,19 +146,26 @@ impl ToolDetector {
         managers.insert("pnpm".to_string(), self.detect_tool("pnpm"));
         managers
     }
-    
+
     /// Detect tool with alternative command names
-    pub fn detect_tool_with_alternatives(&mut self, primary_name: &str, alternatives: &[&str]) -> ToolStatus {
+    pub fn detect_tool_with_alternatives(
+        &mut self,
+        primary_name: &str,
+        alternatives: &[&str],
+    ) -> ToolStatus {
         // Check cache first for primary name
         if self.config.enable_cache {
             if let Some(cached) = self.cache.get(primary_name) {
                 if cached.last_checked.elapsed().unwrap_or(Duration::MAX) < self.config.cache_ttl {
-                    debug!("Using cached status for {}: available={}", primary_name, cached.available);
+                    debug!(
+                        "Using cached status for {}: available={}",
+                        primary_name, cached.available
+                    );
                     return cached.clone();
                 }
             }
         }
-        
+
         // Try each alternative
         for alternative in alternatives {
             debug!("Trying to detect tool: {}", alternative);
@@ -158,7 +178,7 @@ impl ToolDetector {
                 return status;
             }
         }
-        
+
         // Not found
         let not_found = ToolStatus {
             available: false,
@@ -168,20 +188,24 @@ impl ToolDetector {
             installation_source: InstallationSource::NotFound,
             last_checked: SystemTime::now(),
         };
-        
+
         if self.config.enable_cache {
-            self.cache.insert(primary_name.to_string(), not_found.clone());
+            self.cache
+                .insert(primary_name.to_string(), not_found.clone());
         }
         not_found
     }
-    
+
     /// Perform real-time tool detection without caching
     fn detect_tool_real_time(&self, tool_name: &str) -> ToolStatus {
         debug!("Starting real-time detection for {}", tool_name);
-        
+
         // Try direct command first (in PATH)
         if let Some((path, version)) = self.try_command_in_path(tool_name) {
-            info!("Found {} in PATH at {:?} with version {:?}", tool_name, path, version);
+            info!(
+                "Found {} in PATH at {:?} with version {:?}",
+                tool_name, path, version
+            );
             return ToolStatus {
                 available: true,
                 path: Some(path),
@@ -191,20 +215,25 @@ impl ToolDetector {
                 last_checked: SystemTime::now(),
             };
         }
-        
+
         // Try alternative paths if enabled
         if self.config.search_user_paths || self.config.search_system_paths {
             let search_paths = self.get_tool_search_paths(tool_name);
-            debug!("Searching alternative paths for {}: {:?}", tool_name, search_paths);
-            
+            debug!(
+                "Searching alternative paths for {}: {:?}",
+                tool_name, search_paths
+            );
+
             for search_path in search_paths {
                 let tool_path = search_path.join(tool_name);
                 debug!("Checking path: {:?}", tool_path);
-                
+
                 if let Some(version) = self.verify_tool_at_path(&tool_path, tool_name) {
                     let source = self.determine_installation_source(&search_path);
-                    info!("Found {} at {:?} with version {:?} (source: {:?})", 
-                          tool_name, tool_path, version, source);
+                    info!(
+                        "Found {} at {:?} with version {:?} (source: {:?})",
+                        tool_name, tool_path, version, source
+                    );
                     return ToolStatus {
                         available: true,
                         path: Some(tool_path.clone()),
@@ -214,15 +243,17 @@ impl ToolDetector {
                         last_checked: SystemTime::now(),
                     };
                 }
-                
+
                 // Also try with .exe extension on Windows
                 #[cfg(windows)]
                 {
                     let tool_path_exe = search_path.join(format!("{}.exe", tool_name));
                     if let Some(version) = self.verify_tool_at_path(&tool_path_exe, tool_name) {
                         let source = self.determine_installation_source(&search_path);
-                        info!("Found {} at {:?} with version {:?} (source: {:?})", 
-                              tool_name, tool_path_exe, version, source);
+                        info!(
+                            "Found {} at {:?} with version {:?} (source: {:?})",
+                            tool_name, tool_path_exe, version, source
+                        );
                         return ToolStatus {
                             available: true,
                             path: Some(tool_path_exe),
@@ -235,7 +266,7 @@ impl ToolDetector {
                 }
             }
         }
-        
+
         // Tool not found
         debug!("Tool {} not found in any location", tool_name);
         ToolStatus {
@@ -247,29 +278,29 @@ impl ToolDetector {
             last_checked: SystemTime::now(),
         }
     }
-    
+
     /// Get search paths for a specific tool
     fn get_tool_search_paths(&self, tool_name: &str) -> Vec<PathBuf> {
         let mut paths = Vec::new();
-        
+
         if !self.config.search_user_paths && !self.config.search_system_paths {
             return paths;
         }
-        
+
         // User-specific paths
         if self.config.search_user_paths {
             if let Ok(home) = std::env::var("HOME") {
                 let home_path = PathBuf::from(home);
-                
+
                 // Common user install locations
                 paths.push(home_path.join(".local").join("bin"));
                 paths.push(home_path.join(".cargo").join("bin"));
                 paths.push(home_path.join("go").join("bin"));
-                
+
                 // Tool-specific locations
                 self.add_tool_specific_paths(tool_name, &home_path, &mut paths);
             }
-            
+
             // Windows-specific paths
             #[cfg(windows)]
             {
@@ -289,21 +320,26 @@ impl ToolDetector {
                 paths.push(PathBuf::from("C:\\Program Files (x86)"));
             }
         }
-        
+
         // System-wide paths
         if self.config.search_system_paths {
             paths.push(PathBuf::from("/usr/local/bin"));
             paths.push(PathBuf::from("/usr/bin"));
             paths.push(PathBuf::from("/bin"));
         }
-        
+
         // Remove duplicates and non-existent paths
         paths.sort();
         paths.dedup();
         paths.into_iter().filter(|p| p.exists()).collect()
     }
-    
-    fn add_tool_specific_paths(&self, tool_name: &str, home_path: &PathBuf, paths: &mut Vec<PathBuf>) {
+
+    fn add_tool_specific_paths(
+        &self,
+        tool_name: &str,
+        home_path: &PathBuf,
+        paths: &mut Vec<PathBuf>,
+    ) {
         match tool_name {
             "cargo-audit" => {
                 paths.push(home_path.join(".cargo").join("bin"));
@@ -326,14 +362,16 @@ impl ToolDetector {
                 paths.push(home_path.join(".local").join("bin"));
                 if let Ok(output) = Command::new("python3")
                     .args(&["-m", "site", "--user-base"])
-                    .output() {
+                    .output()
+                {
                     if let Ok(user_base) = String::from_utf8(output.stdout) {
                         paths.push(PathBuf::from(user_base.trim()).join("bin"));
                     }
                 }
                 if let Ok(output) = Command::new("python")
                     .args(&["-m", "site", "--user-base"])
-                    .output() {
+                    .output()
+                {
                     if let Ok(user_base) = String::from_utf8(output.stdout) {
                         paths.push(PathBuf::from(user_base.trim()).join("bin"));
                     }
@@ -364,52 +402,49 @@ impl ToolDetector {
             _ => {}
         }
     }
-    
+
     /// Try to run a command in PATH
     fn try_command_in_path(&self, tool_name: &str) -> Option<(PathBuf, Option<String>)> {
         let version_args = self.get_version_args(tool_name);
         debug!("Trying {} with args: {:?}", tool_name, version_args);
-        
-        let output = Command::new(tool_name)
-            .args(&version_args)
-            .output()
-            .ok()?;
-            
+
+        let output = Command::new(tool_name).args(&version_args).output().ok()?;
+
         if output.status.success() {
             let version = self.parse_version_output(&output.stdout, tool_name);
-            let path = self.find_tool_path(tool_name).unwrap_or_else(|| {
-                PathBuf::from(tool_name)
-            });
+            let path = self
+                .find_tool_path(tool_name)
+                .unwrap_or_else(|| PathBuf::from(tool_name));
             return Some((path, version));
         }
-        
+
         // For some tools, stderr might contain version info even on non-zero exit
         if !output.stderr.is_empty() {
             if let Some(version) = self.parse_version_output(&output.stderr, tool_name) {
-                let path = self.find_tool_path(tool_name).unwrap_or_else(|| {
-                    PathBuf::from(tool_name)
-                });
+                let path = self
+                    .find_tool_path(tool_name)
+                    .unwrap_or_else(|| PathBuf::from(tool_name));
                 return Some((path, Some(version)));
             }
         }
-        
+
         None
     }
-    
+
     /// Verify tool installation at a specific path
     fn verify_tool_at_path(&self, tool_path: &Path, tool_name: &str) -> Option<String> {
         if !tool_path.exists() {
             return None;
         }
-        
+
         let version_args = self.get_version_args(tool_name);
-        debug!("Verifying {} at {:?} with args: {:?}", tool_name, tool_path, version_args);
-        
-        let output = Command::new(tool_path)
-            .args(&version_args)
-            .output()
-            .ok()?;
-            
+        debug!(
+            "Verifying {} at {:?} with args: {:?}",
+            tool_name, tool_path, version_args
+        );
+
+        let output = Command::new(tool_path).args(&version_args).output().ok()?;
+
         if output.status.success() {
             self.parse_version_output(&output.stdout, tool_name)
         } else if !output.stderr.is_empty() {
@@ -418,7 +453,7 @@ impl ToolDetector {
             None
         }
     }
-    
+
     /// Get appropriate version check arguments for each tool
     fn get_version_args(&self, tool_name: &str) -> Vec<&str> {
         match tool_name {
@@ -435,12 +470,16 @@ impl ToolDetector {
             _ => vec!["--version"],
         }
     }
-    
+
     /// Parse version information from command output
     fn parse_version_output(&self, output: &[u8], tool_name: &str) -> Option<String> {
         let output_str = String::from_utf8_lossy(output);
-        debug!("Parsing version output for {}: {}", tool_name, output_str.trim());
-        
+        debug!(
+            "Parsing version output for {}: {}",
+            tool_name,
+            output_str.trim()
+        );
+
         match tool_name {
             "cargo-audit" => {
                 for line in output_str.lines() {
@@ -521,14 +560,14 @@ impl ToolDetector {
                 }
             }
         }
-        
+
         None
     }
-    
+
     /// Determine installation source based on path
     fn determine_installation_source(&self, path: &Path) -> InstallationSource {
         let path_str = path.to_string_lossy().to_lowercase();
-        
+
         if path_str.contains(".cargo") {
             InstallationSource::CargoHome
         } else if path_str.contains("go/bin") || path_str.contains("gopath") {
@@ -541,13 +580,16 @@ impl ToolDetector {
             InstallationSource::PackageManager("scoop".to_string())
         } else if path_str.contains("apt") || path_str.contains("/usr/bin") {
             InstallationSource::PackageManager("apt".to_string())
-        } else if path_str.contains("/usr/local") || path_str.contains("/usr/bin") || path_str.contains("/bin") {
+        } else if path_str.contains("/usr/local")
+            || path_str.contains("/usr/bin")
+            || path_str.contains("/bin")
+        {
             InstallationSource::SystemPath
         } else {
             InstallationSource::Manual
         }
     }
-    
+
     /// Find the actual path of a tool using system commands
     fn find_tool_path(&self, tool_name: &str) -> Option<PathBuf> {
         #[cfg(unix)]
@@ -562,7 +604,7 @@ impl ToolDetector {
                 }
             }
         }
-        
+
         #[cfg(windows)]
         {
             if let Ok(output) = Command::new("where").arg(tool_name).output() {
@@ -577,7 +619,7 @@ impl ToolDetector {
                 }
             }
         }
-        
+
         None
     }
 }
@@ -591,13 +633,13 @@ impl Default for ToolDetector {
 /// Extract version using common patterns
 fn extract_version_generic(text: &str) -> Option<String> {
     use regex::Regex;
-    
+
     let patterns = vec![
         r"\b(\d+\.\d+\.\d+(?:[+-][a-zA-Z0-9-.]+)?)\b",
         r"\bv?(\d+\.\d+\.\d+)\b",
         r"\b(\d+\.\d+)\b",
     ];
-    
+
     for pattern in patterns {
         if let Ok(re) = Regex::new(pattern) {
             if let Some(captures) = re.captures(text) {
@@ -610,6 +652,6 @@ fn extract_version_generic(text: &str) -> Option<String> {
             }
         }
     }
-    
+
     None
 }

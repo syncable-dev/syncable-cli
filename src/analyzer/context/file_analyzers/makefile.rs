@@ -1,13 +1,10 @@
-use crate::analyzer::{context::helpers::create_regex, BuildScript};
+use crate::analyzer::{BuildScript, context::helpers::create_regex};
 use crate::common::file_utils::is_readable_file;
 use crate::error::Result;
 use std::path::Path;
 
 /// Analyzes Makefile for build scripts
-pub(crate) fn analyze_makefile(
-    root: &Path,
-    build_scripts: &mut Vec<BuildScript>,
-) -> Result<()> {
+pub(crate) fn analyze_makefile(root: &Path, build_scripts: &mut Vec<BuildScript>) -> Result<()> {
     let makefiles = ["Makefile", "makefile"];
 
     for makefile in &makefiles {
@@ -62,4 +59,4 @@ pub(crate) fn analyze_makefile(
     }
 
     Ok(())
-} 
+}

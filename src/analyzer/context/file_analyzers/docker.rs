@@ -1,4 +1,4 @@
-use crate::analyzer::{context::helpers::create_regex, Port, Protocol};
+use crate::analyzer::{Port, Protocol, context::helpers::create_regex};
 use crate::common::file_utils::is_readable_file;
 use crate::error::{AnalysisError, Result};
 use std::collections::{HashMap, HashSet};
@@ -20,7 +20,8 @@ pub(crate) fn analyze_docker_files(
         for cap in expose_regex.captures_iter(&content) {
             if let Some(port_str) = cap.get(1) {
                 if let Ok(port) = port_str.as_str().parse::<u16>() {
-                    let protocol = cap.get(2)
+                    let protocol = cap
+                        .get(2)
                         .and_then(|p| match p.as_str().to_lowercase().as_str() {
                             "tcp" => Some(Protocol::Tcp),
                             "udp" => Some(Protocol::Udp),
@@ -43,13 +44,20 @@ pub(crate) fn analyze_docker_files(
             if let (Some(name), Some(value)) = (cap.get(1), cap.get(2)) {
                 let var_name = name.as_str().to_string();
                 let var_value = value.as_str().trim().to_string();
-                env_vars.entry(var_name).or_insert((Some(var_value), false, None));
+                env_vars
+                    .entry(var_name)
+                    .or_insert((Some(var_value), false, None));
             }
         }
     }
 
     // Check docker-compose files
-    let compose_files = ["docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"];
+    let compose_files = [
+        "docker-compose.yml",
+        "docker-compose.yaml",
+        "compose.yml",
+        "compose.yaml",
+    ];
     for compose_file in &compose_files {
         let path = root.join(compose_file);
         if is_readable_file(&path) {
@@ -68,7 +76,8 @@ fn analyze_docker_compose(
     env_vars: &mut HashMap<String, (Option<String>, bool, Option<String>)>,
 ) -> Result<()> {
     let content = std::fs::read_to_string(path)?;
-    let value: serde_yaml::Value = serde_yaml::from_str(&content).map_err(|e| AnalysisError::InvalidStructure(format!("Invalid YAML: {}", e)))?;
+    let value: serde_yaml::Value = serde_yaml::from_str(&content)
+        .map_err(|e| AnalysisError::InvalidStructure(format!("Invalid YAML: {}", e)))?;
 
     if let Some(services) = value.get("services").and_then(|s| s.as_mapping()) {
         for (service_name, service) in services {
@@ -107,7 +116,12 @@ fn analyze_docker_compose(
 
                         // Create descriptive port entry
                         if let Ok(port) = external_port.parse::<u16>() {
-                            let description = create_port_description(&service_type, service_name_str, external_port, internal_port);
+                            let description = create_port_description(
+                                &service_type,
+                                service_name_str,
+                                external_port,
+                                internal_port,
+                            );
 
                             ports.insert(Port {
                                 number: port,
@@ -128,8 +142,11 @@ fn analyze_docker_compose(
                         if let Some(key_str) = key.as_str() {
                             let val_str = value.as_str().map(|s| s.to_string());
                             let description = get_env_var_description(key_str, &service_type);
-                            env_vars.entry(key_str.to_string())
-                                .or_insert((val_str, false, description.or_else(|| Some(env_context.clone()))));
+                            env_vars.entry(key_str.to_string()).or_insert((
+                                val_str,
+                                false,
+                                description.or_else(|| Some(env_context.clone())),
+                            ));
                         }
                     }
                 } else if let Some(env_list) = env.as_sequence() {
@@ -139,8 +156,11 @@ fn analyze_docker_compose(
                                 let (key, value) = env_str.split_at(eq_pos);
                                 let value = &value[1..]; // Skip the '='
                                 let description = get_env_var_description(key, &service_type);
-                                env_vars.entry(key.to_string())
-                                    .or_insert((Some(value.to_string()), false, description.or_else(|| Some(env_context.clone()))));
+                                env_vars.entry(key.to_string()).or_insert((
+                                    Some(value.to_string()),
+                                    false,
+                                    description.or_else(|| Some(env_context.clone())),
+                                ));
                             }
                         }
                     }
@@ -255,7 +275,12 @@ fn determine_service_type(name: &str, service: &serde_yaml::Value) -> ServiceTyp
 }
 
 /// Creates a descriptive port description based on service type
-fn create_port_description(service_type: &ServiceType, service_name: &str, external: &str, internal: &str) -> String {
+fn create_port_description(
+    service_type: &ServiceType,
+    service_name: &str,
+    external: &str,
+    internal: &str,
+) -> String {
     let base_desc = match service_type {
         ServiceType::PostgreSQL => format!("PostgreSQL database ({})", service_name),
         ServiceType::MySQL => format!("MySQL database ({})", service_name),
@@ -270,7 +295,10 @@ fn create_port_description(service_type: &ServiceType, service_name: &str, exter
     };
 
     if external != internal {
-        format!("{} - external:{}, internal:{}", base_desc, external, internal)
+        format!(
+            "{} - external:{}, internal:{}",
+            base_desc, external, internal
+        )
     } else {
         format!("{} - port {}", base_desc, external)
     }
@@ -279,19 +307,23 @@ fn create_port_description(service_type: &ServiceType, service_name: &str, exter
 /// Gets a descriptive context for environment variables based on service type
 fn get_env_var_description(var_name: &str, _service_type: &ServiceType) -> Option<String> {
     match var_name {
-        "POSTGRES_PASSWORD" | "POSTGRES_USER" | "POSTGRES_DB" =>
-            Some("PostgreSQL configuration".to_string()),
-        "MYSQL_ROOT_PASSWORD" | "MYSQL_PASSWORD" | "MYSQL_USER" | "MYSQL_DATABASE" =>
-            Some("MySQL configuration".to_string()),
-        "MONGO_INITDB_ROOT_USERNAME" | "MONGO_INITDB_ROOT_PASSWORD" =>
-            Some("MongoDB configuration".to_string()),
+        "POSTGRES_PASSWORD" | "POSTGRES_USER" | "POSTGRES_DB" => {
+            Some("PostgreSQL configuration".to_string())
+        }
+        "MYSQL_ROOT_PASSWORD" | "MYSQL_PASSWORD" | "MYSQL_USER" | "MYSQL_DATABASE" => {
+            Some("MySQL configuration".to_string())
+        }
+        "MONGO_INITDB_ROOT_USERNAME" | "MONGO_INITDB_ROOT_PASSWORD" => {
+            Some("MongoDB configuration".to_string())
+        }
         "REDIS_PASSWORD" => Some("Redis configuration".to_string()),
-        "RABBITMQ_DEFAULT_USER" | "RABBITMQ_DEFAULT_PASS" =>
-            Some("RabbitMQ configuration".to_string()),
-        "DATABASE_URL" | "DB_CONNECTION_STRING" =>
-            Some("Database connection string".to_string()),
-        "GOOGLE_APPLICATION_CREDENTIALS" =>
-            Some("Google Cloud service account credentials".to_string()),
+        "RABBITMQ_DEFAULT_USER" | "RABBITMQ_DEFAULT_PASS" => {
+            Some("RabbitMQ configuration".to_string())
+        }
+        "DATABASE_URL" | "DB_CONNECTION_STRING" => Some("Database connection string".to_string()),
+        "GOOGLE_APPLICATION_CREDENTIALS" => {
+            Some("Google Cloud service account credentials".to_string())
+        }
         _ => None,
     }
-} 
+}

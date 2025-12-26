@@ -1,11 +1,11 @@
 //! # Security Pattern Management
-//! 
+//!
 //! Centralized management of security patterns for different tools and services.
 
-use std::collections::HashMap;
 use regex::Regex;
+use std::collections::HashMap;
 
-use super::{SecuritySeverity, SecurityCategory};
+use super::{SecurityCategory, SecuritySeverity};
 
 /// Manager for organizing security patterns by tool/service
 pub struct SecretPatternManager {
@@ -41,75 +41,98 @@ impl SecretPatternManager {
     pub fn new() -> Result<Self, regex::Error> {
         let patterns_by_tool = Self::initialize_tool_patterns()?;
         let generic_patterns = Self::initialize_generic_patterns()?;
-        
+
         Ok(Self {
             patterns_by_tool,
             generic_patterns,
         })
     }
-    
+
     /// Initialize patterns for specific tools/services
     fn initialize_tool_patterns() -> Result<HashMap<String, Vec<ToolPattern>>, regex::Error> {
         let mut patterns = HashMap::new();
-        
+
         // Firebase patterns
-        patterns.insert("firebase".to_string(), vec![
-            ToolPattern {
-                tool_name: "Firebase".to_string(),
-                pattern_type: "api_key".to_string(),
-                pattern: Regex::new(r#"(?i)(?:firebase.*)?apiKey\s*[:=]\s*["']([A-Za-z0-9_-]{39})["']"#)?,
-                severity: SecuritySeverity::Medium, // Firebase API keys are safe to expose
-                description: "Firebase API key (safe to expose publicly)".to_string(),
-                public_safe: true,
-                context_keywords: vec!["firebase".to_string(), "initializeApp".to_string(), "getApps".to_string()],
-                false_positive_keywords: vec!["example".to_string(), "placeholder".to_string(), "your-api-key".to_string()],
-            },
-            ToolPattern {
-                tool_name: "Firebase".to_string(),
-                pattern_type: "service_account".to_string(),
-                pattern: Regex::new(r#"(?i)(?:type|client_email|private_key).*firebase.*service_account"#)?,
-                severity: SecuritySeverity::Critical,
-                description: "Firebase service account credentials (CRITICAL - never expose)".to_string(),
-                public_safe: false,
-                context_keywords: vec!["service_account".to_string(), "private_key".to_string(), "client_email".to_string()],
-                false_positive_keywords: vec![],
-            },
-        ]);
-        
+        patterns.insert(
+            "firebase".to_string(),
+            vec![
+                ToolPattern {
+                    tool_name: "Firebase".to_string(),
+                    pattern_type: "api_key".to_string(),
+                    pattern: Regex::new(
+                        r#"(?i)(?:firebase.*)?apiKey\s*[:=]\s*["']([A-Za-z0-9_-]{39})["']"#,
+                    )?,
+                    severity: SecuritySeverity::Medium, // Firebase API keys are safe to expose
+                    description: "Firebase API key (safe to expose publicly)".to_string(),
+                    public_safe: true,
+                    context_keywords: vec![
+                        "firebase".to_string(),
+                        "initializeApp".to_string(),
+                        "getApps".to_string(),
+                    ],
+                    false_positive_keywords: vec![
+                        "example".to_string(),
+                        "placeholder".to_string(),
+                        "your-api-key".to_string(),
+                    ],
+                },
+                ToolPattern {
+                    tool_name: "Firebase".to_string(),
+                    pattern_type: "service_account".to_string(),
+                    pattern: Regex::new(
+                        r#"(?i)(?:type|client_email|private_key).*firebase.*service_account"#,
+                    )?,
+                    severity: SecuritySeverity::Critical,
+                    description: "Firebase service account credentials (CRITICAL - never expose)"
+                        .to_string(),
+                    public_safe: false,
+                    context_keywords: vec![
+                        "service_account".to_string(),
+                        "private_key".to_string(),
+                        "client_email".to_string(),
+                    ],
+                    false_positive_keywords: vec![],
+                },
+            ],
+        );
+
         // Stripe patterns
-        patterns.insert("stripe".to_string(), vec![
-            ToolPattern {
-                tool_name: "Stripe".to_string(),
-                pattern_type: "publishable_key".to_string(),
-                pattern: Regex::new(r#"pk_(?:test_|live_)[a-zA-Z0-9]{24,}"#)?,
-                severity: SecuritySeverity::Low, // Publishable keys are meant to be public
-                description: "Stripe publishable key (safe for client-side use)".to_string(),
-                public_safe: true,
-                context_keywords: vec!["stripe".to_string(), "publishable".to_string()],
-                false_positive_keywords: vec![],
-            },
-            ToolPattern {
-                tool_name: "Stripe".to_string(),
-                pattern_type: "secret_key".to_string(),
-                pattern: Regex::new(r#"sk_(?:test_|live_)[a-zA-Z0-9]{24,}"#)?,
-                severity: SecuritySeverity::Critical,
-                description: "Stripe secret key (CRITICAL - server-side only)".to_string(),
-                public_safe: false,
-                context_keywords: vec!["stripe".to_string(), "secret".to_string()],
-                false_positive_keywords: vec![],
-            },
-            ToolPattern {
-                tool_name: "Stripe".to_string(),
-                pattern_type: "webhook_secret".to_string(),
-                pattern: Regex::new(r#"whsec_[a-zA-Z0-9]{32,}"#)?,
-                severity: SecuritySeverity::High,
-                description: "Stripe webhook endpoint secret".to_string(),
-                public_safe: false,
-                context_keywords: vec!["webhook".to_string(), "endpoint".to_string()],
-                false_positive_keywords: vec![],
-            },
-        ]);
-        
+        patterns.insert(
+            "stripe".to_string(),
+            vec![
+                ToolPattern {
+                    tool_name: "Stripe".to_string(),
+                    pattern_type: "publishable_key".to_string(),
+                    pattern: Regex::new(r#"pk_(?:test_|live_)[a-zA-Z0-9]{24,}"#)?,
+                    severity: SecuritySeverity::Low, // Publishable keys are meant to be public
+                    description: "Stripe publishable key (safe for client-side use)".to_string(),
+                    public_safe: true,
+                    context_keywords: vec!["stripe".to_string(), "publishable".to_string()],
+                    false_positive_keywords: vec![],
+                },
+                ToolPattern {
+                    tool_name: "Stripe".to_string(),
+                    pattern_type: "secret_key".to_string(),
+                    pattern: Regex::new(r#"sk_(?:test_|live_)[a-zA-Z0-9]{24,}"#)?,
+                    severity: SecuritySeverity::Critical,
+                    description: "Stripe secret key (CRITICAL - server-side only)".to_string(),
+                    public_safe: false,
+                    context_keywords: vec!["stripe".to_string(), "secret".to_string()],
+                    false_positive_keywords: vec![],
+                },
+                ToolPattern {
+                    tool_name: "Stripe".to_string(),
+                    pattern_type: "webhook_secret".to_string(),
+                    pattern: Regex::new(r#"whsec_[a-zA-Z0-9]{32,}"#)?,
+                    severity: SecuritySeverity::High,
+                    description: "Stripe webhook endpoint secret".to_string(),
+                    public_safe: false,
+                    context_keywords: vec!["webhook".to_string(), "endpoint".to_string()],
+                    false_positive_keywords: vec![],
+                },
+            ],
+        );
+
         // Supabase patterns
         patterns.insert("supabase".to_string(), vec![
             ToolPattern {
@@ -133,31 +156,38 @@ impl SecretPatternManager {
                 false_positive_keywords: vec![],
             },
         ]);
-        
+
         // Clerk patterns
-        patterns.insert("clerk".to_string(), vec![
-            ToolPattern {
-                tool_name: "Clerk".to_string(),
-                pattern_type: "publishable_key".to_string(),
-                pattern: Regex::new(r#"pk_test_[a-zA-Z0-9_-]{60,}|pk_live_[a-zA-Z0-9_-]{60,}"#)?,
-                severity: SecuritySeverity::Low,
-                description: "Clerk publishable key (safe for client-side use)".to_string(),
-                public_safe: true,
-                context_keywords: vec!["clerk".to_string(), "publishable".to_string()],
-                false_positive_keywords: vec![],
-            },
-            ToolPattern {
-                tool_name: "Clerk".to_string(),
-                pattern_type: "secret_key".to_string(),
-                pattern: Regex::new(r#"sk_test_[a-zA-Z0-9_-]{60,}|sk_live_[a-zA-Z0-9_-]{60,}"#)?,
-                severity: SecuritySeverity::Critical,
-                description: "Clerk secret key (CRITICAL - server-side only)".to_string(),
-                public_safe: false,
-                context_keywords: vec!["clerk".to_string(), "secret".to_string()],
-                false_positive_keywords: vec![],
-            },
-        ]);
-        
+        patterns.insert(
+            "clerk".to_string(),
+            vec![
+                ToolPattern {
+                    tool_name: "Clerk".to_string(),
+                    pattern_type: "publishable_key".to_string(),
+                    pattern: Regex::new(
+                        r#"pk_test_[a-zA-Z0-9_-]{60,}|pk_live_[a-zA-Z0-9_-]{60,}"#,
+                    )?,
+                    severity: SecuritySeverity::Low,
+                    description: "Clerk publishable key (safe for client-side use)".to_string(),
+                    public_safe: true,
+                    context_keywords: vec!["clerk".to_string(), "publishable".to_string()],
+                    false_positive_keywords: vec![],
+                },
+                ToolPattern {
+                    tool_name: "Clerk".to_string(),
+                    pattern_type: "secret_key".to_string(),
+                    pattern: Regex::new(
+                        r#"sk_test_[a-zA-Z0-9_-]{60,}|sk_live_[a-zA-Z0-9_-]{60,}"#,
+                    )?,
+                    severity: SecuritySeverity::Critical,
+                    description: "Clerk secret key (CRITICAL - server-side only)".to_string(),
+                    public_safe: false,
+                    context_keywords: vec!["clerk".to_string(), "secret".to_string()],
+                    false_positive_keywords: vec![],
+                },
+            ],
+        );
+
         // Auth0 patterns
         patterns.insert("auth0".to_string(), vec![
             ToolPattern {
@@ -191,7 +221,7 @@ impl SecretPatternManager {
                 false_positive_keywords: vec![],
             },
         ]);
-        
+
         // AWS patterns
         patterns.insert("aws".to_string(), vec![
             ToolPattern {
@@ -216,10 +246,11 @@ impl SecretPatternManager {
                 false_positive_keywords: vec!["example".to_string(), "your_secret".to_string(), "placeholder".to_string()],
             },
         ]);
-        
+
         // OpenAI patterns
-        patterns.insert("openai".to_string(), vec![
-            ToolPattern {
+        patterns.insert(
+            "openai".to_string(),
+            vec![ToolPattern {
                 tool_name: "OpenAI".to_string(),
                 pattern_type: "api_key".to_string(),
                 pattern: Regex::new(r#"sk-[A-Za-z0-9]{48}"#)?,
@@ -228,12 +259,13 @@ impl SecretPatternManager {
                 public_safe: false,
                 context_keywords: vec!["openai".to_string(), "gpt".to_string(), "api".to_string()],
                 false_positive_keywords: vec![],
-            },
-        ]);
-        
+            }],
+        );
+
         // Vercel patterns
-        patterns.insert("vercel".to_string(), vec![
-            ToolPattern {
+        patterns.insert(
+            "vercel".to_string(),
+            vec![ToolPattern {
                 tool_name: "Vercel".to_string(),
                 pattern_type: "token".to_string(),
                 pattern: Regex::new(r#"(?i)vercel.*token.*["\'][a-zA-Z0-9]{24,}["\']"#)?,
@@ -242,12 +274,13 @@ impl SecretPatternManager {
                 public_safe: false,
                 context_keywords: vec!["vercel".to_string(), "deploy".to_string()],
                 false_positive_keywords: vec![],
-            },
-        ]);
-        
+            }],
+        );
+
         // Netlify patterns
-        patterns.insert("netlify".to_string(), vec![
-            ToolPattern {
+        patterns.insert(
+            "netlify".to_string(),
+            vec![ToolPattern {
                 tool_name: "Netlify".to_string(),
                 pattern_type: "access_token".to_string(),
                 pattern: Regex::new(r#"(?i)netlify.*token.*["\'][a-zA-Z0-9_-]{40,}["\']"#)?,
@@ -256,12 +289,12 @@ impl SecretPatternManager {
                 public_safe: false,
                 context_keywords: vec!["netlify".to_string(), "deploy".to_string()],
                 false_positive_keywords: vec![],
-            },
-        ]);
-        
+            }],
+        );
+
         Ok(patterns)
     }
-    
+
     /// Initialize generic patterns that apply across tools
     fn initialize_generic_patterns() -> Result<Vec<GenericPattern>, regex::Error> {
         let patterns = vec![
@@ -269,16 +302,21 @@ impl SecretPatternManager {
                 id: "bearer-token".to_string(),
                 name: "Bearer Token".to_string(),
                 // More specific - exclude template literals and ensure it's a real assignment
-                pattern: Regex::new(r#"(?i)(?:authorization|bearer)\s*[:=]\s*["'](?:bearer\s+)?([A-Za-z0-9_-]{32,})["'](?!\s*\$\{)"#)?,
+                pattern: Regex::new(
+                    r#"(?i)(?:authorization|bearer)\s*[:=]\s*["'](?:bearer\s+)?([A-Za-z0-9_-]{32,})["'](?!\s*\$\{)"#,
+                )?,
                 severity: SecuritySeverity::Critical,
                 category: SecurityCategory::SecretsExposure,
-                description: "Bearer token in authorization header (excluding templates)".to_string(),
+                description: "Bearer token in authorization header (excluding templates)"
+                    .to_string(),
             },
             GenericPattern {
                 id: "jwt-token".to_string(),
                 name: "JWT Token".to_string(),
                 // More specific JWT pattern - must be properly formatted and in assignment context
-                pattern: Regex::new(r#"(?i)(?:token|jwt|authorization|bearer)\s*[:=]\s*["']?eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}["']?"#)?,
+                pattern: Regex::new(
+                    r#"(?i)(?:token|jwt|authorization|bearer)\s*[:=]\s*["']?eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}["']?"#,
+                )?,
                 severity: SecuritySeverity::Medium,
                 category: SecurityCategory::SecretsExposure,
                 description: "JSON Web Token detected in assignment".to_string(),
@@ -286,7 +324,9 @@ impl SecretPatternManager {
             GenericPattern {
                 id: "database-url".to_string(),
                 name: "Database Connection URL".to_string(),
-                pattern: Regex::new(r#"(?i)(?:mongodb|postgres|mysql)://[^"'\s]+:[^"'\s]+@[^"'\s]+"#)?,
+                pattern: Regex::new(
+                    r#"(?i)(?:mongodb|postgres|mysql)://[^"'\s]+:[^"'\s]+@[^"'\s]+"#,
+                )?,
                 severity: SecuritySeverity::Critical,
                 category: SecurityCategory::SecretsExposure,
                 description: "Database connection string with credentials".to_string(),
@@ -303,35 +343,40 @@ impl SecretPatternManager {
                 id: "generic-api-key".to_string(),
                 name: "Generic API Key".to_string(),
                 // More specific - require longer keys and exclude common false positives
-                pattern: Regex::new(r#"(?i)(?:api[_-]?key|apikey)\s*[:=]\s*["']([A-Za-z0-9_-]{32,})["']"#)?,
+                pattern: Regex::new(
+                    r#"(?i)(?:api[_-]?key|apikey)\s*[:=]\s*["']([A-Za-z0-9_-]{32,})["']"#,
+                )?,
                 severity: SecuritySeverity::High,
                 category: SecurityCategory::SecretsExposure,
                 description: "Generic API key pattern (32+ characters)".to_string(),
             },
         ];
-        
+
         Ok(patterns)
     }
-    
+
     /// Get patterns for a specific tool
     pub fn get_tool_patterns(&self, tool: &str) -> Option<&Vec<ToolPattern>> {
         self.patterns_by_tool.get(tool)
     }
-    
+
     /// Get all generic patterns
     pub fn get_generic_patterns(&self) -> &Vec<GenericPattern> {
         &self.generic_patterns
     }
-    
+
     /// Get all supported tools
     pub fn get_supported_tools(&self) -> Vec<String> {
         self.patterns_by_tool.keys().cloned().collect()
     }
-    
+
     /// Get patterns for JavaScript/TypeScript frameworks
     pub fn get_js_framework_patterns(&self) -> Vec<&ToolPattern> {
-        let js_tools = ["firebase", "stripe", "supabase", "clerk", "auth0", "vercel", "netlify"];
-        js_tools.iter()
+        let js_tools = [
+            "firebase", "stripe", "supabase", "clerk", "auth0", "vercel", "netlify",
+        ];
+        js_tools
+            .iter()
             .filter_map(|tool| self.patterns_by_tool.get(*tool))
             .flat_map(|patterns| patterns.iter())
             .collect()
@@ -348,24 +393,30 @@ impl ToolPattern {
     /// Check if this pattern should be treated as a high-confidence match given the context
     pub fn assess_confidence(&self, file_content: &str, line_content: &str) -> f32 {
         let mut confidence: f32 = 0.5; // Base confidence
-        
+
         // Increase confidence for context keywords
         for keyword in &self.context_keywords {
-            if file_content.to_lowercase().contains(&keyword.to_lowercase()) {
+            if file_content
+                .to_lowercase()
+                .contains(&keyword.to_lowercase())
+            {
                 confidence += 0.2;
             }
         }
-        
+
         // Decrease confidence for false positive indicators
         for indicator in &self.false_positive_keywords {
-            if line_content.to_lowercase().contains(&indicator.to_lowercase()) {
+            if line_content
+                .to_lowercase()
+                .contains(&indicator.to_lowercase())
+            {
                 confidence -= 0.3;
             }
         }
-        
+
         confidence.clamp(0.0, 1.0)
     }
-    
+
     /// Get severity adjusted for public safety
     pub fn effective_severity(&self) -> SecuritySeverity {
         if self.public_safe {
@@ -378,4 +429,4 @@ impl ToolPattern {
             self.severity.clone()
         }
     }
-} 
+}

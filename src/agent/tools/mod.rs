@@ -19,6 +19,7 @@
 //!
 //! ### Linting
 //! - `HadolintTool` - Native Dockerfile linting (best practices, security)
+//! - `DclintTool` - Native Docker Compose linting (best practices, style, security)
 //!
 //! ### Diagnostics
 //! - `DiagnosticsTool` - Check for code errors via IDE/LSP or language-specific commands

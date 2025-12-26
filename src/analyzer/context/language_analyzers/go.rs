@@ -1,4 +1,6 @@
-use crate::analyzer::{context::helpers::create_regex, AnalysisConfig, BuildScript, EntryPoint, Port, Protocol};
+use crate::analyzer::{
+    AnalysisConfig, BuildScript, EntryPoint, Port, Protocol, context::helpers::create_regex,
+};
 use crate::common::file_utils::{is_readable_file, read_file_safe};
 use crate::error::Result;
 use std::collections::{HashMap, HashSet};
@@ -127,4 +129,4 @@ fn scan_go_file_for_context(
     }
 
     Ok(())
-} 
+}

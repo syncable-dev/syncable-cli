@@ -204,8 +204,11 @@ impl ConversationHistory {
 
     /// Get the reason for compaction (for logging)
     pub fn compaction_reason(&self) -> Option<String> {
-        self.compact_config
-            .compaction_reason(self.total_tokens, self.user_turn_count, self.turns.len())
+        self.compact_config.compaction_reason(
+            self.total_tokens,
+            self.user_turn_count,
+            self.turns.len(),
+        )
     }
 
     /// Get current token count
@@ -237,7 +240,7 @@ impl ConversationHistory {
     pub fn compact(&mut self) -> Option<String> {
         use super::compact::strategy::{MessageMeta, MessageRole};
         use super::compact::summary::{
-            extract_assistant_action, extract_user_intent, ToolCallSummary, TurnSummary,
+            ToolCallSummary, TurnSummary, extract_assistant_action, extract_user_intent,
         };
 
         if self.turns.len() < 2 {
@@ -285,7 +288,8 @@ impl ConversationHistory {
         let strategy = CompactionStrategy::default();
 
         // Calculate eviction range with tool-call safety
-        let range = strategy.calculate_eviction_range(&messages, self.compact_config.retention_window)?;
+        let range =
+            strategy.calculate_eviction_range(&messages, self.compact_config.retention_window)?;
 
         if range.is_empty() {
             return None;
@@ -383,8 +387,8 @@ impl ConversationHistory {
     /// Convert history to Rig Message format for the agent
     /// Uses structured summary frames to preserve context
     pub fn to_messages(&self) -> Vec<Message> {
-        use rig::completion::message::{AssistantContent, Text, UserContent};
         use rig::OneOrMany;
+        use rig::completion::message::{AssistantContent, Text, UserContent};
 
         let mut messages = Vec::new();
 
@@ -399,8 +403,9 @@ impl ConversationHistory {
             messages.push(Message::Assistant {
                 id: None,
                 content: OneOrMany::one(AssistantContent::Text(Text {
-                    text: "I understand the previous context. I'll continue from where we left off."
-                        .to_string(),
+                    text:
+                        "I understand the previous context. I'll continue from where we left off."
+                            .to_string(),
                 })),
             });
         }
@@ -436,7 +441,9 @@ impl ConversationHistory {
 
             messages.push(Message::Assistant {
                 id: None,
-                content: OneOrMany::one(AssistantContent::Text(Text { text: response_text })),
+                content: OneOrMany::one(AssistantContent::Text(Text {
+                    text: response_text,
+                })),
             });
         }
 
@@ -451,10 +458,7 @@ impl ConversationHistory {
     /// Get a brief status string for display
     pub fn status(&self) -> String {
         let compressed_info = if self.summary_frame.is_some() {
-            format!(
-                " (+{} compacted)",
-                self.context_summary.turns_compacted
-            )
+            format!(" (+{} compacted)", self.context_summary.turns_compacted)
         } else {
             String::new()
         };
@@ -611,11 +615,7 @@ mod tests {
 
         // Add turns to exceed threshold
         for i in 0..5 {
-            history.add_turn(
-                format!("Question {}", i),
-                format!("Answer {}", i),
-                vec![],
-            );
+            history.add_turn(format!("Question {}", i), format!("Answer {}", i), vec![]);
         }
 
         assert!(history.needs_compaction());

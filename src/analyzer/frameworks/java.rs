@@ -1,5 +1,5 @@
-use super::{LanguageFrameworkDetector, TechnologyRule, FrameworkDetectionUtils};
-use crate::analyzer::{DetectedTechnology, DetectedLanguage, TechnologyCategory, LibraryType};
+use super::{FrameworkDetectionUtils, LanguageFrameworkDetector, TechnologyRule};
+use crate::analyzer::{DetectedLanguage, DetectedTechnology, LibraryType, TechnologyCategory};
 use crate::error::Result;
 
 pub struct JavaFrameworkDetector;
@@ -7,20 +7,24 @@ pub struct JavaFrameworkDetector;
 impl LanguageFrameworkDetector for JavaFrameworkDetector {
     fn detect_frameworks(&self, language: &DetectedLanguage) -> Result<Vec<DetectedTechnology>> {
         let rules = get_jvm_technology_rules();
-        
+
         // Combine main and dev dependencies for comprehensive detection
-        let all_deps: Vec<String> = language.main_dependencies.iter()
+        let all_deps: Vec<String> = language
+            .main_dependencies
+            .iter()
             .chain(language.dev_dependencies.iter())
             .cloned()
             .collect();
-        
+
         let technologies = FrameworkDetectionUtils::detect_technologies_by_dependencies(
-            &rules, &all_deps, language.confidence
+            &rules,
+            &all_deps,
+            language.confidence,
         );
-        
+
         Ok(technologies)
     }
-    
+
     fn supported_languages(&self) -> Vec<&'static str> {
         vec!["Java", "Kotlin", "Java/Kotlin"]
     }
@@ -34,7 +38,10 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "Spring Boot".to_string(),
             category: TechnologyCategory::BackendFramework,
             confidence: 0.95,
-            dependency_patterns: vec!["spring-boot".to_string(), "org.springframework.boot".to_string()],
+            dependency_patterns: vec![
+                "spring-boot".to_string(),
+                "org.springframework.boot".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
@@ -45,7 +52,10 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "Spring Framework".to_string(),
             category: TechnologyCategory::BackendFramework,
             confidence: 0.90,
-            dependency_patterns: vec!["spring-context".to_string(), "org.springframework".to_string()],
+            dependency_patterns: vec![
+                "spring-context".to_string(),
+                "org.springframework".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
@@ -56,7 +66,13 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "Spring Data".to_string(),
             category: TechnologyCategory::Database,
             confidence: 0.90,
-            dependency_patterns: vec!["spring-data".to_string(), "org.springframework.data".to_string(), "spring-data-jpa".to_string(), "spring-data-mongodb".to_string(), "spring-data-redis".to_string()],
+            dependency_patterns: vec![
+                "spring-data".to_string(),
+                "org.springframework.data".to_string(),
+                "spring-data-jpa".to_string(),
+                "spring-data-mongodb".to_string(),
+                "spring-data-redis".to_string(),
+            ],
             requires: vec!["Spring Framework".to_string()],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -67,7 +83,12 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "Spring Security".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.90,
-            dependency_patterns: vec!["spring-security".to_string(), "org.springframework.security".to_string(), "spring-security-core".to_string(), "spring-security-oauth2".to_string()],
+            dependency_patterns: vec![
+                "spring-security".to_string(),
+                "org.springframework.security".to_string(),
+                "spring-security-core".to_string(),
+                "spring-security-oauth2".to_string(),
+            ],
             requires: vec!["Spring Framework".to_string()],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -78,7 +99,10 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "Spring Cloud".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.90,
-            dependency_patterns: vec!["spring-cloud".to_string(), "org.springframework.cloud".to_string()],
+            dependency_patterns: vec![
+                "spring-cloud".to_string(),
+                "org.springframework.cloud".to_string(),
+            ],
             requires: vec!["Spring Boot".to_string()],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -89,7 +113,10 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "Spring Cloud Gateway".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.95,
-            dependency_patterns: vec!["spring-cloud-gateway".to_string(), "spring-cloud-starter-gateway".to_string()],
+            dependency_patterns: vec![
+                "spring-cloud-gateway".to_string(),
+                "spring-cloud-starter-gateway".to_string(),
+            ],
             requires: vec!["Spring Cloud".to_string()],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -100,7 +127,10 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "Spring Cloud Config".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.95,
-            dependency_patterns: vec!["spring-cloud-config".to_string(), "spring-cloud-starter-config".to_string()],
+            dependency_patterns: vec![
+                "spring-cloud-config".to_string(),
+                "spring-cloud-starter-config".to_string(),
+            ],
             requires: vec!["Spring Cloud".to_string()],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -111,7 +141,11 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "Spring Cloud Netflix".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.95,
-            dependency_patterns: vec!["spring-cloud-netflix".to_string(), "spring-cloud-starter-netflix-eureka".to_string(), "spring-cloud-starter-netflix-hystrix".to_string()],
+            dependency_patterns: vec![
+                "spring-cloud-netflix".to_string(),
+                "spring-cloud-starter-netflix-eureka".to_string(),
+                "spring-cloud-starter-netflix-hystrix".to_string(),
+            ],
             requires: vec!["Spring Cloud".to_string()],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -122,7 +156,10 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "Spring WebFlux".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.95,
-            dependency_patterns: vec!["spring-webflux".to_string(), "org.springframework.webflux".to_string()],
+            dependency_patterns: vec![
+                "spring-webflux".to_string(),
+                "org.springframework.webflux".to_string(),
+            ],
             requires: vec!["Spring Framework".to_string()],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -144,7 +181,10 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "Spring Batch".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.90,
-            dependency_patterns: vec!["spring-batch".to_string(), "org.springframework.batch".to_string()],
+            dependency_patterns: vec![
+                "spring-batch".to_string(),
+                "org.springframework.batch".to_string(),
+            ],
             requires: vec!["Spring Framework".to_string()],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -155,7 +195,10 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "Spring Integration".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.90,
-            dependency_patterns: vec!["spring-integration".to_string(), "org.springframework.integration".to_string()],
+            dependency_patterns: vec![
+                "spring-integration".to_string(),
+                "org.springframework.integration".to_string(),
+            ],
             requires: vec!["Spring Framework".to_string()],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -166,14 +209,16 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "Spring AOP".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.85,
-            dependency_patterns: vec!["spring-aop".to_string(), "org.springframework.aop".to_string()],
+            dependency_patterns: vec![
+                "spring-aop".to_string(),
+                "org.springframework.aop".to_string(),
+            ],
             requires: vec!["Spring Framework".to_string()],
             conflicts_with: vec![],
             is_primary_indicator: false,
             file_indicators: vec![],
             alternative_names: vec![],
         },
-
         // MICROSERVICES FRAMEWORKS
         TechnologyRule {
             name: "Quarkus".to_string(),
@@ -219,7 +264,6 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             file_indicators: vec![],
             alternative_names: vec!["eclipse vert.x".to_string(), "vertx".to_string()],
         },
-
         // TRADITIONAL FRAMEWORKS
         TechnologyRule {
             name: "Struts".to_string(),
@@ -236,14 +280,17 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "JSF".to_string(),
             category: TechnologyCategory::BackendFramework,
             confidence: 0.85,
-            dependency_patterns: vec!["jsf".to_string(), "javax.faces".to_string(), "jakarta.faces".to_string()],
+            dependency_patterns: vec![
+                "jsf".to_string(),
+                "javax.faces".to_string(),
+                "jakarta.faces".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec!["javaserver faces".to_string()],
             file_indicators: vec![],
         },
-
         // LIGHTWEIGHT FRAMEWORKS
         TechnologyRule {
             name: "Dropwizard".to_string(),
@@ -311,7 +358,6 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-
         // PLAY FRAMEWORK
         TechnologyRule {
             name: "Play Framework".to_string(),
@@ -324,13 +370,17 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec!["play".to_string()],
             file_indicators: vec![],
         },
-
         // ORM/DATABASE - EXPANDED
         TechnologyRule {
             name: "Hibernate".to_string(),
             category: TechnologyCategory::Database,
             confidence: 0.90,
-            dependency_patterns: vec!["hibernate".to_string(), "org.hibernate".to_string(), "hibernate-core".to_string(), "hibernate-entitymanager".to_string()],
+            dependency_patterns: vec![
+                "hibernate".to_string(),
+                "org.hibernate".to_string(),
+                "hibernate-core".to_string(),
+                "hibernate-entitymanager".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -363,7 +413,11 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "JPA".to_string(),
             category: TechnologyCategory::Database,
             confidence: 0.85,
-            dependency_patterns: vec!["javax.persistence".to_string(), "jakarta.persistence".to_string(), "jpa".to_string()],
+            dependency_patterns: vec![
+                "javax.persistence".to_string(),
+                "jakarta.persistence".to_string(),
+                "jpa".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -374,7 +428,10 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "EclipseLink".to_string(),
             category: TechnologyCategory::Database,
             confidence: 0.85,
-            dependency_patterns: vec!["eclipselink".to_string(), "org.eclipse.persistence".to_string()],
+            dependency_patterns: vec![
+                "eclipselink".to_string(),
+                "org.eclipse.persistence".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -414,7 +471,6 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-
         // DATABASE DRIVERS - CRITICAL FOR INFRASTRUCTURE
         TechnologyRule {
             name: "MySQL Connector".to_string(),
@@ -442,7 +498,14 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "MongoDB Driver".to_string(),
             category: TechnologyCategory::Database,
             confidence: 0.95,
-            dependency_patterns: vec!["mongodb-driver".to_string(), "org.mongodb".to_string(), "mongo-java-driver".to_string(), "spring-boot-starter-data-mongodb".to_string(), "spring-data-mongodb".to_string(), "spring-boot-starter-data-mongodb-reactive".to_string()],
+            dependency_patterns: vec![
+                "mongodb-driver".to_string(),
+                "org.mongodb".to_string(),
+                "mongo-java-driver".to_string(),
+                "spring-boot-starter-data-mongodb".to_string(),
+                "spring-data-mongodb".to_string(),
+                "spring-boot-starter-data-mongodb-reactive".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -453,7 +516,13 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "Redis Jedis".to_string(),
             category: TechnologyCategory::Database,
             confidence: 0.95,
-            dependency_patterns: vec!["jedis".to_string(), "redis.clients".to_string(), "spring-boot-starter-data-redis".to_string(), "spring-data-redis".to_string(), "lettuce-core".to_string()],
+            dependency_patterns: vec![
+                "jedis".to_string(),
+                "redis.clients".to_string(),
+                "spring-boot-starter-data-redis".to_string(),
+                "spring-data-redis".to_string(),
+                "lettuce-core".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -508,14 +577,16 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "SQL Server JDBC".to_string(),
             category: TechnologyCategory::Database,
             confidence: 0.90,
-            dependency_patterns: vec!["mssql-jdbc".to_string(), "com.microsoft.sqlserver".to_string()],
+            dependency_patterns: vec![
+                "mssql-jdbc".to_string(),
+                "com.microsoft.sqlserver".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["sqlserver".to_string()],
             file_indicators: vec![],
         },
-
         // ENTERPRISE JAVA
         TechnologyRule {
             name: "Jakarta EE".to_string(),
@@ -528,7 +599,6 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec!["java ee".to_string()],
             file_indicators: vec![],
         },
-
         // BUILD TOOLS
         TechnologyRule {
             name: "Maven".to_string(),
@@ -552,7 +622,6 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-
         // TESTING
         TechnologyRule {
             name: "JUnit".to_string(),
@@ -587,7 +656,6 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-
         // REACTIVE FRAMEWORKS
         TechnologyRule {
             name: "Reactor".to_string(),
@@ -615,14 +683,18 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "RSocket".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.90,
-            dependency_patterns: vec!["rsocket".to_string(), "io.rsocket".to_string(), "rsocket-core".to_string(), "rsocket-transport-netty".to_string()],
+            dependency_patterns: vec![
+                "rsocket".to_string(),
+                "io.rsocket".to_string(),
+                "rsocket-core".to_string(),
+                "rsocket-transport-netty".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
             file_indicators: vec![],
         },
-
         // KOTLIN SPECIFIC
         TechnologyRule {
             name: "Ktor".to_string(),
@@ -635,13 +707,18 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-
         // MESSAGE BROKERS & MESSAGING (Critical for infrastructure)
         TechnologyRule {
             name: "Apache Kafka".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.95,
-            dependency_patterns: vec!["kafka".to_string(), "org.apache.kafka".to_string(), "kafka-clients".to_string(), "spring-kafka".to_string(), "reactor-kafka".to_string()],
+            dependency_patterns: vec![
+                "kafka".to_string(),
+                "org.apache.kafka".to_string(),
+                "kafka-clients".to_string(),
+                "spring-kafka".to_string(),
+                "reactor-kafka".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -681,7 +758,6 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec!["pulsar".to_string()],
             file_indicators: vec![],
         },
-
         // SEARCH ENGINES (Critical for data infrastructure)
         TechnologyRule {
             name: "Elasticsearch".to_string(),
@@ -716,7 +792,6 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec!["lucene".to_string()],
             file_indicators: vec![],
         },
-
         // CACHING (Critical for performance)
         TechnologyRule {
             name: "Hazelcast".to_string(),
@@ -755,14 +830,16 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "Caffeine".to_string(),
             category: TechnologyCategory::Database,
             confidence: 0.85,
-            dependency_patterns: vec!["caffeine".to_string(), "com.github.ben-manes.caffeine".to_string()],
+            dependency_patterns: vec![
+                "caffeine".to_string(),
+                "com.github.ben-manes.caffeine".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
             file_indicators: vec![],
         },
-
         // SECURITY FRAMEWORKS (Critical for enterprise)
         TechnologyRule {
             name: "Apache Shiro".to_string(),
@@ -808,7 +885,6 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-
         // WEB SERVERS & APPLICATION SERVERS (Critical for deployment)
         TechnologyRule {
             name: "Apache Tomcat".to_string(),
@@ -854,13 +930,15 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-
         // HTTP CLIENTS (Important for integration)
         TechnologyRule {
             name: "Apache HttpClient".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.85,
-            dependency_patterns: vec!["httpclient".to_string(), "org.apache.httpcomponents".to_string()],
+            dependency_patterns: vec![
+                "httpclient".to_string(),
+                "org.apache.httpcomponents".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -889,7 +967,6 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-
         // JSON/XML PROCESSING (Critical for APIs)
         TechnologyRule {
             name: "Jackson".to_string(),
@@ -917,14 +994,17 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "Apache JAXB".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.80,
-            dependency_patterns: vec!["jaxb".to_string(), "javax.xml.bind".to_string(), "jakarta.xml.bind".to_string()],
+            dependency_patterns: vec![
+                "jaxb".to_string(),
+                "javax.xml.bind".to_string(),
+                "jakarta.xml.bind".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["jaxb".to_string()],
             file_indicators: vec![],
         },
-
         // LOGGING (Critical for monitoring)
         TechnologyRule {
             name: "Logback".to_string(),
@@ -959,7 +1039,6 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-
         // MONITORING & METRICS (Critical for production)
         TechnologyRule {
             name: "Micrometer".to_string(),
@@ -987,20 +1066,26 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "Actuator".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.90,
-            dependency_patterns: vec!["spring-boot-starter-actuator".to_string(), "actuator".to_string()],
+            dependency_patterns: vec![
+                "spring-boot-starter-actuator".to_string(),
+                "actuator".to_string(),
+            ],
             requires: vec!["Spring Boot".to_string()],
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
             file_indicators: vec![],
         },
-
         // VALIDATION (Important for data integrity)
         TechnologyRule {
             name: "Bean Validation".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.85,
-            dependency_patterns: vec!["validation-api".to_string(), "javax.validation".to_string(), "jakarta.validation".to_string()],
+            dependency_patterns: vec![
+                "validation-api".to_string(),
+                "javax.validation".to_string(),
+                "jakarta.validation".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -1011,20 +1096,25 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "Hibernate Validator".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.85,
-            dependency_patterns: vec!["hibernate-validator".to_string(), "org.hibernate.validator".to_string()],
+            dependency_patterns: vec![
+                "hibernate-validator".to_string(),
+                "org.hibernate.validator".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
             file_indicators: vec![],
             alternative_names: vec![],
         },
-
         // ADDITIONAL TESTING FRAMEWORKS
         TechnologyRule {
             name: "Selenium".to_string(),
             category: TechnologyCategory::Testing,
             confidence: 0.90,
-            dependency_patterns: vec!["selenium".to_string(), "org.seleniumhq.selenium".to_string()],
+            dependency_patterns: vec![
+                "selenium".to_string(),
+                "org.seleniumhq.selenium".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -1068,14 +1158,16 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             name: "Testcontainers".to_string(),
             category: TechnologyCategory::Testing,
             confidence: 0.90,
-            dependency_patterns: vec!["testcontainers".to_string(), "org.testcontainers".to_string()],
+            dependency_patterns: vec![
+                "testcontainers".to_string(),
+                "org.testcontainers".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
             file_indicators: vec![],
             alternative_names: vec![],
         },
-
         // BIG DATA & ANALYTICS (Important for enterprise)
         TechnologyRule {
             name: "Apache Spark".to_string(),
@@ -1110,7 +1202,6 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec!["storm".to_string()],
             file_indicators: vec![],
         },
-
         // UTILITIES & TOOLS
         TechnologyRule {
             name: "Lombok".to_string(),
@@ -1157,4 +1248,4 @@ fn get_jvm_technology_rules() -> Vec<TechnologyRule> {
             file_indicators: vec![],
         },
     ]
-} 
+}

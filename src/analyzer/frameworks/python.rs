@@ -1,5 +1,5 @@
-use super::{LanguageFrameworkDetector, TechnologyRule, FrameworkDetectionUtils};
-use crate::analyzer::{DetectedTechnology, DetectedLanguage, TechnologyCategory, LibraryType};
+use super::{FrameworkDetectionUtils, LanguageFrameworkDetector, TechnologyRule};
+use crate::analyzer::{DetectedLanguage, DetectedTechnology, LibraryType, TechnologyCategory};
 use crate::error::Result;
 
 pub struct PythonFrameworkDetector;
@@ -7,20 +7,24 @@ pub struct PythonFrameworkDetector;
 impl LanguageFrameworkDetector for PythonFrameworkDetector {
     fn detect_frameworks(&self, language: &DetectedLanguage) -> Result<Vec<DetectedTechnology>> {
         let rules = get_python_technology_rules();
-        
+
         // Combine main and dev dependencies for comprehensive detection
-        let all_deps: Vec<String> = language.main_dependencies.iter()
+        let all_deps: Vec<String> = language
+            .main_dependencies
+            .iter()
             .chain(language.dev_dependencies.iter())
             .cloned()
             .collect();
-        
+
         let technologies = FrameworkDetectionUtils::detect_technologies_by_dependencies(
-            &rules, &all_deps, language.confidence
+            &rules,
+            &all_deps,
+            language.confidence,
         );
-        
+
         Ok(technologies)
     }
-    
+
     fn supported_languages(&self) -> Vec<&'static str> {
         vec!["Python"]
     }
@@ -45,14 +49,16 @@ fn get_python_technology_rules() -> Vec<TechnologyRule> {
             name: "Django REST Framework".to_string(),
             category: TechnologyCategory::BackendFramework,
             confidence: 0.90,
-            dependency_patterns: vec!["djangorestframework".to_string(), "rest_framework".to_string()],
+            dependency_patterns: vec![
+                "djangorestframework".to_string(),
+                "rest_framework".to_string(),
+            ],
             requires: vec!["Django".to_string()],
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["DRF".to_string()],
             file_indicators: vec![],
         },
-        
         // MICRO FRAMEWORKS
         TechnologyRule {
             name: "Flask".to_string(),
@@ -318,7 +324,6 @@ fn get_python_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // ASYNC RUNTIMES
         TechnologyRule {
             name: "asyncio".to_string(),
@@ -353,7 +358,6 @@ fn get_python_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // FRONTEND FRAMEWORKS
         TechnologyRule {
             name: "Streamlit".to_string(),
@@ -443,7 +447,6 @@ fn get_python_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // SCIENTIFIC COMPUTING
         TechnologyRule {
             name: "NumPy".to_string(),
@@ -522,7 +525,6 @@ fn get_python_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // MACHINE LEARNING & AI
         TechnologyRule {
             name: "TensorFlow".to_string(),
@@ -601,7 +603,6 @@ fn get_python_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // DATABASE/ORM
         TechnologyRule {
             name: "SQLAlchemy".to_string(),
@@ -669,7 +670,6 @@ fn get_python_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // TESTING
         TechnologyRule {
             name: "Pytest".to_string(),
@@ -737,7 +737,6 @@ fn get_python_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // CLI FRAMEWORKS
         TechnologyRule {
             name: "Click".to_string(),
@@ -805,7 +804,6 @@ fn get_python_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // ASYNC TASK QUEUES
         TechnologyRule {
             name: "Celery".to_string(),
@@ -851,7 +849,6 @@ fn get_python_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // CONFIGURATION
         TechnologyRule {
             name: "Pydantic".to_string(),
@@ -897,7 +894,6 @@ fn get_python_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // HTTP CLIENTS
         TechnologyRule {
             name: "Requests".to_string(),

@@ -1,5 +1,5 @@
 //! # Security Analysis Configuration
-//! 
+//!
 //! Configuration options for customizing security analysis behavior.
 
 use serde::{Deserialize, Serialize};
@@ -10,45 +10,45 @@ pub struct SecurityAnalysisConfig {
     // General settings
     pub include_low_severity: bool,
     pub include_info_level: bool,
-    
+
     // Analysis scope
     pub check_secrets: bool,
     pub check_code_patterns: bool,
     pub check_infrastructure: bool,
     pub check_compliance: bool,
-    
+
     // Language-specific settings
     pub javascript_enabled: bool,
     pub python_enabled: bool,
     pub rust_enabled: bool,
-    
+
     // Framework-specific settings
     pub frameworks_to_check: Vec<String>,
-    
+
     // File filtering
     pub ignore_patterns: Vec<String>,
     pub include_patterns: Vec<String>,
-    
+
     // Git integration
     pub skip_gitignored_files: bool,
     pub downgrade_gitignored_severity: bool,
     pub check_git_history: bool,
-    
+
     // Environment variable handling
     pub check_env_files: bool,
     pub warn_on_public_env_vars: bool,
     pub sensitive_env_keywords: Vec<String>,
-    
+
     // JavaScript/TypeScript specific
     pub check_package_json: bool,
     pub check_node_modules: bool,
     pub framework_env_prefixes: Vec<String>,
-    
+
     // Output customization
     pub max_findings_per_file: Option<usize>,
     pub deduplicate_findings: bool,
     pub group_by_severity: bool,
-    
+
     // Performance settings
     pub max_file_size_mb: Option<usize>,
     pub parallel_analysis: bool,
@@ -61,18 +61,18 @@ impl Default for SecurityAnalysisConfig {
             // General settings
             include_low_severity: false,
             include_info_level: false,
-            
+
             // Analysis scope
             check_secrets: true,
             check_code_patterns: true,
             check_infrastructure: true,
             check_compliance: false, // Disabled by default as it requires more setup
-            
+
             // Language-specific settings
             javascript_enabled: true,
             python_enabled: true,
             rust_enabled: true,
-            
+
             // Framework-specific settings
             frameworks_to_check: vec![
                 "React".to_string(),
@@ -84,7 +84,7 @@ impl Default for SecurityAnalysisConfig {
                 "Django".to_string(),
                 "Spring Boot".to_string(),
             ],
-            
+
             // File filtering - Enhanced patterns to reduce false positives
             ignore_patterns: vec![
                 // Dependencies and build artifacts
@@ -99,11 +99,9 @@ impl Default for SecurityAnalysisConfig {
                 ".output".to_string(),
                 ".vercel".to_string(),
                 ".netlify".to_string(),
-                
                 // Python virtual environments
                 "venv/".to_string(),
                 ".venv/".to_string(),
-                
                 // Minified and bundled files
                 "*.min.js".to_string(),
                 "*.min.css".to_string(),
@@ -112,7 +110,6 @@ impl Default for SecurityAnalysisConfig {
                 "*.chunk.js".to_string(),
                 "*.vendor.js".to_string(),
                 "*.map".to_string(),
-                
                 // Lock files and package managers
                 "*.lock".to_string(),
                 "*.lockb".to_string(),
@@ -125,7 +122,6 @@ impl Default for SecurityAnalysisConfig {
                 "poetry.lock".to_string(),
                 "composer.lock".to_string(),
                 "gemfile.lock".to_string(),
-                
                 // Asset files
                 "*.jpg".to_string(),
                 "*.jpeg".to_string(),
@@ -146,12 +142,10 @@ impl Default for SecurityAnalysisConfig {
                 "*.woff".to_string(),
                 "*.woff2".to_string(),
                 "*.eot".to_string(),
-                
                 // Database & Certificate files
                 "*.wt".to_string(),
                 "*.cer".to_string(),
                 "*.jks".to_string(),
-                
                 // Test and example files
                 "*_sample.*".to_string(),
                 "*example*".to_string(),
@@ -165,14 +159,12 @@ impl Default for SecurityAnalysisConfig {
                 "__tests__/*".to_string(),
                 "spec/*".to_string(),
                 "specs/*".to_string(),
-                
                 // Documentation
                 "*.md".to_string(),
                 "*.txt".to_string(),
                 "*.rst".to_string(),
                 "docs/*".to_string(),
                 "documentation/*".to_string(),
-                
                 // IDE and editor files
                 ".vscode/*".to_string(),
                 ".idea/*".to_string(),
@@ -181,24 +173,22 @@ impl Default for SecurityAnalysisConfig {
                 "*.swo".to_string(),
                 ".DS_Store".to_string(),
                 "Thumbs.db".to_string(),
-                
                 // TypeScript and generated files
                 "*.d.ts".to_string(),
                 "*.generated.*".to_string(),
                 "*.auto.*".to_string(),
-                
                 // Framework-specific
                 ".angular/*".to_string(),
                 ".svelte-kit/*".to_string(),
                 "storybook-static/*".to_string(),
             ],
             include_patterns: vec![], // Empty means include all (subject to ignore patterns)
-            
+
             // Git integration
             skip_gitignored_files: true,
             downgrade_gitignored_severity: false,
             check_git_history: false, // Disabled by default for performance
-            
+
             // Environment variable handling
             check_env_files: true,
             warn_on_public_env_vars: true,
@@ -225,7 +215,7 @@ impl Default for SecurityAnalysisConfig {
                 "AWS_SECRET".to_string(),
                 "FIREBASE_PRIVATE".to_string(),
             ],
-            
+
             // JavaScript/TypeScript specific
             check_package_json: true,
             check_node_modules: false, // Usually don't want to scan dependencies
@@ -239,12 +229,12 @@ impl Default for SecurityAnalysisConfig {
                 "GATSBY_".to_string(),
                 "STORYBOOK_".to_string(),
             ],
-            
+
             // Output customization
             max_findings_per_file: Some(50), // Prevent overwhelming output
             deduplicate_findings: true,
             group_by_severity: true,
-            
+
             // Performance settings
             max_file_size_mb: Some(10), // Skip very large files
             parallel_analysis: true,
@@ -273,7 +263,7 @@ impl SecurityAnalysisConfig {
         ];
         config
     }
-    
+
     /// Create a configuration optimized for Python projects
     pub fn for_python() -> Self {
         let mut config = Self::default();
@@ -289,7 +279,7 @@ impl SecurityAnalysisConfig {
         ];
         config
     }
-    
+
     /// Create a high-security configuration with strict settings
     pub fn high_security() -> Self {
         let mut config = Self::default();
@@ -301,7 +291,7 @@ impl SecurityAnalysisConfig {
         config.max_findings_per_file = None; // No limit
         config
     }
-    
+
     /// Create a fast configuration for CI/CD pipelines
     pub fn fast_ci() -> Self {
         let mut config = Self::default();
@@ -314,31 +304,30 @@ impl SecurityAnalysisConfig {
         config.analysis_timeout_seconds = Some(120); // 2 minutes max
         config
     }
-    
+
     /// Check if a file should be analyzed based on patterns
     pub fn should_analyze_file(&self, file_path: &std::path::Path) -> bool {
         let file_path_str = file_path.to_string_lossy();
-        let file_name = file_path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
-        
+        let file_name = file_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
         // Check ignore patterns first
         for pattern in &self.ignore_patterns {
             if self.matches_pattern(pattern, &file_path_str, file_name) {
                 return false;
             }
         }
-        
+
         // If include patterns are specified, file must match at least one
         if !self.include_patterns.is_empty() {
-            return self.include_patterns.iter().any(|pattern| {
-                self.matches_pattern(pattern, &file_path_str, file_name)
-            });
+            return self
+                .include_patterns
+                .iter()
+                .any(|pattern| self.matches_pattern(pattern, &file_path_str, file_name));
         }
-        
+
         true
     }
-    
+
     /// Check if a pattern matches a file
     fn matches_pattern(&self, pattern: &str, file_path: &str, file_name: &str) -> bool {
         if pattern.contains('*') {
@@ -351,20 +340,22 @@ impl SecurityAnalysisConfig {
             file_path.contains(pattern) || file_name.contains(pattern)
         }
     }
-    
+
     /// Check if an environment variable name appears sensitive
     pub fn is_sensitive_env_var(&self, var_name: &str) -> bool {
         let var_upper = var_name.to_uppercase();
-        self.sensitive_env_keywords.iter()
+        self.sensitive_env_keywords
+            .iter()
             .any(|keyword| var_upper.contains(keyword))
     }
-    
+
     /// Check if an environment variable should be public (safe for client-side)
     pub fn is_public_env_var(&self, var_name: &str) -> bool {
-        self.framework_env_prefixes.iter()
+        self.framework_env_prefixes
+            .iter()
             .any(|prefix| var_name.starts_with(prefix))
     }
-    
+
     /// Get the maximum file size to analyze in bytes
     pub fn max_file_size_bytes(&self) -> Option<usize> {
         self.max_file_size_mb.map(|mb| mb * 1024 * 1024)
@@ -402,4 +393,4 @@ impl From<SecurityConfigPreset> for SecurityAnalysisConfig {
     fn from(preset: SecurityConfigPreset) -> Self {
         preset.to_config()
     }
-} 
+}

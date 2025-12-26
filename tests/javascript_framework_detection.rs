@@ -1,8 +1,7 @@
-use syncable_cli::analyzer::{
-    framework_detector::detect_frameworks,
-    AnalysisConfig, DetectedLanguage, TechnologyCategory
-};
 use std::path::Path;
+use syncable_cli::analyzer::{
+    AnalysisConfig, DetectedLanguage, TechnologyCategory, framework_detector::detect_frameworks,
+};
 
 #[test]
 fn test_javascript_framework_detection_with_file_indicators() {
@@ -31,14 +30,14 @@ fn test_javascript_framework_detection_with_file_indicators() {
 
     // Should detect Next.js with high confidence due to config file
     let nextjs = technologies.iter().find(|t| t.name == "Next.js");
-    
+
     assert!(nextjs.is_some(), "Next.js should be detected");
     let nextjs = nextjs.unwrap();
-    
+
     assert!(matches!(nextjs.category, TechnologyCategory::MetaFramework));
     assert!(nextjs.is_primary);
     assert!(nextjs.confidence > 0.9); // High confidence from config file detection
-    
+
     // Should also detect React as a dependency
     let react = technologies.iter().find(|t| t.name == "React");
     assert!(react.is_some(), "React should be detected");
@@ -71,10 +70,10 @@ fn test_expo_detection_with_config_file() {
 
     // Should detect Expo with high confidence due to config file
     let expo = technologies.iter().find(|t| t.name == "Expo");
-    
+
     assert!(expo.is_some(), "Expo should be detected");
     let expo = expo.unwrap();
-    
+
     assert!(matches!(expo.category, TechnologyCategory::MetaFramework));
     assert!(expo.is_primary);
     assert!(expo.confidence > 0.9); // High confidence from config file detection
@@ -87,9 +86,7 @@ fn test_tanstack_start_detection_with_config_file() {
         name: "JavaScript".to_string(),
         version: Some("18.0.0".to_string()),
         confidence: 0.9,
-        files: vec![
-            std::path::PathBuf::from("app.config.ts"),
-        ],
+        files: vec![std::path::PathBuf::from("app.config.ts")],
         main_dependencies: vec![
             "@tanstack/react-start".to_string(),
             "react".to_string(),
@@ -106,11 +103,14 @@ fn test_tanstack_start_detection_with_config_file() {
 
     // Should detect TanStack Start with high confidence
     let tanstack = technologies.iter().find(|t| t.name == "Tanstack Start");
-    
+
     assert!(tanstack.is_some(), "Tanstack Start should be detected");
     let tanstack = tanstack.unwrap();
-    
-    assert!(matches!(tanstack.category, TechnologyCategory::MetaFramework));
+
+    assert!(matches!(
+        tanstack.category,
+        TechnologyCategory::MetaFramework
+    ));
     assert!(tanstack.is_primary);
     assert!(tanstack.confidence > 0.9); // High confidence from dependency + config file
 }
@@ -122,13 +122,8 @@ fn test_react_native_detection_with_config_file() {
         name: "JavaScript".to_string(),
         version: Some("18.0.0".to_string()),
         confidence: 0.9,
-        files: vec![
-            std::path::PathBuf::from("react-native.config.js"),
-        ],
-        main_dependencies: vec![
-            "react-native".to_string(),
-            "react".to_string(),
-        ],
+        files: vec![std::path::PathBuf::from("react-native.config.js")],
+        main_dependencies: vec!["react-native".to_string(), "react".to_string()],
         dev_dependencies: vec![],
         package_manager: Some("npm".to_string()),
     };
@@ -140,11 +135,14 @@ fn test_react_native_detection_with_config_file() {
 
     // Should detect React Native with high confidence due to config file
     let react_native = technologies.iter().find(|t| t.name == "React Native");
-    
+
     assert!(react_native.is_some(), "React Native should be detected");
     let react_native = react_native.unwrap();
-    
-    assert!(matches!(react_native.category, TechnologyCategory::FrontendFramework));
+
+    assert!(matches!(
+        react_native.category,
+        TechnologyCategory::FrontendFramework
+    ));
     assert!(react_native.is_primary);
     assert!(react_native.confidence > 0.9); // High confidence from config file detection
 }
@@ -171,19 +169,22 @@ fn test_expo_react_native_detection_should_not_detect_nextjs() {
         dev_dependencies: vec![],
         package_manager: Some("npm".to_string()),
     };
-    
+
     let config = AnalysisConfig::default();
     let project_root = Path::new(".");
-    
+
     let technologies = detect_frameworks(project_root, &[language], &config).unwrap();
-    
+
     // Should detect Expo as primary, not Next.js
     let expo = technologies.iter().find(|t| t.name == "Expo");
     let nextjs = technologies.iter().find(|t| t.name == "Next.js");
-    
+
     assert!(expo.is_some(), "Should detect Expo");
     assert!(expo.unwrap().is_primary, "Expo should be primary");
-    assert!(nextjs.is_none(), "Should not detect Next.js in Expo project");
+    assert!(
+        nextjs.is_none(),
+        "Should not detect Next.js in Expo project"
+    );
 }
 
 #[test]
@@ -198,21 +199,19 @@ fn test_encore_backend_detection() {
             std::path::PathBuf::from("service/user.go"),
             std::path::PathBuf::from("encore.app"),
         ],
-        main_dependencies: vec![
-            "encore.dev".to_string(),
-        ],
+        main_dependencies: vec!["encore.dev".to_string()],
         dev_dependencies: vec![],
         package_manager: Some("go mod".to_string()),
     };
-    
+
     let config = AnalysisConfig::default();
     let project_root = Path::new(".");
-    
+
     let technologies = detect_frameworks(project_root, &[language], &config).unwrap();
-    
+
     // Should detect Encore as primary
     let encore = technologies.iter().find(|t| t.name == "Encore");
-    
+
     assert!(encore.is_some(), "Should detect Encore");
     assert!(encore.unwrap().is_primary, "Encore should be primary");
 }
@@ -235,19 +234,22 @@ fn test_encore_detection_should_not_detect_nextjs() {
         dev_dependencies: vec![],
         package_manager: Some("npm".to_string()),
     };
-    
+
     let config = AnalysisConfig::default();
     let project_root = Path::new(".");
-    
+
     let technologies = detect_frameworks(project_root, &[language], &config).unwrap();
-    
+
     // Should detect Encore as primary, not Next.js
     let encore = technologies.iter().find(|t| t.name == "Encore");
     let nextjs = technologies.iter().find(|t| t.name == "Next.js");
-    
+
     assert!(encore.is_some(), "Should detect Encore");
     assert!(encore.unwrap().is_primary, "Encore should be primary");
-    assert!(nextjs.is_none(), "Should not detect Next.js in Encore project");
+    assert!(
+        nextjs.is_none(),
+        "Should not detect Next.js in Encore project"
+    );
 }
 
 #[test]
@@ -299,26 +301,31 @@ fn test_false_positive_expo_detection_in_pure_typescript_project() {
         dev_dependencies: vec![],
         package_manager: Some("npm".to_string()),
     };
-    
+
     let config = AnalysisConfig::default();
     let project_root = Path::new(".");
-    
+
     let technologies = detect_frameworks(project_root, &[language], &config).unwrap();
-    
+
     // Print all detected technologies for debugging
     println!("Detected technologies:");
     for tech in &technologies {
-        println!("  - {} (confidence: {:.2}, primary: {})", tech.name, tech.confidence, tech.is_primary);
+        println!(
+            "  - {} (confidence: {:.2}, primary: {})",
+            tech.name, tech.confidence, tech.is_primary
+        );
     }
-    
+
     // Should NOT detect Expo in this pure TypeScript project
     let expo = technologies.iter().find(|t| t.name == "Expo");
-    
+
     if let Some(expo_tech) = expo {
         println!("ERROR: Expo incorrectly detected!");
         println!("  Confidence: {}", expo_tech.confidence);
         println!("  Is primary: {}", expo_tech.is_primary);
-        panic!("Expo should NOT be detected in a pure TypeScript project without Expo dependencies");
+        panic!(
+            "Expo should NOT be detected in a pure TypeScript project without Expo dependencies"
+        );
     } else {
         println!("SUCCESS: Expo not detected (as expected)");
     }
@@ -351,14 +358,17 @@ fn test_legitimate_expo_detection_still_works() {
 
     // Should detect Expo with high confidence due to config file and proper dependencies
     let expo = technologies.iter().find(|t| t.name == "Expo");
-    
-    assert!(expo.is_some(), "Expo should be detected with proper dependencies");
+
+    assert!(
+        expo.is_some(),
+        "Expo should be detected with proper dependencies"
+    );
     let expo = expo.unwrap();
-    
+
     assert!(matches!(expo.category, TechnologyCategory::MetaFramework));
     assert!(expo.is_primary);
     assert!(expo.confidence > 0.9); // High confidence from config file and dependencies
-    
+
     println!("SUCCESS: Expo correctly detected with legitimate dependencies");
     println!("  Confidence: {}", expo.confidence);
     println!("  Is primary: {}", expo.is_primary);

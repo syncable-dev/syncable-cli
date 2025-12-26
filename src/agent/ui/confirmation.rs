@@ -72,7 +72,15 @@ fn extract_command_prefix(command: &str) -> String {
     }
 
     // For compound commands like "docker build", "npm run", use first two words
-    let compound_commands = ["docker", "terraform", "helm", "kubectl", "npm", "cargo", "go"];
+    let compound_commands = [
+        "docker",
+        "terraform",
+        "helm",
+        "kubectl",
+        "npm",
+        "cargo",
+        "go",
+    ];
     if parts.len() >= 2 && compound_commands.contains(&parts[0]) {
         format!("{} {}", parts[0], parts[1])
     } else {
@@ -137,10 +145,7 @@ fn display_command_box(command: &str, working_dir: &str) {
 /// 1. Yes - proceed once
 /// 2. Yes, and don't ask again for this command type
 /// 3. Type feedback to tell the agent what to do differently
-pub fn confirm_shell_command(
-    command: &str,
-    working_dir: &str,
-) -> ConfirmationResult {
+pub fn confirm_shell_command(command: &str, working_dir: &str) -> ConfirmationResult {
     display_command_box(command, working_dir);
 
     let prefix = extract_command_prefix(command);
@@ -151,7 +156,10 @@ pub fn confirm_shell_command(
 
     let options = vec![
         format!("Yes"),
-        format!("Yes, and don't ask again for `{}` commands in {}", prefix, short_dir),
+        format!(
+            "Yes, and don't ask again for `{}` commands in {}",
+            prefix, short_dir
+        ),
         format!("Type here to tell Syncable Agent what to do differently"),
     ];
 
@@ -196,7 +204,10 @@ mod tests {
 
     #[test]
     fn test_extract_command_prefix() {
-        assert_eq!(extract_command_prefix("docker build -t test ."), "docker build");
+        assert_eq!(
+            extract_command_prefix("docker build -t test ."),
+            "docker build"
+        );
         assert_eq!(extract_command_prefix("npm run test"), "npm run");
         assert_eq!(extract_command_prefix("cargo build"), "cargo build");
         assert_eq!(extract_command_prefix("make"), "make");

@@ -159,9 +159,7 @@ impl StreamingDisplay {
 
     /// Get elapsed time since start
     pub fn elapsed_secs(&self) -> u64 {
-        self.start_time
-            .map(|t| t.elapsed().as_secs())
-            .unwrap_or(0)
+        self.start_time.map(|t| t.elapsed().as_secs()).unwrap_or(0)
     }
 
     /// Get the accumulated text

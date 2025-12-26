@@ -4,12 +4,12 @@
 //! the main linting API.
 
 use crate::analyzer::hadolint::config::HadolintConfig;
-use crate::analyzer::hadolint::parser::{parse_dockerfile, InstructionPos};
-use crate::analyzer::hadolint::pragma::{extract_pragmas, PragmaState};
-use crate::analyzer::hadolint::rules::{all_rules, RuleState};
+use crate::analyzer::hadolint::parser::instruction::Instruction;
+use crate::analyzer::hadolint::parser::{InstructionPos, parse_dockerfile};
+use crate::analyzer::hadolint::pragma::{PragmaState, extract_pragmas};
+use crate::analyzer::hadolint::rules::{RuleState, all_rules};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::{CheckFailure, Severity};
-use crate::analyzer::hadolint::parser::instruction::Instruction;
 
 use std::path::Path;
 
@@ -43,7 +43,9 @@ impl LintResult {
 
     /// Check if there are any warnings (failure with Warning severity).
     pub fn has_warnings(&self) -> bool {
-        self.failures.iter().any(|f| f.severity == Severity::Warning)
+        self.failures
+            .iter()
+            .any(|f| f.severity == Severity::Warning)
     }
 
     /// Get the maximum severity in the results.
@@ -135,7 +137,9 @@ pub fn lint_file(path: &Path, config: &HadolintConfig) -> LintResult {
         Ok(content) => lint(&content, config),
         Err(err) => {
             let mut result = LintResult::new();
-            result.parse_errors.push(format!("Failed to read file: {}", err));
+            result
+                .parse_errors
+                .push(format!("Failed to read file: {}", err));
             result
         }
     }
@@ -167,7 +171,12 @@ fn run_rules(
             };
 
             // Check the instruction
-            rule.check(&mut state, instr.line_number, &instr.instruction, shell.as_ref());
+            rule.check(
+                &mut state,
+                instr.line_number,
+                &instr.instruction,
+                shell.as_ref(),
+            );
 
             // Also check ONBUILD contents
             if let Instruction::OnBuild(inner) = &instr.instruction {
@@ -175,7 +184,12 @@ fn run_rules(
                     Instruction::Run(args) => Some(ParsedShell::from_run_args(args)),
                     _ => None,
                 };
-                rule.check(&mut state, instr.line_number, inner.as_ref(), inner_shell.as_ref());
+                rule.check(
+                    &mut state,
+                    instr.line_number,
+                    inner.as_ref(),
+                    inner_shell.as_ref(),
+                );
             }
         }
 
@@ -417,9 +431,8 @@ USER root
         let result = lint(dockerfile, &HadolintConfig::default());
 
         // Collect unique rule codes triggered
-        let mut triggered_rules: Vec<&str> = result.failures.iter()
-            .map(|f| f.code.as_str())
-            .collect();
+        let mut triggered_rules: Vec<&str> =
+            result.failures.iter().map(|f| f.code.as_str()).collect();
         triggered_rules.sort();
         triggered_rules.dedup();
 
@@ -429,12 +442,20 @@ USER root
         println!("Unique rules triggered: {}", triggered_rules.len());
         println!("\nRules triggered:");
         for rule in &triggered_rules {
-            let count = result.failures.iter().filter(|f| f.code.as_str() == *rule).count();
+            let count = result
+                .failures
+                .iter()
+                .filter(|f| f.code.as_str() == *rule)
+                .count();
             println!("  {} ({}x)", rule, count);
         }
 
         // Verify we catch many rules
-        assert!(triggered_rules.len() >= 30, "Expected at least 30 different rules, got {}", triggered_rules.len());
+        assert!(
+            triggered_rules.len() >= 30,
+            "Expected at least 30 different rules, got {}",
+            triggered_rules.len()
+        );
 
         // Verify some key rules are triggered
         assert!(triggered_rules.contains(&"DL3000"), "DL3000 not triggered");
