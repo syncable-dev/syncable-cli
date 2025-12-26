@@ -53,6 +53,10 @@ You: Now add Redis caching and create a docker-compose
 Agent: I'll add Redis to your stack and create a compose file...
 ```
 
+<p align="center">
+  <img src="syncable-cli-demo.gif" alt="Syncable CLI Demo" width="800" />
+</p>
+
 ## ⚡ Quick Start
 
 ```bash
