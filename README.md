@@ -243,8 +243,13 @@ See [LICENSE](LICENSE) for the full license text.
 
 The Dockerfile linting functionality (`src/analyzer/hadolint/`) is a Rust translation
 of [Hadolint](https://github.com/hadolint/hadolint), originally written in Haskell by
-Lukas Martinelli and contributors. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
-for full attribution details.
+Lukas Martinelli and contributors.
+
+The Docker Compose linting functionality (`src/analyzer/dclint/`) is a Rust implementation
+inspired by [docker-compose-linter](https://github.com/zavoloklom/docker-compose-linter)
+by Sergey Suspended.
+
+See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for full attribution details.
 
 ---
 
