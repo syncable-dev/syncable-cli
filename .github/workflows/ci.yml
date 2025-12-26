@@ -9,6 +9,8 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # Override target-cpu=native from .cargo/config.toml (breaks CI runners)
+  RUSTFLAGS: ""
 
 jobs:
   build:
