@@ -9,10 +9,20 @@
 </p>
 
 <p align="center">
+  <!-- Build & Quality -->
+  <a href="https://github.com/syncable-dev/syncable-cli/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/syncable-dev/syncable-cli/ci.yml?branch=main&style=flat-square&label=CI" alt="CI Status"></a>
   <a href="https://crates.io/crates/syncable-cli"><img src="https://img.shields.io/crates/v/syncable-cli?style=flat-square&color=blue" alt="Crates.io"></a>
+  <a href="https://docs.rs/syncable-cli"><img src="https://img.shields.io/docsrs/syncable-cli?style=flat-square&label=docs.rs" alt="docs.rs"></a>
+  <br>
+  <!-- Downloads & Community -->
   <a href="https://crates.io/crates/syncable-cli"><img src="https://img.shields.io/crates/d/syncable-cli?style=flat-square" alt="Downloads"></a>
+  <a href="https://github.com/syncable-dev/syncable-cli/stargazers"><img src="https://img.shields.io/github/stars/syncable-dev/syncable-cli?style=flat-square" alt="GitHub Stars"></a>
+  <a href="https://github.com/syncable-dev/syncable-cli/commits/main"><img src="https://img.shields.io/github/last-commit/syncable-dev/syncable-cli?style=flat-square" alt="Last Commit"></a>
+  <br>
+  <!-- Tech Stack -->
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPL%20v3-blue.svg?style=flat-square" alt="License"></a>
-  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Built%20with-Rust-orange?style=flat-square" alt="Rust"></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-1.85+-orange?style=flat-square&logo=rust" alt="Rust 1.85+"></a>
+  <a href="https://github.com/syncable-dev/syncable-cli"><img src="https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey?style=flat-square" alt="Platform"></a>
 </p>
 
 <p align="center">
