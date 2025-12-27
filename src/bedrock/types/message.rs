@@ -30,11 +30,50 @@ impl TryFrom<RigMessage> for aws_bedrock::Message {
                     .map_err(|e| CompletionError::RequestError(Box::new(e)))?
             }
             Message::Assistant { content, .. } => {
+                // Debug: Log what we're converting from Rig to AWS format
+                tracing::debug!(
+                    "Converting Assistant message with {} content blocks to AWS format",
+                    content.len()
+                );
+                for (i, c) in content.iter().enumerate() {
+                    let type_name = match c {
+                        AssistantContent::Reasoning(r) => format!(
+                            "Reasoning(len={}, has_sig={})",
+                            r.reasoning.len(),
+                            r.signature.is_some()
+                        ),
+                        AssistantContent::ToolCall(t) => {
+                            format!("ToolCall(id={}, name={})", t.id, t.function.name)
+                        }
+                        AssistantContent::Text(t) => format!("Text(len={})", t.text.len()),
+                        AssistantContent::Image(_) => "Image".to_string(),
+                    };
+                    tracing::debug!("  Input content[{}]: {}", i, type_name);
+                }
+
                 // Convert all content blocks
                 let mut content_blocks: Vec<aws_bedrock::ContentBlock> = content
                     .into_iter()
                     .map(|content| RigAssistantContent(content).try_into())
                     .collect::<Result<Vec<aws_bedrock::ContentBlock>, _>>()?;
+
+                // Debug: Log converted blocks before sorting
+                tracing::debug!(
+                    "Converted {} content blocks, before sorting:",
+                    content_blocks.len()
+                );
+                for (i, block) in content_blocks.iter().enumerate() {
+                    let type_name = match block {
+                        aws_bedrock::ContentBlock::ReasoningContent(_) => "ReasoningContent",
+                        aws_bedrock::ContentBlock::ToolUse(t) => {
+                            tracing::debug!("    ToolUse: id={}, name={}", t.tool_use_id, t.name);
+                            "ToolUse"
+                        }
+                        aws_bedrock::ContentBlock::Text(_) => "Text",
+                        _ => "Other",
+                    };
+                    tracing::debug!("  Block[{}]: {}", i, type_name);
+                }
 
                 // CRITICAL: Sort to put Reasoning blocks FIRST
                 // AWS Bedrock requires assistant messages to start with thinking blocks
@@ -47,6 +86,18 @@ impl TryFrom<RigMessage> for aws_bedrock::Message {
                     aws_bedrock::ContentBlock::ToolUse(_) => 2,          // Last
                     _ => 3,
                 });
+
+                // Debug: Log after sorting
+                tracing::debug!("After sorting, content block order:");
+                for (i, block) in content_blocks.iter().enumerate() {
+                    let type_name = match block {
+                        aws_bedrock::ContentBlock::ReasoningContent(_) => "ReasoningContent",
+                        aws_bedrock::ContentBlock::ToolUse(_) => "ToolUse",
+                        aws_bedrock::ContentBlock::Text(_) => "Text",
+                        _ => "Other",
+                    };
+                    tracing::debug!("  Block[{}]: {}", i, type_name);
+                }
 
                 aws_bedrock::Message::builder()
                     .role(aws_bedrock::ConversationRole::Assistant)
@@ -113,7 +164,7 @@ impl TryFrom<super::converse_output::Message> for RigMessage {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::message::RigMessage;
+    use super::RigMessage;
     use aws_sdk_bedrockruntime::types as aws_bedrock;
     use rig::{
         OneOrMany,

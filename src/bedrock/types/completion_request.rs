@@ -1,5 +1,5 @@
-use crate::types::json::AwsDocument;
-use crate::types::message::RigMessage;
+use super::json::AwsDocument;
+use super::message::RigMessage;
 use aws_sdk_bedrockruntime::types as aws_bedrock;
 use aws_sdk_bedrockruntime::types::{
     InferenceConfiguration, SystemContentBlock, Tool, ToolConfiguration, ToolInputSchema,

@@ -6,7 +6,7 @@ use rig::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::types::message::RigMessage;
+use super::message::RigMessage;
 
 use super::{converse_output::InternalConverseOutput, json::AwsDocument};
 use rig::completion;
@@ -78,6 +78,29 @@ impl TryFrom<aws_bedrock::ContentBlock> for RigAssistantContent {
     type Error = CompletionError;
 
     fn try_from(value: aws_bedrock::ContentBlock) -> Result<Self, Self::Error> {
+        // Debug: Log incoming AWS content block
+        let block_type = match &value {
+            aws_bedrock::ContentBlock::Text(t) => format!("Text(len={})", t.len()),
+            aws_bedrock::ContentBlock::ToolUse(t) => {
+                format!("ToolUse(id={}, name={})", t.tool_use_id, t.name)
+            }
+            aws_bedrock::ContentBlock::ReasoningContent(r) => match r {
+                aws_bedrock::ReasoningContentBlock::ReasoningText(rt) => format!(
+                    "ReasoningContent::ReasoningText(len={}, has_sig={})",
+                    rt.text.len(),
+                    rt.signature.is_some()
+                ),
+                aws_bedrock::ReasoningContentBlock::RedactedContent(blob) => format!(
+                    "ReasoningContent::RedactedContent(blob_len={})",
+                    blob.as_ref().len()
+                ),
+                _ => "ReasoningContent::Unknown".to_string(),
+            },
+            aws_bedrock::ContentBlock::ToolResult(_) => "ToolResult".to_string(),
+            _ => "Other".to_string(),
+        };
+        tracing::debug!("Converting AWS ContentBlock to Rig: {}", block_type);
+
         match value {
             aws_bedrock::ContentBlock::Text(text) => {
                 Ok(RigAssistantContent(AssistantContent::Text(Text { text })))
@@ -91,18 +114,42 @@ impl TryFrom<aws_bedrock::ContentBlock> for RigAssistantContent {
             )),
             aws_bedrock::ContentBlock::ReasoningContent(reasoning_block) => match reasoning_block {
                 aws_bedrock::ReasoningContentBlock::ReasoningText(reasoning_text) => {
+                    tracing::debug!(
+                        "Converting ReasoningText: text_len={}, signature={:?}",
+                        reasoning_text.text.len(),
+                        reasoning_text
+                            .signature
+                            .as_ref()
+                            .map(|s| format!("{}...", &s[..s.len().min(20)]))
+                    );
                     Ok(RigAssistantContent(AssistantContent::Reasoning(
                         rig::message::Reasoning::new(&reasoning_text.text)
                             .with_signature(reasoning_text.signature),
                     )))
                 }
-                _ => Err(CompletionError::ProviderError(
-                    "AWS Bedrock returned unsupported ReasoningContentBlock variant".into(),
-                )),
+                aws_bedrock::ReasoningContentBlock::RedactedContent(blob) => {
+                    tracing::warn!(
+                        "AWS Bedrock returned RedactedContent (blob_len={}). This variant is not yet supported!",
+                        blob.as_ref().len()
+                    );
+                    Err(CompletionError::ProviderError(format!(
+                        "AWS Bedrock returned RedactedContent (blob_len={}). This variant needs to be handled for multi-turn conversations with extended thinking.",
+                        blob.as_ref().len()
+                    )))
+                }
+                _ => {
+                    tracing::error!("AWS Bedrock returned unknown ReasoningContentBlock variant");
+                    Err(CompletionError::ProviderError(
+                        "AWS Bedrock returned unsupported ReasoningContentBlock variant".into(),
+                    ))
+                }
             },
-            _ => Err(CompletionError::ProviderError(
-                "AWS Bedrock returned unsupported ContentBlock".into(),
-            )),
+            _ => {
+                tracing::warn!("AWS Bedrock returned unsupported ContentBlock type");
+                Err(CompletionError::ProviderError(
+                    "AWS Bedrock returned unsupported ContentBlock".into(),
+                ))
+            }
         }
     }
 }
@@ -190,12 +237,9 @@ impl TryFrom<RigAssistantContent> for aws_bedrock::ContentBlock {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::{
-        assistant_content::RigAssistantContent, converse_output::InternalConverseOutput,
-        errors::TypeConversionError,
-    };
-
+    use super::super::{converse_output::InternalConverseOutput, errors::TypeConversionError};
     use super::AwsConverseOutput;
+    use super::RigAssistantContent;
     use aws_sdk_bedrockruntime::types as aws_bedrock;
     use rig::{OneOrMany, completion, message::AssistantContent};
 

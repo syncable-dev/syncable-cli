@@ -495,7 +495,7 @@ pub async fn run_interactive(
                 }
                 ProviderType::Bedrock => {
                     // Bedrock provider via rig-bedrock - same pattern as OpenAI/Anthropic
-                    let client = rig_bedrock::client::Client::from_env();
+                    let client = crate::bedrock::client::Client::from_env();
 
                     // Extended thinking for Claude models via Bedrock
                     // This enables Claude to show its reasoning process before responding.
@@ -1477,7 +1477,7 @@ pub async fn run_query(
         }
         ProviderType::Bedrock => {
             // Bedrock provider via rig-bedrock - same pattern as Anthropic
-            let client = rig_bedrock::client::Client::from_env();
+            let client = crate::bedrock::client::Client::from_env();
             let model_name = model
                 .as_deref()
                 .unwrap_or("global.anthropic.claude-sonnet-4-5-20250929-v1:0");

@@ -1,6 +1,6 @@
 //! All supported models <https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html>
 
-use crate::{
+use super::{
     client::Client,
     types::{
         assistant_content::AwsConverseOutput, completion_request::AwsCompletionRequest,
@@ -173,7 +173,7 @@ impl CompletionModel {
 
 impl completion::CompletionModel for CompletionModel {
     type Response = AwsConverseOutput;
-    type StreamingResponse = crate::streaming::BedrockStreamingResponse;
+    type StreamingResponse = super::streaming::BedrockStreamingResponse;
 
     type Client = Client;
 

@@ -92,7 +92,7 @@ mod tests {
         message::{DocumentSourceKind, Image, ImageMediaType},
     };
 
-    use crate::types::image::RigImage;
+    use super::RigImage;
 
     #[test]
     fn test_image_to_aws_image() {

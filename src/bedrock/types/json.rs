@@ -85,7 +85,7 @@ mod tests {
     use aws_smithy_types::{Document, Number};
     use serde_json::Value;
 
-    use crate::types::json::AwsDocument;
+    use super::AwsDocument;
 
     #[test]
     fn test_json_to_aws_document() {
