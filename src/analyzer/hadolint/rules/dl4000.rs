@@ -3,7 +3,7 @@
 //! The MAINTAINER instruction is deprecated. Use LABEL instead.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{simple_rule, SimpleRule};
+use crate::analyzer::hadolint::rules::{SimpleRule, simple_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
@@ -12,9 +12,7 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
         "DL4000",
         Severity::Error,
         "MAINTAINER is deprecated",
-        |instr, _shell| {
-            !matches!(instr, Instruction::Maintainer(_))
-        },
+        |instr, _shell| !matches!(instr, Instruction::Maintainer(_)),
     )
 }
 

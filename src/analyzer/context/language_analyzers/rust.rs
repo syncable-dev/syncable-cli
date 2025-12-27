@@ -1,4 +1,6 @@
-use crate::analyzer::{context::helpers::create_regex, AnalysisConfig, BuildScript, EntryPoint, Port, Protocol};
+use crate::analyzer::{
+    AnalysisConfig, BuildScript, EntryPoint, Port, Protocol, context::helpers::create_regex,
+};
 use crate::common::file_utils::{is_readable_file, read_file_safe};
 use crate::error::Result;
 use std::collections::{HashMap, HashSet};
@@ -22,10 +24,13 @@ pub(crate) fn analyze_rust_project(
             if let Some(bins) = toml_value.get("bin").and_then(|b| b.as_array()) {
                 for bin in bins {
                     if let Some(name) = bin.get("name").and_then(|n| n.as_str()) {
-                        let path = bin.get("path")
+                        let path = bin
+                            .get("path")
                             .and_then(|p| p.as_str())
                             .map(PathBuf::from)
-                            .unwrap_or_else(|| root.join("src").join("bin").join(format!("{}.rs", name)));
+                            .unwrap_or_else(|| {
+                                root.join("src").join("bin").join(format!("{}.rs", name))
+                            });
 
                         entry_points.push(EntryPoint {
                             file: path,
@@ -37,9 +42,11 @@ pub(crate) fn analyze_rust_project(
             }
 
             // Default binary
-            if let Some(_package_name) = toml_value.get("package")
+            if let Some(_package_name) = toml_value
+                .get("package")
                 .and_then(|p| p.get("name"))
-                .and_then(|n| n.as_str()) {
+                .and_then(|n| n.as_str())
+            {
                 let main_rs = root.join("src").join("main.rs");
                 if is_readable_file(&main_rs) {
                     entry_points.push(EntryPoint {
@@ -136,4 +143,4 @@ fn scan_rust_file_for_context(
     }
 
     Ok(())
-} 
+}

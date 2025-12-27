@@ -1,4 +1,6 @@
-use crate::analyzer::{context::helpers::create_regex, AnalysisConfig, BuildScript, Port, Protocol};
+use crate::analyzer::{
+    AnalysisConfig, BuildScript, Port, Protocol, context::helpers::create_regex,
+};
 use crate::common::file_utils::{is_readable_file, read_file_safe};
 use crate::error::Result;
 use std::collections::{HashMap, HashSet};
@@ -115,4 +117,4 @@ fn analyze_application_properties(
     }
 
     Ok(())
-} 
+}

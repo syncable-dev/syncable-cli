@@ -4,13 +4,13 @@
 //! to monitor the health of the container.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{very_custom_rule, VeryCustomRule, RuleState, CheckFailure};
+use crate::analyzer::hadolint::rules::{CheckFailure, RuleState, VeryCustomRule, very_custom_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
 pub fn rule() -> VeryCustomRule<
     impl Fn(&mut RuleState, u32, &Instruction, Option<&ParsedShell>) + Send + Sync,
-    impl Fn(RuleState) -> Vec<CheckFailure> + Send + Sync
+    impl Fn(RuleState) -> Vec<CheckFailure> + Send + Sync,
 > {
     very_custom_rule(
         "DL3057",
@@ -31,7 +31,12 @@ pub fn rule() -> VeryCustomRule<
             // Only report if there are actual instructions beyond FROM
             if !state.data.get_bool("has_healthcheck") && state.data.get_bool("has_instructions") {
                 let mut failures = state.failures;
-                failures.push(CheckFailure::new("DL3057", Severity::Info, "HEALTHCHECK instruction missing.", 1));
+                failures.push(CheckFailure::new(
+                    "DL3057",
+                    Severity::Info,
+                    "HEALTHCHECK instruction missing.",
+                    1,
+                ));
                 failures
             } else {
                 state.failures
@@ -43,8 +48,8 @@ pub fn rule() -> VeryCustomRule<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::hadolint::lint::{lint, LintResult};
     use crate::analyzer::hadolint::config::HadolintConfig;
+    use crate::analyzer::hadolint::lint::{LintResult, lint};
 
     fn lint_dockerfile(content: &str) -> LintResult {
         lint(content, &HadolintConfig::default())
@@ -58,7 +63,9 @@ mod tests {
 
     #[test]
     fn test_has_healthcheck() {
-        let result = lint_dockerfile("FROM ubuntu:20.04\nHEALTHCHECK CMD curl -f http://localhost/ || exit 1");
+        let result = lint_dockerfile(
+            "FROM ubuntu:20.04\nHEALTHCHECK CMD curl -f http://localhost/ || exit 1",
+        );
         assert!(!result.failures.iter().any(|f| f.code.as_str() == "DL3057"));
     }
 

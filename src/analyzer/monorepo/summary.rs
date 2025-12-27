@@ -16,9 +16,9 @@ pub(crate) fn generate_technology_summary(projects: &[ProjectInfo]) -> Technolog
         // Collect technologies
         for tech in &project.analysis.technologies {
             match tech.category {
-                crate::analyzer::TechnologyCategory::FrontendFramework |
-                crate::analyzer::TechnologyCategory::BackendFramework |
-                crate::analyzer::TechnologyCategory::MetaFramework => {
+                crate::analyzer::TechnologyCategory::FrontendFramework
+                | crate::analyzer::TechnologyCategory::BackendFramework
+                | crate::analyzer::TechnologyCategory::MetaFramework => {
                     all_frameworks.insert(tech.name.clone());
                 }
                 crate::analyzer::TechnologyCategory::Database => {
@@ -46,17 +46,30 @@ fn determine_architecture_pattern(projects: &[ProjectInfo]) -> ArchitecturePatte
         return ArchitecturePattern::Monolithic;
     }
 
-    let has_frontend = projects.iter().any(|p| p.project_category == ProjectCategory::Frontend);
-    let has_backend = projects.iter().any(|p| matches!(p.project_category, ProjectCategory::Backend | ProjectCategory::Api));
-    let service_count = projects.iter().filter(|p| p.project_category == ProjectCategory::Service).count();
+    let has_frontend = projects
+        .iter()
+        .any(|p| p.project_category == ProjectCategory::Frontend);
+    let has_backend = projects.iter().any(|p| {
+        matches!(
+            p.project_category,
+            ProjectCategory::Backend | ProjectCategory::Api
+        )
+    });
+    let service_count = projects
+        .iter()
+        .filter(|p| p.project_category == ProjectCategory::Service)
+        .count();
 
     if service_count >= 2 {
         ArchitecturePattern::Microservices
     } else if has_frontend && has_backend {
         ArchitecturePattern::Fullstack
-    } else if projects.iter().all(|p| p.project_category == ProjectCategory::Api) {
+    } else if projects
+        .iter()
+        .all(|p| p.project_category == ProjectCategory::Api)
+    {
         ArchitecturePattern::ApiFirst
     } else {
         ArchitecturePattern::Mixed
     }
-} 
+}

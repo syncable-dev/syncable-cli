@@ -5,8 +5,8 @@
 
 use crate::agent::ui::colors::{ansi, format_elapsed};
 use std::io::{self, Write};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
@@ -96,7 +96,10 @@ impl Spinner {
 
     /// Update the spinner text
     pub async fn set_text(&self, text: &str) {
-        let _ = self.sender.send(SpinnerMessage::UpdateText(text.to_string())).await;
+        let _ = self
+            .sender
+            .send(SpinnerMessage::UpdateText(text.to_string()))
+            .await;
     }
 
     /// Show tool executing status
@@ -122,7 +125,10 @@ impl Spinner {
 
     /// Show thinking status
     pub async fn thinking(&self, subject: &str) {
-        let _ = self.sender.send(SpinnerMessage::Thinking(subject.to_string())).await;
+        let _ = self
+            .sender
+            .send(SpinnerMessage::Thinking(subject.to_string()))
+            .await;
     }
 
     /// Stop the spinner and clear the line
@@ -144,9 +150,9 @@ async fn run_spinner(
     is_running: Arc<AtomicBool>,
     initial_text: String,
 ) {
-    use rand::{Rng, SeedableRng};
     use rand::rngs::StdRng;
-    
+    use rand::{Rng, SeedableRng};
+
     let start_time = Instant::now();
     let mut frame_index = 0;
     let mut current_text = initial_text;
@@ -274,11 +280,13 @@ async fn run_spinner(
     } else {
         print!("\r{}", ansi::CLEAR_LINE);
     }
-    
+
     // Print summary
     if tools_completed > 0 {
-        println!("  {}✓{} {} tool{} used",
-            ansi::SUCCESS, ansi::RESET,
+        println!(
+            "  {}✓{} {} tool{} used",
+            ansi::SUCCESS,
+            ansi::RESET,
             tools_completed,
             if tools_completed == 1 { "" } else { "s" }
         );

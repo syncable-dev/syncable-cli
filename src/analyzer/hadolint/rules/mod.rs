@@ -86,7 +86,13 @@ pub mod dl4006;
 /// A rule that can check Dockerfile instructions.
 pub trait Rule: Send + Sync {
     /// Check an instruction and potentially add failures to the state.
-    fn check(&self, state: &mut RuleState, line: u32, instruction: &Instruction, shell: Option<&ParsedShell>);
+    fn check(
+        &self,
+        state: &mut RuleState,
+        line: u32,
+        instruction: &Instruction,
+        shell: Option<&ParsedShell>,
+    );
 
     /// Finalize the rule and return any additional failures.
     /// Called after all instructions have been processed.
@@ -120,8 +126,15 @@ impl RuleState {
     }
 
     /// Add a failure.
-    pub fn add_failure(&mut self, code: impl Into<RuleCode>, severity: Severity, message: impl Into<String>, line: u32) {
-        self.failures.push(CheckFailure::new(code, severity, message, line));
+    pub fn add_failure(
+        &mut self,
+        code: impl Into<RuleCode>,
+        severity: Severity,
+        message: impl Into<String>,
+        line: u32,
+    ) {
+        self.failures
+            .push(CheckFailure::new(code, severity, message, line));
     }
 }
 
@@ -168,11 +181,17 @@ impl RuleData {
     }
 
     pub fn insert_to_set(&mut self, key: &'static str, value: impl Into<String>) {
-        self.string_sets.entry(key).or_default().insert(value.into());
+        self.string_sets
+            .entry(key)
+            .or_default()
+            .insert(value.into());
     }
 
     pub fn set_contains(&self, key: &'static str, value: &str) -> bool {
-        self.string_sets.get(key).map(|s| s.contains(value)).unwrap_or(false)
+        self.string_sets
+            .get(key)
+            .map(|s| s.contains(value))
+            .unwrap_or(false)
     }
 }
 
@@ -192,7 +211,12 @@ where
     F: Fn(&Instruction, Option<&ParsedShell>) -> bool + Send + Sync,
 {
     /// Create a new simple rule.
-    pub fn new(code: impl Into<RuleCode>, severity: Severity, message: impl Into<String>, check_fn: F) -> Self {
+    pub fn new(
+        code: impl Into<RuleCode>,
+        severity: Severity,
+        message: impl Into<String>,
+        check_fn: F,
+    ) -> Self {
         Self {
             code: code.into(),
             severity,
@@ -206,7 +230,13 @@ impl<F> Rule for SimpleRule<F>
 where
     F: Fn(&Instruction, Option<&ParsedShell>) -> bool + Send + Sync,
 {
-    fn check(&self, state: &mut RuleState, line: u32, instruction: &Instruction, shell: Option<&ParsedShell>) {
+    fn check(
+        &self,
+        state: &mut RuleState,
+        line: u32,
+        instruction: &Instruction,
+        shell: Option<&ParsedShell>,
+    ) {
         if !(self.check_fn)(instruction, shell) {
             state.add_failure(self.code.clone(), self.severity, self.message.clone(), line);
         }
@@ -254,7 +284,12 @@ where
     F: Fn(&mut RuleState, u32, &Instruction, Option<&ParsedShell>) + Send + Sync,
 {
     /// Create a new custom rule.
-    pub fn new(code: impl Into<RuleCode>, severity: Severity, message: impl Into<String>, step_fn: F) -> Self {
+    pub fn new(
+        code: impl Into<RuleCode>,
+        severity: Severity,
+        message: impl Into<String>,
+        step_fn: F,
+    ) -> Self {
         Self {
             code: code.into(),
             severity,
@@ -268,7 +303,13 @@ impl<F> Rule for CustomRule<F>
 where
     F: Fn(&mut RuleState, u32, &Instruction, Option<&ParsedShell>) + Send + Sync,
 {
-    fn check(&self, state: &mut RuleState, line: u32, instruction: &Instruction, shell: Option<&ParsedShell>) {
+    fn check(
+        &self,
+        state: &mut RuleState,
+        line: u32,
+        instruction: &Instruction,
+        shell: Option<&ParsedShell>,
+    ) {
         (self.step_fn)(state, line, instruction, shell);
     }
 
@@ -339,7 +380,13 @@ where
     F: Fn(&mut RuleState, u32, &Instruction, Option<&ParsedShell>) + Send + Sync,
     D: Fn(RuleState) -> Vec<CheckFailure> + Send + Sync,
 {
-    fn check(&self, state: &mut RuleState, line: u32, instruction: &Instruction, shell: Option<&ParsedShell>) {
+    fn check(
+        &self,
+        state: &mut RuleState,
+        line: u32,
+        instruction: &Instruction,
+        shell: Option<&ParsedShell>,
+    ) {
         (self.step_fn)(state, line, instruction, shell);
     }
 
@@ -462,12 +509,9 @@ mod tests {
 
     #[test]
     fn test_simple_rule() {
-        let rule = simple_rule(
-            "TEST001",
-            Severity::Warning,
-            "Test message",
-            |instr, _| !matches!(instr, Instruction::Maintainer(_)),
-        );
+        let rule = simple_rule("TEST001", Severity::Warning, "Test message", |instr, _| {
+            !matches!(instr, Instruction::Maintainer(_))
+        });
 
         let mut state = RuleState::new();
         let instr = Instruction::Maintainer("test".to_string());

@@ -114,12 +114,15 @@ impl Command {
         if self.name != expected_name {
             return false;
         }
-        expected_args.iter().all(|arg| self.arguments.iter().any(|a| a == *arg))
+        expected_args
+            .iter()
+            .all(|arg| self.arguments.iter().any(|a| a == *arg))
     }
 
     /// Check if the command has any of the specified arguments.
     pub fn has_any_arg(&self, args: &[&str]) -> bool {
-        args.iter().any(|arg| self.arguments.iter().any(|a| a == *arg))
+        args.iter()
+            .any(|arg| self.arguments.iter().any(|a| a == *arg))
     }
 
     /// Check if the command has a specific flag.
@@ -243,10 +246,7 @@ fn parse_single_command(cmd_str: &str) -> Option<Command> {
     }
 
     // Handle subshells and command substitution
-    let cmd_str = cmd_str
-        .trim_start_matches('(')
-        .trim_end_matches(')')
-        .trim();
+    let cmd_str = cmd_str.trim_start_matches('(').trim_end_matches(')').trim();
 
     // Simple word splitting
     let words: Vec<&str> = shell_words(cmd_str);
@@ -429,7 +429,12 @@ mod tests {
     fn test_args_no_flags() {
         let cmd = Command {
             name: "apt-get".to_string(),
-            arguments: vec!["install".to_string(), "-y".to_string(), "nginx".to_string(), "curl".to_string()],
+            arguments: vec![
+                "install".to_string(),
+                "-y".to_string(),
+                "nginx".to_string(),
+                "curl".to_string(),
+            ],
             flags: vec!["y".to_string()],
         };
 

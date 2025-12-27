@@ -6,4 +6,4 @@ pub(crate) mod microservices;
 pub(crate) mod project_type;
 pub(crate) mod tech_specific;
 
-pub use analysis::analyze_context; 
+pub use analysis::analyze_context;

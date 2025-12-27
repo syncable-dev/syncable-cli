@@ -170,7 +170,10 @@ pub struct OpenDiffArgs {
 pub struct CloseDiffArgs {
     #[serde(rename = "filePath")]
     pub file_path: String,
-    #[serde(rename = "suppressNotification", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "suppressNotification",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub suppress_notification: Option<bool>,
 }
 

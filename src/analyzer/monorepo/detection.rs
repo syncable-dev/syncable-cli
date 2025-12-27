@@ -80,7 +80,10 @@ fn should_exclude_directory(dir_name: &str, config: &MonorepoDetectionConfig) ->
     }
 
     // Skip excluded patterns
-    config.exclude_patterns.iter().any(|pattern| dir_name == pattern)
+    config
+        .exclude_patterns
+        .iter()
+        .any(|pattern| dir_name == pattern)
 }
 
 /// Checks if a directory appears to be a project directory
@@ -90,7 +93,12 @@ fn is_project_directory(path: &Path) -> Result<bool> {
     if pkg.exists() {
         if let Ok(content) = std::fs::read_to_string(&pkg) {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                if json.get("name").and_then(|n| n.as_str()).map(|s| s.contains("${") || s.contains("}}")) == Some(true) {
+                if json
+                    .get("name")
+                    .and_then(|n| n.as_str())
+                    .map(|s| s.contains("${") || s.contains("}}"))
+                    == Some(true)
+                {
                     return Ok(false);
                 }
             }
@@ -104,13 +112,20 @@ fn is_project_directory(path: &Path) -> Result<bool> {
         // Rust
         "Cargo.toml",
         // Python
-        "requirements.txt", "pyproject.toml", "Pipfile", "setup.py",
+        "requirements.txt",
+        "pyproject.toml",
+        "Pipfile",
+        "setup.py",
         // Go
         "go.mod",
         // Java/Kotlin
-        "pom.xml", "build.gradle", "build.gradle.kts",
+        "pom.xml",
+        "build.gradle",
+        "build.gradle.kts",
         // .NET
-        "*.csproj", "*.fsproj", "*.vbproj",
+        "*.csproj",
+        "*.fsproj",
+        "*.vbproj",
         // Ruby
         "Gemfile",
         // PHP
@@ -122,7 +137,9 @@ fn is_project_directory(path: &Path) -> Result<bool> {
     let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
     // Skip obvious template placeholders and generic buckets when no manifest exists
-    let generic_buckets = ["src", "packages", "apps", "app", "libs", "services", "packages" ];
+    let generic_buckets = [
+        "src", "packages", "apps", "app", "libs", "services", "packages",
+    ];
     let is_template_placeholder = is_placeholder_dir(path);
 
     // Check for manifest files
@@ -164,7 +181,9 @@ fn is_placeholder_dir(path: &Path) -> bool {
 
 /// Checks if a directory contains source code files
 fn directory_contains_code(path: &Path) -> Result<bool> {
-    let code_extensions = ["js", "ts", "jsx", "tsx", "py", "rs", "go", "java", "kt", "cs", "rb", "php"];
+    let code_extensions = [
+        "js", "ts", "jsx", "tsx", "py", "rs", "go", "java", "kt", "cs", "rb", "php",
+    ];
 
     if let Ok(entries) = std::fs::read_dir(path) {
         for entry in entries.flatten() {
@@ -231,7 +250,8 @@ mod tests {
         std::fs::write(
             &pkg_path,
             r#"{ "name": "${{ values.name }}", "version": "1.0.0" }"#,
-        ).unwrap();
+        )
+        .unwrap();
 
         assert!(!is_project_directory(tmp.path()).unwrap());
     }
@@ -250,15 +270,15 @@ pub(crate) fn determine_if_monorepo(
 
     // Check for common monorepo indicators
     let monorepo_indicators = [
-        "lerna.json",           // Lerna
-        "nx.json",              // Nx
-        "rush.json",            // Rush
-        "pnpm-workspace.yaml",  // pnpm workspaces
-        "yarn.lock",            // Yarn workspaces (need to check package.json)
-        "packages",             // Common packages directory
-        "apps",                 // Common apps directory
-        "services",             // Common services directory
-        "libs",                 // Common libs directory
+        "lerna.json",          // Lerna
+        "nx.json",             // Nx
+        "rush.json",           // Rush
+        "pnpm-workspace.yaml", // pnpm workspaces
+        "yarn.lock",           // Yarn workspaces (need to check package.json)
+        "packages",            // Common packages directory
+        "apps",                // Common apps directory
+        "services",            // Common services directory
+        "libs",                // Common libs directory
     ];
 
     for indicator in &monorepo_indicators {
@@ -281,4 +301,4 @@ pub(crate) fn determine_if_monorepo(
     }
 
     Ok(false)
-} 
+}

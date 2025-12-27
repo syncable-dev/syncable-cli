@@ -85,4 +85,4 @@ pub enum SecurityError {
     InsufficientPermissions(String),
 }
 
-pub type Result<T> = std::result::Result<T, IaCGeneratorError>; 
+pub type Result<T> = std::result::Result<T, IaCGeneratorError>;

@@ -29,16 +29,31 @@ impl TryFrom<RigMessage> for aws_bedrock::Message {
                     .build()
                     .map_err(|e| CompletionError::RequestError(Box::new(e)))?
             }
-            Message::Assistant { content, .. } => aws_bedrock::Message::builder()
-                .role(aws_bedrock::ConversationRole::Assistant)
-                .set_content(Some(
-                    content
-                        .into_iter()
-                        .map(|content| RigAssistantContent(content).try_into())
-                        .collect::<Result<Vec<aws_bedrock::ContentBlock>, _>>()?,
-                ))
-                .build()
-                .map_err(|e| CompletionError::RequestError(Box::new(e)))?,
+            Message::Assistant { content, .. } => {
+                // Convert all content blocks
+                let mut content_blocks: Vec<aws_bedrock::ContentBlock> = content
+                    .into_iter()
+                    .map(|content| RigAssistantContent(content).try_into())
+                    .collect::<Result<Vec<aws_bedrock::ContentBlock>, _>>()?;
+
+                // CRITICAL: Sort to put Reasoning blocks FIRST
+                // AWS Bedrock requires assistant messages to start with thinking blocks
+                // when extended thinking is enabled. Without this, multi-turn conversations
+                // with tool use fail with: "Expected `thinking` or `redacted_thinking`,
+                // but found `tool_use`"
+                content_blocks.sort_by_key(|block| match block {
+                    aws_bedrock::ContentBlock::ReasoningContent(_) => 0, // First
+                    aws_bedrock::ContentBlock::Text(_) => 1,             // Second
+                    aws_bedrock::ContentBlock::ToolUse(_) => 2,          // Last
+                    _ => 3,
+                });
+
+                aws_bedrock::Message::builder()
+                    .role(aws_bedrock::ConversationRole::Assistant)
+                    .set_content(Some(content_blocks))
+                    .build()
+                    .map_err(|e| CompletionError::RequestError(Box::new(e)))?
+            }
         };
         Ok(result)
     }

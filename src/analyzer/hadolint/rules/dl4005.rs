@@ -3,7 +3,7 @@
 //! Instead of using shell commands to change the shell, use the SHELL instruction.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{simple_rule, SimpleRule};
+use crate::analyzer::hadolint::rules::{SimpleRule, simple_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
@@ -16,7 +16,9 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
             match instr {
                 Instruction::Run(args) => {
                     let cmd_text = match &args.arguments {
-                        crate::analyzer::hadolint::parser::instruction::Arguments::Text(t) => t.as_str(),
+                        crate::analyzer::hadolint::parser::instruction::Arguments::Text(t) => {
+                            t.as_str()
+                        }
                         crate::analyzer::hadolint::parser::instruction::Arguments::List(l) => {
                             if l.is_empty() {
                                 return true;
@@ -26,8 +28,7 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
                     };
 
                     // Check for commands that try to change shell
-                    !cmd_text.contains("ln -s")
-                        || !cmd_text.contains("/bin/sh")
+                    !cmd_text.contains("ln -s") || !cmd_text.contains("/bin/sh")
                 }
                 _ => true,
             }
@@ -38,8 +39,8 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::hadolint::lint::{lint, LintResult};
     use crate::analyzer::hadolint::config::HadolintConfig;
+    use crate::analyzer::hadolint::lint::{LintResult, lint};
 
     fn lint_dockerfile(content: &str) -> LintResult {
         lint(content, &HadolintConfig::default())

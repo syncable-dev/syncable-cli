@@ -30,7 +30,7 @@ pub fn load_config(project_path: Option<&Path>) -> Result<types::Config> {
             }
         }
     }
-    
+
     // Try global config
     if let Some(global) = global_config_path() {
         if global.exists() {
@@ -41,7 +41,7 @@ pub fn load_config(project_path: Option<&Path>) -> Result<types::Config> {
             }
         }
     }
-    
+
     Ok(types::Config::default())
 }
 
@@ -74,4 +74,4 @@ pub fn save_agent_config(agent: &types::AgentConfig) -> Result<()> {
     let mut config = load_config(None)?;
     config.agent = agent.clone();
     save_global_config(&config)
-} 
+}

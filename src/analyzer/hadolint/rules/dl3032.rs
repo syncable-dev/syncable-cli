@@ -3,7 +3,7 @@
 //! Clean up yum cache after installing packages to reduce image size.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{simple_rule, SimpleRule};
+use crate::analyzer::hadolint::rules::{SimpleRule, simple_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
@@ -18,7 +18,8 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
                     if let Some(shell) = shell {
                         // Check if yum install is used
                         let has_yum_install = shell.any_command(|cmd| {
-                            cmd.name == "yum" && cmd.has_any_arg(&["install", "groupinstall", "localinstall"])
+                            cmd.name == "yum"
+                                && cmd.has_any_arg(&["install", "groupinstall", "localinstall"])
                         });
 
                         if !has_yum_install {
@@ -28,9 +29,11 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
                         // Check if cleanup is done
                         let has_cleanup = shell.any_command(|cmd| {
                             (cmd.name == "yum" && cmd.has_any_arg(&["clean"]))
-                            || (cmd.name == "rm" && cmd.arguments.iter().any(|arg| {
-                                arg.contains("/var/cache/yum")
-                            }))
+                                || (cmd.name == "rm"
+                                    && cmd
+                                        .arguments
+                                        .iter()
+                                        .any(|arg| arg.contains("/var/cache/yum")))
                         });
 
                         has_cleanup
@@ -47,8 +50,8 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::hadolint::lint::{lint, LintResult};
     use crate::analyzer::hadolint::config::HadolintConfig;
+    use crate::analyzer::hadolint::lint::{LintResult, lint};
 
     fn lint_dockerfile(content: &str) -> LintResult {
         lint(content, &HadolintConfig::default())
@@ -68,7 +71,8 @@ mod tests {
 
     #[test]
     fn test_yum_install_with_rm_cache() {
-        let result = lint_dockerfile("FROM centos:7\nRUN yum install -y nginx && rm -rf /var/cache/yum");
+        let result =
+            lint_dockerfile("FROM centos:7\nRUN yum install -y nginx && rm -rf /var/cache/yum");
         assert!(!result.failures.iter().any(|f| f.code.as_str() == "DL3032"));
     }
 

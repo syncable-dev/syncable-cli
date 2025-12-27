@@ -1,7 +1,7 @@
 use crate::analyzer::{DetectedTechnology, EntryPoint, Port, Protocol};
 use crate::error::Result;
 use std::collections::HashSet;
-use std::path::{Path};
+use std::path::Path;
 
 /// Analyzes technology-specific configurations
 pub(crate) fn analyze_technology_specifics(
@@ -117,4 +117,4 @@ pub(crate) fn analyze_technology_specifics(
     }
 
     Ok(())
-} 
+}

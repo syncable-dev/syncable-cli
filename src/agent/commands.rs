@@ -8,7 +8,7 @@
 
 use crate::agent::ui::colors::ansi;
 use crossterm::{
-    cursor::{self, MoveUp, MoveToColumn},
+    cursor::{self, MoveToColumn, MoveUp},
     event::{self, Event, KeyCode},
     execute,
     terminal::{self, Clear, ClearType},
@@ -244,7 +244,7 @@ impl TokenUsage {
 
         let input_cost = (self.prompt_tokens as f64 / 1_000_000.0) * input_per_m;
         let output_cost = (self.completion_tokens as f64 / 1_000_000.0) * output_per_m;
-        
+
         (input_cost, output_cost, input_cost + output_cost)
     }
 
@@ -260,20 +260,41 @@ impl TokenUsage {
         };
 
         println!();
-        println!("  {}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{}", ansi::PURPLE, ansi::RESET);
+        println!(
+            "  {}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{}",
+            ansi::PURPLE,
+            ansi::RESET
+        );
         println!("  {}💰 Session Cost & Usage{}", ansi::PURPLE, ansi::RESET);
-        println!("  {}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{}", ansi::PURPLE, ansi::RESET);
+        println!(
+            "  {}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{}",
+            ansi::PURPLE,
+            ansi::RESET
+        );
         println!();
         println!("  {}Model:{} {}", ansi::DIM, ansi::RESET, model);
-        println!("  {}Duration:{} {:02}:{:02}:{:02}",
-            ansi::DIM, ansi::RESET,
+        println!(
+            "  {}Duration:{} {:02}:{:02}:{:02}",
+            ansi::DIM,
+            ansi::RESET,
             duration.as_secs() / 3600,
             (duration.as_secs() % 3600) / 60,
             duration.as_secs() % 60
         );
-        println!("  {}Requests:{} {}", ansi::DIM, ansi::RESET, self.request_count);
+        println!(
+            "  {}Requests:{} {}",
+            ansi::DIM,
+            ansi::RESET,
+            self.request_count
+        );
         println!();
-        println!("  {}Tokens{} ({}){}:", ansi::CYAN, ansi::RESET, accuracy_note, ansi::RESET);
+        println!(
+            "  {}Tokens{} ({}){}:",
+            ansi::CYAN,
+            ansi::RESET,
+            accuracy_note,
+            ansi::RESET
+        );
         println!("    Input:    {:>10} tokens", self.prompt_tokens);
         println!("    Output:   {:>10} tokens", self.completion_tokens);
 
@@ -282,7 +303,12 @@ impl TokenUsage {
             println!();
             println!("  {}Cache:{}", ansi::CYAN, ansi::RESET);
             if self.cache_read_tokens > 0 {
-                println!("    Read:     {:>10} tokens {}(saved){}", self.cache_read_tokens, ansi::SUCCESS, ansi::RESET);
+                println!(
+                    "    Read:     {:>10} tokens {}(saved){}",
+                    self.cache_read_tokens,
+                    ansi::SUCCESS,
+                    ansi::RESET
+                );
             }
             if self.cache_creation_tokens > 0 {
                 println!("    Created:  {:>10} tokens", self.cache_creation_tokens);
@@ -297,12 +323,22 @@ impl TokenUsage {
         }
 
         println!();
-        println!("    {}Total:    {:>10} tokens{}", ansi::BOLD, self.format_total(), ansi::RESET);
+        println!(
+            "    {}Total:    {:>10} tokens{}",
+            ansi::BOLD,
+            self.format_total(),
+            ansi::RESET
+        );
         println!();
         println!("  {}Estimated Cost:{}", ansi::SUCCESS, ansi::RESET);
         println!("    Input:  ${:.4}", input_cost);
         println!("    Output: ${:.4}", output_cost);
-        println!("    {}Total:  ${:.4}{}", ansi::BOLD, total_cost, ansi::RESET);
+        println!(
+            "    {}Total:  ${:.4}{}",
+            ansi::BOLD,
+            total_cost,
+            ansi::RESET
+        );
         println!();
 
         // Show note about accuracy
@@ -311,7 +347,11 @@ impl TokenUsage {
                 println!("  {}(Based on actual API usage){}", ansi::DIM, ansi::RESET);
             }
             TokenCountType::Approximate => {
-                println!("  {}(Estimates based on ~4 chars/token){}", ansi::DIM, ansi::RESET);
+                println!(
+                    "  {}(Estimates based on ~4 chars/token){}",
+                    ansi::DIM,
+                    ansi::RESET
+                );
             }
         }
         println!();
@@ -343,11 +383,14 @@ impl CommandPicker {
         self.filtered_commands = SLASH_COMMANDS
             .iter()
             .filter(|cmd| {
-                cmd.name.starts_with(&self.filter) ||
-                cmd.alias.map(|a| a.starts_with(&self.filter)).unwrap_or(false)
+                cmd.name.starts_with(&self.filter)
+                    || cmd
+                        .alias
+                        .map(|a| a.starts_with(&self.filter))
+                        .unwrap_or(false)
             })
             .collect();
-        
+
         // Reset selection if out of bounds
         if self.selected_index >= self.filtered_commands.len() {
             self.selected_index = 0;
@@ -363,7 +406,9 @@ impl CommandPicker {
 
     /// Move selection down  
     pub fn move_down(&mut self) {
-        if !self.filtered_commands.is_empty() && self.selected_index < self.filtered_commands.len() - 1 {
+        if !self.filtered_commands.is_empty()
+            && self.selected_index < self.filtered_commands.len() - 1
+        {
             self.selected_index += 1;
         }
     }
@@ -376,7 +421,7 @@ impl CommandPicker {
     /// Render the picker suggestions below current line
     pub fn render_suggestions(&self) -> usize {
         let mut stdout = io::stdout();
-        
+
         if self.filtered_commands.is_empty() {
             println!("\n  {}No matching commands{}", ansi::DIM, ansi::RESET);
             let _ = stdout.flush();
@@ -385,19 +430,30 @@ impl CommandPicker {
 
         for (i, cmd) in self.filtered_commands.iter().enumerate() {
             let is_selected = i == self.selected_index;
-            
+
             if is_selected {
                 // Selected item - highlighted with arrow
-                println!("  {}▸ /{:<15}{} {}{}{}", 
-                    ansi::PURPLE, cmd.name, ansi::RESET,
-                    ansi::PURPLE, cmd.description, ansi::RESET);
+                println!(
+                    "  {}▸ /{:<15}{} {}{}{}",
+                    ansi::PURPLE,
+                    cmd.name,
+                    ansi::RESET,
+                    ansi::PURPLE,
+                    cmd.description,
+                    ansi::RESET
+                );
             } else {
                 // Normal item - dimmed
-                println!("  {}  /{:<15} {}{}", 
-                    ansi::DIM, cmd.name, cmd.description, ansi::RESET);
+                println!(
+                    "  {}  /{:<15} {}{}",
+                    ansi::DIM,
+                    cmd.name,
+                    cmd.description,
+                    ansi::RESET
+                );
             }
         }
-        
+
         let _ = stdout.flush();
         self.filtered_commands.len()
     }
@@ -418,29 +474,33 @@ impl CommandPicker {
 pub fn show_command_picker(initial_filter: &str) -> Option<String> {
     let mut picker = CommandPicker::new();
     picker.set_filter(initial_filter);
-    
+
     // Enable raw mode for real-time key handling
     if terminal::enable_raw_mode().is_err() {
         // Fallback to simple mode if raw mode fails
         return show_simple_picker(&picker);
     }
-    
+
     let mut stdout = io::stdout();
     let mut input_buffer = format!("/{}", initial_filter);
     let mut last_rendered_lines = 0;
-    
+
     // Initial render
     println!(); // Move to new line for suggestions
     last_rendered_lines = picker.render_suggestions();
-    
+
     // Move back up to input line and position cursor
-    let _ = execute!(stdout, MoveUp(last_rendered_lines as u16 + 1), MoveToColumn(0));
+    let _ = execute!(
+        stdout,
+        MoveUp(last_rendered_lines as u16 + 1),
+        MoveToColumn(0)
+    );
     print!("{}You: {}{}", ansi::SUCCESS, ansi::RESET, input_buffer);
     let _ = stdout.flush();
-    
+
     // Move down to after suggestions
     let _ = execute!(stdout, cursor::MoveDown(last_rendered_lines as u16 + 1));
-    
+
     let result = loop {
         // Wait for key event
         if let Ok(Event::Key(key_event)) = event::read() {
@@ -477,7 +537,7 @@ pub fn show_command_picker(initial_filter: &str) -> Option<String> {
                     input_buffer.push(c);
                     let filter = input_buffer.trim_start_matches('/');
                     picker.set_filter(filter);
-                    
+
                     // If there's an exact match and user typed enough, auto-select
                     if picker.filtered_commands.len() == 1 {
                         // Perfect match - could auto-complete
@@ -491,37 +551,37 @@ pub fn show_command_picker(initial_filter: &str) -> Option<String> {
                 }
                 _ => {}
             }
-            
+
             // Clear old suggestions and re-render
             picker.clear_lines(last_rendered_lines);
-            
+
             // Re-render input line
             let _ = execute!(stdout, Clear(ClearType::CurrentLine), MoveToColumn(0));
             print!("{}You: {}{}", ansi::SUCCESS, ansi::RESET, input_buffer);
             let _ = stdout.flush();
-            
+
             // Render suggestions below
             println!();
             last_rendered_lines = picker.render_suggestions();
-            
+
             // Move back to input line position
             let _ = execute!(stdout, MoveUp(last_rendered_lines as u16 + 1));
             let _ = execute!(stdout, MoveToColumn((5 + input_buffer.len()) as u16));
             let _ = stdout.flush();
-            
+
             // Move down to after suggestions for next iteration
             let _ = execute!(stdout, cursor::MoveDown(last_rendered_lines as u16 + 1));
         }
     };
-    
+
     // Disable raw mode
     let _ = terminal::disable_raw_mode();
-    
+
     // Clean up display
     picker.clear_lines(last_rendered_lines);
     let _ = execute!(stdout, Clear(ClearType::CurrentLine), MoveToColumn(0));
     let _ = stdout.flush();
-    
+
     result
 }
 
@@ -530,19 +590,33 @@ fn show_simple_picker(picker: &CommandPicker) -> Option<String> {
     println!();
     println!("  {}📋 Available Commands:{}", ansi::CYAN, ansi::RESET);
     println!();
-    
+
     for (i, cmd) in picker.filtered_commands.iter().enumerate() {
-        print!("  {} {}/{:<12}", format!("[{}]", i + 1), ansi::PURPLE, cmd.name);
+        print!(
+            "  {} {}/{:<12}",
+            format!("[{}]", i + 1),
+            ansi::PURPLE,
+            cmd.name
+        );
         if let Some(alias) = cmd.alias {
             print!(" ({})", alias);
         }
-        println!("{} - {}{}{}", ansi::RESET, ansi::DIM, cmd.description, ansi::RESET);
+        println!(
+            "{} - {}{}{}",
+            ansi::RESET,
+            ansi::DIM,
+            cmd.description,
+            ansi::RESET
+        );
     }
-    
+
     println!();
-    print!("  Select (1-{}) or press Enter to cancel: ", picker.filtered_commands.len());
+    print!(
+        "  Select (1-{}) or press Enter to cancel: ",
+        picker.filtered_commands.len()
+    );
     let _ = io::stdout().flush();
-    
+
     let mut input = String::new();
     if io::stdin().read_line(&mut input).is_ok() {
         let input = input.trim();
@@ -552,15 +626,15 @@ fn show_simple_picker(picker: &CommandPicker) -> Option<String> {
             }
         }
     }
-    
+
     None
 }
 
 /// Check if a command matches a query (name or alias)
 pub fn match_command(query: &str) -> Option<&'static SlashCommand> {
     let query = query.trim_start_matches('/').to_lowercase();
-    
-    SLASH_COMMANDS.iter().find(|cmd| {
-        cmd.name == query || cmd.alias.map(|a| a == query).unwrap_or(false)
-    })
+
+    SLASH_COMMANDS
+        .iter()
+        .find(|cmd| cmd.name == query || cmd.alias.map(|a| a == query).unwrap_or(false))
 }

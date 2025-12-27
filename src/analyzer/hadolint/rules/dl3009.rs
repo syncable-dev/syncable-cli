@@ -4,7 +4,7 @@
 //! removed to reduce image size.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{simple_rule, SimpleRule};
+use crate::analyzer::hadolint::rules::{SimpleRule, simple_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
@@ -50,8 +50,8 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::hadolint::lint::{lint, LintResult};
     use crate::analyzer::hadolint::config::HadolintConfig;
+    use crate::analyzer::hadolint::lint::{LintResult, lint};
 
     fn lint_dockerfile(content: &str) -> LintResult {
         lint(content, &HadolintConfig::default())
@@ -59,14 +59,15 @@ mod tests {
 
     #[test]
     fn test_apt_get_without_cleanup() {
-        let result = lint_dockerfile("FROM ubuntu:20.04\nRUN apt-get update && apt-get install -y nginx");
+        let result =
+            lint_dockerfile("FROM ubuntu:20.04\nRUN apt-get update && apt-get install -y nginx");
         assert!(result.failures.iter().any(|f| f.code.as_str() == "DL3009"));
     }
 
     #[test]
     fn test_apt_get_with_rm_cleanup() {
         let result = lint_dockerfile(
-            "FROM ubuntu:20.04\nRUN apt-get update && apt-get install -y nginx && rm -rf /var/lib/apt/lists/*"
+            "FROM ubuntu:20.04\nRUN apt-get update && apt-get install -y nginx && rm -rf /var/lib/apt/lists/*",
         );
         assert!(!result.failures.iter().any(|f| f.code.as_str() == "DL3009"));
     }
@@ -74,7 +75,7 @@ mod tests {
     #[test]
     fn test_apt_get_with_clean() {
         let result = lint_dockerfile(
-            "FROM ubuntu:20.04\nRUN apt-get update && apt-get install -y nginx && apt-get clean"
+            "FROM ubuntu:20.04\nRUN apt-get update && apt-get install -y nginx && apt-get clean",
         );
         assert!(!result.failures.iter().any(|f| f.code.as_str() == "DL3009"));
     }

@@ -447,17 +447,42 @@ chart/
 pub fn is_generation_query(query: &str) -> bool {
     let query_lower = query.to_lowercase();
     let generation_keywords = [
-        "create", "generate", "write", "make", "build",
-        "dockerfile", "docker-compose", "docker compose",
-        "terraform", "helm", "kubernetes", "k8s",
-        "manifest", "chart", "module", "infrastructure",
-        "containerize", "containerise", "deploy", "ci/cd", "pipeline",
+        "create",
+        "generate",
+        "write",
+        "make",
+        "build",
+        "dockerfile",
+        "docker-compose",
+        "docker compose",
+        "terraform",
+        "helm",
+        "kubernetes",
+        "k8s",
+        "manifest",
+        "chart",
+        "module",
+        "infrastructure",
+        "containerize",
+        "containerise",
+        "deploy",
+        "ci/cd",
+        "pipeline",
         // Code development keywords
-        "implement", "translate", "port", "convert", "refactor",
-        "add feature", "new feature", "develop", "code",
+        "implement",
+        "translate",
+        "port",
+        "convert",
+        "refactor",
+        "add feature",
+        "new feature",
+        "develop",
+        "code",
     ];
 
-    generation_keywords.iter().any(|kw| query_lower.contains(kw))
+    generation_keywords
+        .iter()
+        .any(|kw| query_lower.contains(kw))
 }
 
 /// Get the planning mode prompt (read-only exploration)
@@ -540,16 +565,26 @@ Task status markers:
 pub fn is_plan_continuation_query(query: &str) -> bool {
     let query_lower = query.to_lowercase();
     let continuation_keywords = [
-        "continue", "resume", "pick up", "carry on",
-        "where we left off", "where i left off", "where it left off",
-        "finish the plan", "complete the plan",
-        "continue the plan", "resume the plan",
+        "continue",
+        "resume",
+        "pick up",
+        "carry on",
+        "where we left off",
+        "where i left off",
+        "where it left off",
+        "finish the plan",
+        "complete the plan",
+        "continue the plan",
+        "resume the plan",
     ];
 
     let plan_keywords = ["plan", "task", "tasks"];
 
     // Direct continuation phrases
-    if continuation_keywords.iter().any(|kw| query_lower.contains(kw)) {
+    if continuation_keywords
+        .iter()
+        .any(|kw| query_lower.contains(kw))
+    {
         return true;
     }
 
@@ -567,10 +602,21 @@ pub fn is_code_development_query(query: &str) -> bool {
 
     // DevOps-specific terms - if these appear, it's DevOps not code dev
     let devops_keywords = [
-        "dockerfile", "docker-compose", "docker compose",
-        "terraform", "helm", "kubernetes", "k8s",
-        "manifest", "chart", "infrastructure",
-        "containerize", "containerise", "deploy", "ci/cd", "pipeline",
+        "dockerfile",
+        "docker-compose",
+        "docker compose",
+        "terraform",
+        "helm",
+        "kubernetes",
+        "k8s",
+        "manifest",
+        "chart",
+        "infrastructure",
+        "containerize",
+        "containerise",
+        "deploy",
+        "ci/cd",
+        "pipeline",
     ];
 
     // If it's clearly DevOps, return false
@@ -580,11 +626,30 @@ pub fn is_code_development_query(query: &str) -> bool {
 
     // Code development keywords
     let code_keywords = [
-        "implement", "translate", "port", "convert", "refactor",
-        "add feature", "new feature", "develop", "module", "library",
-        "crate", "function", "class", "struct", "trait",
-        "rust", "python", "javascript", "typescript", "haskell",
-        "code", "rewrite", "build a", "create a",
+        "implement",
+        "translate",
+        "port",
+        "convert",
+        "refactor",
+        "add feature",
+        "new feature",
+        "develop",
+        "module",
+        "library",
+        "crate",
+        "function",
+        "class",
+        "struct",
+        "trait",
+        "rust",
+        "python",
+        "javascript",
+        "typescript",
+        "haskell",
+        "code",
+        "rewrite",
+        "build a",
+        "create a",
     ];
 
     code_keywords.iter().any(|kw| query_lower.contains(kw))

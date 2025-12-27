@@ -1,5 +1,5 @@
 use crate::analyzer::dependency_parser::Language;
-use crate::analyzer::tool_management::{ToolDetector, InstallationSource};
+use crate::analyzer::tool_management::{InstallationSource, ToolDetector};
 
 /// Handles reporting and display of tool status information
 pub struct ToolStatusReporter {
@@ -12,14 +12,14 @@ impl ToolStatusReporter {
             tool_detector: ToolDetector::new(),
         }
     }
-    
+
     /// Generate a comprehensive tool status report
     pub fn generate_report(&mut self, languages: &[Language]) -> ToolStatusReport {
         let tool_statuses = self.tool_detector.detect_all_vulnerability_tools(languages);
-        
+
         let mut available_tools = Vec::new();
         let mut missing_tools = Vec::new();
-        
+
         for (tool_name, status) in &tool_statuses {
             if status.available {
                 available_tools.push(ToolInfo {
@@ -36,9 +36,9 @@ impl ToolStatusReporter {
                 });
             }
         }
-        
+
         let available_count = available_tools.len();
-        
+
         ToolStatusReport {
             available_tools,
             missing_tools,
@@ -46,7 +46,7 @@ impl ToolStatusReporter {
             availability_percentage: (available_count as f32 / tool_statuses.len() as f32) * 100.0,
         }
     }
-    
+
     fn get_language_for_tool(&self, tool_name: &str, languages: &[Language]) -> Option<Language> {
         for language in languages {
             let tools = match language {
@@ -57,14 +57,14 @@ impl ToolStatusReporter {
                 Language::Java | Language::Kotlin => vec!["grype"],
                 _ => vec![],
             };
-            
+
             if tools.contains(&tool_name) {
                 return Some(language.clone());
             }
         }
         None
     }
-    
+
     fn get_install_command(&self, tool_name: &str) -> String {
         match tool_name {
             "cargo-audit" => "cargo install cargo-audit".to_string(),
@@ -108,11 +108,13 @@ impl ToolStatusReport {
     pub fn print_console_report(&self) {
         println!("\n🔧 Tool Status Report");
         println!("{}", "=".repeat(50));
-        println!("Overall availability: {:.1}% ({}/{})", 
-                 self.availability_percentage, 
-                 self.available_tools.len(), 
-                 self.total_tools);
-        
+        println!(
+            "Overall availability: {:.1}% ({}/{})",
+            self.availability_percentage,
+            self.available_tools.len(),
+            self.total_tools
+        );
+
         if !self.available_tools.is_empty() {
             println!("\n✅ Available Tools:");
             for tool in &self.available_tools {
@@ -130,12 +132,12 @@ impl ToolStatusReport {
                     InstallationSource::GoHome => print!(" [go]"),
                     InstallationSource::PackageManager(pm) => print!(" [{}]", pm),
                     InstallationSource::Manual => print!(" [manual]"),
-                    InstallationSource::NotFound => {},
+                    InstallationSource::NotFound => {}
                 }
                 println!();
             }
         }
-        
+
         if !self.missing_tools.is_empty() {
             println!("\n❌ Missing Tools:");
             for tool in &self.missing_tools {
@@ -146,7 +148,7 @@ impl ToolStatusReport {
                 println!(" - Install: {}", tool.install_command);
             }
         }
-        
+
         println!();
     }
 }

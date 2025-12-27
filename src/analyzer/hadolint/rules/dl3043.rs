@@ -3,7 +3,7 @@
 //! Nested ONBUILD instructions are not allowed.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{simple_rule, SimpleRule};
+use crate::analyzer::hadolint::rules::{SimpleRule, simple_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
@@ -12,13 +12,9 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
         "DL3043",
         Severity::Error,
         "`ONBUILD` combined with `ONBUILD` is not allowed.",
-        |instr, _shell| {
-            match instr {
-                Instruction::OnBuild(inner) => {
-                    !matches!(inner.as_ref(), Instruction::OnBuild(_))
-                }
-                _ => true,
-            }
+        |instr, _shell| match instr {
+            Instruction::OnBuild(inner) => !matches!(inner.as_ref(), Instruction::OnBuild(_)),
+            _ => true,
         },
     )
 }
@@ -26,8 +22,8 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::hadolint::rules::{Rule, RuleState};
     use crate::analyzer::hadolint::parser::instruction::{Arguments, RunArgs, RunFlags};
+    use crate::analyzer::hadolint::rules::{Rule, RuleState};
 
     #[test]
     fn test_nested_onbuild() {

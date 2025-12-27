@@ -15,10 +15,10 @@
 //! - Directory listings: Max 500 entries
 //! - Long lines: Truncated at 2000 characters
 
+use super::truncation::{TruncationLimits, truncate_dir_listing, truncate_file_content};
 use crate::agent::ide::IdeClient;
 use crate::agent::ui::confirmation::ConfirmationResult;
 use crate::agent::ui::diff::{confirm_file_write, confirm_file_write_with_ide};
-use super::truncation::{truncate_file_content, truncate_dir_listing, TruncationLimits};
 use rig::completion::ToolDefinition;
 use rig::tool::Tool;
 use serde::{Deserialize, Serialize};
@@ -54,20 +54,25 @@ impl ReadFileTool {
     }
 
     fn validate_path(&self, requested: &PathBuf) -> Result<PathBuf, ReadFileError> {
-        let canonical_project = self.project_path.canonicalize()
+        let canonical_project = self
+            .project_path
+            .canonicalize()
             .map_err(|e| ReadFileError(format!("Invalid project path: {}", e)))?;
-        
+
         let target = if requested.is_absolute() {
             requested.clone()
         } else {
             self.project_path.join(requested)
         };
 
-        let canonical_target = target.canonicalize()
+        let canonical_target = target
+            .canonicalize()
             .map_err(|e| ReadFileError(format!("File not found: {}", e)))?;
 
         if !canonical_target.starts_with(&canonical_project) {
-            return Err(ReadFileError("Access denied: path is outside project directory".to_string()));
+            return Err(ReadFileError(
+                "Access denied: path is outside project directory".to_string(),
+            ));
         }
 
         Ok(canonical_target)
@@ -127,12 +132,16 @@ impl Tool for ReadFileTool {
             // User requested specific line range - respect it exactly
             let lines: Vec<&str> = content.lines().collect();
             let start_idx = (start as usize).saturating_sub(1);
-            let end_idx = args.end_line.map(|e| (e as usize).min(lines.len())).unwrap_or(lines.len());
+            let end_idx = args
+                .end_line
+                .map(|e| (e as usize).min(lines.len()))
+                .unwrap_or(lines.len());
 
             if start_idx >= lines.len() {
                 return Ok(json!({
                     "error": format!("Start line {} exceeds file length ({})", start, lines.len())
-                }).to_string());
+                })
+                .to_string());
             }
 
             // Ensure end_idx >= start_idx to avoid slice panic when end_line < start_line
@@ -194,20 +203,25 @@ impl ListDirectoryTool {
     }
 
     fn validate_path(&self, requested: &PathBuf) -> Result<PathBuf, ListDirectoryError> {
-        let canonical_project = self.project_path.canonicalize()
+        let canonical_project = self
+            .project_path
+            .canonicalize()
             .map_err(|e| ListDirectoryError(format!("Invalid project path: {}", e)))?;
-        
+
         let target = if requested.is_absolute() {
             requested.clone()
         } else {
             self.project_path.join(requested)
         };
 
-        let canonical_target = target.canonicalize()
+        let canonical_target = target
+            .canonicalize()
             .map_err(|e| ListDirectoryError(format!("Directory not found: {}", e)))?;
 
         if !canonical_target.starts_with(&canonical_project) {
-            return Err(ListDirectoryError("Access denied: path is outside project directory".to_string()));
+            return Err(ListDirectoryError(
+                "Access denied: path is outside project directory".to_string(),
+            ));
         }
 
         Ok(canonical_target)
@@ -222,10 +236,22 @@ impl ListDirectoryTool {
         max_depth: usize,
         entries: &mut Vec<serde_json::Value>,
     ) -> Result<(), ListDirectoryError> {
-        let skip_dirs = ["node_modules", ".git", "target", "__pycache__", ".venv", "venv", "dist", "build"];
-        
-        let dir_name = current_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        
+        let skip_dirs = [
+            "node_modules",
+            ".git",
+            "target",
+            "__pycache__",
+            ".venv",
+            "venv",
+            "dist",
+            "build",
+        ];
+
+        let dir_name = current_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+
         if depth > 0 && skip_dirs.contains(&dir_name) {
             return Ok(());
         }
@@ -234,11 +260,16 @@ impl ListDirectoryTool {
             .map_err(|e| ListDirectoryError(format!("Cannot read directory: {}", e)))?;
 
         for entry in read_dir {
-            let entry = entry.map_err(|e| ListDirectoryError(format!("Error reading entry: {}", e)))?;
+            let entry =
+                entry.map_err(|e| ListDirectoryError(format!("Error reading entry: {}", e)))?;
             let path = entry.path();
             let metadata = entry.metadata().ok();
-            
-            let relative_path = path.strip_prefix(base_path).unwrap_or(&path).to_string_lossy().to_string();
+
+            let relative_path = path
+                .strip_prefix(base_path)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .to_string();
             let is_dir = metadata.as_ref().map(|m| m.is_dir()).unwrap_or(false);
             let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
 
@@ -426,7 +457,9 @@ impl WriteFileTool {
     }
 
     fn validate_path(&self, requested: &PathBuf) -> Result<PathBuf, WriteFileError> {
-        let canonical_project = self.project_path.canonicalize()
+        let canonical_project = self
+            .project_path
+            .canonicalize()
             .map_err(|e| WriteFileError(format!("Invalid project path: {}", e)))?;
 
         let target = if requested.is_absolute() {
@@ -436,22 +469,28 @@ impl WriteFileTool {
         };
 
         // For new files, we can't canonicalize yet, so check the parent
-        let parent = target.parent()
+        let parent = target
+            .parent()
             .ok_or_else(|| WriteFileError("Invalid path: no parent directory".to_string()))?;
 
         // If parent exists, canonicalize it; otherwise check the path prefix
         let is_within_project = if parent.exists() {
-            let canonical_parent = parent.canonicalize()
+            let canonical_parent = parent
+                .canonicalize()
                 .map_err(|e| WriteFileError(format!("Invalid parent path: {}", e)))?;
             canonical_parent.starts_with(&canonical_project)
         } else {
             // For nested new directories, check if the normalized path stays within project
             let normalized = self.project_path.join(requested);
-            !normalized.components().any(|c| c == std::path::Component::ParentDir)
+            !normalized
+                .components()
+                .any(|c| c == std::path::Component::ParentDir)
         };
 
         if !is_within_project {
-            return Err(WriteFileError("Access denied: path is outside project directory".to_string()));
+            return Err(WriteFileError(
+                "Access denied: path is outside project directory".to_string(),
+            ));
         }
 
         Ok(target)
@@ -530,8 +569,8 @@ The tool will create parent directories automatically if they don't exist."#.to_
             .unwrap_or_else(|| args.path.clone());
 
         // Check if confirmation is needed
-        let needs_confirmation = self.require_confirmation
-            && !self.allowed_patterns.is_allowed(&filename);
+        let needs_confirmation =
+            self.require_confirmation && !self.allowed_patterns.is_allowed(&filename);
 
         if needs_confirmation {
             // Get IDE client reference if available
@@ -603,8 +642,9 @@ The tool will create parent directories automatically if they don't exist."#.to_
         if create_dirs {
             if let Some(parent) = file_path.parent() {
                 if !parent.exists() {
-                    fs::create_dir_all(parent)
-                        .map_err(|e| WriteFileError(format!("Failed to create directories: {}", e)))?;
+                    fs::create_dir_all(parent).map_err(|e| {
+                        WriteFileError(format!("Failed to create directories: {}", e))
+                    })?;
                 }
             }
         }
@@ -697,13 +737,18 @@ impl WriteFilesTool {
     }
 
     /// Set the IDE client for native diff views
-    pub fn with_ide_client(mut self, ide_client: std::sync::Arc<tokio::sync::Mutex<IdeClient>>) -> Self {
+    pub fn with_ide_client(
+        mut self,
+        ide_client: std::sync::Arc<tokio::sync::Mutex<IdeClient>>,
+    ) -> Self {
         self.ide_client = Some(ide_client);
         self
     }
 
     fn validate_path(&self, requested: &PathBuf) -> Result<PathBuf, WriteFilesError> {
-        let canonical_project = self.project_path.canonicalize()
+        let canonical_project = self
+            .project_path
+            .canonicalize()
             .map_err(|e| WriteFilesError(format!("Invalid project path: {}", e)))?;
 
         let target = if requested.is_absolute() {
@@ -712,20 +757,26 @@ impl WriteFilesTool {
             self.project_path.join(requested)
         };
 
-        let parent = target.parent()
+        let parent = target
+            .parent()
             .ok_or_else(|| WriteFilesError("Invalid path: no parent directory".to_string()))?;
 
         let is_within_project = if parent.exists() {
-            let canonical_parent = parent.canonicalize()
+            let canonical_parent = parent
+                .canonicalize()
                 .map_err(|e| WriteFilesError(format!("Invalid parent path: {}", e)))?;
             canonical_parent.starts_with(&canonical_project)
         } else {
             let normalized = self.project_path.join(requested);
-            !normalized.components().any(|c| c == std::path::Component::ParentDir)
+            !normalized
+                .components()
+                .any(|c| c == std::path::Component::ParentDir)
         };
 
         if !is_within_project {
-            return Err(WriteFilesError("Access denied: path is outside project directory".to_string()));
+            return Err(WriteFilesError(
+                "Access denied: path is outside project directory".to_string(),
+            ));
         }
 
         Ok(target)
@@ -812,8 +863,8 @@ All files are written atomically. Parent directories are created automatically."
                 .unwrap_or_else(|| file.path.clone());
 
             // Check if confirmation is needed
-            let needs_confirmation = self.require_confirmation
-                && !self.allowed_patterns.is_allowed(&filename);
+            let needs_confirmation =
+                self.require_confirmation && !self.allowed_patterns.is_allowed(&filename);
 
             if needs_confirmation {
                 // Use IDE diff if client is connected, otherwise terminal diff
@@ -825,21 +876,14 @@ All files are written atomically. Parent directories are created automatically."
                             old_content.as_deref(),
                             &file.content,
                             Some(&*guard),
-                        ).await
+                        )
+                        .await
                     } else {
                         drop(guard);
-                        confirm_file_write(
-                            &file.path,
-                            old_content.as_deref(),
-                            &file.content,
-                        )
+                        confirm_file_write(&file.path, old_content.as_deref(), &file.content)
                     }
                 } else {
-                    confirm_file_write(
-                        &file.path,
-                        old_content.as_deref(),
-                        &file.content,
-                    )
+                    confirm_file_write(&file.path, old_content.as_deref(), &file.content)
                 };
 
                 match confirmation {
@@ -894,8 +938,12 @@ All files are written atomically. Parent directories are created automatically."
             if create_dirs {
                 if let Some(parent) = file_path.parent() {
                     if !parent.exists() {
-                        fs::create_dir_all(parent)
-                            .map_err(|e| WriteFilesError(format!("Failed to create directories for {}: {}", file.path, e)))?;
+                        fs::create_dir_all(parent).map_err(|e| {
+                            WriteFilesError(format!(
+                                "Failed to create directories for {}: {}",
+                                file.path, e
+                            ))
+                        })?;
                     }
                 }
             }

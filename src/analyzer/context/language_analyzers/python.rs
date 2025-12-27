@@ -1,4 +1,6 @@
-use crate::analyzer::{context::helpers::create_regex, AnalysisConfig, BuildScript, EntryPoint, Port, Protocol};
+use crate::analyzer::{
+    AnalysisConfig, BuildScript, EntryPoint, Port, Protocol, context::helpers::create_regex,
+};
 use crate::common::file_utils::{is_readable_file, read_file_safe};
 use crate::error::Result;
 use std::collections::{HashMap, HashSet};
@@ -14,7 +16,15 @@ pub(crate) fn analyze_python_project(
     config: &AnalysisConfig,
 ) -> Result<()> {
     // Check for common Python entry points
-    let common_entries = ["main.py", "app.py", "wsgi.py", "asgi.py", "manage.py", "run.py", "__main__.py"];
+    let common_entries = [
+        "main.py",
+        "app.py",
+        "wsgi.py",
+        "asgi.py",
+        "manage.py",
+        "run.py",
+        "__main__.py",
+    ];
 
     for entry in &common_entries {
         let path = root.join(entry);
@@ -35,9 +45,13 @@ pub(crate) fn analyze_python_project(
                 let script_regex = create_regex(r#"['"](\w+)\s*=\s*([\w\.]+):(\w+)"#)?;
                 for script_cap in script_regex.captures_iter(scripts.as_str()) {
                     if let (Some(name), Some(module), Some(func)) =
-                        (script_cap.get(1), script_cap.get(2), script_cap.get(3)) {
+                        (script_cap.get(1), script_cap.get(2), script_cap.get(3))
+                    {
                         entry_points.push(EntryPoint {
-                            file: PathBuf::from(format!("{}.py", module.as_str().replace('.', "/"))),
+                            file: PathBuf::from(format!(
+                                "{}.py",
+                                module.as_str().replace('.', "/")
+                            )),
                             function: Some(func.as_str().to_string()),
                             command: Some(name.as_str().to_string()),
                         });
@@ -53,10 +67,12 @@ pub(crate) fn analyze_python_project(
         let content = read_file_safe(&pyproject, config.max_file_size)?;
         if let Ok(toml_value) = toml::from_str::<toml::Value>(&content) {
             // Extract build scripts from poetry
-            if let Some(scripts) = toml_value.get("tool")
+            if let Some(scripts) = toml_value
+                .get("tool")
                 .and_then(|t| t.get("poetry"))
                 .and_then(|p| p.get("scripts"))
-                .and_then(|s| s.as_table()) {
+                .and_then(|s| s.as_table())
+            {
                 for (name, cmd) in scripts {
                     if let Some(command) = cmd.as_str() {
                         build_scripts.push(BuildScript {
@@ -133,14 +149,18 @@ fn scan_python_file_for_context(
     }
 
     // Check if this is a main entry point
-    if content.contains("if __name__ == '__main__':") ||
-       content.contains("if __name__ == \"__main__\":") {
+    if content.contains("if __name__ == '__main__':")
+        || content.contains("if __name__ == \"__main__\":")
+    {
         entry_points.push(EntryPoint {
             file: path.to_path_buf(),
             function: Some("main".to_string()),
-            command: Some(format!("python {}", path.file_name().unwrap().to_string_lossy())),
+            command: Some(format!(
+                "python {}",
+                path.file_name().unwrap().to_string_lossy()
+            )),
         });
     }
 
     Ok(())
-} 
+}

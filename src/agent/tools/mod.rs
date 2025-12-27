@@ -19,6 +19,7 @@
 //!
 //! ### Linting
 //! - `HadolintTool` - Native Dockerfile linting (best practices, security)
+//! - `DclintTool` - Native Docker Compose linting (best practices, style, security)
 //!
 //! ### Diagnostics
 //! - `DiagnosticsTool` - Check for code errors via IDE/LSP or language-specific commands
@@ -38,6 +39,7 @@
 //! - `PlanListTool` - List all available plan files
 //!
 mod analyze;
+mod dclint;
 mod diagnostics;
 mod file_ops;
 mod hadolint;
@@ -50,6 +52,7 @@ mod truncation;
 pub use truncation::TruncationLimits;
 
 pub use analyze::AnalyzeTool;
+pub use dclint::DclintTool;
 pub use diagnostics::DiagnosticsTool;
 pub use file_ops::{ListDirectoryTool, ReadFileTool, WriteFileTool, WriteFilesTool};
 pub use hadolint::HadolintTool;

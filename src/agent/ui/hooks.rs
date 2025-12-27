@@ -153,7 +153,8 @@ where
 
         async move {
             // Print tool result and get the output info
-            let (status_ok, output_lines, is_collapsible) = print_tool_result(&name, &args_str, &result_str);
+            let (status_ok, output_lines, is_collapsible) =
+                print_tool_result(&name, &args_str, &result_str);
 
             // Update state
             let mut s = state.lock().await;
@@ -187,12 +188,15 @@ where
 
         // Check if response contains tool calls - if so, any text is "thinking"
         // If no tool calls, this is the final response - don't show as thinking
-        let has_tool_calls = response.choice.iter().any(|content| {
-            matches!(content, AssistantContent::ToolCall(_))
-        });
+        let has_tool_calls = response
+            .choice
+            .iter()
+            .any(|content| matches!(content, AssistantContent::ToolCall(_)));
 
         // Extract reasoning content (GPT-5.2 thinking summaries)
-        let reasoning_parts: Vec<String> = response.choice.iter()
+        let reasoning_parts: Vec<String> = response
+            .choice
+            .iter()
             .filter_map(|content| {
                 if let AssistantContent::Reasoning(Reasoning { reasoning, .. }) = content {
                     // Join all reasoning strings
@@ -209,7 +213,9 @@ where
             .collect();
 
         // Extract text content from the response (for non-reasoning models)
-        let text_parts: Vec<String> = response.choice.iter()
+        let text_parts: Vec<String> = response
+            .choice
+            .iter()
             .filter_map(|content| {
                 if let AssistantContent::Text(text) = content {
                     // Filter out empty or whitespace-only text
@@ -285,14 +291,22 @@ fn print_agent_thinking(text: &str) {
         // Handle code blocks
         if trimmed.starts_with("```") {
             if in_code_block {
-                println!("{}  └────────────────────────────────────────────────────────┘{}", brand::LIGHT_PEACH, brand::RESET);
+                println!(
+                    "{}  └────────────────────────────────────────────────────────┘{}",
+                    brand::LIGHT_PEACH,
+                    brand::RESET
+                );
                 in_code_block = false;
             } else {
                 let lang = trimmed.strip_prefix("```").unwrap_or("");
                 let lang_display = if lang.is_empty() { "code" } else { lang };
                 println!(
                     "{}  ┌─ {}{}{} ────────────────────────────────────────────────────┐{}",
-                    brand::LIGHT_PEACH, brand::CYAN, lang_display, brand::LIGHT_PEACH, brand::RESET
+                    brand::LIGHT_PEACH,
+                    brand::CYAN,
+                    lang_display,
+                    brand::LIGHT_PEACH,
+                    brand::RESET
                 );
                 in_code_block = true;
             }
@@ -300,22 +314,46 @@ fn print_agent_thinking(text: &str) {
         }
 
         if in_code_block {
-            println!("{}  │ {}{}{}  │", brand::LIGHT_PEACH, brand::CYAN, line, brand::RESET);
+            println!(
+                "{}  │ {}{}{}  │",
+                brand::LIGHT_PEACH,
+                brand::CYAN,
+                line,
+                brand::RESET
+            );
             continue;
         }
 
         // Handle bullet points
         if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
-            let content = trimmed.strip_prefix("- ").or_else(|| trimmed.strip_prefix("* ")).unwrap_or(trimmed);
-            println!("{}  {} {}{}", brand::PEACH, "•", format_thinking_inline(content), brand::RESET);
+            let content = trimmed
+                .strip_prefix("- ")
+                .or_else(|| trimmed.strip_prefix("* "))
+                .unwrap_or(trimmed);
+            println!(
+                "{}  {} {}{}",
+                brand::PEACH,
+                "•",
+                format_thinking_inline(content),
+                brand::RESET
+            );
             continue;
         }
 
         // Handle numbered lists
-        if trimmed.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false)
+        if trimmed
+            .chars()
+            .next()
+            .map(|c| c.is_ascii_digit())
+            .unwrap_or(false)
             && trimmed.chars().nth(1) == Some('.')
         {
-            println!("{}  {}{}", brand::PEACH, format_thinking_inline(trimmed), brand::RESET);
+            println!(
+                "{}  {}{}",
+                brand::PEACH,
+                format_thinking_inline(trimmed),
+                brand::RESET
+            );
             continue;
         }
 
@@ -326,7 +364,12 @@ fn print_agent_thinking(text: &str) {
             // Word wrap long lines
             let wrapped = wrap_text(trimmed, 76);
             for wrapped_line in wrapped {
-                println!("{}  {}{}", brand::PEACH, format_thinking_inline(&wrapped_line), brand::RESET);
+                println!(
+                    "{}  {}{}",
+                    brand::PEACH,
+                    format_thinking_inline(&wrapped_line),
+                    brand::RESET
+                );
             }
         }
     }
@@ -432,7 +475,12 @@ fn print_tool_header(name: &str, args: &str) {
     if args_display.is_empty() {
         println!("\n{} {}", "●".yellow(), name.cyan().bold());
     } else {
-        println!("\n{} {}({})", "●".yellow(), name.cyan().bold(), args_display.dimmed());
+        println!(
+            "\n{} {}({})",
+            "●".yellow(),
+            name.cyan().bold(),
+            args_display.dimmed()
+        );
     }
 
     // Print running indicator
@@ -449,8 +497,8 @@ fn print_tool_result(name: &str, args: &str, result: &str) -> (bool, Vec<String>
     let _ = io::stdout().flush();
 
     // Parse the result - handle potential double-encoding from Rig
-    let parsed: Result<serde_json::Value, _> = serde_json::from_str(result)
-        .map(|v: serde_json::Value| {
+    let parsed: Result<serde_json::Value, _> =
+        serde_json::from_str(result).map(|v: serde_json::Value| {
             // If the parsed value is a string, it might be double-encoded JSON
             // Try to parse the inner string, but fall back to original if it fails
             if let Some(inner_str) = v.as_str() {
@@ -476,7 +524,11 @@ fn print_tool_result(name: &str, args: &str, result: &str) -> (bool, Vec<String>
     print!("{}{}", ansi::CURSOR_UP, ansi::CLEAR_LINE);
 
     // Reprint header with green/red dot and args
-    let dot = if status_ok { "●".green() } else { "●".red() };
+    let dot = if status_ok {
+        "●".green()
+    } else {
+        "●".red()
+    };
 
     // Format args for display (same logic as print_tool_header)
     let args_parsed: Result<serde_json::Value, _> = serde_json::from_str(args);
@@ -515,18 +567,27 @@ fn print_tool_result(name: &str, args: &str, result: &str) -> (bool, Vec<String>
 }
 
 /// Format args for display based on tool type
-fn format_args_display(name: &str, parsed: &Result<serde_json::Value, serde_json::Error>) -> String {
+fn format_args_display(
+    name: &str,
+    parsed: &Result<serde_json::Value, serde_json::Error>,
+) -> String {
     match name {
         "shell" => {
             if let Ok(v) = parsed {
-                v.get("command").and_then(|c| c.as_str()).unwrap_or("").to_string()
+                v.get("command")
+                    .and_then(|c| c.as_str())
+                    .unwrap_or("")
+                    .to_string()
             } else {
                 String::new()
             }
         }
         "write_file" => {
             if let Ok(v) = parsed {
-                v.get("path").and_then(|p| p.as_str()).unwrap_or("").to_string()
+                v.get("path")
+                    .and_then(|p| p.as_str())
+                    .unwrap_or("")
+                    .to_string()
             } else {
                 String::new()
             }
@@ -554,14 +615,20 @@ fn format_args_display(name: &str, parsed: &Result<serde_json::Value, serde_json
         }
         "read_file" => {
             if let Ok(v) = parsed {
-                v.get("path").and_then(|p| p.as_str()).unwrap_or("").to_string()
+                v.get("path")
+                    .and_then(|p| p.as_str())
+                    .unwrap_or("")
+                    .to_string()
             } else {
                 String::new()
             }
         }
         "list_directory" => {
             if let Ok(v) = parsed {
-                v.get("path").and_then(|p| p.as_str()).unwrap_or(".").to_string()
+                v.get("path")
+                    .and_then(|p| p.as_str())
+                    .unwrap_or(".")
+                    .to_string()
             } else {
                 ".".to_string()
             }
@@ -571,7 +638,9 @@ fn format_args_display(name: &str, parsed: &Result<serde_json::Value, serde_json
 }
 
 /// Format shell command result
-fn format_shell_result(parsed: &Result<serde_json::Value, serde_json::Error>) -> (bool, Vec<String>) {
+fn format_shell_result(
+    parsed: &Result<serde_json::Value, serde_json::Error>,
+) -> (bool, Vec<String>) {
     if let Ok(v) = parsed {
         let success = v.get("success").and_then(|s| s.as_bool()).unwrap_or(false);
         let stdout = v.get("stdout").and_then(|s| s.as_str()).unwrap_or("");
@@ -600,7 +669,11 @@ fn format_shell_result(parsed: &Result<serde_json::Value, serde_json::Error>) ->
         }
 
         if lines.is_empty() {
-            lines.push(if success { "completed".to_string() } else { "failed".to_string() });
+            lines.push(if success {
+                "completed".to_string()
+            } else {
+                "failed".to_string()
+            });
         }
 
         (success, lines)
@@ -610,18 +683,24 @@ fn format_shell_result(parsed: &Result<serde_json::Value, serde_json::Error>) ->
 }
 
 /// Format write file result
-fn format_write_result(parsed: &Result<serde_json::Value, serde_json::Error>) -> (bool, Vec<String>) {
+fn format_write_result(
+    parsed: &Result<serde_json::Value, serde_json::Error>,
+) -> (bool, Vec<String>) {
     if let Ok(v) = parsed {
         let success = v.get("success").and_then(|s| s.as_bool()).unwrap_or(false);
         let action = v.get("action").and_then(|a| a.as_str()).unwrap_or("wrote");
-        let lines_written = v.get("lines_written")
+        let lines_written = v
+            .get("lines_written")
             .or_else(|| v.get("total_lines"))
             .and_then(|n| n.as_u64())
             .unwrap_or(0);
         let files_written = v.get("files_written").and_then(|n| n.as_u64()).unwrap_or(1);
 
         let msg = if files_written > 1 {
-            format!("{} {} files ({} lines)", action, files_written, lines_written)
+            format!(
+                "{} {} files ({} lines)",
+                action, files_written, lines_written
+            )
         } else {
             format!("{} ({} lines)", action, lines_written)
         };
@@ -633,11 +712,16 @@ fn format_write_result(parsed: &Result<serde_json::Value, serde_json::Error>) ->
 }
 
 /// Format read file result
-fn format_read_result(parsed: &Result<serde_json::Value, serde_json::Error>) -> (bool, Vec<String>) {
+fn format_read_result(
+    parsed: &Result<serde_json::Value, serde_json::Error>,
+) -> (bool, Vec<String>) {
     if let Ok(v) = parsed {
         // Handle error field
         if v.get("error").is_some() {
-            let error_msg = v.get("error").and_then(|e| e.as_str()).unwrap_or("file not found");
+            let error_msg = v
+                .get("error")
+                .and_then(|e| e.as_str())
+                .unwrap_or("file not found");
             return (false, vec![error_msg.to_string()]);
         }
 
@@ -671,7 +755,9 @@ fn format_read_result(parsed: &Result<serde_json::Value, serde_json::Error>) -> 
 }
 
 /// Format list directory result
-fn format_list_result(parsed: &Result<serde_json::Value, serde_json::Error>) -> (bool, Vec<String>) {
+fn format_list_result(
+    parsed: &Result<serde_json::Value, serde_json::Error>,
+) -> (bool, Vec<String>) {
     if let Ok(v) = parsed {
         let entries = v.get("entries").and_then(|e| e.as_array());
 
@@ -682,7 +768,11 @@ fn format_list_result(parsed: &Result<serde_json::Value, serde_json::Error>) -> 
             for entry in entries.iter().take(PREVIEW_LINES + 2) {
                 let name = entry.get("name").and_then(|n| n.as_str()).unwrap_or("?");
                 let entry_type = entry.get("type").and_then(|t| t.as_str()).unwrap_or("file");
-                let prefix = if entry_type == "directory" { "📁" } else { "📄" };
+                let prefix = if entry_type == "directory" {
+                    "📁"
+                } else {
+                    "📄"
+                };
                 lines.push(format!("{} {}", prefix, name));
             }
             // Add count if there are more entries than shown
@@ -702,7 +792,9 @@ fn format_list_result(parsed: &Result<serde_json::Value, serde_json::Error>) -> 
 }
 
 /// Format analyze result
-fn format_analyze_result(parsed: &Result<serde_json::Value, serde_json::Error>) -> (bool, Vec<String>) {
+fn format_analyze_result(
+    parsed: &Result<serde_json::Value, serde_json::Error>,
+) -> (bool, Vec<String>) {
     if let Ok(v) = parsed {
         let mut lines = Vec::new();
 
@@ -741,9 +833,12 @@ fn format_analyze_result(parsed: &Result<serde_json::Value, serde_json::Error>) 
 }
 
 /// Format security scan result
-fn format_security_result(parsed: &Result<serde_json::Value, serde_json::Error>) -> (bool, Vec<String>) {
+fn format_security_result(
+    parsed: &Result<serde_json::Value, serde_json::Error>,
+) -> (bool, Vec<String>) {
     if let Ok(v) = parsed {
-        let findings = v.get("findings")
+        let findings = v
+            .get("findings")
             .or_else(|| v.get("vulnerabilities"))
             .and_then(|f| f.as_array())
             .map(|a| a.len())
@@ -760,7 +855,9 @@ fn format_security_result(parsed: &Result<serde_json::Value, serde_json::Error>)
 }
 
 /// Format hadolint result - uses new priority-based format with Docker styling
-fn format_hadolint_result(parsed: &Result<serde_json::Value, serde_json::Error>) -> (bool, Vec<String>) {
+fn format_hadolint_result(
+    parsed: &Result<serde_json::Value, serde_json::Error>,
+) -> (bool, Vec<String>) {
     if let Ok(v) = parsed {
         let success = v.get("success").and_then(|s| s.as_bool()).unwrap_or(true);
         let summary = v.get("summary");
@@ -778,7 +875,8 @@ fn format_hadolint_result(parsed: &Result<serde_json::Value, serde_json::Error>)
         if total == 0 {
             lines.push(format!(
                 "{}🐳 Dockerfile OK - no issues found{}",
-                ansi::SUCCESS, ansi::RESET
+                ansi::SUCCESS,
+                ansi::RESET
             ));
             return (true, lines);
         }
@@ -808,13 +906,23 @@ fn format_hadolint_result(parsed: &Result<serde_json::Value, serde_json::Error>)
         // Summary with priority breakdown
         let mut priority_parts = Vec::new();
         if critical > 0 {
-            priority_parts.push(format!("{}🔴 {} critical{}", ansi::CRITICAL, critical, ansi::RESET));
+            priority_parts.push(format!(
+                "{}🔴 {} critical{}",
+                ansi::CRITICAL,
+                critical,
+                ansi::RESET
+            ));
         }
         if high > 0 {
             priority_parts.push(format!("{}🟠 {} high{}", ansi::HIGH, high, ansi::RESET));
         }
         if medium > 0 {
-            priority_parts.push(format!("{}🟡 {} medium{}", ansi::MEDIUM, medium, ansi::RESET));
+            priority_parts.push(format!(
+                "{}🟡 {} medium{}",
+                ansi::MEDIUM,
+                medium,
+                ansi::RESET
+            ));
         }
         if low > 0 {
             priority_parts.push(format!("{}🟢 {} low{}", ansi::LOW, low, ansi::RESET));
@@ -875,7 +983,9 @@ fn format_hadolint_result(parsed: &Result<serde_json::Value, serde_json::Error>)
                 };
                 lines.push(format!(
                     "{}  → Fix: {}{}",
-                    ansi::INFO_BLUE, truncated, ansi::RESET
+                    ansi::INFO_BLUE,
+                    truncated,
+                    ansi::RESET
                 ));
             }
         }
@@ -923,8 +1033,14 @@ fn format_hadolint_issue(issue: &serde_json::Value, icon: &str, color: &str) -> 
 
     format!(
         "{}{} L{}:{} {}{}[{}]{} {} {}",
-        color, icon, line_num, ansi::RESET,
-        ansi::DOCKER_BLUE, ansi::BOLD, code, ansi::RESET,
+        color,
+        icon,
+        line_num,
+        ansi::RESET,
+        ansi::DOCKER_BLUE,
+        ansi::BOLD,
+        code,
+        ansi::RESET,
         badge,
         msg_display
     )

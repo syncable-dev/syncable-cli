@@ -8,7 +8,13 @@ pub(crate) fn analyze_env_files(
     root: &Path,
     env_vars: &mut HashMap<String, (Option<String>, bool, Option<String>)>,
 ) -> Result<()> {
-    let env_files = [".env", ".env.example", ".env.local", ".env.development", ".env.production"];
+    let env_files = [
+        ".env",
+        ".env.example",
+        ".env.local",
+        ".env.development",
+        ".env.production",
+    ];
 
     for env_file in &env_files {
         let path = root.join(env_file);
@@ -28,13 +34,19 @@ pub(crate) fn analyze_env_files(
 
                     // Check if it's marked as required (common convention)
                     let required = value.is_empty() || value == "required" || value == "REQUIRED";
-                    let actual_value = if required { None } else { Some(value.to_string()) };
+                    let actual_value = if required {
+                        None
+                    } else {
+                        Some(value.to_string())
+                    };
 
-                    env_vars.entry(key.to_string()).or_insert((actual_value, required, None));
+                    env_vars
+                        .entry(key.to_string())
+                        .or_insert((actual_value, required, None));
                 }
             }
         }
     }
 
     Ok(())
-} 
+}

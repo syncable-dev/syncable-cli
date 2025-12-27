@@ -1,5 +1,5 @@
 use crate::analyzer::dependency_parser::Language;
-use crate::analyzer::tool_management::{ToolDetector, InstallationSource};
+use crate::analyzer::tool_management::{InstallationSource, ToolDetector};
 use crate::error::Result;
 use std::collections::HashMap;
 use thiserror::Error;
@@ -8,13 +8,13 @@ use thiserror::Error;
 pub enum ToolInstallationError {
     #[error("Installation failed: {0}")]
     InstallationFailed(String),
-    
+
     #[error("Tool not supported on this platform: {0}")]
     UnsupportedPlatform(String),
-    
+
     #[error("Command execution failed: {0}")]
     CommandFailed(String),
-    
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -32,7 +32,7 @@ impl ToolInstaller {
             tool_detector: ToolDetector::new(),
         }
     }
-    
+
     /// Ensure all required tools for vulnerability scanning are available
     pub fn ensure_tools_for_languages(&mut self, languages: &[Language]) -> Result<()> {
         for language in languages {
@@ -42,7 +42,7 @@ impl ToolInstaller {
                     if self.ensure_bun().is_err() {
                         self.ensure_npm()?;
                     }
-                },
+                }
                 Language::Python => self.ensure_pip_audit()?,
                 Language::Go => self.ensure_govulncheck()?,
                 Language::Java | Language::Kotlin => self.ensure_grype()?,
@@ -51,31 +51,32 @@ impl ToolInstaller {
         }
         Ok(())
     }
-    
+
     /// Check if a tool is installed and available
     fn is_tool_installed(&mut self, tool: &str) -> bool {
         let status = self.tool_detector.detect_tool(tool);
-        self.installed_tools.insert(tool.to_string(), status.available);
+        self.installed_tools
+            .insert(tool.to_string(), status.available);
         status.available
     }
-    
+
     /// Test if a tool is available by running version command
     pub fn test_tool_availability(&mut self, tool: &str) -> bool {
         self.is_tool_installed(tool)
     }
-    
+
     /// Get installation status summary
     pub fn get_tool_status(&self) -> HashMap<String, bool> {
         self.installed_tools.clone()
     }
-    
+
     /// Print tool installation status with detailed information
     pub fn print_tool_status(&mut self, languages: &[Language]) {
         println!("\n🔧 Vulnerability Scanning Tools Status:");
         println!("{}", "=".repeat(50));
-        
+
         let tool_statuses = self.tool_detector.detect_all_vulnerability_tools(languages);
-        
+
         for language in languages {
             match language {
                 Language::Rust => {
@@ -103,7 +104,7 @@ impl ToolInstaller {
         }
         println!();
     }
-    
+
     fn print_single_tool_status(
         &self,
         tool_name: &str,
@@ -112,9 +113,18 @@ impl ToolInstaller {
     ) {
         if let Some(status) = tool_statuses.get(tool_name) {
             let status_icon = if status.available { "✅" } else { "❌" };
-            print!("  {} {:?}: {} {}", status_icon, language, tool_name, 
-                   if status.available { "installed" } else { "missing" });
-            
+            print!(
+                "  {} {:?}: {} {}",
+                status_icon,
+                language,
+                tool_name,
+                if status.available {
+                    "installed"
+                } else {
+                    "missing"
+                }
+            );
+
             if status.available {
                 if let Some(ref version) = status.version {
                     print!(" (v{})", version);
@@ -129,7 +139,7 @@ impl ToolInstaller {
                     InstallationSource::GoHome => print!(" [go]"),
                     InstallationSource::PackageManager(pm) => print!(" [{}]", pm),
                     InstallationSource::Manual => print!(" [manual]"),
-                    InstallationSource::NotFound => {},
+                    InstallationSource::NotFound => {}
                 }
             } else {
                 print!(" - Install with: ");
@@ -144,7 +154,7 @@ impl ToolInstaller {
             println!();
         }
     }
-    
+
     fn print_js_tool_status(
         &self,
         tool_name: &str,
@@ -152,9 +162,18 @@ impl ToolInstaller {
         language: &Language,
     ) {
         let status_icon = if status.available { "✅" } else { "❌" };
-        print!("  {} {:?}: {} {}", status_icon, language, tool_name, 
-               if status.available { "installed" } else { "missing" });
-        
+        print!(
+            "  {} {:?}: {} {}",
+            status_icon,
+            language,
+            tool_name,
+            if status.available {
+                "installed"
+            } else {
+                "missing"
+            }
+        );
+
         if status.available {
             if let Some(ref version) = status.version {
                 print!(" (v{})", version);
@@ -169,7 +188,7 @@ impl ToolInstaller {
                 InstallationSource::GoHome => print!(" [go]"),
                 InstallationSource::PackageManager(pm) => print!(" [{}]", pm),
                 InstallationSource::Manual => print!(" [manual]"),
-                InstallationSource::NotFound => {},
+                InstallationSource::NotFound => {}
             }
         } else {
             print!(" - Install with: ");
@@ -183,33 +202,33 @@ impl ToolInstaller {
         }
         println!();
     }
-    
+
     // Installation methods - these will be moved to installers/ modules
     fn ensure_cargo_audit(&mut self) -> Result<()> {
         use crate::analyzer::tool_management::installers::rust::install_cargo_audit;
         install_cargo_audit(&mut self.tool_detector, &mut self.installed_tools)
     }
-    
+
     fn ensure_npm(&mut self) -> Result<()> {
         use crate::analyzer::tool_management::installers::javascript::ensure_npm;
         ensure_npm(&mut self.tool_detector, &mut self.installed_tools)
     }
-    
+
     fn ensure_bun(&mut self) -> Result<()> {
         use crate::analyzer::tool_management::installers::javascript::install_bun;
         install_bun(&mut self.tool_detector, &mut self.installed_tools)
     }
-    
+
     fn ensure_pip_audit(&mut self) -> Result<()> {
         use crate::analyzer::tool_management::installers::python::install_pip_audit;
         install_pip_audit(&mut self.tool_detector, &mut self.installed_tools)
     }
-    
+
     fn ensure_govulncheck(&mut self) -> Result<()> {
         use crate::analyzer::tool_management::installers::go::install_govulncheck;
         install_govulncheck(&mut self.tool_detector, &mut self.installed_tools)
     }
-    
+
     fn ensure_grype(&mut self) -> Result<()> {
         use crate::analyzer::tool_management::installers::java::install_grype;
         install_grype(&mut self.tool_detector, &mut self.installed_tools)

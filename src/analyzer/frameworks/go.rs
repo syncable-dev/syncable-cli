@@ -1,5 +1,5 @@
-use super::{LanguageFrameworkDetector, TechnologyRule, FrameworkDetectionUtils};
-use crate::analyzer::{DetectedTechnology, DetectedLanguage, TechnologyCategory, LibraryType};
+use super::{FrameworkDetectionUtils, LanguageFrameworkDetector, TechnologyRule};
+use crate::analyzer::{DetectedLanguage, DetectedTechnology, LibraryType, TechnologyCategory};
 use crate::error::Result;
 
 pub struct GoFrameworkDetector;
@@ -7,20 +7,24 @@ pub struct GoFrameworkDetector;
 impl LanguageFrameworkDetector for GoFrameworkDetector {
     fn detect_frameworks(&self, language: &DetectedLanguage) -> Result<Vec<DetectedTechnology>> {
         let rules = get_go_technology_rules();
-        
+
         // Combine main and dev dependencies for comprehensive detection
-        let all_deps: Vec<String> = language.main_dependencies.iter()
+        let all_deps: Vec<String> = language
+            .main_dependencies
+            .iter()
             .chain(language.dev_dependencies.iter())
             .cloned()
             .collect();
-        
+
         let technologies = FrameworkDetectionUtils::detect_technologies_by_dependencies(
-            &rules, &all_deps, language.confidence
+            &rules,
+            &all_deps,
+            language.confidence,
         );
-        
+
         Ok(technologies)
     }
-    
+
     fn supported_languages(&self) -> Vec<&'static str> {
         vec!["Go"]
     }
@@ -34,7 +38,10 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             name: "Gin".to_string(),
             category: TechnologyCategory::BackendFramework,
             confidence: 0.95,
-            dependency_patterns: vec!["github.com/gin-gonic/gin".to_string(), "gin-gonic".to_string()],
+            dependency_patterns: vec![
+                "github.com/gin-gonic/gin".to_string(),
+                "gin-gonic".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
@@ -45,7 +52,10 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             name: "Echo".to_string(),
             category: TechnologyCategory::BackendFramework,
             confidence: 0.95,
-            dependency_patterns: vec!["github.com/labstack/echo".to_string(), "labstack/echo".to_string()],
+            dependency_patterns: vec![
+                "github.com/labstack/echo".to_string(),
+                "labstack/echo".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
@@ -56,7 +66,10 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             name: "Fiber".to_string(),
             category: TechnologyCategory::BackendFramework,
             confidence: 0.95,
-            dependency_patterns: vec!["github.com/gofiber/fiber".to_string(), "gofiber".to_string()],
+            dependency_patterns: vec![
+                "github.com/gofiber/fiber".to_string(),
+                "gofiber".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
@@ -67,7 +80,10 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             name: "Chi".to_string(),
             category: TechnologyCategory::BackendFramework,
             confidence: 0.90,
-            dependency_patterns: vec!["github.com/go-chi/chi".to_string(), "go-chi/chi".to_string()],
+            dependency_patterns: vec![
+                "github.com/go-chi/chi".to_string(),
+                "go-chi/chi".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
@@ -78,7 +94,10 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             name: "Gorilla Mux".to_string(),
             category: TechnologyCategory::BackendFramework,
             confidence: 0.90,
-            dependency_patterns: vec!["github.com/gorilla/mux".to_string(), "gorilla/mux".to_string()],
+            dependency_patterns: vec![
+                "github.com/gorilla/mux".to_string(),
+                "gorilla/mux".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
@@ -89,7 +108,10 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             name: "HttpRouter".to_string(),
             category: TechnologyCategory::BackendFramework,
             confidence: 0.90,
-            dependency_patterns: vec!["github.com/julienschmidt/httprouter".to_string(), "julienschmidt/httprouter".to_string()],
+            dependency_patterns: vec![
+                "github.com/julienschmidt/httprouter".to_string(),
+                "julienschmidt/httprouter".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
@@ -100,7 +122,10 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             name: "Beego".to_string(),
             category: TechnologyCategory::BackendFramework,
             confidence: 0.90,
-            dependency_patterns: vec!["github.com/beego/beego".to_string(), "beego/beego".to_string()],
+            dependency_patterns: vec![
+                "github.com/beego/beego".to_string(),
+                "beego/beego".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
@@ -111,7 +136,10 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             name: "Revel".to_string(),
             category: TechnologyCategory::BackendFramework,
             confidence: 0.85,
-            dependency_patterns: vec!["github.com/revel/revel".to_string(), "revel/revel".to_string()],
+            dependency_patterns: vec![
+                "github.com/revel/revel".to_string(),
+                "revel/revel".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
@@ -122,7 +150,10 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             name: "Buffalo".to_string(),
             category: TechnologyCategory::BackendFramework,
             confidence: 0.85,
-            dependency_patterns: vec!["github.com/gobuffalo/buffalo".to_string(), "gobuffalo/buffalo".to_string()],
+            dependency_patterns: vec![
+                "github.com/gobuffalo/buffalo".to_string(),
+                "gobuffalo/buffalo".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
@@ -133,7 +164,10 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             name: "Gin Web Framework".to_string(),
             category: TechnologyCategory::BackendFramework,
             confidence: 0.95,
-            dependency_patterns: vec!["github.com/gin-gonic/gin".to_string(), "gin-gonic".to_string()],
+            dependency_patterns: vec![
+                "github.com/gin-gonic/gin".to_string(),
+                "gin-gonic".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
@@ -155,7 +189,10 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             name: "Micro".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.90,
-            dependency_patterns: vec!["github.com/micro/micro".to_string(), "micro/micro".to_string()],
+            dependency_patterns: vec![
+                "github.com/micro/micro".to_string(),
+                "micro/micro".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -166,7 +203,10 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             name: "Go Micro".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.90,
-            dependency_patterns: vec!["github.com/micro/go-micro".to_string(), "micro/go-micro".to_string()],
+            dependency_patterns: vec![
+                "github.com/micro/go-micro".to_string(),
+                "micro/go-micro".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -188,7 +228,10 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             name: "Iris".to_string(),
             category: TechnologyCategory::BackendFramework,
             confidence: 0.90,
-            dependency_patterns: vec!["github.com/kataras/iris".to_string(), "kataras/iris".to_string()],
+            dependency_patterns: vec![
+                "github.com/kataras/iris".to_string(),
+                "kataras/iris".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
@@ -199,7 +242,10 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             name: "FastHTTP".to_string(),
             category: TechnologyCategory::BackendFramework,
             confidence: 0.95,
-            dependency_patterns: vec!["github.com/valyala/fasthttp".to_string(), "fasthttp".to_string()],
+            dependency_patterns: vec![
+                "github.com/valyala/fasthttp".to_string(),
+                "fasthttp".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
@@ -210,14 +256,16 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             name: "Hertz".to_string(),
             category: TechnologyCategory::BackendFramework,
             confidence: 0.95,
-            dependency_patterns: vec!["github.com/cloudwego/hertz".to_string(), "cloudwego/hertz".to_string()],
+            dependency_patterns: vec![
+                "github.com/cloudwego/hertz".to_string(),
+                "cloudwego/hertz".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,
             alternative_names: vec!["cloudwego".to_string()],
             file_indicators: vec![],
         },
-        
         // DATABASE/ORM
         TechnologyRule {
             name: "GORM".to_string(),
@@ -256,7 +304,10 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             name: "Bun".to_string(),
             category: TechnologyCategory::Database,
             confidence: 0.85,
-            dependency_patterns: vec!["github.com/uptrace/bun".to_string(), "uptrace/bun".to_string()],
+            dependency_patterns: vec![
+                "github.com/uptrace/bun".to_string(),
+                "uptrace/bun".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -267,7 +318,10 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             name: "SQLBoiler".to_string(),
             category: TechnologyCategory::Database,
             confidence: 0.85,
-            dependency_patterns: vec!["github.com/volatiletech/sqlboiler".to_string(), "volatiletech/sqlboiler".to_string()],
+            dependency_patterns: vec![
+                "github.com/volatiletech/sqlboiler".to_string(),
+                "volatiletech/sqlboiler".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -278,20 +332,25 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             name: "Squirrel".to_string(),
             category: TechnologyCategory::Database,
             confidence: 0.85,
-            dependency_patterns: vec!["github.com/Masterminds/squirrel".to_string(), "Masterminds/squirrel".to_string()],
+            dependency_patterns: vec![
+                "github.com/Masterminds/squirrel".to_string(),
+                "Masterminds/squirrel".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec![],
             file_indicators: vec![],
         },
-        
         // TESTING
         TechnologyRule {
             name: "Testify".to_string(),
             category: TechnologyCategory::Testing,
             confidence: 0.85,
-            dependency_patterns: vec!["github.com/stretchr/testify".to_string(), "stretchr/testify".to_string()],
+            dependency_patterns: vec![
+                "github.com/stretchr/testify".to_string(),
+                "stretchr/testify".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -309,7 +368,6 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec!["onsi/ginkgo".to_string()],
             file_indicators: vec![],
         },
-        
         // CLI FRAMEWORKS
         TechnologyRule {
             name: "Cobra".to_string(),
@@ -322,7 +380,6 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec!["spf13/cobra".to_string()],
             file_indicators: vec![],
         },
-        
         // CONFIG MANAGEMENT
         TechnologyRule {
             name: "Viper".to_string(),
@@ -335,13 +392,15 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec!["spf13/viper".to_string()],
             file_indicators: vec![],
         },
-        
         // LOGGING
         TechnologyRule {
             name: "Logrus".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.85,
-            dependency_patterns: vec!["github.com/sirupsen/logrus".to_string(), "sirupsen/logrus".to_string()],
+            dependency_patterns: vec![
+                "github.com/sirupsen/logrus".to_string(),
+                "sirupsen/logrus".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -359,26 +418,30 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             alternative_names: vec!["zap".to_string()],
             file_indicators: vec![],
         },
-        
         // HTTP CLIENTS
         TechnologyRule {
             name: "Resty".to_string(),
             category: TechnologyCategory::Library(LibraryType::HttpClient),
             confidence: 0.85,
-            dependency_patterns: vec!["github.com/go-resty/resty".to_string(), "go-resty/resty".to_string()],
+            dependency_patterns: vec![
+                "github.com/go-resty/resty".to_string(),
+                "go-resty/resty".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
             alternative_names: vec!["resty".to_string()],
             file_indicators: vec![],
         },
-        
         // MESSAGING
         TechnologyRule {
             name: "NATS".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.90,
-            dependency_patterns: vec!["github.com/nats-io/nats.go".to_string(), "nats-io/nats.go".to_string()],
+            dependency_patterns: vec![
+                "github.com/nats-io/nats.go".to_string(),
+                "nats-io/nats.go".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -389,7 +452,10 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             name: "Kafka".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.90,
-            dependency_patterns: vec!["github.com/Shopify/sarama".to_string(), "Shopify/sarama".to_string()],
+            dependency_patterns: vec![
+                "github.com/Shopify/sarama".to_string(),
+                "Shopify/sarama".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,
@@ -400,7 +466,10 @@ fn get_go_technology_rules() -> Vec<TechnologyRule> {
             name: "RabbitMQ".to_string(),
             category: TechnologyCategory::Library(LibraryType::Utility),
             confidence: 0.90,
-            dependency_patterns: vec!["github.com/streadway/amqp".to_string(), "streadway/amqp".to_string()],
+            dependency_patterns: vec![
+                "github.com/streadway/amqp".to_string(),
+                "streadway/amqp".to_string(),
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: false,

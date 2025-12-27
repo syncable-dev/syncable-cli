@@ -39,19 +39,53 @@ pub fn analyze_context(
     for language in languages {
         match language.name.as_str() {
             "JavaScript" | "TypeScript" => {
-                javascript::analyze_node_project(project_root, &mut entry_points, &mut ports, &mut env_vars, &mut build_scripts, config)?;
+                javascript::analyze_node_project(
+                    project_root,
+                    &mut entry_points,
+                    &mut ports,
+                    &mut env_vars,
+                    &mut build_scripts,
+                    config,
+                )?;
             }
             "Python" => {
-                python::analyze_python_project(project_root, &mut entry_points, &mut ports, &mut env_vars, &mut build_scripts, config)?;
+                python::analyze_python_project(
+                    project_root,
+                    &mut entry_points,
+                    &mut ports,
+                    &mut env_vars,
+                    &mut build_scripts,
+                    config,
+                )?;
             }
             "Rust" => {
-                rust::analyze_rust_project(project_root, &mut entry_points, &mut ports, &mut env_vars, &mut build_scripts, config)?;
+                rust::analyze_rust_project(
+                    project_root,
+                    &mut entry_points,
+                    &mut ports,
+                    &mut env_vars,
+                    &mut build_scripts,
+                    config,
+                )?;
             }
             "Go" => {
-                go::analyze_go_project(project_root, &mut entry_points, &mut ports, &mut env_vars, &mut build_scripts, config)?;
+                go::analyze_go_project(
+                    project_root,
+                    &mut entry_points,
+                    &mut ports,
+                    &mut env_vars,
+                    &mut build_scripts,
+                    config,
+                )?;
             }
             "Java" | "Kotlin" => {
-                jvm::analyze_jvm_project(project_root, &mut ports, &mut env_vars, &mut build_scripts, config)?;
+                jvm::analyze_jvm_project(
+                    project_root,
+                    &mut ports,
+                    &mut env_vars,
+                    &mut build_scripts,
+                    config,
+                )?;
             }
             _ => {}
         }
@@ -64,7 +98,12 @@ pub fn analyze_context(
 
     // Technology-specific analysis
     for technology in technologies {
-        tech_specific::analyze_technology_specifics(technology, project_root, &mut entry_points, &mut ports)?;
+        tech_specific::analyze_technology_specifics(
+            technology,
+            project_root,
+            &mut entry_points,
+            &mut ports,
+        )?;
     }
 
     // Detect microservices structure
@@ -99,4 +138,4 @@ pub fn analyze_context(
         project_type,
         build_scripts,
     })
-} 
+}

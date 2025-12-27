@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
 
-use crate::analyzer::security::turbo::{TurboSecurityAnalyzer, TurboConfig, ScanMode};
+use crate::analyzer::security::turbo::{ScanMode, TurboConfig, TurboSecurityAnalyzer};
 
 // ============================================================================
 // Security Scan Tool
@@ -82,8 +82,9 @@ impl Tool for SecurityScanTool {
 
         let scanner = TurboSecurityAnalyzer::new(config)
             .map_err(|e| SecurityScanError(format!("Failed to create scanner: {}", e)))?;
-        
-        let report = scanner.analyze_project(&path)
+
+        let report = scanner
+            .analyze_project(&path)
             .map_err(|e| SecurityScanError(format!("Scan failed: {}", e)))?;
 
         let result = json!({
@@ -145,7 +146,9 @@ impl Tool for VulnerabilitiesTool {
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
             name: Self::NAME.to_string(),
-            description: "Check the project's dependencies for known security vulnerabilities (CVEs).".to_string(),
+            description:
+                "Check the project's dependencies for known security vulnerabilities (CVEs)."
+                    .to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -173,7 +176,8 @@ impl Tool for VulnerabilitiesTool {
             return Ok(json!({
                 "message": "No dependencies found in project",
                 "total_vulnerabilities": 0
-            }).to_string());
+            })
+            .to_string());
         }
 
         let checker = crate::analyzer::vulnerability::VulnerabilityChecker::new();

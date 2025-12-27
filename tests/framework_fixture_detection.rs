@@ -11,16 +11,56 @@ struct Case<'a> {
 #[test]
 fn detects_framework_across_10_fixtures() {
     let cases = [
-        Case { name: "nextjs", path: "tests/fixtures/js_frameworks/nextjs", expected_primary: "Next.js" },
-        Case { name: "tanstack-start", path: "tests/fixtures/js_frameworks/tanstack-start", expected_primary: "Tanstack Start" },
-        Case { name: "sveltekit", path: "tests/fixtures/js_frameworks/sveltekit", expected_primary: "SvelteKit" },
-        Case { name: "nuxt", path: "tests/fixtures/js_frameworks/nuxt", expected_primary: "Nuxt.js" },
-        Case { name: "astro", path: "tests/fixtures/js_frameworks/astro", expected_primary: "Astro" },
-        Case { name: "solidstart", path: "tests/fixtures/js_frameworks/solidstart", expected_primary: "SolidStart" },
-        Case { name: "react-router-spa", path: "tests/fixtures/js_frameworks/react-router-spa", expected_primary: "React Router v7" },
-        Case { name: "angular", path: "tests/fixtures/js_frameworks/angular", expected_primary: "Angular" },
-        Case { name: "expo", path: "tests/fixtures/js_frameworks/expo", expected_primary: "Expo" },
-        Case { name: "express", path: "tests/fixtures/js_frameworks/express", expected_primary: "Express.js" },
+        Case {
+            name: "nextjs",
+            path: "tests/fixtures/js_frameworks/nextjs",
+            expected_primary: "Next.js",
+        },
+        Case {
+            name: "tanstack-start",
+            path: "tests/fixtures/js_frameworks/tanstack-start",
+            expected_primary: "Tanstack Start",
+        },
+        Case {
+            name: "sveltekit",
+            path: "tests/fixtures/js_frameworks/sveltekit",
+            expected_primary: "SvelteKit",
+        },
+        Case {
+            name: "nuxt",
+            path: "tests/fixtures/js_frameworks/nuxt",
+            expected_primary: "Nuxt.js",
+        },
+        Case {
+            name: "astro",
+            path: "tests/fixtures/js_frameworks/astro",
+            expected_primary: "Astro",
+        },
+        Case {
+            name: "solidstart",
+            path: "tests/fixtures/js_frameworks/solidstart",
+            expected_primary: "SolidStart",
+        },
+        Case {
+            name: "react-router-spa",
+            path: "tests/fixtures/js_frameworks/react-router-spa",
+            expected_primary: "React Router v7",
+        },
+        Case {
+            name: "angular",
+            path: "tests/fixtures/js_frameworks/angular",
+            expected_primary: "Angular",
+        },
+        Case {
+            name: "expo",
+            path: "tests/fixtures/js_frameworks/expo",
+            expected_primary: "Expo",
+        },
+        Case {
+            name: "express",
+            path: "tests/fixtures/js_frameworks/express",
+            expected_primary: "Express.js",
+        },
     ];
 
     for case in cases {
@@ -36,9 +76,22 @@ fn detects_framework_across_10_fixtures() {
         }
 
         if let Some(primary) = found {
-            assert!(primary.is_primary, "{}: {} detected but not marked primary", case.name, case.expected_primary);
+            assert!(
+                primary.is_primary,
+                "{}: {} detected but not marked primary",
+                case.name, case.expected_primary
+            );
         } else {
-            panic!("{}: expected to detect primary framework {} but did not. Detected: {:?}", case.name, case.expected_primary, analysis.technologies.iter().map(|t| t.name.clone()).collect::<Vec<_>>());
+            panic!(
+                "{}: expected to detect primary framework {} but did not. Detected: {:?}",
+                case.name,
+                case.expected_primary,
+                analysis
+                    .technologies
+                    .iter()
+                    .map(|t| t.name.clone())
+                    .collect::<Vec<_>>()
+            );
         }
     }
 }
