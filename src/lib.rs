@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod analyzer;
+pub mod bedrock; // Inlined rig-bedrock with extended thinking fixes
 pub mod cli;
 pub mod common;
 pub mod config;
