@@ -97,7 +97,7 @@ impl TryFrom<RigUserContent> for Vec<aws_bedrock::ContentBlock> {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::user_content::RigUserContent;
+    use super::RigUserContent;
     use aws_sdk_bedrockruntime::types as aws_bedrock;
     use rig::{
         OneOrMany,

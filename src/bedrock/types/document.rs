@@ -4,7 +4,7 @@ use rig::{
     message::{Document, DocumentSourceKind},
 };
 
-pub(crate) use crate::types::media_types::RigDocumentMediaType;
+pub(crate) use super::media_types::RigDocumentMediaType;
 use base64::{Engine, prelude::BASE64_STANDARD};
 use uuid::Uuid;
 
@@ -95,7 +95,7 @@ mod tests {
         message::{Document, DocumentMediaType, DocumentSourceKind},
     };
 
-    use crate::types::document::RigDocument;
+    use super::RigDocument;
 
     #[test]
     fn test_document_to_aws_document() {

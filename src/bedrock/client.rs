@@ -1,5 +1,5 @@
-use crate::image::ImageGenerationModel;
-use crate::{completion::CompletionModel, embedding::EmbeddingModel};
+use super::image::ImageGenerationModel;
+use super::{completion::CompletionModel, embedding::EmbeddingModel};
 use aws_config::{BehaviorVersion, Region};
 use rig::client::Nothing;
 use rig::prelude::*;
