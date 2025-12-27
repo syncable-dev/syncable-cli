@@ -643,9 +643,8 @@ The tool will create parent directories automatically if they don't exist."#.to_
             && let Some(parent) = file_path.parent()
             && !parent.exists()
         {
-            fs::create_dir_all(parent).map_err(|e| {
-                WriteFileError(format!("Failed to create directories: {}", e))
-            })?;
+            fs::create_dir_all(parent)
+                .map_err(|e| WriteFileError(format!("Failed to create directories: {}", e)))?;
         }
 
         // Check if file exists (for reporting)

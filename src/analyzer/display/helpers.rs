@@ -153,10 +153,7 @@ pub fn display_technologies_detailed_legacy(technologies: &[DetectedTechnology])
         std::collections::HashMap::new();
 
     for tech in technologies {
-        by_category
-            .entry(&tech.category)
-            .or_default()
-            .push(tech);
+        by_category.entry(&tech.category).or_default().push(tech);
     }
 
     // Find and display primary technology
@@ -229,8 +226,7 @@ pub fn display_technologies_detailed_legacy(technologies: &[DetectedTechnology])
             };
 
             // Only print if not already handled above
-            if !matches!(lib_type, LibraryType::UI | LibraryType::Utility) && !techs.is_empty()
-            {
+            if !matches!(lib_type, LibraryType::UI | LibraryType::Utility) && !techs.is_empty() {
                 println!("\n   {}:", label);
                 for tech in techs {
                     println!(
@@ -258,10 +254,7 @@ pub fn display_technologies_detailed_legacy_to_string(
         std::collections::HashMap::new();
 
     for tech in technologies {
-        by_category
-            .entry(&tech.category)
-            .or_default()
-            .push(tech);
+        by_category.entry(&tech.category).or_default().push(tech);
     }
 
     // Find and display primary technology
@@ -334,8 +327,7 @@ pub fn display_technologies_detailed_legacy_to_string(
             };
 
             // Only print if not already handled above
-            if !matches!(lib_type, LibraryType::UI | LibraryType::Utility) && !techs.is_empty()
-            {
+            if !matches!(lib_type, LibraryType::UI | LibraryType::Utility) && !techs.is_empty() {
                 output.push_str(&format!("\n   {}:\n", label));
                 for tech in techs {
                     output.push_str(&format!(

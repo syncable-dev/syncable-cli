@@ -59,7 +59,6 @@ impl fmt::Display for Severity {
     }
 }
 
-
 impl Ord for Severity {
     fn cmp(&self, other: &Self) -> Ordering {
         // Higher severity = lower numeric value for Ord

@@ -148,7 +148,8 @@ fn detect_by_config_files(
                         });
                     } else if has_tanstack_deps
                         && !has_expo_deps
-                        && let Some(tanstack_rule) = rules.iter().find(|r| r.name == "Tanstack Start")
+                        && let Some(tanstack_rule) =
+                            rules.iter().find(|r| r.name == "Tanstack Start")
                     {
                         detected.push(DetectedTechnology {
                             name: tanstack_rule.name.clone(),
@@ -782,8 +783,7 @@ fn analyze_tanstack_start_usage(content: &str, file_path: &Path) -> Option<f32> 
     }
 
     // Router configuration patterns (very high confidence)
-    if file_name.contains("router.")
-        && (file_name.ends_with(".ts") || file_name.ends_with(".tsx"))
+    if file_name.contains("router.") && (file_name.ends_with(".ts") || file_name.ends_with(".tsx"))
     {
         if content.contains("createRouter") && content.contains("@tanstack/react-router") {
             confidence += 0.4;

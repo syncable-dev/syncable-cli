@@ -15,9 +15,7 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
         |instr, _shell| match instr {
             Instruction::Label(pairs) => {
                 for (key, value) in pairs {
-                    if key == "org.opencontainers.image.url"
-                        && !is_valid_url(value)
-                    {
+                    if key == "org.opencontainers.image.url" && !is_valid_url(value) {
                         return false;
                     }
                 }

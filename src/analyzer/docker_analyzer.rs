@@ -564,7 +564,10 @@ fn parse_compose_file(path: &PathBuf) -> Result<ComposeFileInfo> {
 
                 // Check if it's external
                 if let Some(config) = network_config.as_mapping()
-                    && config.get("external").and_then(|e| e.as_bool()).unwrap_or(false)
+                    && config
+                        .get("external")
+                        .and_then(|e| e.as_bool())
+                        .unwrap_or(false)
                 {
                     info.external_dependencies.push(format!("network:{}", name));
                 }
@@ -580,7 +583,10 @@ fn parse_compose_file(path: &PathBuf) -> Result<ComposeFileInfo> {
 
                 // Check if it's external
                 if let Some(config) = volume_config.as_mapping()
-                    && config.get("external").and_then(|e| e.as_bool()).unwrap_or(false)
+                    && config
+                        .get("external")
+                        .and_then(|e| e.as_bool())
+                        .unwrap_or(false)
                 {
                     info.external_dependencies.push(format!("volume:{}", name));
                 }

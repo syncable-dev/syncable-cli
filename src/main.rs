@@ -713,9 +713,10 @@ async fn check_for_update(suppress_output: bool) {
                             if !latest.is_empty()
                                 && latest != current
                                 && is_version_newer(current, latest)
-                                && !suppress_output {
-                                    show_update_notification(current, latest);
-                                }
+                                && !suppress_output
+                            {
+                                show_update_notification(current, latest);
+                            }
                         }
                         Err(e) => {
                             if std::env::var("SYNC_CTL_DEBUG").is_ok() {

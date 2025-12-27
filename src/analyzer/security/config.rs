@@ -303,7 +303,7 @@ impl SecurityAnalysisConfig {
             check_compliance: false,
             check_git_history: false,
             parallel_analysis: true,
-            max_findings_per_file: Some(20), // Limit output
+            max_findings_per_file: Some(20),     // Limit output
             analysis_timeout_seconds: Some(120), // 2 minutes max
             ..Self::default()
         }

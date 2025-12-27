@@ -189,7 +189,8 @@ fn analyze_rust_project(
                 };
 
                 // Extract dependencies
-                if let Some(deps_table) = cargo_toml.get("dependencies").and_then(|d| d.as_table()) {
+                if let Some(deps_table) = cargo_toml.get("dependencies").and_then(|d| d.as_table())
+                {
                     for (name, _) in deps_table {
                         info.main_dependencies.push(name.clone());
                     }
@@ -197,7 +198,9 @@ fn analyze_rust_project(
 
                 // Extract dev dependencies if enabled
                 if config.include_dev_dependencies
-                    && let Some(dev_deps_table) = cargo_toml.get("dev-dependencies").and_then(|d| d.as_table())
+                    && let Some(dev_deps_table) = cargo_toml
+                        .get("dev-dependencies")
+                        .and_then(|d| d.as_table())
                 {
                     for (name, _) in dev_deps_table {
                         info.dev_dependencies.push(name.clone());
@@ -262,13 +265,16 @@ fn analyze_javascript_project(
                 && let Ok(package_json) = serde_json::from_str::<JsonValue>(&content)
             {
                 // Extract Node.js version from engines
-                if let Some(node_version) = package_json.get("engines").and_then(|e| e.get("node")).and_then(|v| v.as_str()) {
+                if let Some(node_version) = package_json
+                    .get("engines")
+                    .and_then(|e| e.get("node"))
+                    .and_then(|v| v.as_str())
+                {
                     info.version = Some(node_version.to_string());
                 }
 
                 // Extract dependencies (always include all buckets for framework detection)
-                if let Some(deps) = package_json.get("dependencies").and_then(|d| d.as_object())
-                {
+                if let Some(deps) = package_json.get("dependencies").and_then(|d| d.as_object()) {
                     for (name, _) in deps {
                         info.main_dependencies.push(name.clone());
                     }
@@ -442,7 +448,9 @@ fn parse_pipfile(content: &str, info: &mut LanguageInfo, config: &AnalysisConfig
         if let Some(requires) = pipfile.get("requires") {
             if let Some(python_version) = requires.get("python_version").and_then(|v| v.as_str()) {
                 info.version = Some(format!("~={}", python_version));
-            } else if let Some(python_full) = requires.get("python_full_version").and_then(|v| v.as_str()) {
+            } else if let Some(python_full) =
+                requires.get("python_full_version").and_then(|v| v.as_str())
+            {
                 info.version = Some(format!("=={}", python_full));
             }
         }
@@ -478,7 +486,8 @@ fn parse_pyproject_toml(content: &str, info: &mut LanguageInfo, config: &Analysi
             if let Some(deps_array) = project.get("dependencies").and_then(|d| d.as_array()) {
                 for dep in deps_array {
                     if let Some(dep_str) = dep.as_str()
-                        && let Some(package_name) = dep_str.split(&['=', '>', '<', '!', '~', ';'][..]).next()
+                        && let Some(package_name) =
+                            dep_str.split(&['=', '>', '<', '!', '~', ';'][..]).next()
                     {
                         let clean_name = package_name.trim();
                         if !clean_name.is_empty() {
@@ -490,13 +499,16 @@ fn parse_pyproject_toml(content: &str, info: &mut LanguageInfo, config: &Analysi
 
             // Extract optional dependencies (dev dependencies)
             if config.include_dev_dependencies
-                && let Some(optional_table) = project.get("optional-dependencies").and_then(|o| o.as_table())
+                && let Some(optional_table) = project
+                    .get("optional-dependencies")
+                    .and_then(|o| o.as_table())
             {
                 for (_, deps) in optional_table {
                     if let Some(deps_array) = deps.as_array() {
                         for dep in deps_array {
                             if let Some(dep_str) = dep.as_str()
-                                && let Some(package_name) = dep_str.split(&['=', '>', '<', '!', '~', ';'][..]).next()
+                                && let Some(package_name) =
+                                    dep_str.split(&['=', '>', '<', '!', '~', ';'][..]).next()
                             {
                                 let clean_name = package_name.trim();
                                 if !clean_name.is_empty() {
@@ -523,7 +535,8 @@ fn parse_pyproject_toml(content: &str, info: &mut LanguageInfo, config: &Analysi
             }
 
             if config.include_dev_dependencies
-                && let Some(dev_deps_table) = poetry.get("group")
+                && let Some(dev_deps_table) = poetry
+                    .get("group")
                     .and_then(|g| g.get("dev"))
                     .and_then(|d| d.get("dependencies"))
                     .and_then(|d| d.as_table())
