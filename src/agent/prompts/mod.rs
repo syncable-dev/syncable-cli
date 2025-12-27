@@ -478,6 +478,13 @@ pub fn is_generation_query(query: &str) -> bool {
         "new feature",
         "develop",
         "code",
+        // Plan execution keywords - needed for plan continuation
+        "plan",
+        "continue",
+        "resume",
+        "execute",
+        "next task",
+        "proceed",
     ];
 
     generation_keywords
