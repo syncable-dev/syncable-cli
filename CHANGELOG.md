@@ -106,6 +106,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.29.0](https://github.com/syncable-dev/syncable-cli/compare/v0.28.1...v0.29.0) - 2025-12-27
+
+### Fixed
+
+- *(clippy)* resolve all clippy warnings across codebase
+
+### Other
+
+- fix print_with_newline clippy lint and format code
+
 ## [0.28.1](https://github.com/syncable-dev/syncable-cli/compare/v0.28.0...v0.28.1) - 2025-12-27
 
 ### Added
