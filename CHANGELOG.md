@@ -106,6 +106,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.28.1](https://github.com/syncable-dev/syncable-cli/compare/v0.28.0...v0.28.1) - 2025-12-27
+
+### Added
+
+- add CI workflow, trust badges, and fix Bedrock extended thinking
+- updated README with gif
+
+### Fixed
+
+- *(ci)* remove recursive clippy alias that broke CI
+- *(ci)* ignore flaky integration test and fix doctests
+- fix flaky tests and extract_environment_from_filename bug
+- clone PathBuf to fix Windows build error
+- *(ci)* add permissions for security audit and ignore unmaintained warnings
+- *(ci)* override target-cpu=native that breaks macOS CI
+- *(ci)* remove recursive cargo fmt alias that broke CI
+
+### Other
+
+- Merge pull request #240 from syncable-dev/develop
+- format dclint tool files
+- add docker-compose-linter attribution
+- run cargo fmt --all
+- add demo GIF to README for better conversions
+
 ## [0.28.0](https://github.com/syncable-dev/syncable-cli/compare/v0.27.2...v0.28.0) - 2025-12-26
 
 ### Added
