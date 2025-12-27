@@ -208,7 +208,7 @@ fn format_vulnerabilities_table(
                     output.push_str(&format!("     ✅ Fix: Upgrade to {}\n", patched));
                 }
             }
-            output.push_str("\n");
+            output.push('\n');
         }
     } else {
         output.push_str("\n✅ No vulnerabilities found!\n");

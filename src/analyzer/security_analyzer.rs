@@ -177,6 +177,7 @@ struct SecretPattern {
 }
 
 /// Security rule for code pattern analysis
+#[allow(dead_code)]
 struct SecurityRule {
     id: String,
     name: String,
@@ -418,10 +419,10 @@ impl SecurityAnalyzer {
         };
 
         // Use cache to avoid repeated git calls
-        if let Ok(cache) = self.git_ignore_cache.lock() {
-            if let Some(&cached_result) = cache.get(file_path) {
-                return cached_result;
-            }
+        if let Ok(cache) = self.git_ignore_cache.lock()
+            && let Some(&cached_result) = cache.get(file_path)
+        {
+            return cached_result;
         }
 
         // Check if this is a git repository
@@ -432,7 +433,7 @@ impl SecurityAnalyzer {
 
         // First, try git check-ignore for the most accurate result
         let git_result = Command::new("git")
-            .args(&["check-ignore", "--quiet"])
+            .args(["check-ignore", "--quiet"])
             .arg(file_path)
             .current_dir(project_root)
             .output()
@@ -506,9 +507,8 @@ impl SecurityAnalyzer {
                     return true;
                 }
             }
-        } else if pattern.starts_with('/') {
+        } else if let Some(abs_pattern) = pattern.strip_prefix('/') {
             // Absolute path from repo root
-            let abs_pattern = &pattern[1..];
             if path_str == abs_pattern {
                 return true;
             }
@@ -570,7 +570,7 @@ impl SecurityAnalyzer {
 
         // Use git ls-files to check if file is tracked
         Command::new("git")
-            .args(&["ls-files", "--error-unmatch"])
+            .args(["ls-files", "--error-unmatch"])
             .arg(file_path)
             .current_dir(project_root)
             .output()
@@ -982,12 +982,12 @@ impl SecurityAnalyzer {
         let mut language_files = Vec::new();
 
         for language in languages {
-            if let Some(lang) = Language::from_string(&language.name) {
-                if let Some(_rules) = self.security_rules.get(&lang) {
-                    let source_files = self.collect_source_files(project_root, &language.name)?;
-                    total_files += source_files.len();
-                    language_files.push((language, source_files));
-                }
+            if let Some(lang) = Language::from_string(&language.name)
+                && let Some(_rules) = self.security_rules.get(&lang)
+            {
+                let source_files = self.collect_source_files(project_root, &language.name)?;
+                total_files += source_files.len();
+                language_files.push((language, source_files));
             }
         }
 
@@ -1028,9 +1028,10 @@ impl SecurityAnalyzer {
 
         // Process all languages
         for (language, source_files) in language_files {
-            if let Some(lang) = Language::from_string(&language.name) {
-                if let Some(rules) = self.security_rules.get(&lang) {
-                    let file_findings: Vec<Vec<SecurityFinding>> = source_files
+            if let Some(lang) = Language::from_string(&language.name)
+                && let Some(rules) = self.security_rules.get(&lang)
+            {
+                let file_findings: Vec<Vec<SecurityFinding>> = source_files
                         .par_iter()
                         .map(|file_path| {
                             let result = self.analyze_file_with_rules(file_path, rules);
@@ -1062,7 +1063,6 @@ impl SecurityAnalyzer {
                     for mut file_findings in file_findings {
                         findings.append(&mut file_findings);
                     }
-                }
             }
         }
 
@@ -1089,12 +1089,12 @@ impl SecurityAnalyzer {
         let mut language_files = Vec::new();
 
         for language in languages {
-            if let Some(lang) = Language::from_string(&language.name) {
-                if let Some(_rules) = self.security_rules.get(&lang) {
-                    let source_files = self.collect_source_files(project_root, &language.name)?;
-                    total_files += source_files.len();
-                    language_files.push((language, source_files));
-                }
+            if let Some(lang) = Language::from_string(&language.name)
+                && let Some(_rules) = self.security_rules.get(&lang)
+            {
+                let source_files = self.collect_source_files(project_root, &language.name)?;
+                total_files += source_files.len();
+                language_files.push((language, source_files));
             }
         }
 
@@ -1111,17 +1111,17 @@ impl SecurityAnalyzer {
 
         // Process all languages without progress tracking
         for (language, source_files) in language_files {
-            if let Some(lang) = Language::from_string(&language.name) {
-                if let Some(rules) = self.security_rules.get(&lang) {
-                    let file_findings: Vec<Vec<SecurityFinding>> = source_files
-                        .par_iter()
-                        .map(|file_path| self.analyze_file_with_rules(file_path, rules))
-                        .filter_map(|result| result.ok())
-                        .collect();
+            if let Some(lang) = Language::from_string(&language.name)
+                && let Some(rules) = self.security_rules.get(&lang)
+            {
+                let file_findings: Vec<Vec<SecurityFinding>> = source_files
+                    .par_iter()
+                    .map(|file_path| self.analyze_file_with_rules(file_path, rules))
+                    .filter_map(|result| result.ok())
+                    .collect();
 
-                    for mut file_findings in file_findings {
-                        findings.append(&mut file_findings);
-                    }
+                for mut file_findings in file_findings {
+                    findings.append(&mut file_findings);
                 }
             }
         }
@@ -1131,6 +1131,7 @@ impl SecurityAnalyzer {
     }
 
     /// Analyze infrastructure configurations with appropriate progress tracking
+    #[allow(dead_code)]
     fn analyze_infrastructure_security_with_progress(
         &self,
         project_root: &Path,
@@ -1185,6 +1186,7 @@ impl SecurityAnalyzer {
     }
 
     /// Direct infrastructure security analysis without progress bars
+    #[allow(dead_code)]
     fn analyze_infrastructure_security(
         &self,
         project_root: &Path,
@@ -1242,6 +1244,7 @@ impl SecurityAnalyzer {
     }
 
     /// Analyze framework-specific security configurations with appropriate progress
+    #[allow(dead_code)]
     fn analyze_framework_security_with_progress(
         &self,
         project_root: &Path,
@@ -1311,6 +1314,7 @@ impl SecurityAnalyzer {
     }
 
     /// Direct framework security analysis without progress bars
+    #[allow(dead_code)]
     fn analyze_framework_security(
         &self,
         project_root: &Path,
@@ -1373,7 +1377,7 @@ impl SecurityAnalyzer {
         ];
 
         let mut files = crate::common::file_utils::find_files_by_patterns(project_root, &patterns)
-            .map_err(|e| SecurityError::Io(e))?;
+            .map_err(SecurityError::Io)?;
 
         // Filter out files matching ignore patterns
         files.retain(|file| {
@@ -1513,19 +1517,19 @@ impl SecurityAnalyzer {
 
         // Check if the line matches any legitimate environment variable access pattern
         for pattern_str in &legitimate_env_patterns {
-            if let Ok(pattern) = Regex::new(pattern_str) {
-                if pattern.is_match(line_trimmed) {
-                    // Additional context checks to make sure this is really legitimate
+            if let Ok(pattern) = Regex::new(pattern_str)
+                && pattern.is_match(line_trimmed)
+            {
+                // Additional context checks to make sure this is really legitimate
 
-                    // Check if this is in a server-side context (not client-side)
-                    if self.is_server_side_file(file_path) {
-                        return true;
-                    }
+                // Check if this is in a server-side context (not client-side)
+                if self.is_server_side_file(file_path) {
+                    return true;
+                }
 
-                    // Check if this is NOT a client-side exposed variable
-                    if !self.is_client_side_exposed_env_var(line_trimmed) {
-                        return true;
-                    }
+                // Check if this is NOT a client-side exposed variable
+                if !self.is_client_side_exposed_env_var(line_trimmed) {
+                    return true;
                 }
             }
         }
@@ -1683,10 +1687,10 @@ impl SecurityAnalyzer {
         ];
 
         for pattern_str in &setup_patterns {
-            if let Ok(pattern) = Regex::new(pattern_str) {
-                if pattern.is_match(line) {
-                    return true;
-                }
+            if let Ok(pattern) = Regex::new(pattern_str)
+                && pattern.is_match(line)
+            {
+                return true;
             }
         }
 
@@ -1751,10 +1755,11 @@ impl SecurityAnalyzer {
         }
 
         // Check if it's likely a hex-only string (git commits, checksums)
-        if let Some(potential_hash) = self.extract_potential_hash(line) {
-            if potential_hash.len() >= 32 && self.is_hex_only(&potential_hash) {
-                return true; // Likely a SHA hash
-            }
+        if let Some(potential_hash) = self.extract_potential_hash(line)
+            && potential_hash.len() >= 32
+            && self.is_hex_only(&potential_hash)
+        {
+            return true; // Likely a SHA hash
         }
 
         false
@@ -1762,12 +1767,12 @@ impl SecurityAnalyzer {
 
     fn extract_potential_hash(&self, line: &str) -> Option<String> {
         // Look for quoted strings that might be hashes
-        if let Some(start) = line.find('"') {
-            if let Some(end) = line[start + 1..].find('"') {
-                let potential = &line[start + 1..start + 1 + end];
-                if potential.len() >= 32 {
-                    return Some(potential.to_string());
-                }
+        if let Some(start) = line.find('"')
+            && let Some(end) = line[start + 1..].find('"')
+        {
+            let potential = &line[start + 1..start + 1 + end];
+            if potential.len() >= 32 {
+                return Some(potential.to_string());
             }
         }
         None
@@ -1921,16 +1926,16 @@ impl SecurityAnalyzer {
         match finding.category {
             SecurityCategory::SecretsExposure => {
                 // For secrets, deduplicate based on file path and the actual secret content
-                if let Some(evidence) = &finding.evidence {
-                    if let Some(file_path) = &finding.file_path {
-                        // Extract the secret value from the evidence line
-                        if let Some(secret_value) = self.extract_secret_value(evidence) {
-                            return format!("secret:{}:{}", file_path.display(), secret_value);
-                        }
-                        // Fallback to file + line if we can't extract the value
-                        if let Some(line_num) = finding.line_number {
-                            return format!("secret:{}:{}", file_path.display(), line_num);
-                        }
+                if let Some(evidence) = &finding.evidence
+                    && let Some(file_path) = &finding.file_path
+                {
+                    // Extract the secret value from the evidence line
+                    if let Some(secret_value) = self.extract_secret_value(evidence) {
+                        return format!("secret:{}:{}", file_path.display(), secret_value);
+                    }
+                    // Fallback to file + line if we can't extract the value
+                    if let Some(line_num) = finding.line_number {
+                        return format!("secret:{}:{}", file_path.display(), line_num);
                     }
                 }
                 // Fallback for environment variables or other secrets without file paths
@@ -1938,17 +1943,17 @@ impl SecurityAnalyzer {
             }
             _ => {
                 // For non-secret findings, use file path + line number + title
-                if let Some(file_path) = &finding.file_path {
-                    if let Some(line_num) = finding.line_number {
-                        format!(
-                            "other:{}:{}:{}",
-                            file_path.display(),
-                            line_num,
-                            finding.title
-                        )
-                    } else {
-                        format!("other:{}:{}", file_path.display(), finding.title)
-                    }
+                if let Some(file_path) = &finding.file_path
+                    && let Some(line_num) = finding.line_number
+                {
+                    format!(
+                        "other:{}:{}:{}",
+                        file_path.display(),
+                        line_num,
+                        finding.title
+                    )
+                } else if let Some(file_path) = &finding.file_path {
+                    format!("other:{}:{}", file_path.display(), finding.title)
                 } else {
                     format!("other:{}", finding.title)
                 }
@@ -2094,6 +2099,7 @@ impl SecurityAnalyzer {
         }
     }
 
+    #[allow(dead_code)]
     fn assess_compliance(
         &self,
         _findings: &[SecurityFinding],
@@ -2186,7 +2192,7 @@ mod tests {
 
         // Initialize a real git repo
         let git_init = Command::new("git")
-            .args(&["init"])
+            .args(["init"])
             .current_dir(project_root)
             .output();
 
@@ -2201,19 +2207,19 @@ mod tests {
 
         // Stage and commit .gitignore to make it effective
         let _ = Command::new("git")
-            .args(&["add", ".gitignore"])
+            .args(["add", ".gitignore"])
             .current_dir(project_root)
             .output();
         let _ = Command::new("git")
-            .args(&["config", "user.email", "test@example.com"])
+            .args(["config", "user.email", "test@example.com"])
             .current_dir(project_root)
             .output();
         let _ = Command::new("git")
-            .args(&["config", "user.name", "Test User"])
+            .args(["config", "user.name", "Test User"])
             .current_dir(project_root)
             .output();
         let _ = Command::new("git")
-            .args(&["commit", "-m", "Add gitignore"])
+            .args(["commit", "-m", "Add gitignore"])
             .current_dir(project_root)
             .output();
 

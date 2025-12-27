@@ -358,7 +358,7 @@ fn print_setup_instructions() {
 fn print_version_info(tool_name: &str) {
     use std::process::Command;
     let version_result = match tool_name {
-        "cargo-audit" => Command::new("cargo").args(&["audit", "--version"]).output(),
+        "cargo-audit" => Command::new("cargo").args(["audit", "--version"]).output(),
         "npm" => Command::new("npm").arg("--version").output(),
         "bun" => Command::new("bun").arg("--version").output(),
         "yarn" => Command::new("yarn").arg("--version").output(),
@@ -369,11 +369,11 @@ fn print_version_info(tool_name: &str) {
         _ => return,
     };
 
-    if let Ok(output) = version_result {
-        if output.status.success() {
-            let version = String::from_utf8_lossy(&output.stdout);
-            println!("    Version: {}", version.trim());
-        }
+    if let Ok(output) = version_result
+        && output.status.success()
+    {
+        let version = String::from_utf8_lossy(&output.stdout);
+        println!("    Version: {}", version.trim());
     }
 }
 
@@ -388,19 +388,16 @@ fn print_language_guide(language: &Language, target_platform: &str) {
             println!("\n🌐 JavaScript/TypeScript - Multiple package managers");
             println!("  Bun (recommended for speed):");
             println!("    Install: curl -fsSL https://bun.sh/install | bash");
-            match target_platform {
-                "Windows" => println!("    Windows: irm bun.sh/install.ps1 | iex"),
-                _ => {}
+            if target_platform == "Windows" {
+                println!("    Windows: irm bun.sh/install.ps1 | iex");
             }
             println!("    Usage: bun audit");
             println!("  npm (traditional):");
             println!("    Install: Download Node.js from https://nodejs.org/");
-            match target_platform {
-                "macOS" => println!("    Package manager: brew install node"),
-                "Linux" => {
-                    println!("    Package manager: sudo apt install nodejs npm (Ubuntu/Debian)")
-                }
-                _ => {}
+            if target_platform == "macOS" {
+                println!("    Package manager: brew install node");
+            } else if target_platform == "Linux" {
+                println!("    Package manager: sudo apt install nodejs npm (Ubuntu/Debian)");
             }
             println!("    Usage: npm audit");
             println!("  yarn:");

@@ -325,7 +325,7 @@ fn find_dockerfiles(project_root: &Path) -> Result<Vec<PathBuf>> {
     let mut dockerfiles = Vec::new();
 
     fn collect_dockerfiles_recursive(dir: &Path, dockerfiles: &mut Vec<PathBuf>) -> Result<()> {
-        if dir.file_name().map_or(false, |name| {
+        if dir.file_name().is_some_and(|name| {
             name == "node_modules" || name == ".git" || name == "target" || name == ".next"
         }) {
             return Ok(());
@@ -337,10 +337,10 @@ fn find_dockerfiles(project_root: &Path) -> Result<Vec<PathBuf>> {
 
             if path.is_dir() {
                 collect_dockerfiles_recursive(&path, dockerfiles)?;
-            } else if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                if is_dockerfile_name(filename) {
-                    dockerfiles.push(path);
-                }
+            } else if let Some(filename) = path.file_name().and_then(|n| n.to_str())
+                && is_dockerfile_name(filename)
+            {
+                dockerfiles.push(path);
             }
         }
         Ok(())
@@ -377,7 +377,7 @@ fn find_compose_files(project_root: &Path) -> Result<Vec<PathBuf>> {
     let mut compose_files = Vec::new();
 
     fn collect_compose_files_recursive(dir: &Path, compose_files: &mut Vec<PathBuf>) -> Result<()> {
-        if dir.file_name().map_or(false, |name| {
+        if dir.file_name().is_some_and(|name| {
             name == "node_modules" || name == ".git" || name == "target" || name == ".next"
         }) {
             return Ok(());
@@ -389,10 +389,10 @@ fn find_compose_files(project_root: &Path) -> Result<Vec<PathBuf>> {
 
             if path.is_dir() {
                 collect_compose_files_recursive(&path, compose_files)?;
-            } else if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                if is_compose_file_name(filename) {
-                    compose_files.push(path);
-                }
+            } else if let Some(filename) = path.file_name().and_then(|n| n.to_str())
+                && is_compose_file_name(filename)
+            {
+                compose_files.push(path);
             }
         }
         Ok(())
@@ -500,10 +500,10 @@ fn parse_dockerfile(path: &PathBuf) -> Result<DockerfileInfo> {
         }
 
         // Parse CMD and ENTRYPOINT
-        if let Some(captures) = cmd_regex.captures(line) {
-            if info.entrypoint.is_none() {
-                info.entrypoint = Some(captures.get(1).unwrap().as_str().trim().to_string());
-            }
+        if let Some(captures) = cmd_regex.captures(line)
+            && info.entrypoint.is_none()
+        {
+            info.entrypoint = Some(captures.get(1).unwrap().as_str().trim().to_string());
         }
 
         if let Some(captures) = entrypoint_regex.captures(line) {
@@ -563,14 +563,10 @@ fn parse_compose_file(path: &PathBuf) -> Result<ComposeFileInfo> {
                 info.networks.push(name.to_string());
 
                 // Check if it's external
-                if let Some(config) = network_config.as_mapping() {
-                    if config
-                        .get("external")
-                        .and_then(|e| e.as_bool())
-                        .unwrap_or(false)
-                    {
-                        info.external_dependencies.push(format!("network:{}", name));
-                    }
+                if let Some(config) = network_config.as_mapping()
+                    && config.get("external").and_then(|e| e.as_bool()).unwrap_or(false)
+                {
+                    info.external_dependencies.push(format!("network:{}", name));
                 }
             }
         }
@@ -583,14 +579,10 @@ fn parse_compose_file(path: &PathBuf) -> Result<ComposeFileInfo> {
                 info.volumes.push(name.to_string());
 
                 // Check if it's external
-                if let Some(config) = volume_config.as_mapping() {
-                    if config
-                        .get("external")
-                        .and_then(|e| e.as_bool())
-                        .unwrap_or(false)
-                    {
-                        info.external_dependencies.push(format!("volume:{}", name));
-                    }
+                if let Some(config) = volume_config.as_mapping()
+                    && config.get("external").and_then(|e| e.as_bool()).unwrap_or(false)
+                {
+                    info.external_dependencies.push(format!("volume:{}", name));
                 }
             }
         }
@@ -600,7 +592,7 @@ fn parse_compose_file(path: &PathBuf) -> Result<ComposeFileInfo> {
 }
 
 /// Extracts environment from filename (e.g., "dev" from "dockerfile.dev")
-fn extract_environment_from_filename(path: &PathBuf) -> Option<String> {
+fn extract_environment_from_filename(path: &Path) -> Option<String> {
     if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
         let filename_lower = filename.to_lowercase();
 
@@ -617,13 +609,12 @@ fn extract_environment_from_filename(path: &PathBuf) -> Option<String> {
         };
 
         // Handle patterns like "docker-compose.prod.yml" (env between two dots)
-        if let Some(last_dot) = filename_lower.rfind('.') {
-            let before_ext = &filename_lower[..last_dot];
-            if let Some(env_dot_pos) = before_ext.rfind('.') {
-                let env = &before_ext[env_dot_pos + 1..];
-                if let Some(result) = map_env(env) {
-                    return Some(result);
-                }
+        if let Some(last_dot) = filename_lower.rfind('.')
+            && let Some(env_dot_pos) = filename_lower[..last_dot].rfind('.')
+        {
+            let env = &filename_lower[env_dot_pos + 1..last_dot];
+            if let Some(result) = map_env(env) {
+                return Some(result);
             }
         }
 
@@ -632,10 +623,10 @@ fn extract_environment_from_filename(path: &PathBuf) -> Option<String> {
             let ext = &filename_lower[dot_pos + 1..];
             // Only if the base is dockerfile/docker-compose related
             let base = &filename_lower[..dot_pos];
-            if base.contains("dockerfile") || base.contains("docker-compose") || base == "compose" {
-                if let Some(result) = map_env(ext) {
-                    return Some(result);
-                }
+            if (base.contains("dockerfile") || base.contains("docker-compose") || base == "compose")
+                && let Some(result) = map_env(ext)
+            {
+                return Some(result);
             }
         }
     }
@@ -674,11 +665,11 @@ fn extract_services_from_compose(compose_files: &[ComposeFileInfo]) -> Result<Ve
 fn parse_docker_service(
     name: &str,
     config: &serde_yaml::Mapping,
-    compose_file: &PathBuf,
+    compose_file: &Path,
 ) -> Result<DockerService> {
     let mut service = DockerService {
         name: name.to_string(),
-        compose_file: compose_file.clone(),
+        compose_file: compose_file.to_path_buf(),
         image_or_build: ImageOrBuild::Image("unknown".to_string()),
         ports: Vec::new(),
         environment: HashMap::new(),
@@ -792,24 +783,24 @@ fn parse_docker_service(
     }
 
     // Parse health check
-    if let Some(healthcheck_config) = config.get("healthcheck").and_then(|h| h.as_mapping()) {
-        if let Some(test) = healthcheck_config.get("test").and_then(|t| t.as_str()) {
-            service.health_check = Some(HealthCheck {
-                test: test.to_string(),
-                interval: healthcheck_config
-                    .get("interval")
-                    .and_then(|i| i.as_str())
-                    .map(|s| s.to_string()),
-                timeout: healthcheck_config
-                    .get("timeout")
-                    .and_then(|t| t.as_str())
-                    .map(|s| s.to_string()),
-                retries: healthcheck_config
-                    .get("retries")
-                    .and_then(|r| r.as_u64())
-                    .map(|r| r as u32),
-            });
-        }
+    if let Some(healthcheck_config) = config.get("healthcheck").and_then(|h| h.as_mapping())
+        && let Some(test) = healthcheck_config.get("test").and_then(|t| t.as_str())
+    {
+        service.health_check = Some(HealthCheck {
+            test: test.to_string(),
+            interval: healthcheck_config
+                .get("interval")
+                .and_then(|i| i.as_str())
+                .map(|s| s.to_string()),
+            timeout: healthcheck_config
+                .get("timeout")
+                .and_then(|t| t.as_str())
+                .map(|s| s.to_string()),
+            retries: healthcheck_config
+                .get("retries")
+                .and_then(|r| r.as_u64())
+                .map(|r| r as u32),
+        });
     }
 
     Ok(service)
@@ -867,7 +858,7 @@ fn parse_volume_mount(volume_value: &serde_yaml::Value) -> Option<VolumeMount> {
                 } else {
                     "volume".to_string()
                 },
-                read_only: parts.get(2).map_or(false, |&opt| opt == "ro"),
+                read_only: parts.get(2).is_some_and(|&opt| opt == "ro"),
             });
         }
     }
@@ -928,7 +919,7 @@ fn analyze_networking(
         for network in &service.networks {
             connected_services
                 .entry(network.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(service.name.clone());
         }
     }
@@ -988,7 +979,7 @@ fn determine_orchestration_pattern(
     let has_service_discovery = networking.service_discovery.internal_dns
         || !networking.service_discovery.external_tools.is_empty();
 
-    let has_load_balancing = !networking.load_balancing.is_empty();
+    let _has_load_balancing = !networking.load_balancing.is_empty();
 
     let has_message_queues = services.iter().any(|s| match &s.image_or_build {
         ImageOrBuild::Image(img) => {
@@ -1006,8 +997,6 @@ fn determine_orchestration_pattern(
         OrchestrationPattern::EventDriven
     } else if has_multiple_backends && has_service_discovery {
         OrchestrationPattern::Microservices
-    } else if has_load_balancing || services.len() > 3 {
-        OrchestrationPattern::DockerCompose
     } else {
         OrchestrationPattern::DockerCompose
     }
@@ -1157,16 +1146,14 @@ fn analyze_external_connectivity(services: &[DockerService]) -> ExternalConnecti
         }
 
         // Also check image for API gateway patterns
-        if let ImageOrBuild::Image(image) = &service.image_or_build {
-            if image.contains("kong")
+        if let ImageOrBuild::Image(image) = &service.image_or_build
+            && (image.contains("kong")
                 || image.contains("zuul")
                 || image.contains("ambassador")
-                || image.contains("traefik")
-            {
-                if !api_gateways.contains(&service.name) {
-                    api_gateways.push(service.name.clone());
-                }
-            }
+                || image.contains("traefik"))
+            && !api_gateways.contains(&service.name)
+        {
+            api_gateways.push(service.name.clone());
         }
     }
 

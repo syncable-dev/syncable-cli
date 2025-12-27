@@ -205,8 +205,7 @@ impl Formatter for SarifFormatter {
             }],
         };
 
-        let json = serde_json::to_string_pretty(&report)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let json = serde_json::to_string_pretty(&report).map_err(std::io::Error::other)?;
 
         writeln!(writer, "{}", json)
     }

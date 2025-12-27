@@ -88,10 +88,7 @@ pub fn run_shellcheck(script: &str, shell: &str) -> Vec<ShellCheckComment> {
     // ShellCheck returns exit code 1 if there are warnings, but still outputs valid JSON
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    match serde_json::from_str::<Vec<ShellCheckComment>>(&stdout) {
-        Ok(comments) => comments,
-        Err(_) => Vec::new(),
-    }
+    serde_json::from_str::<Vec<ShellCheckComment>>(&stdout).unwrap_or_default()
 }
 
 /// Check if shellcheck is available on the system.

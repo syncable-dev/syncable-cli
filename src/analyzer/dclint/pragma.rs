@@ -43,10 +43,10 @@ impl PragmaState {
         if self.all_disabled_lines.contains(&line) {
             return true;
         }
-        if let Some(rules) = self.line_disabled.get(&line) {
-            if rules.contains("*") || rules.contains(code.as_str()) {
-                return true;
-            }
+        if let Some(rules) = self.line_disabled.get(&line)
+            && (rules.contains("*") || rules.contains(code.as_str()))
+        {
+            return true;
         }
 
         false
@@ -89,8 +89,8 @@ pub fn extract_pragmas(source: &str) -> PragmaState {
         let comment = trimmed.trim_start_matches('#').trim();
 
         // Check for disable-file (applies to entire file)
-        if comment.starts_with("dclint-disable-file") {
-            let rules = parse_rule_list(&comment["dclint-disable-file".len()..]);
+        if let Some(rest) = comment.strip_prefix("dclint-disable-file") {
+            let rules = parse_rule_list(rest);
             if rules.is_empty() {
                 state.all_disabled = true;
             } else {
@@ -102,8 +102,8 @@ pub fn extract_pragmas(source: &str) -> PragmaState {
         }
 
         // Check for disable-next-line
-        if comment.starts_with("dclint-disable-next-line") {
-            let rules = parse_rule_list(&comment["dclint-disable-next-line".len()..]);
+        if let Some(rest) = comment.strip_prefix("dclint-disable-next-line") {
+            let rules = parse_rule_list(rest);
             let next_line = line_num + 1;
 
             if rules.is_empty() {

@@ -280,7 +280,7 @@ fn display_projects_matrix(analysis: &MonorepoAnalysis) {
     }
 
     // Calculate column widths based on content
-    let headers = vec![
+    let headers = [
         "Project",
         "Type",
         "Languages",
@@ -317,7 +317,7 @@ fn display_projects_matrix(analysis: &MonorepoAnalysis) {
 
     // Add data rows
     for (name, proj_type, languages, main_tech, ports, docker, deps_count) in project_data {
-        let row_parts = vec![
+        let row_parts = [
             format!("{:<width$}", name, width = col_widths[0]),
             format!("{:<width$}", proj_type, width = col_widths[1]),
             format!("{:<width$}", languages, width = col_widths[2]),
@@ -385,7 +385,7 @@ fn display_projects_matrix_to_string(analysis: &MonorepoAnalysis) -> String {
     }
 
     // Calculate column widths based on content
-    let headers = vec![
+    let headers = [
         "Project",
         "Type",
         "Languages",
@@ -422,7 +422,7 @@ fn display_projects_matrix_to_string(analysis: &MonorepoAnalysis) -> String {
 
     // Add data rows
     for (name, proj_type, languages, main_tech, ports, docker, deps_count) in project_data {
-        let row_parts = vec![
+        let row_parts = [
             format!("{:<width$}", name, width = col_widths[0]),
             format!("{:<width$}", proj_type, width = col_widths[1]),
             format!("{:<width$}", languages, width = col_widths[2]),
@@ -448,7 +448,7 @@ fn display_single_project_matrix(analysis: &MonorepoAnalysis) {
         box_drawer.add_line("Name:", &colors.primary(&project.name), true);
         box_drawer.add_line(
             "Type:",
-            &colors.secondary(&format_project_category(&project.project_category)),
+            &colors.secondary(format_project_category(&project.project_category)),
             true,
         );
 
@@ -515,7 +515,7 @@ fn display_single_project_matrix_to_string(analysis: &MonorepoAnalysis) -> Strin
         box_drawer.add_line("Name:", &colors.primary(&project.name), true);
         box_drawer.add_line(
             "Type:",
-            &colors.secondary(&format_project_category(&project.project_category)),
+            &colors.secondary(format_project_category(&project.project_category)),
             true,
         );
 
@@ -718,10 +718,10 @@ fn display_metrics_box(analysis: &MonorepoAnalysis) {
 
     // Create metrics line without emojis first to avoid width calculation issues
     let metrics_line = format!(
-        "Duration: {} | Files: {} | Score: {}% | Version: {}",
+        "Duration: {} | Files: {} | Score: {:.0}% | Version: {}",
         duration_str,
         analysis.metadata.files_analyzed,
-        format!("{:.0}", analysis.metadata.confidence_score * 100.0),
+        analysis.metadata.confidence_score * 100.0,
         analysis.metadata.analyzer_version
     );
 
@@ -747,10 +747,10 @@ fn display_metrics_box_to_string(analysis: &MonorepoAnalysis) -> String {
 
     // Create metrics line
     let metrics_line = format!(
-        "Duration: {} | Files: {} | Score: {}% | Version: {}",
+        "Duration: {} | Files: {} | Score: {:.0}% | Version: {}",
         duration_str,
         analysis.metadata.files_analyzed,
-        format!("{:.0}", analysis.metadata.confidence_score * 100.0),
+        analysis.metadata.confidence_score * 100.0,
         analysis.metadata.analyzer_version
     );
 

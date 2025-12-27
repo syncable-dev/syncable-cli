@@ -301,14 +301,13 @@ impl SecretPatternManager {
             GenericPattern {
                 id: "bearer-token".to_string(),
                 name: "Bearer Token".to_string(),
-                // More specific - exclude template literals and ensure it's a real assignment
+                // More specific - ensure it's a real assignment with a token value
                 pattern: Regex::new(
-                    r#"(?i)(?:authorization|bearer)\s*[:=]\s*["'](?:bearer\s+)?([A-Za-z0-9_-]{32,})["'](?!\s*\$\{)"#,
+                    r#"(?i)(?:authorization|bearer)\s*[:=]\s*["'](?:bearer\s+)?([A-Za-z0-9_-]{32,})["']"#,
                 )?,
                 severity: SecuritySeverity::Critical,
                 category: SecurityCategory::SecretsExposure,
-                description: "Bearer token in authorization header (excluding templates)"
-                    .to_string(),
+                description: "Bearer token in authorization header".to_string(),
             },
             GenericPattern {
                 id: "jwt-token".to_string(),

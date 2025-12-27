@@ -2,6 +2,7 @@ use crate::analyzer::dependency_parser::Language;
 use crate::analyzer::tool_management::{InstallationSource, ToolDetector};
 
 /// Handles reporting and display of tool status information
+#[derive(Default)]
 pub struct ToolStatusReporter {
     tool_detector: ToolDetector,
 }

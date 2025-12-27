@@ -22,13 +22,11 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
                         return true;
                     }
 
-                    let has_clean = shell.any_command(|cmd| {
+                    shell.any_command(|cmd| {
                         (cmd.name == "dnf" && cmd.has_any_arg(&["clean"]))
                             || (cmd.name == "rm"
                                 && cmd.arguments.iter().any(|a| a.contains("/var/cache/dnf")))
-                    });
-
-                    has_clean
+                    })
                 } else {
                     true
                 }

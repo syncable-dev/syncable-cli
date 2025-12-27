@@ -37,18 +37,17 @@ impl ColorAdapter {
     /// Detect terminal background based on environment variables and heuristics
     fn detect_terminal_background() -> ColorScheme {
         // Check COLORFGBG environment variable (format: "foreground;background")
-        if let Ok(colorfgbg) = env::var("COLORFGBG") {
-            if let Some(bg_str) = colorfgbg.split(';').nth(1) {
-                if let Ok(bg_code) = bg_str.parse::<u8>() {
-                    // Background colors 0-6 are dark, 7-15 are light/bright
-                    // Be more aggressive about detecting light backgrounds
-                    return if bg_code >= 7 {
-                        ColorScheme::Light
-                    } else {
-                        ColorScheme::Dark
-                    };
-                }
-            }
+        if let Ok(colorfgbg) = env::var("COLORFGBG")
+            && let Some(bg_str) = colorfgbg.split(';').nth(1)
+            && let Ok(bg_code) = bg_str.parse::<u8>()
+        {
+            // Background colors 0-6 are dark, 7-15 are light/bright
+            // Be more aggressive about detecting light backgrounds
+            return if bg_code >= 7 {
+                ColorScheme::Light
+            } else {
+                ColorScheme::Dark
+            };
         }
 
         // Check for common light terminal setups
@@ -136,12 +135,12 @@ impl ColorAdapter {
         // But add a bias toward light for macOS users
         #[cfg(target_os = "macos")]
         {
-            return ColorScheme::Light; // macOS Terminal.app default is light
+            ColorScheme::Light // macOS Terminal.app default is light
         }
 
         #[cfg(not(target_os = "macos"))]
         {
-            return ColorScheme::Dark; // Most other platforms default to dark
+            ColorScheme::Dark // Most other platforms default to dark
         }
     }
 

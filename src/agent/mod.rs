@@ -305,7 +305,7 @@ pub async fn run_interactive(
         // MAX_TOOL_CALLS is the absolute maximum (300 = 6 checkpoints x 50)
         const MAX_RETRIES: u32 = 3;
         const MAX_CONTINUATIONS: u32 = 10;
-        const TOOL_CALL_CHECKPOINT: usize = 50;
+        const _TOOL_CALL_CHECKPOINT: usize = 50;
         const MAX_TOOL_CALLS: usize = 300;
         let mut retry_attempt = 0;
         let mut continuation_count = 0;
@@ -317,10 +317,7 @@ pub async fn run_interactive(
         while retry_attempt < MAX_RETRIES && continuation_count < MAX_CONTINUATIONS && !succeeded {
             // Log if this is a continuation attempt
             if continuation_count > 0 {
-                eprintln!(
-                    "{}",
-                    format!("  📡 Sending continuation request...").dimmed()
-                );
+                eprintln!("{}", "  📡 Sending continuation request...".dimmed());
             }
 
             // Create hook for Claude Code style tool display
@@ -607,7 +604,7 @@ pub async fn run_interactive(
                     let model_short = session
                         .model
                         .split('/')
-                        .last()
+                        .next_back()
                         .unwrap_or(&session.model)
                         .split(':')
                         .next()
@@ -1203,14 +1200,12 @@ fn find_most_recent_plan_file() -> Option<String> {
 
     for entry in std::fs::read_dir(&plans_dir).ok()?.flatten() {
         let path = entry.path();
-        if path.extension().map(|e| e == "md").unwrap_or(false) {
-            if let Ok(metadata) = entry.metadata() {
-                if let Ok(modified) = metadata.modified() {
-                    if newest.as_ref().map(|(_, t)| modified > *t).unwrap_or(true) {
-                        newest = Some((path, modified));
-                    }
-                }
-            }
+        if path.extension().is_some_and(|e| e == "md")
+            && let Ok(metadata) = entry.metadata()
+            && let Ok(modified) = metadata.modified()
+            && newest.as_ref().map(|(_, t)| modified > *t).unwrap_or(true)
+        {
+            newest = Some((path, modified));
         }
     }
 
@@ -1356,13 +1351,11 @@ fn build_continuation_prompt(
     }
 
     // Include last thinking context if available
-    if !agent_thinking.is_empty() {
-        if let Some(last_thought) = agent_thinking.last() {
-            prompt.push_str(&format!(
-                "\n== YOUR LAST THOUGHTS ==\n\"{}\"\n",
-                truncate_string(last_thought, 300)
-            ));
-        }
+    if let Some(last_thought) = agent_thinking.last() {
+        prompt.push_str(&format!(
+            "\n== YOUR LAST THOUGHTS ==\n\"{}\"\n",
+            truncate_string(last_thought, 300)
+        ));
     }
 
     prompt.push_str("\n== INSTRUCTIONS ==\n");

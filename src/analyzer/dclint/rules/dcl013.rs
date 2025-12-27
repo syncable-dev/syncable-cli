@@ -70,7 +70,7 @@ fn fix(source: &str) -> Option<String> {
     let mut modified = false;
     let mut in_ports_section = false;
     let mut ports_indent = 0;
-    let mut service_indent = 0;
+    let mut _service_indent = 0;
     let mut ports: Vec<(String, String)> = Vec::new(); // (raw, full line)
 
     for line in source.lines() {
@@ -78,10 +78,13 @@ fn fix(source: &str) -> Option<String> {
         let indent = line.len() - line.trim_start().len();
 
         // Track service indent level
-        if !trimmed.is_empty() && !trimmed.starts_with('#') && !trimmed.starts_with('-') {
-            if trimmed.ends_with(':') && indent == 2 {
-                service_indent = indent;
-            }
+        if !trimmed.is_empty()
+            && !trimmed.starts_with('#')
+            && !trimmed.starts_with('-')
+            && trimmed.ends_with(':')
+            && indent == 2
+        {
+            _service_indent = indent;
         }
 
         // Track if we're in a ports section

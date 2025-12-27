@@ -69,14 +69,14 @@ impl ToolDetector {
         }
 
         // Check cache first
-        if let Some(cached) = self.cache.get(tool_name) {
-            if cached.last_checked.elapsed().unwrap_or(Duration::MAX) < self.config.cache_ttl {
-                debug!(
-                    "Using cached status for {}: available={}",
-                    tool_name, cached.available
-                );
-                return cached.clone();
-            }
+        if let Some(cached) = self.cache.get(tool_name)
+            && cached.last_checked.elapsed().unwrap_or(Duration::MAX) < self.config.cache_ttl
+        {
+            debug!(
+                "Using cached status for {}: available={}",
+                tool_name, cached.available
+            );
+            return cached.clone();
         }
 
         // Perform real detection
@@ -154,16 +154,15 @@ impl ToolDetector {
         alternatives: &[&str],
     ) -> ToolStatus {
         // Check cache first for primary name
-        if self.config.enable_cache {
-            if let Some(cached) = self.cache.get(primary_name) {
-                if cached.last_checked.elapsed().unwrap_or(Duration::MAX) < self.config.cache_ttl {
-                    debug!(
-                        "Using cached status for {}: available={}",
-                        primary_name, cached.available
-                    );
-                    return cached.clone();
-                }
-            }
+        if self.config.enable_cache
+            && let Some(cached) = self.cache.get(primary_name)
+            && cached.last_checked.elapsed().unwrap_or(Duration::MAX) < self.config.cache_ttl
+        {
+            debug!(
+                "Using cached status for {}: available={}",
+                primary_name, cached.available
+            );
+            return cached.clone();
         }
 
         // Try each alternative
@@ -288,18 +287,18 @@ impl ToolDetector {
         }
 
         // User-specific paths
-        if self.config.search_user_paths {
-            if let Ok(home) = std::env::var("HOME") {
-                let home_path = PathBuf::from(home);
+        if self.config.search_user_paths
+            && let Ok(home) = std::env::var("HOME")
+        {
+            let home_path = PathBuf::from(home);
 
-                // Common user install locations
-                paths.push(home_path.join(".local").join("bin"));
-                paths.push(home_path.join(".cargo").join("bin"));
-                paths.push(home_path.join("go").join("bin"));
+            // Common user install locations
+            paths.push(home_path.join(".local").join("bin"));
+            paths.push(home_path.join(".cargo").join("bin"));
+            paths.push(home_path.join("go").join("bin"));
 
-                // Tool-specific locations
-                self.add_tool_specific_paths(tool_name, &home_path, &mut paths);
-            }
+            // Tool-specific locations
+            self.add_tool_specific_paths(tool_name, &home_path, &mut paths);
 
             // Windows-specific paths
             #[cfg(windows)]
@@ -337,7 +336,7 @@ impl ToolDetector {
     fn add_tool_specific_paths(
         &self,
         tool_name: &str,
-        home_path: &PathBuf,
+        home_path: &Path,
         paths: &mut Vec<PathBuf>,
     ) {
         match tool_name {
@@ -361,20 +360,18 @@ impl ToolDetector {
             "pip-audit" => {
                 paths.push(home_path.join(".local").join("bin"));
                 if let Ok(output) = Command::new("python3")
-                    .args(&["-m", "site", "--user-base"])
+                    .args(["--", "site", "--user-base"])
                     .output()
+                    && let Ok(user_base) = String::from_utf8(output.stdout)
                 {
-                    if let Ok(user_base) = String::from_utf8(output.stdout) {
-                        paths.push(PathBuf::from(user_base.trim()).join("bin"));
-                    }
+                    paths.push(PathBuf::from(user_base.trim()).join("bin"));
                 }
                 if let Ok(output) = Command::new("python")
-                    .args(&["-m", "site", "--user-base"])
+                    .args(["-m", "site", "--user-base"])
                     .output()
+                    && let Ok(user_base) = String::from_utf8(output.stdout)
                 {
-                    if let Ok(user_base) = String::from_utf8(output.stdout) {
-                        paths.push(PathBuf::from(user_base.trim()).join("bin"));
-                    }
+                    paths.push(PathBuf::from(user_base.trim()).join("bin"));
                 }
             }
             "bun" | "bunx" => {
@@ -419,13 +416,13 @@ impl ToolDetector {
         }
 
         // For some tools, stderr might contain version info even on non-zero exit
-        if !output.stderr.is_empty() {
-            if let Some(version) = self.parse_version_output(&output.stderr, tool_name) {
-                let path = self
-                    .find_tool_path(tool_name)
-                    .unwrap_or_else(|| PathBuf::from(tool_name));
-                return Some((path, Some(version)));
-            }
+        if !output.stderr.is_empty()
+            && let Some(version) = self.parse_version_output(&output.stderr, tool_name)
+        {
+            let path = self
+                .find_tool_path(tool_name)
+                .unwrap_or_else(|| PathBuf::from(tool_name));
+            return Some((path, Some(version)));
         }
 
         None
@@ -483,26 +480,25 @@ impl ToolDetector {
         match tool_name {
             "cargo-audit" => {
                 for line in output_str.lines() {
-                    if line.contains("cargo-audit") {
-                        if let Some(version) = line.split_whitespace().nth(1) {
-                            return Some(version.to_string());
-                        }
+                    if line.contains("cargo-audit")
+                        && let Some(version) = line.split_whitespace().nth(1)
+                    {
+                        return Some(version.to_string());
                     }
                 }
             }
             "grype" => {
                 for line in output_str.lines() {
-                    if line.trim_start().starts_with("grype") {
-                        if let Some(version) = line.split_whitespace().nth(1) {
-                            return Some(version.to_string());
-                        }
+                    if line.trim_start().starts_with("grype")
+                        && let Some(version) = line.split_whitespace().nth(1)
+                    {
+                        return Some(version.to_string());
                     }
-                    if line.contains("\"version\"") {
-                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
-                            if let Some(version) = json.get("version").and_then(|v| v.as_str()) {
-                                return Some(version.to_string());
-                            }
-                        }
+                    if line.contains("\"version\"")
+                        && let Ok(json) = serde_json::from_str::<serde_json::Value>(line)
+                        && let Some(version) = json.get("version").and_then(|v| v.as_str())
+                    {
+                        return Some(version.to_string());
                     }
                 }
             }
@@ -514,10 +510,10 @@ impl ToolDetector {
                             return Some(version.trim_start_matches('v').to_string());
                         }
                     }
-                    if line.contains("govulncheck") {
-                        if let Some(version) = line.split_whitespace().nth(1) {
-                            return Some(version.trim_start_matches('v').to_string());
-                        }
+                    if line.contains("govulncheck")
+                        && let Some(version) = line.split_whitespace().nth(1)
+                    {
+                        return Some(version.trim_start_matches('v').to_string());
                     }
                 }
             }
@@ -532,10 +528,10 @@ impl ToolDetector {
             "bun" | "bunx" => {
                 for line in output_str.lines() {
                     let line = line.trim();
-                    if line.starts_with("bun ") {
-                        if let Some(version) = line.split_whitespace().nth(1) {
-                            return Some(version.to_string());
-                        }
+                    if line.starts_with("bun ")
+                        && let Some(version) = line.split_whitespace().nth(1)
+                    {
+                        return Some(version.to_string());
                     }
                     if let Some(version) = extract_version_generic(line) {
                         return Some(version);
@@ -544,10 +540,10 @@ impl ToolDetector {
             }
             "pip-audit" => {
                 for line in output_str.lines() {
-                    if line.contains("pip-audit") {
-                        if let Some(version) = line.split_whitespace().nth(1) {
-                            return Some(version.to_string());
-                        }
+                    if line.contains("pip-audit")
+                        && let Some(version) = line.split_whitespace().nth(1)
+                    {
+                        return Some(version.to_string());
                     }
                 }
                 if let Some(version) = extract_version_generic(&output_str) {
@@ -594,28 +590,28 @@ impl ToolDetector {
     fn find_tool_path(&self, tool_name: &str) -> Option<PathBuf> {
         #[cfg(unix)]
         {
-            if let Ok(output) = Command::new("which").arg(tool_name).output() {
-                if output.status.success() {
-                    let output_str = String::from_utf8_lossy(&output.stdout);
-                    let path_str = output_str.trim();
-                    if !path_str.is_empty() {
-                        return Some(PathBuf::from(path_str));
-                    }
+            if let Ok(output) = Command::new("which").arg(tool_name).output()
+                && output.status.success()
+            {
+                let output_str = String::from_utf8_lossy(&output.stdout);
+                let path_str = output_str.trim();
+                if !path_str.is_empty() {
+                    return Some(PathBuf::from(path_str));
                 }
             }
         }
 
         #[cfg(windows)]
         {
-            if let Ok(output) = Command::new("where").arg(tool_name).output() {
-                if output.status.success() {
-                    let output_str = String::from_utf8_lossy(&output.stdout);
-                    let path_str = output_str.trim();
-                    if let Some(first_path) = path_str.lines().next() {
-                        if !first_path.is_empty() {
-                            return Some(PathBuf::from(first_path));
-                        }
-                    }
+            if let Ok(output) = Command::new("where").arg(tool_name).output()
+                && output.status.success()
+            {
+                let output_str = String::from_utf8_lossy(&output.stdout);
+                let path_str = output_str.trim();
+                if let Some(first_path) = path_str.lines().next()
+                    && !first_path.is_empty()
+                {
+                    return Some(PathBuf::from(first_path));
                 }
             }
         }
@@ -641,14 +637,13 @@ fn extract_version_generic(text: &str) -> Option<String> {
     ];
 
     for pattern in patterns {
-        if let Ok(re) = Regex::new(pattern) {
-            if let Some(captures) = re.captures(text) {
-                if let Some(version) = captures.get(1) {
-                    let version_str = version.as_str();
-                    if !version_str.starts_with("127.") && !version_str.starts_with("192.") {
-                        return Some(version_str.to_string());
-                    }
-                }
+        if let Ok(re) = Regex::new(pattern)
+            && let Some(captures) = re.captures(text)
+            && let Some(version) = captures.get(1)
+        {
+            let version_str = version.as_str();
+            if !version_str.starts_with("127.") && !version_str.starts_with("192.") {
+                return Some(version_str.to_string());
             }
         }
     }

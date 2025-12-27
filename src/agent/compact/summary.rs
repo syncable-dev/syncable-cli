@@ -315,7 +315,7 @@ pub fn extract_assistant_action(response: &str, max_len: usize) -> String {
 
     // Take first sentence or line
     let first_part = response
-        .split(|c| c == '.' || c == '\n')
+        .split(['.', '\n'])
         .next()
         .unwrap_or(response);
 
