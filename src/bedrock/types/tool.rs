@@ -60,7 +60,7 @@ mod tests {
         message::{DocumentSourceKind, Image, ImageMediaType, Text, ToolResultContent},
     };
 
-    use crate::types::tool::RigToolResultContent;
+    use super::RigToolResultContent;
 
     #[test]
     fn rig_tool_text_to_aws_tool() {

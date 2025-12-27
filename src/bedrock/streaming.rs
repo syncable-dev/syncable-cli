@@ -1,5 +1,5 @@
-use crate::types::completion_request::AwsCompletionRequest;
-use crate::{completion::CompletionModel, types::errors::AwsSdkConverseStreamError};
+use super::types::completion_request::AwsCompletionRequest;
+use super::{completion::CompletionModel, types::errors::AwsSdkConverseStreamError};
 use async_stream::stream;
 use aws_sdk_bedrockruntime::types as aws_bedrock;
 use rig::completion::GetTokenUsage;

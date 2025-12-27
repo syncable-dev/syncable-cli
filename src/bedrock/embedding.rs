@@ -2,7 +2,7 @@ use aws_smithy_types::Blob;
 use rig::embeddings::{self, Embedding, EmbeddingError};
 use serde::{Deserialize, Serialize};
 
-use crate::{client::Client, types::errors::AwsSdkInvokeModelError};
+use super::{client::Client, types::errors::AwsSdkInvokeModelError};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
