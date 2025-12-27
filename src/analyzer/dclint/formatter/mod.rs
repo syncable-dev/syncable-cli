@@ -220,10 +220,7 @@ mod tests {
     fn test_output_format_from_str() {
         assert_eq!(OutputFormat::parse("json"), Some(OutputFormat::Json));
         assert_eq!(OutputFormat::parse("JSON"), Some(OutputFormat::Json));
-        assert_eq!(
-            OutputFormat::parse("stylish"),
-            Some(OutputFormat::Stylish)
-        );
+        assert_eq!(OutputFormat::parse("stylish"), Some(OutputFormat::Stylish));
         assert_eq!(OutputFormat::parse("github"), Some(OutputFormat::GitHub));
         assert_eq!(OutputFormat::parse("invalid"), None);
     }

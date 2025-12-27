@@ -333,12 +333,7 @@ impl ToolDetector {
         paths.into_iter().filter(|p| p.exists()).collect()
     }
 
-    fn add_tool_specific_paths(
-        &self,
-        tool_name: &str,
-        home_path: &Path,
-        paths: &mut Vec<PathBuf>,
-    ) {
+    fn add_tool_specific_paths(&self, tool_name: &str, home_path: &Path, paths: &mut Vec<PathBuf>) {
         match tool_name {
             "cargo-audit" => {
                 paths.push(home_path.join(".cargo").join("bin"));

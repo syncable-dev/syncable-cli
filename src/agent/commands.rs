@@ -597,12 +597,7 @@ fn show_simple_picker(picker: &CommandPicker) -> Option<String> {
     println!();
 
     for (i, cmd) in picker.filtered_commands.iter().enumerate() {
-        print!(
-            "  [{}] {}/{:<12}",
-            i + 1,
-            ansi::PURPLE,
-            cmd.name
-        );
+        print!("  [{}] {}/{:<12}", i + 1, ansi::PURPLE, cmd.name);
         if let Some(alias) = cmd.alias {
             print!(" ({})", alias);
         }

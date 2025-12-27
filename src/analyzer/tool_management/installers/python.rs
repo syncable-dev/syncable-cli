@@ -26,10 +26,7 @@ pub fn install_pip_audit(
         debug!("Trying installation command: {} {}", cmd, args.join(" "));
 
         if InstallationUtils::is_command_available(cmd)
-            && let Ok(success) = InstallationUtils::execute_command(
-                cmd,
-                &args.to_vec(),
-            )
+            && let Ok(success) = InstallationUtils::execute_command(cmd, &args.to_vec())
             && success
         {
             info!("✅ pip-audit installed successfully using {}", cmd);

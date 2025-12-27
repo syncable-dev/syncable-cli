@@ -568,13 +568,11 @@ impl IdeClient {
                         let total_errors = diagnostics
                             .iter()
                             .filter(|d| d.severity == DiagnosticSeverity::Error)
-                            .count()
-                            as u32;
+                            .count() as u32;
                         let total_warnings = diagnostics
                             .iter()
                             .filter(|d| d.severity == DiagnosticSeverity::Warning)
-                            .count()
-                            as u32;
+                            .count() as u32;
                         return Ok(DiagnosticsResponse {
                             diagnostics,
                             total_errors,

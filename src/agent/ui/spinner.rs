@@ -194,7 +194,7 @@ async fn run_spinner(
                 if has_printed_tool_line {
                     // Move up to tool line, update it, move back down to spinner line
                     if let Some(ref tool) = current_tool {
-                        print!("{}{}  {}🔧 {}{}\n", // Move back down
+                        println!("{}{}  {}🔧 {}{}", // Move back down
                             ansi::CURSOR_UP,
                             ansi::CLEAR_LINE,
                             ansi::PURPLE,

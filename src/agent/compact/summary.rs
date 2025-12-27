@@ -314,10 +314,7 @@ pub fn extract_assistant_action(response: &str, max_len: usize) -> String {
     let response = response.trim();
 
     // Take first sentence or line
-    let first_part = response
-        .split(['.', '\n'])
-        .next()
-        .unwrap_or(response);
+    let first_part = response.split(['.', '\n']).next().unwrap_or(response);
 
     truncate(first_part, max_len)
 }

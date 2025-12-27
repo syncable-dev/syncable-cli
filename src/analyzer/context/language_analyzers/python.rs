@@ -49,10 +49,7 @@ pub(crate) fn analyze_python_project(
                     (script_cap.get(1), script_cap.get(2), script_cap.get(3))
                 {
                     entry_points.push(EntryPoint {
-                        file: PathBuf::from(format!(
-                            "{}.py",
-                            module.as_str().replace('.', "/")
-                        )),
+                        file: PathBuf::from(format!("{}.py", module.as_str().replace('.', "/"))),
                         function: Some(func.as_str().to_string()),
                         command: Some(name.as_str().to_string()),
                     });

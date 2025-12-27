@@ -557,7 +557,10 @@ impl FileScanner {
 
         // Downgrade severity for known public/client-side keys in specific files.
         if (filename == "GoogleService-Info.plist" || filename.ends_with(".plist"))
-            && matches!(severity, SecuritySeverity::Critical | SecuritySeverity::High)
+            && matches!(
+                severity,
+                SecuritySeverity::Critical | SecuritySeverity::High
+            )
         {
             return SecuritySeverity::Medium; // It's a client-side key, less critical.
         }

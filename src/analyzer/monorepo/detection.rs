@@ -191,9 +191,7 @@ fn directory_contains_code(path: &Path) -> Result<bool> {
             }
 
             // Recursively check subdirectories (limited depth)
-            if entry.file_type()?.is_dir()
-                && directory_contains_code(&entry.path())?
-            {
+            if entry.file_type()?.is_dir() && directory_contains_code(&entry.path())? {
                 return Ok(true);
             }
         }

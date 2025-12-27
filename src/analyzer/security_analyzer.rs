@@ -1032,37 +1032,36 @@ impl SecurityAnalyzer {
                 && let Some(rules) = self.security_rules.get(&lang)
             {
                 let file_findings: Vec<Vec<SecurityFinding>> = source_files
-                        .par_iter()
-                        .map(|file_path| {
-                            let result = self.analyze_file_with_rules(file_path, rules);
+                    .par_iter()
+                    .map(|file_path| {
+                        let result = self.analyze_file_with_rules(file_path, rules);
 
-                            // Update progress only in non-verbose mode
-                            if let Some(ref pb) = code_pb {
-                                let current = processed_count.fetch_add(1, Ordering::Relaxed) + 1;
-                                if let Some(file_name) =
-                                    file_path.file_name().and_then(|n| n.to_str())
-                                {
-                                    let display_name = if file_name.len() > 25 {
-                                        format!("...{}", &file_name[file_name.len() - 22..])
-                                    } else {
-                                        file_name.to_string()
-                                    };
-                                    pb.set_message(format!(
-                                        "Scanning {} ({})",
-                                        display_name, language.name
-                                    ));
-                                }
-                                pb.set_position(current as u64);
+                        // Update progress only in non-verbose mode
+                        if let Some(ref pb) = code_pb {
+                            let current = processed_count.fetch_add(1, Ordering::Relaxed) + 1;
+                            if let Some(file_name) = file_path.file_name().and_then(|n| n.to_str())
+                            {
+                                let display_name = if file_name.len() > 25 {
+                                    format!("...{}", &file_name[file_name.len() - 22..])
+                                } else {
+                                    file_name.to_string()
+                                };
+                                pb.set_message(format!(
+                                    "Scanning {} ({})",
+                                    display_name, language.name
+                                ));
                             }
+                            pb.set_position(current as u64);
+                        }
 
-                            result
-                        })
-                        .filter_map(|result| result.ok())
-                        .collect();
+                        result
+                    })
+                    .filter_map(|result| result.ok())
+                    .collect();
 
-                    for mut file_findings in file_findings {
-                        findings.append(&mut file_findings);
-                    }
+                for mut file_findings in file_findings {
+                    findings.append(&mut file_findings);
+                }
             }
         }
 

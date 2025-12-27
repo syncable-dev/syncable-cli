@@ -261,8 +261,7 @@ impl DependencyParser {
                         name: name.to_string(),
                         version: version.to_string(),
                         dep_type,
-                        license: detect_rust_license(name)
-                            .unwrap_or_else(|| "Unknown".to_string()),
+                        license: detect_rust_license(name).unwrap_or_else(|| "Unknown".to_string()),
                         source: Some("crates.io".to_string()),
                         language: Language::Rust,
                     });
@@ -352,7 +351,9 @@ impl DependencyParser {
         // Parse regular dependencies
         if let Some(dependencies) = parsed.get("dependencies").and_then(|d| d.as_object()) {
             for (name, version) in dependencies {
-                let Some(ver_str) = version.as_str() else { continue };
+                let Some(ver_str) = version.as_str() else {
+                    continue;
+                };
                 deps.push(DependencyInfo {
                     name: name.clone(),
                     version: ver_str.to_string(),
@@ -367,7 +368,9 @@ impl DependencyParser {
         // Parse dev dependencies
         if let Some(dev_deps) = parsed.get("devDependencies").and_then(|d| d.as_object()) {
             for (name, version) in dev_deps {
-                let Some(ver_str) = version.as_str() else { continue };
+                let Some(ver_str) = version.as_str() else {
+                    continue;
+                };
                 deps.push(DependencyInfo {
                     name: name.clone(),
                     version: ver_str.to_string(),
@@ -455,7 +458,9 @@ impl DependencyParser {
                 {
                     debug!("Found PEP 621 dependencies in pyproject.toml");
                     for dep in project_deps {
-                        let Some(dep_str) = dep.as_str() else { continue };
+                        let Some(dep_str) = dep.as_str() else {
+                            continue;
+                        };
                         let (name, version) = self.parse_python_requirement_spec(dep_str);
                         deps.push(DependencyInfo {
                             name: name.clone(),
@@ -477,10 +482,14 @@ impl DependencyParser {
                 {
                     debug!("Found PEP 621 optional dependencies in pyproject.toml");
                     for (group_name, group_deps) in optional_deps {
-                        let Some(deps_array) = group_deps.as_array() else { continue };
+                        let Some(deps_array) = group_deps.as_array() else {
+                            continue;
+                        };
                         let is_dev = group_name.contains("dev") || group_name.contains("test");
                         for dep in deps_array {
-                            let Some(dep_str) = dep.as_str() else { continue };
+                            let Some(dep_str) = dep.as_str() else {
+                                continue;
+                            };
                             let (name, version) = self.parse_python_requirement_spec(dep_str);
                             deps.push(DependencyInfo {
                                 name: name.clone(),
@@ -508,9 +517,13 @@ impl DependencyParser {
                 {
                     debug!("Found PDM dev dependencies in pyproject.toml");
                     for (_group_name, group_deps) in pdm_deps {
-                        let Some(deps_array) = group_deps.as_array() else { continue };
+                        let Some(deps_array) = group_deps.as_array() else {
+                            continue;
+                        };
                         for dep in deps_array {
-                            let Some(dep_str) = dep.as_str() else { continue };
+                            let Some(dep_str) = dep.as_str() else {
+                                continue;
+                            };
                             let (name, version) = self.parse_python_requirement_spec(dep_str);
                             deps.push(DependencyInfo {
                                 name: name.clone(),
@@ -535,7 +548,9 @@ impl DependencyParser {
                 {
                     debug!("Found setuptools dependencies in pyproject.toml");
                     for dep in setuptools_deps {
-                        let Some(dep_str) = dep.as_str() else { continue };
+                        let Some(dep_str) = dep.as_str() else {
+                            continue;
+                        };
                         let (name, version) = self.parse_python_requirement_spec(dep_str);
                         deps.push(DependencyInfo {
                             name: name.clone(),
@@ -1097,9 +1112,7 @@ impl DependencyParser {
                 || trimmed.starts_with("testImplementation ")
                 || trimmed.starts_with("testCompile ");
 
-            if is_dependency
-                && let Some(dep_str) = extract_gradle_dependency(trimmed)
-            {
+            if is_dependency && let Some(dep_str) = extract_gradle_dependency(trimmed) {
                 let parts: Vec<&str> = dep_str.split(':').collect();
                 if parts.len() >= 3 {
                     let group_id = parts[0];
@@ -1723,9 +1736,7 @@ fn parse_jvm_dependencies(project_root: &Path) -> Result<DependencyMap> {
                 || trimmed.starts_with("testImplementation")
                 || trimmed.starts_with("testCompile");
 
-            if is_dep
-                && let Some(dep_str) = extract_gradle_dependency(trimmed)
-            {
+            if is_dep && let Some(dep_str) = extract_gradle_dependency(trimmed) {
                 let parts: Vec<&str> = dep_str.split(':').collect();
                 if parts.len() >= 3 {
                     let name = format!("{}:{}", parts[0], parts[1]);
@@ -1809,9 +1820,7 @@ fn parse_jvm_dependencies_detailed(project_root: &Path) -> Result<DetailedDepend
                 || trimmed.starts_with("testImplementation")
                 || trimmed.starts_with("testCompile");
 
-            if is_dep
-                && let Some(dep_str) = extract_gradle_dependency(trimmed)
-            {
+            if is_dep && let Some(dep_str) = extract_gradle_dependency(trimmed) {
                 let parts: Vec<&str> = dep_str.split(':').collect();
                 if parts.len() >= 3 {
                     let name = format!("{}:{}", parts[0], parts[1]);
