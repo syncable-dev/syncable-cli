@@ -329,13 +329,13 @@ impl ForgeToolDisplay {
         // Try to parse as JSON and extract summary
         if let Ok(json) = serde_json::from_str::<serde_json::Value>(result) {
             // Handle common patterns
-            if let Some(success) = json.get("success").and_then(|v| v.as_bool()) {
-                if !success {
-                    if let Some(err) = json.get("error").and_then(|v| v.as_str()) {
-                        return format!("Error: {}", truncate_str(err, 50));
-                    }
-                    return "Failed".to_string();
+            if let Some(success) = json.get("success").and_then(|v| v.as_bool())
+                && !success
+            {
+                if let Some(err) = json.get("error").and_then(|v| v.as_str()) {
+                    return format!("Error: {}", truncate_str(err, 50));
                 }
+                return "Failed".to_string();
             }
 
             // Check for issues/errors count

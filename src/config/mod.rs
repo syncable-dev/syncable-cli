@@ -22,24 +22,21 @@ pub fn load_config(project_path: Option<&Path>) -> Result<types::Config> {
     // Try local config first
     if let Some(path) = project_path {
         let local = local_config_path(path);
-        if local.exists() {
-            if let Ok(content) = fs::read_to_string(&local) {
-                if let Ok(config) = toml::from_str(&content) {
-                    return Ok(config);
-                }
-            }
+        if local.exists()
+            && let Ok(content) = fs::read_to_string(&local)
+            && let Ok(config) = toml::from_str(&content)
+        {
+            return Ok(config);
         }
     }
 
     // Try global config
-    if let Some(global) = global_config_path() {
-        if global.exists() {
-            if let Ok(content) = fs::read_to_string(&global) {
-                if let Ok(config) = toml::from_str(&content) {
-                    return Ok(config);
-                }
-            }
-        }
+    if let Some(global) = global_config_path()
+        && global.exists()
+        && let Ok(content) = fs::read_to_string(&global)
+        && let Ok(config) = toml::from_str(&content)
+    {
+        return Ok(config);
     }
 
     Ok(types::Config::default())
@@ -57,14 +54,12 @@ pub fn save_global_config(config: &types::Config) -> Result<()> {
 
 /// Load only the agent config section (for API keys)
 pub fn load_agent_config() -> types::AgentConfig {
-    if let Some(global) = global_config_path() {
-        if global.exists() {
-            if let Ok(content) = fs::read_to_string(&global) {
-                if let Ok(config) = toml::from_str::<types::Config>(&content) {
-                    return config.agent;
-                }
-            }
-        }
+    if let Some(global) = global_config_path()
+        && global.exists()
+        && let Ok(content) = fs::read_to_string(&global)
+        && let Ok(config) = toml::from_str::<types::Config>(&content)
+    {
+        return config.agent;
     }
     types::AgentConfig::default()
 }

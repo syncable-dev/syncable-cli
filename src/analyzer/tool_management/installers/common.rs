@@ -58,12 +58,10 @@ impl InstallationUtils {
             } else {
                 std::path::PathBuf::from(".").join("bin")
             }
+        } else if let Ok(home) = std::env::var("HOME") {
+            std::path::PathBuf::from(home).join(".local").join("bin")
         } else {
-            if let Ok(home) = std::env::var("HOME") {
-                std::path::PathBuf::from(home).join(".local").join("bin")
-            } else {
-                std::path::PathBuf::from(".").join("bin")
-            }
+            std::path::PathBuf::from(".").join("bin")
         }
     }
 

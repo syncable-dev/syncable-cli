@@ -246,63 +246,67 @@ impl Default for SecurityAnalysisConfig {
 impl SecurityAnalysisConfig {
     /// Create a configuration optimized for JavaScript/TypeScript projects
     pub fn for_javascript() -> Self {
-        let mut config = Self::default();
-        config.javascript_enabled = true;
-        config.python_enabled = false;
-        config.rust_enabled = false;
-        config.check_package_json = true;
-        config.frameworks_to_check = vec![
-            "React".to_string(),
-            "Vue".to_string(),
-            "Angular".to_string(),
-            "Next.js".to_string(),
-            "Vite".to_string(),
-            "Express".to_string(),
-            "Svelte".to_string(),
-            "Nuxt".to_string(),
-        ];
-        config
+        Self {
+            javascript_enabled: true,
+            python_enabled: false,
+            rust_enabled: false,
+            check_package_json: true,
+            frameworks_to_check: vec![
+                "React".to_string(),
+                "Vue".to_string(),
+                "Angular".to_string(),
+                "Next.js".to_string(),
+                "Vite".to_string(),
+                "Express".to_string(),
+                "Svelte".to_string(),
+                "Nuxt".to_string(),
+            ],
+            ..Self::default()
+        }
     }
 
     /// Create a configuration optimized for Python projects
     pub fn for_python() -> Self {
-        let mut config = Self::default();
-        config.javascript_enabled = false;
-        config.python_enabled = true;
-        config.rust_enabled = false;
-        config.check_package_json = false;
-        config.frameworks_to_check = vec![
-            "Django".to_string(),
-            "Flask".to_string(),
-            "FastAPI".to_string(),
-            "Tornado".to_string(),
-        ];
-        config
+        Self {
+            javascript_enabled: false,
+            python_enabled: true,
+            rust_enabled: false,
+            check_package_json: false,
+            frameworks_to_check: vec![
+                "Django".to_string(),
+                "Flask".to_string(),
+                "FastAPI".to_string(),
+                "Tornado".to_string(),
+            ],
+            ..Self::default()
+        }
     }
 
     /// Create a high-security configuration with strict settings
     pub fn high_security() -> Self {
-        let mut config = Self::default();
-        config.include_low_severity = true;
-        config.include_info_level = true;
-        config.skip_gitignored_files = false; // Check everything
-        config.check_git_history = true;
-        config.warn_on_public_env_vars = true;
-        config.max_findings_per_file = None; // No limit
-        config
+        Self {
+            include_low_severity: true,
+            include_info_level: true,
+            skip_gitignored_files: false, // Check everything
+            check_git_history: true,
+            warn_on_public_env_vars: true,
+            max_findings_per_file: None, // No limit
+            ..Self::default()
+        }
     }
 
     /// Create a fast configuration for CI/CD pipelines
     pub fn fast_ci() -> Self {
-        let mut config = Self::default();
-        config.include_low_severity = false;
-        config.include_info_level = false;
-        config.check_compliance = false;
-        config.check_git_history = false;
-        config.parallel_analysis = true;
-        config.max_findings_per_file = Some(20); // Limit output
-        config.analysis_timeout_seconds = Some(120); // 2 minutes max
-        config
+        Self {
+            include_low_severity: false,
+            include_info_level: false,
+            check_compliance: false,
+            check_git_history: false,
+            parallel_analysis: true,
+            max_findings_per_file: Some(20), // Limit output
+            analysis_timeout_seconds: Some(120), // 2 minutes max
+            ..Self::default()
+        }
     }
 
     /// Check if a file should be analyzed based on patterns

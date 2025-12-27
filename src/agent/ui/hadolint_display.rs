@@ -126,26 +126,26 @@ impl HadolintDisplay {
         }
 
         // Quick fixes (most important)
-        if let Some(quick_fixes) = result.get("quick_fixes").and_then(|f| f.as_array()) {
-            if !quick_fixes.is_empty() {
-                let _ = writeln!(
-                    handle,
-                    "\n{}{}  Quick Fixes:{}",
-                    ansi::DOCKER_BLUE,
-                    icons::FIX,
-                    ansi::RESET
-                );
-                for fix in quick_fixes.iter().take(5) {
-                    if let Some(fix_str) = fix.as_str() {
-                        let _ = writeln!(
-                            handle,
-                            "{}    {} {}{}",
-                            ansi::INFO_BLUE,
-                            icons::ARROW,
-                            fix_str,
-                            ansi::RESET
-                        );
-                    }
+        if let Some(quick_fixes) = result.get("quick_fixes").and_then(|f| f.as_array())
+            && !quick_fixes.is_empty()
+        {
+            let _ = writeln!(
+                handle,
+                "\n{}{}  Quick Fixes:{}",
+                ansi::DOCKER_BLUE,
+                icons::FIX,
+                ansi::RESET
+            );
+            for fix in quick_fixes.iter().take(5) {
+                if let Some(fix_str) = fix.as_str() {
+                    let _ = writeln!(
+                        handle,
+                        "{}    {} {}{}",
+                        ansi::INFO_BLUE,
+                        icons::ARROW,
+                        fix_str,
+                        ansi::RESET
+                    );
                 }
             }
         }
@@ -161,18 +161,18 @@ impl HadolintDisplay {
         Self::print_priority_section(&mut handle, result, "high", "High Priority", ansi::HIGH);
 
         // Optionally show medium (collapsed)
-        if let Some(medium_issues) = result["action_plan"]["medium"].as_array() {
-            if !medium_issues.is_empty() {
-                let _ = writeln!(
-                    handle,
-                    "\n{}  {} {} medium priority issue{} (run with --verbose to see all){}",
-                    ansi::MEDIUM,
-                    icons::MEDIUM,
-                    medium_issues.len(),
-                    if medium_issues.len() == 1 { "" } else { "s" },
-                    ansi::RESET
-                );
-            }
+        if let Some(medium_issues) = result["action_plan"]["medium"].as_array()
+            && !medium_issues.is_empty()
+        {
+            let _ = writeln!(
+                handle,
+                "\n{}  {} {} medium priority issue{} (run with --verbose to see all){}",
+                ansi::MEDIUM,
+                icons::MEDIUM,
+                medium_issues.len(),
+                if medium_issues.len() == 1 { "" } else { "s" },
+                ansi::RESET
+            );
         }
 
         // Footer separator

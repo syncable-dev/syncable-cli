@@ -402,8 +402,8 @@ Use this to validate generated configurations:
 
         // Spawn task to read stdout
         let tx_stdout = tx.clone();
-        let stdout_handle = if let Some(stdout) = stdout {
-            Some(tokio::spawn(async move {
+        let stdout_handle = stdout.map(|stdout| {
+            tokio::spawn(async move {
                 let mut reader = BufReader::new(stdout).lines();
                 let mut content = String::new();
                 while let Ok(Some(line)) = reader.next_line().await {
@@ -412,15 +412,13 @@ Use this to validate generated configurations:
                     let _ = tx_stdout.send((line, false)).await;
                 }
                 content
-            }))
-        } else {
-            None
-        };
+            })
+        });
 
         // Spawn task to read stderr
         let tx_stderr = tx;
-        let stderr_handle = if let Some(stderr) = stderr {
-            Some(tokio::spawn(async move {
+        let stderr_handle = stderr.map(|stderr| {
+            tokio::spawn(async move {
                 let mut reader = BufReader::new(stderr).lines();
                 let mut content = String::new();
                 while let Ok(Some(line)) = reader.next_line().await {
@@ -429,10 +427,8 @@ Use this to validate generated configurations:
                     let _ = tx_stderr.send((line, true)).await;
                 }
                 content
-            }))
-        } else {
-            None
-        };
+            })
+        });
 
         // Process incoming lines and update display in real-time on the main task
         // Use tokio::select! to handle both the receiver and the reader completion

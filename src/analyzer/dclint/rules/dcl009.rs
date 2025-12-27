@@ -34,34 +34,34 @@ fn check(ctx: &LintContext) -> Vec<CheckFailure> {
     let pattern = Regex::new(DEFAULT_PATTERN).expect("Invalid default pattern");
 
     for (service_name, service) in &ctx.compose.services {
-        if let Some(container_name) = &service.container_name {
-            if !pattern.is_match(container_name) {
-                let line = service
-                    .container_name_pos
-                    .map(|p| p.line)
-                    .unwrap_or(service.position.line);
+        if let Some(container_name) = &service.container_name
+            && !pattern.is_match(container_name)
+        {
+            let line = service
+                .container_name_pos
+                .map(|p| p.line)
+                .unwrap_or(service.position.line);
 
-                let message = format!(
-                    "Container name \"{}\" in service \"{}\" does not match the required pattern: {}",
-                    container_name, service_name, DEFAULT_PATTERN
-                );
+            let message = format!(
+                "Container name \"{}\" in service \"{}\" does not match the required pattern: {}",
+                container_name, service_name, DEFAULT_PATTERN
+            );
 
-                failures.push(
-                    make_failure(
-                        &CODE.into(),
-                        NAME,
-                        Severity::Warning,
-                        RuleCategory::Style,
-                        message,
-                        line,
-                        1,
-                        false,
-                    )
-                    .with_data("serviceName", service_name.clone())
-                    .with_data("containerName", container_name.clone())
-                    .with_data("pattern", DEFAULT_PATTERN.to_string()),
-                );
-            }
+            failures.push(
+                make_failure(
+                    &CODE.into(),
+                    NAME,
+                    Severity::Warning,
+                    RuleCategory::Style,
+                    message,
+                    line,
+                    1,
+                    false,
+                )
+                .with_data("serviceName", service_name.clone())
+                .with_data("containerName", container_name.clone())
+                .with_data("pattern", DEFAULT_PATTERN.to_string()),
+            );
         }
     }
 

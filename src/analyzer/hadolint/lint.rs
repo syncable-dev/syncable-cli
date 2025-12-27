@@ -149,7 +149,7 @@ pub fn lint_file(path: &Path, config: &HadolintConfig) -> LintResult {
 fn run_rules(
     instructions: &[InstructionPos],
     config: &HadolintConfig,
-    pragmas: &PragmaState,
+    _pragmas: &PragmaState,
 ) -> Vec<CheckFailure> {
     let rules = all_rules();
     let mut all_failures = Vec::new();

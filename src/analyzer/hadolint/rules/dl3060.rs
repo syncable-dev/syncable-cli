@@ -16,14 +16,14 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
             Instruction::Run(_) => {
                 if let Some(shell) = shell {
                     let has_install = shell.any_command(|cmd| {
-                        (cmd.name == "yarn" && cmd.has_any_arg(&["install", "add"]))
+                        cmd.name == "yarn" && cmd.has_any_arg(&["install", "add"])
                     });
 
                     if !has_install {
                         return true;
                     }
 
-                    let has_clean = shell.any_command(|cmd| {
+                    shell.any_command(|cmd| {
                         (cmd.name == "yarn"
                             && cmd.has_any_arg(&["cache"])
                             && cmd.arguments.iter().any(|a| a == "clean"))
@@ -32,9 +32,7 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
                                     .arguments
                                     .iter()
                                     .any(|a| a.contains("yarn") && a.contains("cache")))
-                    });
-
-                    has_clean
+                    })
                 } else {
                     true
                 }

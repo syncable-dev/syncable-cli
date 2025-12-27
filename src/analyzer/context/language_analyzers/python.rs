@@ -40,22 +40,22 @@ pub(crate) fn analyze_python_project(
 
         // Look for console_scripts
         let console_regex = create_regex(r#"console_scripts['"]\s*:\s*\[(.*?)\]"#)?;
-        if let Some(cap) = console_regex.captures(&content) {
-            if let Some(scripts) = cap.get(1) {
-                let script_regex = create_regex(r#"['"](\w+)\s*=\s*([\w\.]+):(\w+)"#)?;
-                for script_cap in script_regex.captures_iter(scripts.as_str()) {
-                    if let (Some(name), Some(module), Some(func)) =
-                        (script_cap.get(1), script_cap.get(2), script_cap.get(3))
-                    {
-                        entry_points.push(EntryPoint {
-                            file: PathBuf::from(format!(
-                                "{}.py",
-                                module.as_str().replace('.', "/")
-                            )),
-                            function: Some(func.as_str().to_string()),
-                            command: Some(name.as_str().to_string()),
-                        });
-                    }
+        if let Some(cap) = console_regex.captures(&content)
+            && let Some(scripts) = cap.get(1)
+        {
+            let script_regex = create_regex(r#"['"](\w+)\s*=\s*([\w\.]+):(\w+)"#)?;
+            for script_cap in script_regex.captures_iter(scripts.as_str()) {
+                if let (Some(name), Some(module), Some(func)) =
+                    (script_cap.get(1), script_cap.get(2), script_cap.get(3))
+                {
+                    entry_points.push(EntryPoint {
+                        file: PathBuf::from(format!(
+                            "{}.py",
+                            module.as_str().replace('.', "/")
+                        )),
+                        function: Some(func.as_str().to_string()),
+                        command: Some(name.as_str().to_string()),
+                    });
                 }
             }
         }
@@ -119,14 +119,14 @@ fn scan_python_file_for_context(
     for pattern in &port_patterns {
         let regex = create_regex(pattern)?;
         for cap in regex.captures_iter(&content) {
-            if let Some(port_str) = cap.get(1) {
-                if let Ok(port) = port_str.as_str().parse::<u16>() {
-                    ports.insert(Port {
-                        number: port,
-                        protocol: Protocol::Http,
-                        description: Some("Python web server".to_string()),
-                    });
-                }
+            if let Some(port_str) = cap.get(1)
+                && let Ok(port) = port_str.as_str().parse::<u16>()
+            {
+                ports.insert(Port {
+                    number: port,
+                    protocol: Protocol::Http,
+                    description: Some("Python web server".to_string()),
+                });
             }
         }
     }

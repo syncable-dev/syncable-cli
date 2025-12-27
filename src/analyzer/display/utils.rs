@@ -10,7 +10,7 @@ pub fn visual_width(s: &str) -> usize {
             // Skip ANSI escape sequence
             if chars.peek() == Some(&'[') {
                 chars.next(); // consume '['
-                while let Some(c) = chars.next() {
+                for c in chars.by_ref() {
                     if c.is_ascii_alphabetic() {
                         break; // End of escape sequence
                     }
@@ -136,7 +136,7 @@ pub fn strip_ansi_codes(s: &str) -> String {
             // Skip ANSI escape sequence
             if chars.peek() == Some(&'[') {
                 chars.next(); // consume '['
-                while let Some(c) = chars.next() {
+                for c in chars.by_ref() {
                     if c.is_ascii_alphabetic() {
                         break; // End of escape sequence
                     }

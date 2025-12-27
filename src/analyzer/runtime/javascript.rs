@@ -325,15 +325,15 @@ impl RuntimeDetector {
         }
 
         // Check for bun-specific scripts in package.json
-        if let Ok(package_json) = self.read_package_json() {
-            if let Some(scripts) = package_json.get("scripts").and_then(|s| s.as_object()) {
-                for script in scripts.values() {
-                    if let Some(script_str) = script.as_str() {
-                        if script_str.contains("bun ") || script_str.starts_with("bun") {
-                            debug!("Found Bun command in scripts: {}", script_str);
-                            return true;
-                        }
-                    }
+        if let Ok(package_json) = self.read_package_json()
+            && let Some(scripts) = package_json.get("scripts").and_then(|s| s.as_object())
+        {
+            for script in scripts.values() {
+                if let Some(script_str) = script.as_str()
+                    && (script_str.contains("bun ") || script_str.starts_with("bun"))
+                {
+                    debug!("Found Bun command in scripts: {}", script_str);
+                    return true;
                 }
             }
         }

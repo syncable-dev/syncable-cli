@@ -15,49 +15,46 @@ pub fn rule()
         Severity::Warning,
         "Always tag the version of an image explicitly",
         |state, line, instr, _shell| {
-            match instr {
-                Instruction::From(base) => {
-                    // Remember stage aliases
-                    if let Some(alias) = &base.alias {
-                        state.data.insert_to_set("aliases", alias.as_str());
-                    }
-
-                    // Check if image needs a tag
-                    let image_name = &base.image.name;
-
-                    // Skip check for:
-                    // 1. scratch image
-                    // 2. images with tags
-                    // 3. images with digests
-                    // 4. variable references
-                    // 5. references to previous build stages
-
-                    if base.is_scratch() {
-                        return;
-                    }
-
-                    if base.has_version() {
-                        return;
-                    }
-
-                    if base.is_variable() {
-                        return;
-                    }
-
-                    // Check if it's a reference to a previous stage
-                    if state.data.set_contains("aliases", image_name) {
-                        return;
-                    }
-
-                    // Image doesn't have a tag
-                    state.add_failure(
-                        "DL3006",
-                        Severity::Warning,
-                        "Always tag the version of an image explicitly",
-                        line,
-                    );
+            if let Instruction::From(base) = instr {
+                // Remember stage aliases
+                if let Some(alias) = &base.alias {
+                    state.data.insert_to_set("aliases", alias.as_str());
                 }
-                _ => {}
+
+                // Check if image needs a tag
+                let image_name = &base.image.name;
+
+                // Skip check for:
+                // 1. scratch image
+                // 2. images with tags
+                // 3. images with digests
+                // 4. variable references
+                // 5. references to previous build stages
+
+                if base.is_scratch() {
+                    return;
+                }
+
+                if base.has_version() {
+                    return;
+                }
+
+                if base.is_variable() {
+                    return;
+                }
+
+                // Check if it's a reference to a previous stage
+                if state.data.set_contains("aliases", image_name) {
+                    return;
+                }
+
+                // Image doesn't have a tag
+                state.add_failure(
+                    "DL3006",
+                    Severity::Warning,
+                    "Always tag the version of an image explicitly",
+                    line,
+                );
             }
         },
     )

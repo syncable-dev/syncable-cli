@@ -234,11 +234,10 @@ impl FrameworkDetectionUtils {
                 if matches!(
                     tech.category,
                     TechnologyCategory::BackendFramework | TechnologyCategory::FrontendFramework
-                ) {
-                    if tech.confidence > best_confidence {
-                        best_confidence = tech.confidence;
-                        best_framework = Some(i);
-                    }
+                ) && tech.confidence > best_confidence
+                {
+                    best_confidence = tech.confidence;
+                    best_framework = Some(i);
                 }
             }
 

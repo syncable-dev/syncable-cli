@@ -1,7 +1,7 @@
 use crate::analyzer::ProjectCategory;
 
 pub fn handle_support(languages: bool, frameworks: bool, _detailed: bool) -> crate::Result<()> {
-    if languages || (!languages && !frameworks) {
+    if languages || !frameworks {
         println!("🌐 Supported Languages:");
         println!("├── Rust");
         println!("├── JavaScript/TypeScript");
@@ -11,7 +11,7 @@ pub fn handle_support(languages: bool, frameworks: bool, _detailed: bool) -> cra
         println!("└── (More coming soon...)");
     }
 
-    if frameworks || (!languages && !frameworks) {
+    if frameworks || !languages {
         println!("\n🚀 Supported Frameworks:");
         println!("├── Web: Express.js, Next.js, React, Vue.js, Actix Web");
         println!("├── Database: PostgreSQL, MySQL, MongoDB, Redis");

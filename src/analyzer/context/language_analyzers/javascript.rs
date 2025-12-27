@@ -97,14 +97,14 @@ fn scan_js_file_for_context(
         Regex::new(r"(?:PORT|port)\s*[=:]\s*(?:process\.env\.PORT\s*\|\|\s*)?(\d{1,5})")
             .map_err(|e| AnalysisError::InvalidStructure(format!("Invalid regex: {}", e)))?;
     for cap in port_regex.captures_iter(&content) {
-        if let Some(port_str) = cap.get(1) {
-            if let Ok(port) = port_str.as_str().parse::<u16>() {
-                ports.insert(Port {
-                    number: port,
-                    protocol: Protocol::Http,
-                    description: Some("HTTP server port".to_string()),
-                });
-            }
+        if let Some(port_str) = cap.get(1)
+            && let Ok(port) = port_str.as_str().parse::<u16>()
+        {
+            ports.insert(Port {
+                number: port,
+                protocol: Protocol::Http,
+                description: Some("HTTP server port".to_string()),
+            });
         }
     }
 
@@ -112,14 +112,14 @@ fn scan_js_file_for_context(
     let listen_regex = Regex::new(r"\.listen\s*\(\s*(\d{1,5})")
         .map_err(|e| AnalysisError::InvalidStructure(format!("Invalid regex: {}", e)))?;
     for cap in listen_regex.captures_iter(&content) {
-        if let Some(port_str) = cap.get(1) {
-            if let Ok(port) = port_str.as_str().parse::<u16>() {
-                ports.insert(Port {
-                    number: port,
-                    protocol: Protocol::Http,
-                    description: Some("Express/HTTP server".to_string()),
-                });
-            }
+        if let Some(port_str) = cap.get(1)
+            && let Ok(port) = port_str.as_str().parse::<u16>()
+        {
+            ports.insert(Port {
+                number: port,
+                protocol: Protocol::Http,
+                description: Some("Express/HTTP server".to_string()),
+            });
         }
     }
 

@@ -43,42 +43,42 @@ pub fn find_incomplete_plans(project_path: &std::path::Path) -> Vec<IncompletePl
     if let Ok(entries) = std::fs::read_dir(&plans_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension().map(|e| e == "md").unwrap_or(false) {
-                if let Ok(content) = std::fs::read_to_string(&path) {
-                    let mut done = 0;
-                    let mut pending = 0;
-                    let mut in_progress = 0;
+            if path.extension().map(|e| e == "md").unwrap_or(false)
+                && let Ok(content) = std::fs::read_to_string(&path)
+            {
+                let mut done = 0;
+                let mut pending = 0;
+                let mut in_progress = 0;
 
-                    for line in content.lines() {
-                        if let Some(caps) = task_regex.captures(line) {
-                            match caps.get(1).map(|m| m.as_str()) {
-                                Some("x") => done += 1,
-                                Some(" ") => pending += 1,
-                                Some("~") => in_progress += 1,
-                                Some("!") => done += 1, // Failed counts as "attempted"
-                                _ => {}
-                            }
+                for line in content.lines() {
+                    if let Some(caps) = task_regex.captures(line) {
+                        match caps.get(1).map(|m| m.as_str()) {
+                            Some("x") => done += 1,
+                            Some(" ") => pending += 1,
+                            Some("~") => in_progress += 1,
+                            Some("!") => done += 1, // Failed counts as "attempted"
+                            _ => {}
                         }
                     }
+                }
 
-                    let total = done + pending + in_progress;
-                    if total > 0 && (pending > 0 || in_progress > 0) {
-                        let rel_path = path
-                            .strip_prefix(project_path)
-                            .map(|p| p.display().to_string())
-                            .unwrap_or_else(|_| path.display().to_string());
+                let total = done + pending + in_progress;
+                if total > 0 && (pending > 0 || in_progress > 0) {
+                    let rel_path = path
+                        .strip_prefix(project_path)
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_else(|_| path.display().to_string());
 
-                        incomplete.push(IncompletePlan {
-                            path: rel_path,
-                            filename: path
-                                .file_name()
-                                .map(|n| n.to_string_lossy().to_string())
-                                .unwrap_or_default(),
-                            done,
-                            pending: pending + in_progress,
-                            total,
-                        });
-                    }
+                    incomplete.push(IncompletePlan {
+                        path: rel_path,
+                        filename: path
+                            .file_name()
+                            .map(|n| n.to_string_lossy().to_string())
+                            .unwrap_or_default(),
+                        done,
+                        pending: pending + in_progress,
+                        total,
+                    });
                 }
             }
         }
@@ -236,38 +236,37 @@ impl ChatSession {
         let agent_config = load_agent_config();
 
         // Check active global profile first
-        if let Some(profile_name) = &agent_config.active_profile {
-            if let Some(profile) = agent_config.profiles.get(profile_name) {
-                match provider {
-                    ProviderType::OpenAI => {
-                        if profile
-                            .openai
-                            .as_ref()
-                            .map(|o| !o.api_key.is_empty())
-                            .unwrap_or(false)
-                        {
-                            return true;
-                        }
+        if let Some(profile_name) = &agent_config.active_profile
+            && let Some(profile) = agent_config.profiles.get(profile_name)
+        {
+            match provider {
+                ProviderType::OpenAI => {
+                    if profile
+                        .openai
+                        .as_ref()
+                        .map(|o| !o.api_key.is_empty())
+                        .unwrap_or(false)
+                    {
+                        return true;
                     }
-                    ProviderType::Anthropic => {
-                        if profile
-                            .anthropic
-                            .as_ref()
-                            .map(|a| !a.api_key.is_empty())
-                            .unwrap_or(false)
-                        {
-                            return true;
-                        }
+                }
+                ProviderType::Anthropic => {
+                    if profile
+                        .anthropic
+                        .as_ref()
+                        .map(|a| !a.api_key.is_empty())
+                        .unwrap_or(false)
+                    {
+                        return true;
                     }
-                    ProviderType::Bedrock => {
-                        if let Some(bedrock) = &profile.bedrock {
-                            if bedrock.profile.is_some()
-                                || (bedrock.access_key_id.is_some()
-                                    && bedrock.secret_access_key.is_some())
-                            {
-                                return true;
-                            }
-                        }
+                }
+                ProviderType::Bedrock => {
+                    if let Some(bedrock) = &profile.bedrock
+                        && (bedrock.profile.is_some()
+                            || (bedrock.access_key_id.is_some()
+                                && bedrock.secret_access_key.is_some()))
+                    {
+                        return true;
                     }
                 }
             }
@@ -297,13 +296,12 @@ impl ChatSession {
                     }
                 }
                 ProviderType::Bedrock => {
-                    if let Some(bedrock) = &profile.bedrock {
-                        if bedrock.profile.is_some()
+                    if let Some(bedrock) = &profile.bedrock
+                        && (bedrock.profile.is_some()
                             || (bedrock.access_key_id.is_some()
-                                && bedrock.secret_access_key.is_some())
-                        {
-                            return true;
-                        }
+                                && bedrock.secret_access_key.is_some()))
+                    {
+                        return true;
                     }
                 }
             }
@@ -387,19 +385,19 @@ impl ChatSession {
 
                 if let Some(bedrock) = bedrock_config {
                     // Load region
-                    if std::env::var("AWS_REGION").is_err() {
-                        if let Some(region) = &bedrock.region {
-                            unsafe {
-                                std::env::set_var("AWS_REGION", region);
-                            }
+                    if std::env::var("AWS_REGION").is_err()
+                        && let Some(region) = &bedrock.region
+                    {
+                        unsafe {
+                            std::env::set_var("AWS_REGION", region);
                         }
                     }
                     // Load profile OR access keys (profile takes precedence)
-                    if let Some(profile) = &bedrock.profile {
-                        if std::env::var("AWS_PROFILE").is_err() {
-                            unsafe {
-                                std::env::set_var("AWS_PROFILE", profile);
-                            }
+                    if let Some(profile) = &bedrock.profile
+                        && std::env::var("AWS_PROFILE").is_err()
+                    {
+                        unsafe {
+                            std::env::set_var("AWS_PROFILE", profile);
                         }
                     } else if let (Some(key_id), Some(secret)) =
                         (&bedrock.access_key_id, &bedrock.secret_access_key)
@@ -1190,10 +1188,10 @@ impl ChatSession {
                     }
 
                     // Update current provider if profile has a default
-                    if let Some(default_provider) = &profile.default_provider {
-                        if let Ok(p) = default_provider.parse() {
-                            self.provider = p;
-                        }
+                    if let Some(default_provider) = &profile.default_provider
+                        && let Ok(p) = default_provider.parse()
+                    {
+                        self.provider = p;
                     }
                 }
 
@@ -1308,11 +1306,11 @@ impl ChatSession {
 
                         // Get the saved bedrock config and copy it to the profile
                         let fresh_config = load_agent_config();
-                        if let Some(bedrock) = fresh_config.bedrock.clone() {
-                            if let Some(profile) = agent_config.profiles.get_mut(&profile_name) {
-                                profile.bedrock = Some(bedrock);
-                                profile.default_model = Some(selected_model);
-                            }
+                        if let Some(bedrock) = fresh_config.bedrock.clone()
+                            && let Some(profile) = agent_config.profiles.get_mut(&profile_name)
+                        {
+                            profile.bedrock = Some(bedrock);
+                            profile.default_model = Some(selected_model);
                         }
                         println!(
                             "{}",

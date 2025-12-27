@@ -15,10 +15,10 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
         |instr, _shell| match instr {
             Instruction::Label(pairs) => {
                 for (key, value) in pairs {
-                    if key == "org.opencontainers.image.licenses" {
-                        if value.is_empty() || !is_valid_spdx(value) {
-                            return false;
-                        }
+                    if key == "org.opencontainers.image.licenses"
+                        && (value.is_empty() || !is_valid_spdx(value))
+                    {
+                        return false;
                     }
                 }
                 true
@@ -76,7 +76,7 @@ fn is_valid_spdx(license: &str) -> bool {
 
     // Handle compound expressions (AND, OR, WITH)
     let parts: Vec<&str> = license_upper
-        .split(|c| c == '(' || c == ')' || c == ' ')
+        .split(['(', ')', ' '])
         .filter(|s| !s.is_empty() && *s != "AND" && *s != "OR" && *s != "WITH")
         .collect();
 

@@ -18,23 +18,23 @@ pub(crate) fn analyze_docker_files(
         // Look for EXPOSE directives
         let expose_regex = create_regex(r"EXPOSE\s+(\d{1,5})(?:/(\w+))?")?;
         for cap in expose_regex.captures_iter(&content) {
-            if let Some(port_str) = cap.get(1) {
-                if let Ok(port) = port_str.as_str().parse::<u16>() {
-                    let protocol = cap
-                        .get(2)
-                        .and_then(|p| match p.as_str().to_lowercase().as_str() {
-                            "tcp" => Some(Protocol::Tcp),
-                            "udp" => Some(Protocol::Udp),
-                            _ => None,
-                        })
-                        .unwrap_or(Protocol::Tcp);
+            if let Some(port_str) = cap.get(1)
+                && let Ok(port) = port_str.as_str().parse::<u16>()
+            {
+                let protocol = cap
+                    .get(2)
+                    .and_then(|p| match p.as_str().to_lowercase().as_str() {
+                        "tcp" => Some(Protocol::Tcp),
+                        "udp" => Some(Protocol::Udp),
+                        _ => None,
+                    })
+                    .unwrap_or(Protocol::Tcp);
 
-                    ports.insert(Port {
-                        number: port,
-                        protocol,
-                        description: Some("Exposed in Dockerfile".to_string()),
-                    });
-                }
+                ports.insert(Port {
+                    number: port,
+                    protocol,
+                    description: Some("Exposed in Dockerfile".to_string()),
+                });
             }
         }
 
@@ -151,17 +151,17 @@ fn analyze_docker_compose(
                     }
                 } else if let Some(env_list) = env.as_sequence() {
                     for item in env_list {
-                        if let Some(env_str) = item.as_str() {
-                            if let Some(eq_pos) = env_str.find('=') {
-                                let (key, value) = env_str.split_at(eq_pos);
-                                let value = &value[1..]; // Skip the '='
-                                let description = get_env_var_description(key, &service_type);
-                                env_vars.entry(key.to_string()).or_insert((
-                                    Some(value.to_string()),
-                                    false,
-                                    description.or_else(|| Some(env_context.clone())),
-                                ));
-                            }
+                        if let Some(env_str) = item.as_str()
+                            && let Some(eq_pos) = env_str.find('=')
+                        {
+                            let (key, value) = env_str.split_at(eq_pos);
+                            let value = &value[1..]; // Skip the '='
+                            let description = get_env_var_description(key, &service_type);
+                            env_vars.entry(key.to_string()).or_insert((
+                                Some(value.to_string()),
+                                false,
+                                description.or_else(|| Some(env_context.clone())),
+                            ));
                         }
                     }
                 }
@@ -250,17 +250,17 @@ fn determine_service_type(name: &str, service: &serde_yaml::Value) -> ServiceTyp
     }
 
     // Check environment variables for clues
-    if let Some(env) = service.get("environment") {
-        if let Some(env_map) = env.as_mapping() {
-            for (key, _) in env_map {
-                if let Some(key_str) = key.as_str() {
-                    if key_str.contains("POSTGRES") || key_str.contains("PGPASSWORD") {
-                        return ServiceType::PostgreSQL;
-                    } else if key_str.contains("MYSQL") {
-                        return ServiceType::MySQL;
-                    } else if key_str.contains("MONGO") {
-                        return ServiceType::MongoDB;
-                    }
+    if let Some(env) = service.get("environment")
+        && let Some(env_map) = env.as_mapping()
+    {
+        for (key, _) in env_map {
+            if let Some(key_str) = key.as_str() {
+                if key_str.contains("POSTGRES") || key_str.contains("PGPASSWORD") {
+                    return ServiceType::PostgreSQL;
+                } else if key_str.contains("MYSQL") {
+                    return ServiceType::MySQL;
+                } else if key_str.contains("MONGO") {
+                    return ServiceType::MongoDB;
                 }
             }
         }

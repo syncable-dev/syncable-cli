@@ -43,6 +43,7 @@ pub struct SecurityCache {
 
 /// Internal cache entry
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct CachedEntry {
     key: CacheKey,
     result: CachedResult,

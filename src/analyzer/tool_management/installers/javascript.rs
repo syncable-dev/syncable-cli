@@ -80,7 +80,7 @@ fn install_bun_unix() -> Result<()> {
     info!("🐧 Installing bun on Unix using curl...");
 
     let output = Command::new("curl")
-        .args(&["-fsSL", "https://bun.sh/install"])
+        .args(["-fsSL", "https://bun.sh/install"])
         .stdout(std::process::Stdio::piped())
         .spawn()
         .and_then(|curl_process| {

@@ -153,7 +153,7 @@ fn display_license_summary(
 
     let mut license_counts: HashMap<String, usize> = HashMap::new();
 
-    for (_name, info) in dependencies {
+    for info in dependencies.values() {
         if let Some(license) = &info.license {
             *license_counts.entry(license.clone()).or_insert(0) += 1;
         }

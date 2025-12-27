@@ -181,17 +181,17 @@ impl CompactionStrategy {
 
         // Check if we're about to evict a tool result without its call
         let msg_at_end = messages.get(end);
-        if let Some(msg) = msg_at_end {
-            if msg.is_tool_result {
-                // We're keeping a tool result - make sure we also keep its call
-                // Move end back to before this tool result group
-                while end > 0 {
-                    let prev = &messages[end - 1];
-                    if prev.is_tool_result || prev.has_tool_call {
-                        end -= 1;
-                    } else {
-                        break;
-                    }
+        if let Some(msg) = msg_at_end
+            && msg.is_tool_result
+        {
+            // We're keeping a tool result - make sure we also keep its call
+            // Move end back to before this tool result group
+            while end > 0 {
+                let prev = &messages[end - 1];
+                if prev.is_tool_result || prev.has_tool_call {
+                    end -= 1;
+                } else {
+                    break;
                 }
             }
         }

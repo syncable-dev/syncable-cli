@@ -34,7 +34,7 @@ pub enum OutputFormat {
 
 impl OutputFormat {
     /// Parse from string (case-insensitive).
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "json" => Some(Self::Json),
             "stylish" => Some(Self::Stylish),
@@ -61,7 +61,7 @@ pub fn format_results(results: &[LintResult], format: OutputFormat) -> String {
 
 /// Format a single result.
 pub fn format_result(result: &LintResult, format: OutputFormat) -> String {
-    format_results(&[result.clone()], format)
+    format_results(std::slice::from_ref(result), format)
 }
 
 /// Format results as a string.
@@ -218,13 +218,13 @@ mod tests {
 
     #[test]
     fn test_output_format_from_str() {
-        assert_eq!(OutputFormat::from_str("json"), Some(OutputFormat::Json));
-        assert_eq!(OutputFormat::from_str("JSON"), Some(OutputFormat::Json));
+        assert_eq!(OutputFormat::parse("json"), Some(OutputFormat::Json));
+        assert_eq!(OutputFormat::parse("JSON"), Some(OutputFormat::Json));
         assert_eq!(
-            OutputFormat::from_str("stylish"),
+            OutputFormat::parse("stylish"),
             Some(OutputFormat::Stylish)
         );
-        assert_eq!(OutputFormat::from_str("github"), Some(OutputFormat::GitHub));
-        assert_eq!(OutputFormat::from_str("invalid"), None);
+        assert_eq!(OutputFormat::parse("github"), Some(OutputFormat::GitHub));
+        assert_eq!(OutputFormat::parse("invalid"), None);
     }
 }
