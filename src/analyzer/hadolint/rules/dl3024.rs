@@ -3,11 +3,12 @@
 //! Each FROM instruction should have a unique alias.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{custom_rule, CustomRule, RuleState};
+use crate::analyzer::hadolint::rules::{CustomRule, RuleState, custom_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
-pub fn rule() -> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&ParsedShell>) + Send + Sync> {
+pub fn rule()
+-> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&ParsedShell>) + Send + Sync> {
     custom_rule(
         "DL3024",
         Severity::Error,
@@ -35,8 +36,8 @@ pub fn rule() -> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&P
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::hadolint::lint::{lint, LintResult};
     use crate::analyzer::hadolint::config::HadolintConfig;
+    use crate::analyzer::hadolint::lint::{LintResult, lint};
 
     fn lint_dockerfile(content: &str) -> LintResult {
         lint(content, &HadolintConfig::default())
@@ -45,7 +46,7 @@ mod tests {
     #[test]
     fn test_duplicate_alias() {
         let result = lint_dockerfile(
-            "FROM node:18 AS builder\nRUN npm ci\nFROM node:18-alpine AS builder\nRUN echo done"
+            "FROM node:18 AS builder\nRUN npm ci\nFROM node:18-alpine AS builder\nRUN echo done",
         );
         assert!(result.failures.iter().any(|f| f.code.as_str() == "DL3024"));
     }
@@ -53,16 +54,15 @@ mod tests {
     #[test]
     fn test_unique_aliases() {
         let result = lint_dockerfile(
-            "FROM node:18 AS builder\nRUN npm ci\nFROM node:18-alpine AS runner\nRUN echo done"
+            "FROM node:18 AS builder\nRUN npm ci\nFROM node:18-alpine AS runner\nRUN echo done",
         );
         assert!(!result.failures.iter().any(|f| f.code.as_str() == "DL3024"));
     }
 
     #[test]
     fn test_no_aliases() {
-        let result = lint_dockerfile(
-            "FROM node:18\nRUN npm ci\nFROM node:18-alpine\nRUN echo done"
-        );
+        let result =
+            lint_dockerfile("FROM node:18\nRUN npm ci\nFROM node:18-alpine\nRUN echo done");
         assert!(!result.failures.iter().any(|f| f.code.as_str() == "DL3024"));
     }
 

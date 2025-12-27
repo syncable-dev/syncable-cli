@@ -47,6 +47,42 @@ https://www.gnu.org/licenses/gpl-3.0.en.html
 
 ---
 
+## Docker Compose Linter
+
+The Docker Compose linting functionality in `src/analyzer/dclint/` is a Rust
+implementation inspired by the docker-compose-linter project.
+
+**Original Project:** [docker-compose-linter](https://github.com/zavoloklom/docker-compose-linter)
+
+**Original Author:** Sergey Suspended (zavoloklom)
+
+**Original License:** MIT License
+
+**Original Copyright:**
+```
+Copyright (c) 2024 Sergey Suspended
+```
+
+**What was implemented:**
+- Docker Compose YAML validation logic
+- Lint rule concepts (DCL001-DCL015 series)
+- Service configuration validation patterns
+- Best practices enforcement
+
+**Modifications made:**
+- Complete implementation in Rust (original was TypeScript)
+- Integration with Syncable-CLI's agent and tool system
+- Native async support for streaming output
+- Adaptation to Rust error handling patterns
+- Additional rules and improvements specific to Syncable's use cases
+
+**License Notice:**
+The original docker-compose-linter is licensed under MIT. Our Rust implementation
+is original code inspired by the rule concepts and validation patterns from the
+original project.
+
+---
+
 ## ShellCheck (Rule Concepts)
 
 Some shell-related lint rules are inspired by ShellCheck.
@@ -65,10 +101,11 @@ concepts and documentation.
 
 ## Acknowledgments
 
-We are grateful to the open source community and the authors of Hadolint for
-creating and maintaining excellent Dockerfile linting tools. This translation
-to Rust allows native integration with Syncable-CLI while preserving the
-valuable rule definitions and linting logic developed by the original authors.
+We are grateful to the open source community and the authors of Hadolint and
+docker-compose-linter for creating and maintaining excellent container configuration
+linting tools. These Rust implementations allow native integration with Syncable-CLI
+while preserving the valuable rule definitions and linting logic developed by the
+original authors.
 
 If you are the author of any software mentioned here and believe the attribution
 is incorrect or incomplete, please open an issue at:

@@ -4,7 +4,7 @@
 //! COPY + RUN tar for better efficiency.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{simple_rule, SimpleRule};
+use crate::analyzer::hadolint::rules::{SimpleRule, simple_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
@@ -39,8 +39,16 @@ fn is_local_archive(src: &str) -> bool {
 
     // Check for archive extensions
     let archive_extensions = [
-        ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz",
-        ".tar.zst", ".tar.lz", ".tar.lzma"
+        ".tar",
+        ".tar.gz",
+        ".tgz",
+        ".tar.bz2",
+        ".tbz2",
+        ".tar.xz",
+        ".txz",
+        ".tar.zst",
+        ".tar.lz",
+        ".tar.lzma",
     ];
 
     let lower = src.to_lowercase();
@@ -50,8 +58,8 @@ fn is_local_archive(src: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::hadolint::lint::{lint, LintResult};
     use crate::analyzer::hadolint::config::HadolintConfig;
+    use crate::analyzer::hadolint::lint::{LintResult, lint};
 
     fn lint_dockerfile(content: &str) -> LintResult {
         lint(content, &HadolintConfig::default())

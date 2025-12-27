@@ -41,7 +41,12 @@ struct JsonFailure {
 }
 
 impl Formatter for JsonFormatter {
-    fn format<W: Write>(&self, result: &LintResult, filename: &str, writer: &mut W) -> std::io::Result<()> {
+    fn format<W: Write>(
+        &self,
+        result: &LintResult,
+        filename: &str,
+        writer: &mut W,
+    ) -> std::io::Result<()> {
         let failures: Vec<JsonFailure> = result
             .failures
             .iter()

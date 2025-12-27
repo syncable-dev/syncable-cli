@@ -156,8 +156,14 @@ impl ToolCallDisplay {
             return;
         }
 
-        let success_count = tools.iter().filter(|t| t.status == ToolCallStatus::Success).count();
-        let error_count = tools.iter().filter(|t| t.status == ToolCallStatus::Error).count();
+        let success_count = tools
+            .iter()
+            .filter(|t| t.status == ToolCallStatus::Success)
+            .count();
+        let error_count = tools
+            .iter()
+            .filter(|t| t.status == ToolCallStatus::Error)
+            .count();
 
         println!();
         if error_count == 0 {
@@ -199,7 +205,12 @@ pub fn print_tool_inline(status: ToolCallStatus, name: &str, description: &str) 
 
 /// Print a tool group header
 pub fn print_tool_group_header(count: usize) {
-    println!("\n{} {} tool{}:", icons::TOOL, count, if count == 1 { "" } else { "s" });
+    println!(
+        "\n{} {} tool{}:",
+        icons::TOOL,
+        count,
+        if count == 1 { "" } else { "s" }
+    );
 }
 
 // ============================================================================
@@ -207,7 +218,7 @@ pub fn print_tool_group_header(count: usize) {
 // ============================================================================
 
 /// Forge-style tool display that shows:
-/// ```
+/// ```text
 /// ● tool_name(arg1=value1, arg2=value2)
 ///   └ Running...
 /// ```
@@ -260,7 +271,7 @@ impl ForgeToolDisplay {
     }
 
     /// Print tool start in forge style
-    /// ```
+    /// ```text
     /// ● tool_name(args)
     ///   └ Running...
     /// ```
@@ -334,7 +345,10 @@ impl ForgeToolDisplay {
 
             // Check for files written
             if let Some(files) = json.get("files_written").and_then(|v| v.as_u64()) {
-                let lines = json.get("total_lines").and_then(|v| v.as_u64()).unwrap_or(0);
+                let lines = json
+                    .get("total_lines")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
                 return format!("wrote {} file(s) ({} lines)", files, lines);
             }
 

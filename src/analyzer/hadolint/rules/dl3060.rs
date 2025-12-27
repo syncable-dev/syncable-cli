@@ -3,7 +3,7 @@
 //! Clean up yarn cache after installing packages.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{simple_rule, SimpleRule};
+use crate::analyzer::hadolint::rules::{SimpleRule, simple_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
@@ -12,30 +12,34 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
         "DL3060",
         Severity::Info,
         "`yarn cache clean` missing after `yarn install`.",
-        |instr, shell| {
-            match instr {
-                Instruction::Run(_) => {
-                    if let Some(shell) = shell {
-                        let has_install = shell.any_command(|cmd| {
-                            (cmd.name == "yarn" && cmd.has_any_arg(&["install", "add"]))
-                        });
+        |instr, shell| match instr {
+            Instruction::Run(_) => {
+                if let Some(shell) = shell {
+                    let has_install = shell.any_command(|cmd| {
+                        (cmd.name == "yarn" && cmd.has_any_arg(&["install", "add"]))
+                    });
 
-                        if !has_install {
-                            return true;
-                        }
-
-                        let has_clean = shell.any_command(|cmd| {
-                            (cmd.name == "yarn" && cmd.has_any_arg(&["cache"]) && cmd.arguments.iter().any(|a| a == "clean"))
-                            || (cmd.name == "rm" && cmd.arguments.iter().any(|a| a.contains("yarn") && a.contains("cache")))
-                        });
-
-                        has_clean
-                    } else {
-                        true
+                    if !has_install {
+                        return true;
                     }
+
+                    let has_clean = shell.any_command(|cmd| {
+                        (cmd.name == "yarn"
+                            && cmd.has_any_arg(&["cache"])
+                            && cmd.arguments.iter().any(|a| a == "clean"))
+                            || (cmd.name == "rm"
+                                && cmd
+                                    .arguments
+                                    .iter()
+                                    .any(|a| a.contains("yarn") && a.contains("cache")))
+                    });
+
+                    has_clean
+                } else {
+                    true
                 }
-                _ => true,
             }
+            _ => true,
         },
     )
 }
@@ -43,8 +47,8 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::hadolint::lint::{lint, LintResult};
     use crate::analyzer::hadolint::config::HadolintConfig;
+    use crate::analyzer::hadolint::lint::{LintResult, lint};
 
     fn lint_dockerfile(content: &str) -> LintResult {
         lint(content, &HadolintConfig::default())

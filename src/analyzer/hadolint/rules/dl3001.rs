@@ -4,23 +4,13 @@
 //! are not appropriate for Dockerfile RUN instructions.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{simple_rule, SimpleRule};
+use crate::analyzer::hadolint::rules::{SimpleRule, simple_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
 /// Invalid commands that shouldn't be used in Dockerfiles.
 const INVALID_COMMANDS: &[&str] = &[
-    "ssh",
-    "vim",
-    "shutdown",
-    "service",
-    "ps",
-    "free",
-    "top",
-    "kill",
-    "mount",
-    "ifconfig",
-    "nano",
+    "ssh", "vim", "shutdown", "service", "ps", "free", "top", "kill", "mount", "ifconfig", "nano",
 ];
 
 pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool + Send + Sync> {
@@ -28,17 +18,15 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
         "DL3001",
         Severity::Info,
         "For some bash commands it makes no sense running them in a Docker container like ssh, vim, shutdown, service, ps, free, top, kill, mount, ifconfig",
-        |instr, shell| {
-            match instr {
-                Instruction::Run(_) => {
-                    if let Some(shell) = shell {
-                        !shell.any_command(|cmd| INVALID_COMMANDS.contains(&cmd.name.as_str()))
-                    } else {
-                        true
-                    }
+        |instr, shell| match instr {
+            Instruction::Run(_) => {
+                if let Some(shell) = shell {
+                    !shell.any_command(|cmd| INVALID_COMMANDS.contains(&cmd.name.as_str()))
+                } else {
+                    true
                 }
-                _ => true,
             }
+            _ => true,
         },
     )
 }

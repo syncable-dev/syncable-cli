@@ -15,9 +15,9 @@
 //! - Middle content is summarized with line count
 //! - Long lines (>2000 chars) are truncated
 
-use crate::agent::ui::confirmation::{confirm_shell_command, AllowedCommands, ConfirmationResult};
+use super::truncation::{TruncationLimits, truncate_shell_output};
+use crate::agent::ui::confirmation::{AllowedCommands, ConfirmationResult, confirm_shell_command};
 use crate::agent::ui::shell_output::StreamingShellOutput;
-use super::truncation::{truncate_shell_output, TruncationLimits};
 use rig::completion::ToolDefinition;
 use rig::tool::Tool;
 use serde::Deserialize;
@@ -136,7 +136,10 @@ impl ShellTool {
     }
 
     /// Create with shared allowed commands state (for session persistence)
-    pub fn with_allowed_commands(project_path: PathBuf, allowed_commands: Arc<AllowedCommands>) -> Self {
+    pub fn with_allowed_commands(
+        project_path: PathBuf,
+        allowed_commands: Arc<AllowedCommands>,
+    ) -> Self {
         Self {
             project_path,
             allowed_commands,
@@ -159,9 +162,9 @@ impl ShellTool {
 
     fn is_command_allowed(&self, command: &str) -> bool {
         let trimmed = command.trim();
-        ALLOWED_COMMANDS.iter().any(|allowed| {
-            trimmed.starts_with(allowed) || trimmed == *allowed
-        })
+        ALLOWED_COMMANDS
+            .iter()
+            .any(|allowed| trimmed.starts_with(allowed) || trimmed == *allowed)
     }
 
     /// Check if a command is read-only (safe for plan mode)
@@ -174,7 +177,20 @@ impl ShellTool {
         }
 
         // Block dangerous commands explicitly
-        let dangerous = ["rm ", "rm\t", "rmdir", "mv ", "cp ", "mkdir ", "touch ", "chmod ", "chown ", "npm install", "yarn install", "pnpm install"];
+        let dangerous = [
+            "rm ",
+            "rm\t",
+            "rmdir",
+            "mv ",
+            "cp ",
+            "mkdir ",
+            "touch ",
+            "chmod ",
+            "chown ",
+            "npm install",
+            "yarn install",
+            "pnpm install",
+        ];
         for d in dangerous {
             if trimmed.contains(d) {
                 return false;
@@ -186,9 +202,7 @@ impl ShellTool {
         let separators = ["&&", "||", "|", ";"];
         let mut parts: Vec<&str> = vec![trimmed];
         for sep in separators {
-            parts = parts.iter()
-                .flat_map(|p| p.split(sep))
-                .collect();
+            parts = parts.iter().flat_map(|p| p.split(sep)).collect();
         }
 
         // Each part must be a read-only command
@@ -204,9 +218,9 @@ impl ShellTool {
             }
 
             // Check if this part starts with a read-only command
-            let is_allowed = READ_ONLY_COMMANDS.iter().any(|allowed| {
-                part.starts_with(allowed) || part == *allowed
-            });
+            let is_allowed = READ_ONLY_COMMANDS
+                .iter()
+                .any(|allowed| part.starts_with(allowed) || part == *allowed);
 
             if !is_allowed {
                 return false;
@@ -217,7 +231,9 @@ impl ShellTool {
     }
 
     fn validate_working_dir(&self, dir: &Option<String>) -> Result<PathBuf, ShellError> {
-        let canonical_project = self.project_path.canonicalize()
+        let canonical_project = self
+            .project_path
+            .canonicalize()
             .map_err(|e| ShellError(format!("Invalid project path: {}", e)))?;
 
         let target = match dir {
@@ -232,11 +248,14 @@ impl ShellTool {
             None => self.project_path.clone(),
         };
 
-        let canonical_target = target.canonicalize()
+        let canonical_target = target
+            .canonicalize()
             .map_err(|e| ShellError(format!("Invalid working directory: {}", e)))?;
 
         if !canonical_target.starts_with(&canonical_project) {
-            return Err(ShellError("Working directory must be within project".to_string()));
+            return Err(ShellError(
+                "Working directory must be within project".to_string(),
+            ));
         }
 
         Ok(canonical_target)
@@ -321,8 +340,8 @@ Use this to validate generated configurations:
         let timeout_secs = args.timeout_secs.unwrap_or(60).min(300);
 
         // Check if confirmation is needed
-        let needs_confirmation = self.require_confirmation
-            && !self.allowed_commands.is_allowed(&args.command);
+        let needs_confirmation =
+            self.require_confirmation && !self.allowed_commands.is_allowed(&args.command);
 
         if needs_confirmation {
             // Show confirmation prompt

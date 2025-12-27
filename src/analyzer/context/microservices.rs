@@ -14,7 +14,14 @@ pub(crate) fn detect_microservices_structure(project_root: &Path) -> Result<Vec<
     let mut microservices = Vec::new();
 
     // Common patterns for microservice directories
-    let service_indicators = ["api", "service", "encore.service.ts", "main.ts", "main.go", "main.py"];
+    let service_indicators = [
+        "api",
+        "service",
+        "encore.service.ts",
+        "main.ts",
+        "main.go",
+        "main.py",
+    ];
     let db_indicators = ["db", "database", "migrations", "schema", "models"];
 
     // Check root-level directories
@@ -25,8 +32,17 @@ pub(crate) fn detect_microservices_structure(project_root: &Path) -> Result<Vec<
                 let dir_path = entry.path();
 
                 // Skip common non-service directories
-                if dir_name.starts_with('.') ||
-                   ["node_modules", "target", "dist", "build", "__pycache__", "vendor"].contains(&dir_name.as_str()) {
+                if dir_name.starts_with('.')
+                    || [
+                        "node_modules",
+                        "target",
+                        "dist",
+                        "build",
+                        "__pycache__",
+                        "vendor",
+                    ]
+                    .contains(&dir_name.as_str())
+                {
                     continue;
                 }
 
@@ -63,4 +79,4 @@ pub(crate) fn detect_microservices_structure(project_root: &Path) -> Result<Vec<
     }
 
     Ok(microservices)
-} 
+}

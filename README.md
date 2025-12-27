@@ -9,10 +9,20 @@
 </p>
 
 <p align="center">
+  <!-- Build & Quality -->
+  <a href="https://github.com/syncable-dev/syncable-cli/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/syncable-dev/syncable-cli/ci.yml?branch=main&style=flat-square&label=CI" alt="CI Status"></a>
   <a href="https://crates.io/crates/syncable-cli"><img src="https://img.shields.io/crates/v/syncable-cli?style=flat-square&color=blue" alt="Crates.io"></a>
+  <a href="https://docs.rs/syncable-cli"><img src="https://img.shields.io/docsrs/syncable-cli?style=flat-square&label=docs.rs" alt="docs.rs"></a>
+  <br>
+  <!-- Downloads & Community -->
   <a href="https://crates.io/crates/syncable-cli"><img src="https://img.shields.io/crates/d/syncable-cli?style=flat-square" alt="Downloads"></a>
+  <a href="https://github.com/syncable-dev/syncable-cli/stargazers"><img src="https://img.shields.io/github/stars/syncable-dev/syncable-cli?style=flat-square" alt="GitHub Stars"></a>
+  <a href="https://github.com/syncable-dev/syncable-cli/commits/main"><img src="https://img.shields.io/github/last-commit/syncable-dev/syncable-cli?style=flat-square" alt="Last Commit"></a>
+  <br>
+  <!-- Tech Stack -->
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPL%20v3-blue.svg?style=flat-square" alt="License"></a>
-  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Built%20with-Rust-orange?style=flat-square" alt="Rust"></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-1.85+-orange?style=flat-square&logo=rust" alt="Rust 1.85+"></a>
+  <a href="https://github.com/syncable-dev/syncable-cli"><img src="https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey?style=flat-square" alt="Platform"></a>
 </p>
 
 <p align="center">
@@ -33,25 +43,9 @@
 
 **Stop copy-pasting Dockerfiles from Stack Overflow.** Syncable CLI is an AI-powered assistant that understands your codebase and generates production-ready infrastructure — Dockerfiles, Kubernetes manifests, Terraform configs, and CI/CD pipelines — tailored specifically to your project.
 
-```bash
-$ sync-ctl chat
-🤖 Syncable Agent powered by Claude
-
-You: Create a production Dockerfile for this project
-
-Agent: I've analyzed your Express.js + TypeScript project. Here's an optimized
-multi-stage Dockerfile with:
-  ✓ Non-root user for security
-  ✓ Layer caching for faster builds
-  ✓ Health checks configured
-  ✓ Production dependencies only
-
-[Creates Dockerfile with VS Code diff view]
-
-You: Now add Redis caching and create a docker-compose
-
-Agent: I'll add Redis to your stack and create a compose file...
-```
+<p align="center">
+  <img src="syncable-cli-demo.gif" alt="Syncable CLI Demo" width="800" />
+</p>
 
 ## ⚡ Quick Start
 
@@ -249,8 +243,13 @@ See [LICENSE](LICENSE) for the full license text.
 
 The Dockerfile linting functionality (`src/analyzer/hadolint/`) is a Rust translation
 of [Hadolint](https://github.com/hadolint/hadolint), originally written in Haskell by
-Lukas Martinelli and contributors. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
-for full attribution details.
+Lukas Martinelli and contributors.
+
+The Docker Compose linting functionality (`src/analyzer/dclint/`) is a Rust implementation
+inspired by [docker-compose-linter](https://github.com/zavoloklom/docker-compose-linter)
+by Sergey Suspended.
+
+See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for full attribution details.
 
 ---
 

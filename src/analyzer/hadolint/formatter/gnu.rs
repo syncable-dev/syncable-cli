@@ -20,7 +20,12 @@ impl GnuFormatter {
 }
 
 impl Formatter for GnuFormatter {
-    fn format<W: Write>(&self, result: &LintResult, filename: &str, writer: &mut W) -> std::io::Result<()> {
+    fn format<W: Write>(
+        &self,
+        result: &LintResult,
+        filename: &str,
+        writer: &mut W,
+    ) -> std::io::Result<()> {
         for failure in &result.failures {
             let severity_str = match failure.severity {
                 Severity::Error => "error",
@@ -35,22 +40,13 @@ impl Formatter for GnuFormatter {
                 writeln!(
                     writer,
                     "{}:{}:{}: {}: {} [{}]",
-                    filename,
-                    failure.line,
-                    col,
-                    severity_str,
-                    failure.message,
-                    failure.code
+                    filename, failure.line, col, severity_str, failure.message, failure.code
                 )?;
             } else {
                 writeln!(
                     writer,
                     "{}:{}: {}: {} [{}]",
-                    filename,
-                    failure.line,
-                    severity_str,
-                    failure.message,
-                    failure.code
+                    filename, failure.line, severity_str, failure.message, failure.code
                 )?;
             }
         }

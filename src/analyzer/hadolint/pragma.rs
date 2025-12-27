@@ -104,11 +104,7 @@ fn parse_ignore_list(s: &str) -> Option<Vec<RuleCode>> {
         .map(|s| RuleCode::new(s))
         .collect();
 
-    if codes.is_empty() {
-        None
-    } else {
-        Some(codes)
-    }
+    if codes.is_empty() { None } else { Some(codes) }
 }
 
 /// Parsed pragma types.
@@ -123,11 +119,15 @@ pub enum Pragma {
 }
 
 /// Extract pragma state from Dockerfile instructions.
-pub fn extract_pragmas(instructions: &[crate::analyzer::hadolint::parser::InstructionPos]) -> PragmaState {
+pub fn extract_pragmas(
+    instructions: &[crate::analyzer::hadolint::parser::InstructionPos],
+) -> PragmaState {
     let mut state = PragmaState::new();
 
     for instr in instructions {
-        if let crate::analyzer::hadolint::parser::instruction::Instruction::Comment(comment) = &instr.instruction {
+        if let crate::analyzer::hadolint::parser::instruction::Instruction::Comment(comment) =
+            &instr.instruction
+        {
             if let Some(pragma) = parse_pragma(comment) {
                 match pragma {
                     Pragma::Ignore(codes) => {

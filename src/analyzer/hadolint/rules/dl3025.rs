@@ -4,7 +4,7 @@
 //! signal handling and avoids shell processing issues.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{simple_rule, SimpleRule};
+use crate::analyzer::hadolint::rules::{SimpleRule, simple_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
@@ -13,13 +13,9 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
         "DL3025",
         Severity::Warning,
         "Use arguments JSON notation for CMD and ENTRYPOINT arguments",
-        |instr, _shell| {
-            match instr {
-                Instruction::Cmd(args) | Instruction::Entrypoint(args) => {
-                    args.is_exec_form()
-                }
-                _ => true,
-            }
+        |instr, _shell| match instr {
+            Instruction::Cmd(args) | Instruction::Entrypoint(args) => args.is_exec_form(),
+            _ => true,
         },
     )
 }

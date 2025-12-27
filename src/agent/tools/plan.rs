@@ -30,10 +30,10 @@ use std::path::PathBuf;
 /// Task status in a plan file
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskStatus {
-    Pending,     // [ ]
-    InProgress,  // [~]
-    Done,        // [x]
-    Failed,      // [!]
+    Pending,    // [ ]
+    InProgress, // [~]
+    Done,       // [x]
+    Failed,     // [!]
 }
 
 impl TaskStatus {
@@ -60,10 +60,10 @@ impl TaskStatus {
 /// A task parsed from a plan file
 #[derive(Debug, Clone)]
 pub struct PlanTask {
-    pub index: usize,         // 1-based index
+    pub index: usize, // 1-based index
     pub status: TaskStatus,
     pub description: String,
-    pub line_number: usize,   // Line number in file (1-based)
+    pub line_number: usize, // Line number in file (1-based)
 }
 
 // ============================================================================
@@ -103,7 +103,12 @@ fn parse_plan_tasks(content: &str) -> Vec<PlanTask> {
 }
 
 /// Update a task's status in the plan file content
-fn update_task_status(content: &str, task_index: usize, new_status: TaskStatus, note: Option<&str>) -> Option<String> {
+fn update_task_status(
+    content: &str,
+    task_index: usize,
+    new_status: TaskStatus,
+    note: Option<&str>,
+) -> Option<String> {
     let task_regex = Regex::new(r"^(\s*)-\s*\[[ x~!]\]\s*(.+)$").unwrap();
     let mut current_index = 0;
     let mut lines: Vec<String> = content.lines().map(String::from).collect();
@@ -120,7 +125,13 @@ fn update_task_status(content: &str, task_index: usize, new_status: TaskStatus, 
                 // Build new line with updated status
                 let new_line = if new_status == TaskStatus::Failed {
                     let fail_note = note.unwrap_or("unknown reason");
-                    format!("{}- {} {} (FAILED: {})", indent, new_status.marker(), desc, fail_note)
+                    format!(
+                        "{}- {} {} (FAILED: {})",
+                        indent,
+                        new_status.marker(),
+                        desc,
+                        fail_note
+                    )
                 } else {
                     format!("{}- {} {}", indent, new_status.marker(), desc)
                 };
@@ -233,7 +244,8 @@ The task status markers are:
         let tasks = parse_plan_tasks(&args.content);
         if tasks.is_empty() {
             return Err(PlanCreateError(
-                "Plan must contain at least one task with format: '- [ ] Task description'".to_string()
+                "Plan must contain at least one task with format: '- [ ] Task description'"
+                    .to_string(),
             ));
         }
 
@@ -263,7 +275,8 @@ The task status markers are:
             .map_err(|e| PlanCreateError(format!("Failed to write plan file: {}", e)))?;
 
         // Get relative path for display
-        let rel_path = file_path.strip_prefix(&self.project_path)
+        let rel_path = file_path
+            .strip_prefix(&self.project_path)
             .map(|p| p.display().to_string())
             .unwrap_or_else(|_| file_path.display().to_string());
 
@@ -339,7 +352,8 @@ This tool:
 
 After executing the task, use `plan_update` to mark it as done or failed.
 
-Returns null task if all tasks are complete."#.to_string(),
+Returns null task if all tasks are complete."#
+                .to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -372,17 +386,28 @@ Returns null task if all tasks are complete."#.to_string(),
         match pending_task {
             Some(task) => {
                 // Update task to in-progress
-                let updated_content = update_task_status(&content, task.index, TaskStatus::InProgress, None)
-                    .ok_or_else(|| PlanNextError("Failed to update task status".to_string()))?;
+                let updated_content =
+                    update_task_status(&content, task.index, TaskStatus::InProgress, None)
+                        .ok_or_else(|| PlanNextError("Failed to update task status".to_string()))?;
 
                 // Write updated content
                 fs::write(&file_path, &updated_content)
                     .map_err(|e| PlanNextError(format!("Failed to write plan file: {}", e)))?;
 
                 // Count task states
-                let done_count = tasks.iter().filter(|t| t.status == TaskStatus::Done).count();
-                let pending_count = tasks.iter().filter(|t| t.status == TaskStatus::Pending).count() - 1; // -1 for current
-                let failed_count = tasks.iter().filter(|t| t.status == TaskStatus::Failed).count();
+                let done_count = tasks
+                    .iter()
+                    .filter(|t| t.status == TaskStatus::Done)
+                    .count();
+                let pending_count = tasks
+                    .iter()
+                    .filter(|t| t.status == TaskStatus::Pending)
+                    .count()
+                    - 1; // -1 for current
+                let failed_count = tasks
+                    .iter()
+                    .filter(|t| t.status == TaskStatus::Failed)
+                    .count();
 
                 let result = json!({
                     "has_task": true,
@@ -401,9 +426,18 @@ Returns null task if all tasks are complete."#.to_string(),
             }
             None => {
                 // No pending tasks - check if all done
-                let done_count = tasks.iter().filter(|t| t.status == TaskStatus::Done).count();
-                let failed_count = tasks.iter().filter(|t| t.status == TaskStatus::Failed).count();
-                let in_progress = tasks.iter().filter(|t| t.status == TaskStatus::InProgress).count();
+                let done_count = tasks
+                    .iter()
+                    .filter(|t| t.status == TaskStatus::Done)
+                    .count();
+                let failed_count = tasks
+                    .iter()
+                    .filter(|t| t.status == TaskStatus::Failed)
+                    .count();
+                let in_progress = tasks
+                    .iter()
+                    .filter(|t| t.status == TaskStatus::InProgress)
+                    .count();
 
                 let result = json!({
                     "has_task": false,
@@ -484,7 +518,8 @@ Use this after completing or failing a task to update its status:
 - "failed" - Mark task as failed `[!]` (include a note explaining why)
 - "pending" - Reset task to pending `[ ]`
 
-After marking a task done, call `plan_next` to get the next task."#.to_string(),
+After marking a task done, call `plan_next` to get the next task."#
+                .to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -523,29 +558,27 @@ After marking a task done, call `plan_next` to get the next task."#.to_string(),
             "done" => TaskStatus::Done,
             "failed" => TaskStatus::Failed,
             "pending" => TaskStatus::Pending,
-            _ => return Err(PlanUpdateError(format!(
-                "Invalid status '{}'. Use: done, failed, or pending",
-                args.status
-            ))),
+            _ => {
+                return Err(PlanUpdateError(format!(
+                    "Invalid status '{}'. Use: done, failed, or pending",
+                    args.status
+                )));
+            }
         };
 
         // Require note for failed status
         if new_status == TaskStatus::Failed && args.note.is_none() {
             return Err(PlanUpdateError(
-                "A note is required when marking a task as failed".to_string()
+                "A note is required when marking a task as failed".to_string(),
             ));
         }
 
         // Update task status
-        let updated_content = update_task_status(
-            &content,
-            args.task_index,
-            new_status,
-            args.note.as_deref(),
-        ).ok_or_else(|| PlanUpdateError(format!(
-            "Task {} not found in plan",
-            args.task_index
-        )))?;
+        let updated_content =
+            update_task_status(&content, args.task_index, new_status, args.note.as_deref())
+                .ok_or_else(|| {
+                    PlanUpdateError(format!("Task {} not found in plan", args.task_index))
+                })?;
 
         // Write updated content
         fs::write(&file_path, &updated_content)
@@ -553,9 +586,18 @@ After marking a task done, call `plan_next` to get the next task."#.to_string(),
 
         // Parse updated tasks for summary
         let tasks = parse_plan_tasks(&updated_content);
-        let done_count = tasks.iter().filter(|t| t.status == TaskStatus::Done).count();
-        let pending_count = tasks.iter().filter(|t| t.status == TaskStatus::Pending).count();
-        let failed_count = tasks.iter().filter(|t| t.status == TaskStatus::Failed).count();
+        let done_count = tasks
+            .iter()
+            .filter(|t| t.status == TaskStatus::Done)
+            .count();
+        let pending_count = tasks
+            .iter()
+            .filter(|t| t.status == TaskStatus::Pending)
+            .count();
+        let failed_count = tasks
+            .iter()
+            .filter(|t| t.status == TaskStatus::Failed)
+            .count();
 
         let result = json!({
             "success": true,
@@ -622,7 +664,8 @@ impl Tool for PlanListTool {
 Shows each plan with:
 - Filename and path
 - Task counts (done/pending/failed)
-- Overall status"#.to_string(),
+- Overall status"#
+                .to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -659,10 +702,22 @@ Shows each plan with:
             if path.extension().map(|e| e == "md").unwrap_or(false) {
                 if let Ok(content) = fs::read_to_string(&path) {
                     let tasks = parse_plan_tasks(&content);
-                    let done = tasks.iter().filter(|t| t.status == TaskStatus::Done).count();
-                    let pending = tasks.iter().filter(|t| t.status == TaskStatus::Pending).count();
-                    let in_progress = tasks.iter().filter(|t| t.status == TaskStatus::InProgress).count();
-                    let failed = tasks.iter().filter(|t| t.status == TaskStatus::Failed).count();
+                    let done = tasks
+                        .iter()
+                        .filter(|t| t.status == TaskStatus::Done)
+                        .count();
+                    let pending = tasks
+                        .iter()
+                        .filter(|t| t.status == TaskStatus::Pending)
+                        .count();
+                    let in_progress = tasks
+                        .iter()
+                        .filter(|t| t.status == TaskStatus::InProgress)
+                        .count();
+                    let failed = tasks
+                        .iter()
+                        .filter(|t| t.status == TaskStatus::Failed)
+                        .count();
 
                     // Apply filter
                     let include = match filter {
@@ -672,7 +727,8 @@ Shows each plan with:
                     };
 
                     if include {
-                        let rel_path = path.strip_prefix(&self.project_path)
+                        let rel_path = path
+                            .strip_prefix(&self.project_path)
                             .map(|p| p.display().to_string())
                             .unwrap_or_else(|_| path.display().to_string());
 

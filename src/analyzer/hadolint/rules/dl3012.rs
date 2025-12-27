@@ -3,11 +3,12 @@
 //! Only one HEALTHCHECK instruction is allowed per stage.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{custom_rule, CustomRule, RuleState};
+use crate::analyzer::hadolint::rules::{CustomRule, RuleState, custom_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
-pub fn rule() -> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&ParsedShell>) + Send + Sync> {
+pub fn rule()
+-> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&ParsedShell>) + Send + Sync> {
     custom_rule(
         "DL3012",
         Severity::Error,
@@ -39,8 +40,8 @@ pub fn rule() -> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&P
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::hadolint::lint::{lint, LintResult};
     use crate::analyzer::hadolint::config::HadolintConfig;
+    use crate::analyzer::hadolint::lint::{LintResult, lint};
 
     fn lint_dockerfile(content: &str) -> LintResult {
         lint(content, &HadolintConfig::default())
@@ -49,7 +50,7 @@ mod tests {
     #[test]
     fn test_single_healthcheck() {
         let result = lint_dockerfile(
-            "FROM ubuntu:20.04\nHEALTHCHECK CMD curl -f http://localhost/ || exit 1"
+            "FROM ubuntu:20.04\nHEALTHCHECK CMD curl -f http://localhost/ || exit 1",
         );
         assert!(!result.failures.iter().any(|f| f.code.as_str() == "DL3012"));
     }
@@ -57,7 +58,7 @@ mod tests {
     #[test]
     fn test_multiple_healthchecks() {
         let result = lint_dockerfile(
-            "FROM ubuntu:20.04\nHEALTHCHECK CMD curl http://localhost/\nHEALTHCHECK CMD wget http://localhost/"
+            "FROM ubuntu:20.04\nHEALTHCHECK CMD curl http://localhost/\nHEALTHCHECK CMD wget http://localhost/",
         );
         assert!(result.failures.iter().any(|f| f.code.as_str() == "DL3012"));
     }
@@ -65,7 +66,7 @@ mod tests {
     #[test]
     fn test_healthcheck_different_stages() {
         let result = lint_dockerfile(
-            "FROM ubuntu:20.04 AS builder\nHEALTHCHECK CMD curl http://localhost/\nFROM ubuntu:20.04\nHEALTHCHECK CMD wget http://localhost/"
+            "FROM ubuntu:20.04 AS builder\nHEALTHCHECK CMD curl http://localhost/\nFROM ubuntu:20.04\nHEALTHCHECK CMD wget http://localhost/",
         );
         assert!(!result.failures.iter().any(|f| f.code.as_str() == "DL3012"));
     }

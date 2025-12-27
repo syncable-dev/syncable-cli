@@ -13,5 +13,5 @@ pub use dependencies::handle_dependencies;
 pub use generate::{handle_generate, handle_validate};
 pub use security::handle_security;
 pub use tools::handle_tools;
-pub use utils::{handle_support, format_project_category};
-pub use vulnerabilities::handle_vulnerabilities; 
+pub use utils::{format_project_category, handle_support};
+pub use vulnerabilities::handle_vulnerabilities;

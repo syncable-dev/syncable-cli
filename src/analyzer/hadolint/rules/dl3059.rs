@@ -3,11 +3,12 @@
 //! Combine consecutive RUN instructions to reduce the number of layers.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{custom_rule, CustomRule, RuleState};
+use crate::analyzer::hadolint::rules::{CustomRule, RuleState, custom_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
-pub fn rule() -> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&ParsedShell>) + Send + Sync> {
+pub fn rule()
+-> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&ParsedShell>) + Send + Sync> {
     custom_rule(
         "DL3059",
         Severity::Info,
@@ -46,8 +47,8 @@ pub fn rule() -> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&P
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::hadolint::lint::{lint, LintResult};
     use crate::analyzer::hadolint::config::HadolintConfig;
+    use crate::analyzer::hadolint::lint::{LintResult, lint};
 
     fn lint_dockerfile(content: &str) -> LintResult {
         lint(content, &HadolintConfig::default())
@@ -55,42 +56,42 @@ mod tests {
 
     #[test]
     fn test_consecutive_runs() {
-        let result = lint_dockerfile(
-            "FROM ubuntu:20.04\nRUN apt-get update\nRUN apt-get install -y nginx"
-        );
+        let result =
+            lint_dockerfile("FROM ubuntu:20.04\nRUN apt-get update\nRUN apt-get install -y nginx");
         assert!(result.failures.iter().any(|f| f.code.as_str() == "DL3059"));
     }
 
     #[test]
     fn test_single_run() {
-        let result = lint_dockerfile(
-            "FROM ubuntu:20.04\nRUN apt-get update && apt-get install -y nginx"
-        );
+        let result =
+            lint_dockerfile("FROM ubuntu:20.04\nRUN apt-get update && apt-get install -y nginx");
         assert!(!result.failures.iter().any(|f| f.code.as_str() == "DL3059"));
     }
 
     #[test]
     fn test_runs_separated_by_other() {
         let result = lint_dockerfile(
-            "FROM ubuntu:20.04\nRUN apt-get update\nENV DEBIAN_FRONTEND=noninteractive\nRUN apt-get install -y nginx"
+            "FROM ubuntu:20.04\nRUN apt-get update\nENV DEBIAN_FRONTEND=noninteractive\nRUN apt-get install -y nginx",
         );
         assert!(!result.failures.iter().any(|f| f.code.as_str() == "DL3059"));
     }
 
     #[test]
     fn test_three_consecutive_runs() {
-        let result = lint_dockerfile(
-            "FROM ubuntu:20.04\nRUN echo 1\nRUN echo 2\nRUN echo 3"
-        );
+        let result = lint_dockerfile("FROM ubuntu:20.04\nRUN echo 1\nRUN echo 2\nRUN echo 3");
         // Should report on 2nd and 3rd RUN
-        let count = result.failures.iter().filter(|f| f.code.as_str() == "DL3059").count();
+        let count = result
+            .failures
+            .iter()
+            .filter(|f| f.code.as_str() == "DL3059")
+            .count();
         assert_eq!(count, 2);
     }
 
     #[test]
     fn test_different_stages() {
         let result = lint_dockerfile(
-            "FROM ubuntu:20.04 AS stage1\nRUN echo 1\nFROM ubuntu:20.04 AS stage2\nRUN echo 2"
+            "FROM ubuntu:20.04 AS stage1\nRUN echo 1\nFROM ubuntu:20.04 AS stage2\nRUN echo 2",
         );
         // Different stages, no consecutive RUNs
         assert!(!result.failures.iter().any(|f| f.code.as_str() == "DL3059"));

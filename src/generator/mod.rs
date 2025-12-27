@@ -19,4 +19,4 @@ pub fn generate_compose(analysis: &ProjectAnalysis) -> Result<String> {
 /// Generate Terraform configuration based on project analysis
 pub fn generate_terraform(analysis: &ProjectAnalysis) -> Result<String> {
     terraform_gen::generate(analysis)
-} 
+}

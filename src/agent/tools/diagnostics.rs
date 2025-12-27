@@ -87,10 +87,7 @@ impl DiagnosticsTool {
     }
 
     /// Get diagnostics from IDE via MCP
-    async fn get_ide_diagnostics(
-        &self,
-        file_path: Option<&str>,
-    ) -> Option<DiagnosticsResponse> {
+    async fn get_ide_diagnostics(&self, file_path: Option<&str>) -> Option<DiagnosticsResponse> {
         let client = self.ide_client.as_ref()?;
         let guard = client.lock().await;
 
@@ -172,15 +169,26 @@ impl DiagnosticsTool {
 
         // Get the primary span
         let spans = message.get("spans")?.as_array()?;
-        let span = spans.iter().find(|s| {
-            s.get("is_primary").and_then(|v| v.as_bool()).unwrap_or(false)
-        }).or_else(|| spans.first())?;
+        let span = spans
+            .iter()
+            .find(|s| {
+                s.get("is_primary")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+            })
+            .or_else(|| spans.first())?;
 
         let file = span.get("file_name")?.as_str()?;
         let line = span.get("line_start")?.as_u64()? as u32;
         let column = span.get("column_start")?.as_u64()? as u32;
-        let end_line = span.get("line_end").and_then(|v| v.as_u64()).map(|v| v as u32);
-        let end_column = span.get("column_end").and_then(|v| v.as_u64()).map(|v| v as u32);
+        let end_line = span
+            .get("line_end")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32);
+        let end_column = span
+            .get("column_end")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32);
 
         let code = message
             .get("code")
@@ -265,9 +273,18 @@ impl DiagnosticsTool {
                         .to_string();
                     let line = msg.get("line").and_then(|l| l.as_u64()).unwrap_or(1) as u32;
                     let column = msg.get("column").and_then(|c| c.as_u64()).unwrap_or(1) as u32;
-                    let end_line = msg.get("endLine").and_then(|l| l.as_u64()).map(|v| v as u32);
-                    let end_column = msg.get("endColumn").and_then(|c| c.as_u64()).map(|v| v as u32);
-                    let code = msg.get("ruleId").and_then(|r| r.as_str()).map(|s| s.to_string());
+                    let end_line = msg
+                        .get("endLine")
+                        .and_then(|l| l.as_u64())
+                        .map(|v| v as u32);
+                    let end_column = msg
+                        .get("endColumn")
+                        .and_then(|c| c.as_u64())
+                        .map(|v| v as u32);
+                    let code = msg
+                        .get("ruleId")
+                        .and_then(|r| r.as_str())
+                        .map(|s| s.to_string());
 
                     diagnostics.push(Diagnostic {
                         file: file.to_string(),
@@ -459,7 +476,9 @@ impl DiagnosticsTool {
 
         // Filter out warnings if not requested
         if !include_warnings {
-            response.diagnostics.retain(|d| d.severity == DiagnosticSeverity::Error);
+            response
+                .diagnostics
+                .retain(|d| d.severity == DiagnosticSeverity::Error);
         }
 
         // Apply limit

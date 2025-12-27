@@ -39,6 +39,7 @@ pub mod session;
 pub mod tools;
 pub mod ui;
 use colored::Colorize;
+use commands::TokenUsage;
 use history::{ConversationHistory, ToolCallRecord};
 use ide::IdeClient;
 use rig::{
@@ -47,7 +48,6 @@ use rig::{
     providers::{anthropic, openai},
 };
 use session::{ChatSession, PlanMode};
-use commands::TokenUsage;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Mutex as TokioMutex;
@@ -80,7 +80,10 @@ impl std::str::FromStr for ProviderType {
             "openai" => Ok(ProviderType::OpenAI),
             "anthropic" => Ok(ProviderType::Anthropic),
             "bedrock" | "aws" | "aws-bedrock" => Ok(ProviderType::Bedrock),
-            _ => Err(format!("Unknown provider: {}. Use: openai, anthropic, or bedrock", s)),
+            _ => Err(format!(
+                "Unknown provider: {}. Use: openai, anthropic, or bedrock",
+                s
+            )),
         }
     }
 }
@@ -149,16 +152,16 @@ pub async fn run_interactive(
                 }
                 Err(e) => {
                     // IDE detected but companion not running or connection failed
-                    println!(
-                        "{} IDE companion not connected: {}",
-                        "!".yellow(),
-                        e
-                    );
+                    println!("{} IDE companion not connected: {}", "!".yellow(), e);
                     None
                 }
             }
         } else {
-            println!("{} No IDE detected (TERM_PROGRAM={})", "·".dimmed(), std::env::var("TERM_PROGRAM").unwrap_or_default());
+            println!(
+                "{} No IDE detected (TERM_PROGRAM={})",
+                "·".dimmed(),
+                std::env::var("TERM_PROGRAM").unwrap_or_default()
+            );
             None
         }
     };
@@ -185,7 +188,10 @@ pub async fn run_interactive(
     loop {
         // Show conversation status if we have history
         if !conversation_history.is_empty() {
-            println!("{}", format!("  💬 Context: {}", conversation_history.status()).dimmed());
+            println!(
+                "{}",
+                format!("  💬 Context: {}", conversation_history.status()).dimmed()
+            );
         }
 
         // Check for pending input (from plan menu selection)
@@ -243,7 +249,10 @@ pub async fn run_interactive(
 
         // Check API key before making request (in case provider changed)
         if !ChatSession::has_api_key(session.provider) {
-            eprintln!("{}", "No API key configured. Use /provider to set one.".yellow());
+            eprintln!(
+                "{}",
+                "No API key configured. Use /provider to set one.".yellow()
+            );
             continue;
         }
 
@@ -251,7 +260,10 @@ pub async fn run_interactive(
         if conversation_history.needs_compaction() {
             println!("{}", "  📦 Compacting conversation history...".dimmed());
             if let Some(summary) = conversation_history.compact() {
-                println!("{}", format!("  ✓ Compressed {} turns", summary.matches("Turn").count()).dimmed());
+                println!(
+                    "{}",
+                    format!("  ✓ Compressed {} turns", summary.matches("Turn").count()).dimmed()
+                );
             }
         }
 
@@ -263,7 +275,10 @@ pub async fn run_interactive(
             + 5000; // System prompt overhead estimate
 
         if estimated_input_tokens > 150_000 {
-            println!("{}", "  ⚠ Large context detected. Pre-truncating...".yellow());
+            println!(
+                "{}",
+                "  ⚠ Large context detected. Pre-truncating...".yellow()
+            );
 
             let old_count = raw_chat_history.len();
             // Keep last 20 messages when approaching limit
@@ -271,7 +286,15 @@ pub async fn run_interactive(
                 let drain_count = raw_chat_history.len() - 20;
                 raw_chat_history.drain(0..drain_count);
                 conversation_history.clear(); // Stay in sync
-                println!("{}", format!("  ✓ Truncated {} → {} messages", old_count, raw_chat_history.len()).dimmed());
+                println!(
+                    "{}",
+                    format!(
+                        "  ✓ Truncated {} → {} messages",
+                        old_count,
+                        raw_chat_history.len()
+                    )
+                    .dimmed()
+                );
             }
         }
 
@@ -292,10 +315,12 @@ pub async fn run_interactive(
         let mut succeeded = false;
 
         while retry_attempt < MAX_RETRIES && continuation_count < MAX_CONTINUATIONS && !succeeded {
-
             // Log if this is a continuation attempt
             if continuation_count > 0 {
-                eprintln!("{}", format!("  📡 Sending continuation request...").dimmed());
+                eprintln!(
+                    "{}",
+                    format!("  📡 Sending continuation request...").dimmed()
+                );
             }
 
             // Create hook for Claude Code style tool display
@@ -303,7 +328,11 @@ pub async fn run_interactive(
 
             let project_path_buf = session.project_path.clone();
             // Select prompt based on query type (analysis vs generation) and plan mode
-            let preamble = get_system_prompt(&session.project_path, Some(&current_input), session.plan_mode);
+            let preamble = get_system_prompt(
+                &session.project_path,
+                Some(&current_input),
+                session.plan_mode,
+            );
             let is_generation = prompts::is_generation_query(&current_input);
             let is_planning = session.plan_mode.is_planning();
 
@@ -315,16 +344,17 @@ pub async fn run_interactive(
                     let client = openai::Client::from_env();
                     // For GPT-5.x reasoning models, enable reasoning with summary output
                     // so we can see the model's thinking process
-                    let reasoning_params = if session.model.starts_with("gpt-5") || session.model.starts_with("o1") {
-                        Some(serde_json::json!({
-                            "reasoning": {
-                                "effort": "medium",
-                                "summary": "detailed"
-                            }
-                        }))
-                    } else {
-                        None
-                    };
+                    let reasoning_params =
+                        if session.model.starts_with("gpt-5") || session.model.starts_with("o1") {
+                            Some(serde_json::json!({
+                                "reasoning": {
+                                    "effort": "medium",
+                                    "summary": "detailed"
+                                }
+                            }))
+                        } else {
+                            None
+                        };
 
                     let mut builder = client
                         .agent(&session.model)
@@ -334,6 +364,7 @@ pub async fn run_interactive(
                         .tool(SecurityScanTool::new(project_path_buf.clone()))
                         .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
                         .tool(HadolintTool::new(project_path_buf.clone()))
+                        .tool(DclintTool::new(project_path_buf.clone()))
                         .tool(TerraformFmtTool::new(project_path_buf.clone()))
                         .tool(TerraformValidateTool::new(project_path_buf.clone()))
                         .tool(TerraformInstallTool::new())
@@ -349,19 +380,20 @@ pub async fn run_interactive(
                             .tool(PlanListTool::new(project_path_buf.clone()));
                     } else if is_generation {
                         // Standard mode + generation query: all tools including file writes and plan execution
-                        let (mut write_file_tool, mut write_files_tool) = if let Some(ref client) = ide_client {
-                            (
-                                WriteFileTool::new(project_path_buf.clone())
-                                    .with_ide_client(client.clone()),
-                                WriteFilesTool::new(project_path_buf.clone())
-                                    .with_ide_client(client.clone()),
-                            )
-                        } else {
-                            (
-                                WriteFileTool::new(project_path_buf.clone()),
-                                WriteFilesTool::new(project_path_buf.clone()),
-                            )
-                        };
+                        let (mut write_file_tool, mut write_files_tool) =
+                            if let Some(ref client) = ide_client {
+                                (
+                                    WriteFileTool::new(project_path_buf.clone())
+                                        .with_ide_client(client.clone()),
+                                    WriteFilesTool::new(project_path_buf.clone())
+                                        .with_ide_client(client.clone()),
+                                )
+                            } else {
+                                (
+                                    WriteFileTool::new(project_path_buf.clone()),
+                                    WriteFilesTool::new(project_path_buf.clone()),
+                                )
+                            };
                         // Disable confirmations if auto-accept mode is enabled (from plan menu)
                         if auto_accept_writes {
                             write_file_tool = write_file_tool.without_confirmation();
@@ -384,7 +416,8 @@ pub async fn run_interactive(
                     // Allow up to 50 tool call turns for complex generation tasks
                     // Use hook to display tool calls as they happen
                     // Pass conversation history for context continuity
-                    agent.prompt(&current_input)
+                    agent
+                        .prompt(&current_input)
                         .with_history(&mut raw_chat_history)
                         .with_hook(hook.clone())
                         .multi_turn(50)
@@ -407,6 +440,7 @@ pub async fn run_interactive(
                         .tool(SecurityScanTool::new(project_path_buf.clone()))
                         .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
                         .tool(HadolintTool::new(project_path_buf.clone()))
+                        .tool(DclintTool::new(project_path_buf.clone()))
                         .tool(TerraformFmtTool::new(project_path_buf.clone()))
                         .tool(TerraformValidateTool::new(project_path_buf.clone()))
                         .tool(TerraformInstallTool::new())
@@ -422,19 +456,20 @@ pub async fn run_interactive(
                             .tool(PlanListTool::new(project_path_buf.clone()));
                     } else if is_generation {
                         // Standard mode + generation query: all tools including file writes and plan execution
-                        let (mut write_file_tool, mut write_files_tool) = if let Some(ref client) = ide_client {
-                            (
-                                WriteFileTool::new(project_path_buf.clone())
-                                    .with_ide_client(client.clone()),
-                                WriteFilesTool::new(project_path_buf.clone())
-                                    .with_ide_client(client.clone()),
-                            )
-                        } else {
-                            (
-                                WriteFileTool::new(project_path_buf.clone()),
-                                WriteFilesTool::new(project_path_buf.clone()),
-                            )
-                        };
+                        let (mut write_file_tool, mut write_files_tool) =
+                            if let Some(ref client) = ide_client {
+                                (
+                                    WriteFileTool::new(project_path_buf.clone())
+                                        .with_ide_client(client.clone()),
+                                    WriteFilesTool::new(project_path_buf.clone())
+                                        .with_ide_client(client.clone()),
+                                )
+                            } else {
+                                (
+                                    WriteFileTool::new(project_path_buf.clone()),
+                                    WriteFilesTool::new(project_path_buf.clone()),
+                                )
+                            };
                         // Disable confirmations if auto-accept mode is enabled (from plan menu)
                         if auto_accept_writes {
                             write_file_tool = write_file_tool.without_confirmation();
@@ -454,7 +489,8 @@ pub async fn run_interactive(
                     // Allow up to 50 tool call turns for complex generation tasks
                     // Use hook to display tool calls as they happen
                     // Pass conversation history for context continuity
-                    agent.prompt(&current_input)
+                    agent
+                        .prompt(&current_input)
                         .with_history(&mut raw_chat_history)
                         .with_hook(hook.clone())
                         .multi_turn(50)
@@ -484,6 +520,7 @@ pub async fn run_interactive(
                         .tool(SecurityScanTool::new(project_path_buf.clone()))
                         .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
                         .tool(HadolintTool::new(project_path_buf.clone()))
+                        .tool(DclintTool::new(project_path_buf.clone()))
                         .tool(TerraformFmtTool::new(project_path_buf.clone()))
                         .tool(TerraformValidateTool::new(project_path_buf.clone()))
                         .tool(TerraformInstallTool::new())
@@ -499,19 +536,20 @@ pub async fn run_interactive(
                             .tool(PlanListTool::new(project_path_buf.clone()));
                     } else if is_generation {
                         // Standard mode + generation query: all tools including file writes and plan execution
-                        let (mut write_file_tool, mut write_files_tool) = if let Some(ref client) = ide_client {
-                            (
-                                WriteFileTool::new(project_path_buf.clone())
-                                    .with_ide_client(client.clone()),
-                                WriteFilesTool::new(project_path_buf.clone())
-                                    .with_ide_client(client.clone()),
-                            )
-                        } else {
-                            (
-                                WriteFileTool::new(project_path_buf.clone()),
-                                WriteFilesTool::new(project_path_buf.clone()),
-                            )
-                        };
+                        let (mut write_file_tool, mut write_files_tool) =
+                            if let Some(ref client) = ide_client {
+                                (
+                                    WriteFileTool::new(project_path_buf.clone())
+                                        .with_ide_client(client.clone()),
+                                    WriteFilesTool::new(project_path_buf.clone())
+                                        .with_ide_client(client.clone()),
+                                )
+                            } else {
+                                (
+                                    WriteFileTool::new(project_path_buf.clone()),
+                                    WriteFilesTool::new(project_path_buf.clone()),
+                                )
+                            };
                         // Disable confirmations if auto-accept mode is enabled (from plan menu)
                         if auto_accept_writes {
                             write_file_tool = write_file_tool.without_confirmation();
@@ -532,7 +570,8 @@ pub async fn run_interactive(
                     let agent = builder.build();
 
                     // Use same multi-turn pattern as OpenAI/Anthropic
-                    agent.prompt(&current_input)
+                    agent
+                        .prompt(&current_input)
                         .with_history(&mut raw_chat_history)
                         .with_hook(hook.clone())
                         .multi_turn(50)
@@ -550,20 +589,28 @@ pub async fn run_interactive(
                     let hook_usage = hook.get_usage().await;
                     if hook_usage.has_data() {
                         // Use actual token counts from API response
-                        session.token_usage.add_actual(hook_usage.input_tokens, hook_usage.output_tokens);
+                        session
+                            .token_usage
+                            .add_actual(hook_usage.input_tokens, hook_usage.output_tokens);
                     } else {
                         // Fall back to estimation when API doesn't provide usage
                         let prompt_tokens = TokenUsage::estimate_tokens(&input);
                         let completion_tokens = TokenUsage::estimate_tokens(&text);
-                        session.token_usage.add_estimated(prompt_tokens, completion_tokens);
+                        session
+                            .token_usage
+                            .add_estimated(prompt_tokens, completion_tokens);
                     }
                     // Reset hook usage for next request batch
                     hook.reset_usage().await;
 
                     // Show context indicator like Forge: [model/~tokens]
-                    let model_short = session.model.split('/').last()
+                    let model_short = session
+                        .model
+                        .split('/')
+                        .last()
                         .unwrap_or(&session.model)
-                        .split(':').next()
+                        .split(':')
+                        .next()
                         .unwrap_or(&session.model);
                     println!();
                     println!(
@@ -581,7 +628,14 @@ pub async fn run_interactive(
 
                     // Show tool call summary if significant
                     if batch_tool_count > 10 {
-                        println!("{}", format!("  ✓ Completed with {} tool calls ({} total this session)", batch_tool_count, total_tool_calls).dimmed());
+                        println!(
+                            "{}",
+                            format!(
+                                "  ✓ Completed with {} tool calls ({} total this session)",
+                                batch_tool_count, total_tool_calls
+                            )
+                            .dimmed()
+                        );
                     }
 
                     // Add to conversation history with tool call records
@@ -592,13 +646,19 @@ pub async fn run_interactive(
                     if conversation_history.needs_compaction() {
                         println!("{}", "  📦 Compacting conversation history...".dimmed());
                         if let Some(summary) = conversation_history.compact() {
-                            println!("{}", format!("  ✓ Compressed {} turns", summary.matches("Turn").count()).dimmed());
+                            println!(
+                                "{}",
+                                format!("  ✓ Compressed {} turns", summary.matches("Turn").count())
+                                    .dimmed()
+                            );
                         }
                     }
 
                     // Also update legacy session history for compatibility
                     session.history.push(("user".to_string(), input.clone()));
-                    session.history.push(("assistant".to_string(), text.clone()));
+                    session
+                        .history
+                        .push(("assistant".to_string(), text.clone()));
 
                     // Check if plan_create was called - show interactive menu
                     if let Some(plan_info) = find_plan_create_call(&tool_calls) {
@@ -652,7 +712,10 @@ pub async fn run_interactive(
                     println!();
 
                     // Check if this is a max depth error - handle as checkpoint
-                    if err_str.contains("MaxDepth") || err_str.contains("max_depth") || err_str.contains("reached limit") {
+                    if err_str.contains("MaxDepth")
+                        || err_str.contains("max_depth")
+                        || err_str.contains("reached limit")
+                    {
                         // Extract what was done before hitting the limit
                         let completed_tools = extract_tool_calls_from_hook(&hook).await;
                         let agent_thinking = extract_agent_messages_from_hook(&hook).await;
@@ -666,18 +729,35 @@ pub async fn run_interactive(
 
                         // Check if we've hit the absolute maximum
                         if total_tool_calls >= MAX_TOOL_CALLS {
-                            eprintln!("{}", format!("Maximum tool call limit ({}) reached.", MAX_TOOL_CALLS).red());
-                            eprintln!("{}", "The task is too complex. Try breaking it into smaller parts.".dimmed());
+                            eprintln!(
+                                "{}",
+                                format!("Maximum tool call limit ({}) reached.", MAX_TOOL_CALLS)
+                                    .red()
+                            );
+                            eprintln!(
+                                "{}",
+                                "The task is too complex. Try breaking it into smaller parts."
+                                    .dimmed()
+                            );
                             break;
                         }
 
                         // Ask user if they want to continue (unless auto-continue is enabled)
                         let should_continue = if auto_continue_tools {
-                            eprintln!("{}", "  Auto-continuing (you selected 'always')...".dimmed());
+                            eprintln!(
+                                "{}",
+                                "  Auto-continuing (you selected 'always')...".dimmed()
+                            );
                             true
                         } else {
-                            eprintln!("{}", "Excessive tool calls used. Want to continue?".yellow());
-                            eprintln!("{}", "  [y] Yes, continue  [n] No, stop  [a] Always continue".dimmed());
+                            eprintln!(
+                                "{}",
+                                "Excessive tool calls used. Want to continue?".yellow()
+                            );
+                            eprintln!(
+                                "{}",
+                                "  [y] Yes, continue  [n] No, stop  [a] Always continue".dimmed()
+                            );
                             print!("  > ");
                             let _ = std::io::Write::flush(&mut std::io::stdout());
 
@@ -698,51 +778,84 @@ pub async fn run_interactive(
                         };
 
                         if !should_continue {
-                            eprintln!("{}", "Stopped by user. Type 'continue' to resume later.".dimmed());
+                            eprintln!(
+                                "{}",
+                                "Stopped by user. Type 'continue' to resume later.".dimmed()
+                            );
                             // Add partial progress to history
                             if !completed_tools.is_empty() {
                                 conversation_history.add_turn(
                                     current_input.clone(),
-                                    format!("[Stopped at checkpoint - {} tools completed]", batch_tool_count),
-                                    vec![]
+                                    format!(
+                                        "[Stopped at checkpoint - {} tools completed]",
+                                        batch_tool_count
+                                    ),
+                                    vec![],
                                 );
                             }
                             break;
                         }
 
                         // Continue from checkpoint
-                        eprintln!("{}", format!(
-                            "  → Continuing... {} remaining tool calls available",
-                            MAX_TOOL_CALLS - total_tool_calls
-                        ).dimmed());
+                        eprintln!(
+                            "{}",
+                            format!(
+                                "  → Continuing... {} remaining tool calls available",
+                                MAX_TOOL_CALLS - total_tool_calls
+                            )
+                            .dimmed()
+                        );
 
                         // Add partial progress to history (without duplicating tool calls)
                         conversation_history.add_turn(
                             current_input.clone(),
-                            format!("[Checkpoint - {} tools completed, continuing...]", batch_tool_count),
-                            vec![]
+                            format!(
+                                "[Checkpoint - {} tools completed, continuing...]",
+                                batch_tool_count
+                            ),
+                            vec![],
                         );
 
                         // Build continuation prompt
-                        current_input = build_continuation_prompt(&input, &completed_tools, &agent_thinking);
+                        current_input =
+                            build_continuation_prompt(&input, &completed_tools, &agent_thinking);
 
                         // Brief delay before continuation
                         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                         continue; // Continue the loop without incrementing retry_attempt
-                    } else if err_str.contains("rate") || err_str.contains("Rate") || err_str.contains("429")
-                        || err_str.contains("Too many tokens") || err_str.contains("please wait")
-                        || err_str.contains("throttl") || err_str.contains("Throttl") {
+                    } else if err_str.contains("rate")
+                        || err_str.contains("Rate")
+                        || err_str.contains("429")
+                        || err_str.contains("Too many tokens")
+                        || err_str.contains("please wait")
+                        || err_str.contains("throttl")
+                        || err_str.contains("Throttl")
+                    {
                         eprintln!("{}", "⚠ Rate limited by API provider.".yellow());
                         // Wait before retry for rate limits (longer wait for "too many tokens")
                         retry_attempt += 1;
-                        let wait_secs = if err_str.contains("Too many tokens") { 30 } else { 5 };
-                        eprintln!("{}", format!("  Waiting {} seconds before retry ({}/{})...", wait_secs, retry_attempt, MAX_RETRIES).dimmed());
+                        let wait_secs = if err_str.contains("Too many tokens") {
+                            30
+                        } else {
+                            5
+                        };
+                        eprintln!(
+                            "{}",
+                            format!(
+                                "  Waiting {} seconds before retry ({}/{})...",
+                                wait_secs, retry_attempt, MAX_RETRIES
+                            )
+                            .dimmed()
+                        );
                         tokio::time::sleep(tokio::time::Duration::from_secs(wait_secs)).await;
                     } else if is_input_too_long_error(&err_str) {
                         // Context too large - truncate raw_chat_history directly
                         // NOTE: We truncate raw_chat_history (actual messages) not conversation_history
                         // because conversation_history may be empty/stale during errors
-                        eprintln!("{}", "⚠ Context too large for model. Truncating history...".yellow());
+                        eprintln!(
+                            "{}",
+                            "⚠ Context too large for model. Truncating history...".yellow()
+                        );
 
                         let old_token_count = estimate_raw_history_tokens(&raw_chat_history);
                         let old_msg_count = raw_chat_history.len();
@@ -773,10 +886,21 @@ pub async fn run_interactive(
                         // Retry with truncated context
                         retry_attempt += 1;
                         if retry_attempt < MAX_RETRIES {
-                            eprintln!("{}", format!("  → Retrying with truncated context ({}/{})...", retry_attempt, MAX_RETRIES).dimmed());
+                            eprintln!(
+                                "{}",
+                                format!(
+                                    "  → Retrying with truncated context ({}/{})...",
+                                    retry_attempt, MAX_RETRIES
+                                )
+                                .dimmed()
+                            );
                             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                         } else {
-                            eprintln!("{}", "Context still too large after truncation. Try /clear to reset.".red());
+                            eprintln!(
+                                "{}",
+                                "Context still too large after truncation. Try /clear to reset."
+                                    .red()
+                            );
                             break;
                         }
                     } else if is_truncation_error(&err_str) {
@@ -785,7 +909,8 @@ pub async fn run_interactive(
                         let agent_thinking = extract_agent_messages_from_hook(&hook).await;
 
                         // Count actually completed tools (not in-progress)
-                        let completed_count = completed_tools.iter()
+                        let completed_count = completed_tools
+                            .iter()
                             .filter(|t| !t.result_summary.contains("IN PROGRESS"))
                             .count();
                         let in_progress_count = completed_tools.len() - completed_count;
@@ -796,7 +921,10 @@ pub async fn run_interactive(
                             let status_msg = if in_progress_count > 0 {
                                 format!(
                                     "⚠ Response truncated. {} completed, {} in-progress. Auto-continuing ({}/{})...",
-                                    completed_count, in_progress_count, continuation_count, MAX_CONTINUATIONS
+                                    completed_count,
+                                    in_progress_count,
+                                    continuation_count,
+                                    MAX_CONTINUATIONS
                                 )
                             } else {
                                 format!(
@@ -820,14 +948,28 @@ pub async fn run_interactive(
                             // Check if we need compaction after adding this heavy turn
                             // This is important for long multi-turn sessions with many tool calls
                             if conversation_history.needs_compaction() {
-                                eprintln!("{}", "  📦 Compacting history before continuation...".dimmed());
+                                eprintln!(
+                                    "{}",
+                                    "  📦 Compacting history before continuation...".dimmed()
+                                );
                                 if let Some(summary) = conversation_history.compact() {
-                                    eprintln!("{}", format!("  ✓ Compressed {} turns", summary.matches("Turn").count()).dimmed());
+                                    eprintln!(
+                                        "{}",
+                                        format!(
+                                            "  ✓ Compressed {} turns",
+                                            summary.matches("Turn").count()
+                                        )
+                                        .dimmed()
+                                    );
                                 }
                             }
 
                             // Build continuation prompt with context
-                            current_input = build_continuation_prompt(&input, &completed_tools, &agent_thinking);
+                            current_input = build_continuation_prompt(
+                                &input,
+                                &completed_tools,
+                                &agent_thinking,
+                            );
 
                             // Log continuation details for debugging
                             eprintln!("{}", format!(
@@ -843,7 +985,14 @@ pub async fn run_interactive(
                         } else if retry_attempt < MAX_RETRIES {
                             // No tool calls completed - simple retry
                             retry_attempt += 1;
-                            eprintln!("{}", format!("⚠ Response error (attempt {}/{}). Retrying...", retry_attempt, MAX_RETRIES).yellow());
+                            eprintln!(
+                                "{}",
+                                format!(
+                                    "⚠ Response error (attempt {}/{}). Retrying...",
+                                    retry_attempt, MAX_RETRIES
+                                )
+                                .yellow()
+                            );
                             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                         } else {
                             // Max retries/continuations reached
@@ -851,16 +1000,30 @@ pub async fn run_interactive(
                             if continuation_count >= MAX_CONTINUATIONS {
                                 eprintln!("{}", format!("Max continuations ({}) reached. The task is too complex for one request.", MAX_CONTINUATIONS).dimmed());
                             } else {
-                                eprintln!("{}", "Max retries reached. The response may be too complex.".dimmed());
+                                eprintln!(
+                                    "{}",
+                                    "Max retries reached. The response may be too complex."
+                                        .dimmed()
+                                );
                             }
-                            eprintln!("{}", "Try breaking your request into smaller parts.".dimmed());
+                            eprintln!(
+                                "{}",
+                                "Try breaking your request into smaller parts.".dimmed()
+                            );
                             break;
                         }
                     } else if err_str.contains("timeout") || err_str.contains("Timeout") {
                         // Timeout - simple retry
                         retry_attempt += 1;
                         if retry_attempt < MAX_RETRIES {
-                            eprintln!("{}", format!("⚠ Request timed out (attempt {}/{}). Retrying...", retry_attempt, MAX_RETRIES).yellow());
+                            eprintln!(
+                                "{}",
+                                format!(
+                                    "⚠ Request timed out (attempt {}/{}). Retrying...",
+                                    retry_attempt, MAX_RETRIES
+                                )
+                                .yellow()
+                            );
                             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                         } else {
                             eprintln!("{}", "Request timed out. Please try again.".red());
@@ -870,11 +1033,29 @@ pub async fn run_interactive(
                         // Unknown error - show details and break
                         eprintln!("{}", format!("Error: {}", e).red());
                         if continuation_count > 0 {
-                            eprintln!("{}", format!("  (occurred during continuation attempt {})", continuation_count).dimmed());
+                            eprintln!(
+                                "{}",
+                                format!(
+                                    "  (occurred during continuation attempt {})",
+                                    continuation_count
+                                )
+                                .dimmed()
+                            );
                         }
                         eprintln!("{}", "Error details for debugging:".dimmed());
-                        eprintln!("{}", format!("  - retry_attempt: {}/{}", retry_attempt, MAX_RETRIES).dimmed());
-                        eprintln!("{}", format!("  - continuation_count: {}/{}", continuation_count, MAX_CONTINUATIONS).dimmed());
+                        eprintln!(
+                            "{}",
+                            format!("  - retry_attempt: {}/{}", retry_attempt, MAX_RETRIES)
+                                .dimmed()
+                        );
+                        eprintln!(
+                            "{}",
+                            format!(
+                                "  - continuation_count: {}/{}",
+                                continuation_count, MAX_CONTINUATIONS
+                            )
+                            .dimmed()
+                        );
                         break;
                     }
                 }
@@ -891,29 +1072,34 @@ async fn extract_tool_calls_from_hook(hook: &ToolDisplayHook) -> Vec<ToolCallRec
     let state = hook.state();
     let guard = state.lock().await;
 
-    guard.tool_calls.iter().enumerate().map(|(i, tc)| {
-        let result = if tc.is_running {
-            // Tool was in progress when error occurred
-            "[IN PROGRESS - may need to be re-run]".to_string()
-        } else if let Some(output) = &tc.output {
-            truncate_string(output, 200)
-        } else {
-            "completed".to_string()
-        };
+    guard
+        .tool_calls
+        .iter()
+        .enumerate()
+        .map(|(i, tc)| {
+            let result = if tc.is_running {
+                // Tool was in progress when error occurred
+                "[IN PROGRESS - may need to be re-run]".to_string()
+            } else if let Some(output) = &tc.output {
+                truncate_string(output, 200)
+            } else {
+                "completed".to_string()
+            };
 
-        ToolCallRecord {
-            tool_name: tc.name.clone(),
-            args_summary: truncate_string(&tc.args, 100),
-            result_summary: result,
-            // Generate a unique tool ID for proper message pairing
-            tool_id: Some(format!("tool_{}_{}", tc.name, i)),
-            // Mark read-only tools as droppable (their results can be re-fetched)
-            droppable: matches!(
-                tc.name.as_str(),
-                "read_file" | "list_directory" | "analyze_project"
-            ),
-        }
-    }).collect()
+            ToolCallRecord {
+                tool_name: tc.name.clone(),
+                args_summary: truncate_string(&tc.args, 100),
+                result_summary: result,
+                // Generate a unique tool ID for proper message pairing
+                tool_id: Some(format!("tool_{}_{}", tc.name, i)),
+                // Mark read-only tools as droppable (their results can be re-fetched)
+                droppable: matches!(
+                    tc.name.as_str(),
+                    "read_file" | "list_directory" | "analyze_project"
+                ),
+            }
+        })
+        .collect()
 }
 
 /// Extract any agent thinking/messages from the hook for context
@@ -938,31 +1124,40 @@ fn truncate_string(s: &str, max_len: usize) -> String {
 fn estimate_raw_history_tokens(messages: &[rig::completion::Message]) -> usize {
     use rig::completion::message::{AssistantContent, UserContent};
 
-    messages.iter().map(|msg| -> usize {
-        match msg {
-            rig::completion::Message::User { content } => {
-                content.iter().map(|c| -> usize {
-                    match c {
-                        UserContent::Text(t) => t.text.len() / 4,
-                        _ => 100, // Estimate for images/documents
-                    }
-                }).sum::<usize>()
+    messages
+        .iter()
+        .map(|msg| -> usize {
+            match msg {
+                rig::completion::Message::User { content } => {
+                    content
+                        .iter()
+                        .map(|c| -> usize {
+                            match c {
+                                UserContent::Text(t) => t.text.len() / 4,
+                                _ => 100, // Estimate for images/documents
+                            }
+                        })
+                        .sum::<usize>()
+                }
+                rig::completion::Message::Assistant { content, .. } => {
+                    content
+                        .iter()
+                        .map(|c| -> usize {
+                            match c {
+                                AssistantContent::Text(t) => t.text.len() / 4,
+                                AssistantContent::ToolCall(tc) => {
+                                    // arguments is serde_json::Value, convert to string for length estimate
+                                    let args_len = tc.function.arguments.to_string().len();
+                                    (tc.function.name.len() + args_len) / 4
+                                }
+                                _ => 100,
+                            }
+                        })
+                        .sum::<usize>()
+                }
             }
-            rig::completion::Message::Assistant { content, .. } => {
-                content.iter().map(|c| -> usize {
-                    match c {
-                        AssistantContent::Text(t) => t.text.len() / 4,
-                        AssistantContent::ToolCall(tc) => {
-                            // arguments is serde_json::Value, convert to string for length estimate
-                            let args_len = tc.function.arguments.to_string().len();
-                            (tc.function.name.len() + args_len) / 4
-                        }
-                        _ => 100,
-                    }
-                }).sum::<usize>()
-            }
-        }
-    }).sum()
+        })
+        .sum()
 }
 
 /// Find a plan_create tool call in the list and extract plan info
@@ -972,13 +1167,15 @@ fn find_plan_create_call(tool_calls: &[ToolCallRecord]) -> Option<(String, usize
         if tc.tool_name == "plan_create" {
             // Try to parse the result_summary as JSON to extract plan_path
             // Note: result_summary may be truncated, so we have multiple fallbacks
-            let plan_path = if let Ok(result) = serde_json::from_str::<serde_json::Value>(&tc.result_summary) {
-                result.get("plan_path")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-            } else {
-                None
-            };
+            let plan_path =
+                if let Ok(result) = serde_json::from_str::<serde_json::Value>(&tc.result_summary) {
+                    result
+                        .get("plan_path")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string())
+                } else {
+                    None
+                };
 
             // If JSON parsing failed, find the most recently created plan file
             // This is more reliable than trying to reconstruct the path from truncated args
@@ -1040,7 +1237,8 @@ fn count_tasks_in_plan_file(plan_path: &str) -> Option<usize> {
 
     // Count task checkboxes: - [ ], - [x], - [~], - [!]
     let task_regex = Regex::new(r"^\s*-\s*\[[ x~!]\]").ok()?;
-    let count = content.lines()
+    let count = content
+        .lines()
         .filter(|line| task_regex.is_match(line))
         .count();
 
@@ -1103,7 +1301,11 @@ fn build_continuation_prompt(
                 dirs_listed.insert(tool.args_summary.clone());
             }
             _ => {
-                other_tools.push(format!("{}({})", tool.tool_name, truncate_string(&tool.args_summary, 40)));
+                other_tools.push(format!(
+                    "{}({})",
+                    tool.tool_name,
+                    truncate_string(&tool.args_summary, 40)
+                ));
             }
         }
     }
@@ -1194,16 +1396,17 @@ pub async fn run_query(
             let model_name = model.as_deref().unwrap_or("gpt-5.2");
 
             // For GPT-5.x reasoning models, enable reasoning with summary output
-            let reasoning_params = if model_name.starts_with("gpt-5") || model_name.starts_with("o1") {
-                Some(serde_json::json!({
-                    "reasoning": {
-                        "effort": "medium",
-                        "summary": "detailed"
-                    }
-                }))
-            } else {
-                None
-            };
+            let reasoning_params =
+                if model_name.starts_with("gpt-5") || model_name.starts_with("o1") {
+                    Some(serde_json::json!({
+                        "reasoning": {
+                            "effort": "medium",
+                            "summary": "detailed"
+                        }
+                    }))
+                } else {
+                    None
+                };
 
             let mut builder = client
                 .agent(model_name)
@@ -1213,6 +1416,7 @@ pub async fn run_query(
                 .tool(SecurityScanTool::new(project_path_buf.clone()))
                 .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
                 .tool(HadolintTool::new(project_path_buf.clone()))
+                .tool(DclintTool::new(project_path_buf.clone()))
                 .tool(TerraformFmtTool::new(project_path_buf.clone()))
                 .tool(TerraformValidateTool::new(project_path_buf.clone()))
                 .tool(TerraformInstallTool::new())
@@ -1255,6 +1459,7 @@ pub async fn run_query(
                 .tool(SecurityScanTool::new(project_path_buf.clone()))
                 .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
                 .tool(HadolintTool::new(project_path_buf.clone()))
+                .tool(DclintTool::new(project_path_buf.clone()))
                 .tool(TerraformFmtTool::new(project_path_buf.clone()))
                 .tool(TerraformValidateTool::new(project_path_buf.clone()))
                 .tool(TerraformInstallTool::new())
@@ -1280,7 +1485,9 @@ pub async fn run_query(
         ProviderType::Bedrock => {
             // Bedrock provider via rig-bedrock - same pattern as Anthropic
             let client = rig_bedrock::client::Client::from_env();
-            let model_name = model.as_deref().unwrap_or("global.anthropic.claude-sonnet-4-5-20250929-v1:0");
+            let model_name = model
+                .as_deref()
+                .unwrap_or("global.anthropic.claude-sonnet-4-5-20250929-v1:0");
 
             // Extended thinking for Claude via Bedrock
             let thinking_params = serde_json::json!({
@@ -1298,6 +1505,7 @@ pub async fn run_query(
                 .tool(SecurityScanTool::new(project_path_buf.clone()))
                 .tool(VulnerabilitiesTool::new(project_path_buf.clone()))
                 .tool(HadolintTool::new(project_path_buf.clone()))
+                .tool(DclintTool::new(project_path_buf.clone()))
                 .tool(TerraformFmtTool::new(project_path_buf.clone()))
                 .tool(TerraformValidateTool::new(project_path_buf.clone()))
                 .tool(TerraformInstallTool::new())
@@ -1312,9 +1520,7 @@ pub async fn run_query(
                     .tool(ShellTool::new(project_path_buf.clone()));
             }
 
-            let agent = builder
-                .additional_params(thinking_params)
-                .build();
+            let agent = builder.additional_params(thinking_params).build();
 
             agent
                 .prompt(query)

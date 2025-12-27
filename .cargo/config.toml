@@ -9,5 +9,4 @@ t = "test"
 tr = "test --release"
 r = "run"
 rr = "run --release"
-fmt = "fmt --all"
-clippy = "clippy --all-targets --all-features" 
+# Note: cargo fmt and clippy aliases removed - were recursive and broke CI

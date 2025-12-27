@@ -114,7 +114,12 @@ fn get_help_body(code: &str) -> String {
 }
 
 impl Formatter for CodeClimateFormatter {
-    fn format<W: Write>(&self, result: &LintResult, filename: &str, writer: &mut W) -> std::io::Result<()> {
+    fn format<W: Write>(
+        &self,
+        result: &LintResult,
+        filename: &str,
+        writer: &mut W,
+    ) -> std::io::Result<()> {
         let issues: Vec<CodeClimateIssue> = result
             .failures
             .iter()

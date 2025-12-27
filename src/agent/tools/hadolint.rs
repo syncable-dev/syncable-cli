@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
 
-use crate::analyzer::hadolint::{lint, lint_file, HadolintConfig, LintResult, Severity};
+use crate::analyzer::hadolint::{HadolintConfig, LintResult, Severity, lint, lint_file};
 
 /// Arguments for the hadolint tool
 #[derive(Debug, Deserialize)]
@@ -69,18 +69,19 @@ impl HadolintTool {
             // Security rules
             "DL3000" | "DL3002" | "DL3004" | "DL3047" => "security",
             // Best practice rules
-            "DL3003" | "DL3006" | "DL3007" | "DL3008" | "DL3009" | "DL3013" |
-            "DL3014" | "DL3015" | "DL3016" | "DL3018" | "DL3019" | "DL3020" |
-            "DL3025" | "DL3027" | "DL3028" | "DL3033" | "DL3042" | "DL3059" => "best-practice",
+            "DL3003" | "DL3006" | "DL3007" | "DL3008" | "DL3009" | "DL3013" | "DL3014"
+            | "DL3015" | "DL3016" | "DL3018" | "DL3019" | "DL3020" | "DL3025" | "DL3027"
+            | "DL3028" | "DL3033" | "DL3042" | "DL3059" => "best-practice",
             // Maintainability rules
-            "DL3005" | "DL3010" | "DL3021" | "DL3022" | "DL3023" | "DL3024" |
-            "DL3026" | "DL3029" | "DL3030" | "DL3032" | "DL3034" | "DL3035" |
-            "DL3036" | "DL3044" | "DL3045" | "DL3048" | "DL3049" | "DL3050" |
-            "DL3051" | "DL3052" | "DL3053" | "DL3054" | "DL3055" | "DL3056" |
-            "DL3057" | "DL3058" | "DL3060" | "DL3061" => "maintainability",
+            "DL3005" | "DL3010" | "DL3021" | "DL3022" | "DL3023" | "DL3024" | "DL3026"
+            | "DL3029" | "DL3030" | "DL3032" | "DL3034" | "DL3035" | "DL3036" | "DL3044"
+            | "DL3045" | "DL3048" | "DL3049" | "DL3050" | "DL3051" | "DL3052" | "DL3053"
+            | "DL3054" | "DL3055" | "DL3056" | "DL3057" | "DL3058" | "DL3060" | "DL3061" => {
+                "maintainability"
+            }
             // Performance rules
-            "DL3001" | "DL3011" | "DL3017" | "DL3031" | "DL3037" | "DL3038" |
-            "DL3039" | "DL3040" | "DL3041" | "DL3046" | "DL3062" => "performance",
+            "DL3001" | "DL3011" | "DL3017" | "DL3031" | "DL3037" | "DL3038" | "DL3039"
+            | "DL3040" | "DL3041" | "DL3046" | "DL3062" => "performance",
             // Deprecated instructions
             "DL4000" | "DL4001" | "DL4003" | "DL4005" | "DL4006" => "deprecated",
             // ShellCheck rules
@@ -108,14 +109,26 @@ impl HadolintTool {
         match code {
             "DL3000" => "Use absolute WORKDIR paths like '/app' instead of relative paths.",
             "DL3001" => "Remove commands that have no effect in Docker (like 'ssh', 'mount').",
-            "DL3002" => "Remove the last USER instruction setting root, or add 'USER <non-root>' at the end.",
+            "DL3002" => {
+                "Remove the last USER instruction setting root, or add 'USER <non-root>' at the end."
+            }
             "DL3003" => "Use WORKDIR to change directories instead of 'cd' in RUN commands.",
-            "DL3004" => "Remove 'sudo' from RUN commands. Docker runs as root by default, or use proper USER switching.",
-            "DL3005" => "Remove 'apt-get upgrade' or 'dist-upgrade'. Pin packages instead for reproducibility.",
-            "DL3006" => "Add explicit version tag to base image, e.g., 'FROM node:18-alpine' instead of 'FROM node'.",
+            "DL3004" => {
+                "Remove 'sudo' from RUN commands. Docker runs as root by default, or use proper USER switching."
+            }
+            "DL3005" => {
+                "Remove 'apt-get upgrade' or 'dist-upgrade'. Pin packages instead for reproducibility."
+            }
+            "DL3006" => {
+                "Add explicit version tag to base image, e.g., 'FROM node:18-alpine' instead of 'FROM node'."
+            }
             "DL3007" => "Use specific version tag instead of ':latest', e.g., 'nginx:1.25-alpine'.",
-            "DL3008" => "Pin apt package versions: 'apt-get install package=version' or use '--no-install-recommends'.",
-            "DL3009" => "Add 'rm -rf /var/lib/apt/lists/*' after apt-get install to reduce image size.",
+            "DL3008" => {
+                "Pin apt package versions: 'apt-get install package=version' or use '--no-install-recommends'."
+            }
+            "DL3009" => {
+                "Add 'rm -rf /var/lib/apt/lists/*' after apt-get install to reduce image size."
+            }
             "DL3010" => "Use ADD only for extracting archives. For other files, use COPY.",
             "DL3011" => "Use valid port numbers (0-65535) in EXPOSE.",
             "DL3013" => "Pin pip package versions: 'pip install package==version'.",
@@ -125,13 +138,19 @@ impl HadolintTool {
             "DL3017" => "Remove 'apt-get upgrade'. Pin specific package versions instead.",
             "DL3018" => "Pin apk package versions: 'apk add package=version'.",
             "DL3019" => "Add '--no-cache' to apk add instead of separate cache cleanup.",
-            "DL3020" => "Use COPY instead of ADD for files from build context. ADD is for URLs and archives.",
-            "DL3021" => "Use COPY with --from for multi-stage builds instead of COPY from external images.",
+            "DL3020" => {
+                "Use COPY instead of ADD for files from build context. ADD is for URLs and archives."
+            }
+            "DL3021" => {
+                "Use COPY with --from for multi-stage builds instead of COPY from external images."
+            }
             "DL3022" => "Use COPY --from=stage instead of --from=image for multi-stage builds.",
             "DL3023" => "Reference build stage by name instead of number in COPY --from.",
             "DL3024" => "Use lowercase for 'as' in multi-stage builds: 'FROM image AS builder'.",
             "DL3025" => "Use JSON array format for CMD/ENTRYPOINT: CMD [\"executable\", \"arg1\"].",
-            "DL3026" => "Use official Docker images when possible, or document why unofficial is needed.",
+            "DL3026" => {
+                "Use official Docker images when possible, or document why unofficial is needed."
+            }
             "DL3027" => "Remove 'apt' and use 'apt-get' for scripting in Dockerfiles.",
             "DL3028" => "Pin gem versions: 'gem install package:version'.",
             "DL3029" => "Specify --platform explicitly for multi-arch builds.",
@@ -146,11 +165,15 @@ impl HadolintTool {
             "DL3039" => "Add 'zypper clean' after zypper install.",
             "DL3040" => "Add 'dnf clean all && rm -rf /var/cache/dnf' after dnf install.",
             "DL3041" => "Add 'microdnf clean all' after microdnf install.",
-            "DL3042" => "Avoid pip cache in builds. Use '--no-cache-dir' or set PIP_NO_CACHE_DIR=1.",
+            "DL3042" => {
+                "Avoid pip cache in builds. Use '--no-cache-dir' or set PIP_NO_CACHE_DIR=1."
+            }
             "DL3044" => "Only use 'HEALTHCHECK' once per Dockerfile, or it won't work correctly.",
             "DL3045" => "Use COPY instead of ADD for local files.",
             "DL3046" => "Use 'useradd' instead of 'adduser' for better compatibility.",
-            "DL3047" => "Add 'wget --progress=dot:giga' or 'curl --progress-bar' to show progress during download.",
+            "DL3047" => {
+                "Add 'wget --progress=dot:giga' or 'curl --progress-bar' to show progress during download."
+            }
             "DL3048" => "Prefer setting flag with 'SHELL' instruction instead of inline in RUN.",
             "DL3049" => "Add a 'LABEL maintainer=\"name\"' for documentation.",
             "DL3050" => "Add 'LABEL version=\"x.y\"' for versioning.",
@@ -170,7 +193,9 @@ impl HadolintTool {
             "DL4001" => "Use wget or curl instead of ADD for downloading from URLs.",
             "DL4003" => "Use 'ENTRYPOINT' and 'CMD' together properly for container startup.",
             "DL4005" => "Prefer JSON notation for SHELL: SHELL [\"/bin/bash\", \"-c\"].",
-            "DL4006" => "Add 'SHELL [\"/bin/bash\", \"-o\", \"pipefail\", \"-c\"]' before RUN with pipes.",
+            "DL4006" => {
+                "Add 'SHELL [\"/bin/bash\", \"-o\", \"pipefail\", \"-c\"]' before RUN with pipes."
+            }
             _ if code.starts_with("SC") => "See ShellCheck wiki for shell scripting fix.",
             _ => "Review the rule documentation for specific guidance.",
         }
@@ -192,40 +217,53 @@ impl HadolintTool {
     /// Format result optimized for agent decision-making
     fn format_result(result: &LintResult, filename: &str) -> String {
         // Categorize and enrich failures
-        let enriched_failures: Vec<serde_json::Value> = result.failures.iter().map(|f| {
-            let code = f.code.as_str();
-            let category = Self::get_rule_category(code);
-            let priority = Self::get_priority(f.severity, category);
+        let enriched_failures: Vec<serde_json::Value> = result
+            .failures
+            .iter()
+            .map(|f| {
+                let code = f.code.as_str();
+                let category = Self::get_rule_category(code);
+                let priority = Self::get_priority(f.severity, category);
 
-            json!({
-                "code": code,
-                "severity": format!("{:?}", f.severity).to_lowercase(),
-                "priority": priority,
-                "category": category,
-                "message": f.message,
-                "line": f.line,
-                "column": f.column,
-                "fix": Self::get_fix_recommendation(code),
-                "docs": Self::get_rule_url(code),
+                json!({
+                    "code": code,
+                    "severity": format!("{:?}", f.severity).to_lowercase(),
+                    "priority": priority,
+                    "category": category,
+                    "message": f.message,
+                    "line": f.line,
+                    "column": f.column,
+                    "fix": Self::get_fix_recommendation(code),
+                    "docs": Self::get_rule_url(code),
+                })
             })
-        }).collect();
+            .collect();
 
         // Group by priority for agent decision ordering
-        let critical: Vec<_> = enriched_failures.iter()
+        let critical: Vec<_> = enriched_failures
+            .iter()
             .filter(|f| f["priority"] == "critical")
-            .cloned().collect();
-        let high: Vec<_> = enriched_failures.iter()
+            .cloned()
+            .collect();
+        let high: Vec<_> = enriched_failures
+            .iter()
             .filter(|f| f["priority"] == "high")
-            .cloned().collect();
-        let medium: Vec<_> = enriched_failures.iter()
+            .cloned()
+            .collect();
+        let medium: Vec<_> = enriched_failures
+            .iter()
             .filter(|f| f["priority"] == "medium")
-            .cloned().collect();
-        let low: Vec<_> = enriched_failures.iter()
+            .cloned()
+            .collect();
+        let low: Vec<_> = enriched_failures
+            .iter()
             .filter(|f| f["priority"] == "low")
-            .cloned().collect();
+            .cloned()
+            .collect();
 
         // Group by category for thematic fixes
-        let mut by_category: std::collections::HashMap<&str, Vec<_>> = std::collections::HashMap::new();
+        let mut by_category: std::collections::HashMap<&str, Vec<_>> =
+            std::collections::HashMap::new();
         for f in &enriched_failures {
             let cat = f["category"].as_str().unwrap_or("other");
             by_category.entry(cat).or_default().push(f.clone());
@@ -276,14 +314,18 @@ impl HadolintTool {
 
         // Add quick fixes summary for agent
         if !enriched_failures.is_empty() {
-            let quick_fixes: Vec<String> = enriched_failures.iter()
+            let quick_fixes: Vec<String> = enriched_failures
+                .iter()
                 .filter(|f| f["priority"] == "critical" || f["priority"] == "high")
                 .take(5)
-                .map(|f| format!("Line {}: {} - {}",
-                    f["line"],
-                    f["code"].as_str().unwrap_or(""),
-                    f["fix"].as_str().unwrap_or("")
-                ))
+                .map(|f| {
+                    format!(
+                        "Line {}: {} - {}",
+                        f["line"],
+                        f["code"].as_str().unwrap_or(""),
+                        f["fix"].as_str().unwrap_or("")
+                    )
+                })
                 .collect();
 
             if !quick_fixes.is_empty() {
@@ -425,7 +467,11 @@ mod tests {
 
         // Check issues have fix recommendations
         let issues = collect_all_issues(&parsed);
-        assert!(issues.iter().all(|i| i["fix"].is_string() && !i["fix"].as_str().unwrap().is_empty()));
+        assert!(
+            issues
+                .iter()
+                .all(|i| i["fix"].is_string() && !i["fix"].as_str().unwrap().is_empty())
+        );
     }
 
     #[tokio::test]
@@ -470,7 +516,11 @@ mod tests {
         let temp = temp_dir().join("hadolint_test");
         fs::create_dir_all(&temp).unwrap();
         let dockerfile = temp.join("Dockerfile");
-        fs::write(&dockerfile, "FROM node:18-alpine\nWORKDIR /app\nCOPY . .\nCMD [\"node\", \"app.js\"]").unwrap();
+        fs::write(
+            &dockerfile,
+            "FROM node:18-alpine\nWORKDIR /app\nCOPY . .\nCMD [\"node\", \"app.js\"]",
+        )
+        .unwrap();
 
         let tool = HadolintTool::new(temp.clone());
         let args = HadolintArgs {
@@ -525,8 +575,18 @@ CMD ["node", "dist/index.js"]
         // Should have decision context
         assert!(parsed["decision_context"].is_string());
         // Should not have critical or high priority issues
-        assert_eq!(parsed["summary"]["by_priority"]["critical"].as_u64().unwrap_or(99), 0);
-        assert_eq!(parsed["summary"]["by_priority"]["high"].as_u64().unwrap_or(99), 0);
+        assert_eq!(
+            parsed["summary"]["by_priority"]["critical"]
+                .as_u64()
+                .unwrap_or(99),
+            0
+        );
+        assert_eq!(
+            parsed["summary"]["by_priority"]["high"]
+                .as_u64()
+                .unwrap_or(99),
+            0
+        );
     }
 
     #[tokio::test]
@@ -571,8 +631,15 @@ CMD ["node", "dist/index.js"]
         let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
 
         // Should have quick_fixes for high priority issues
-        if parsed["summary"]["by_priority"]["high"].as_u64().unwrap_or(0) > 0
-            || parsed["summary"]["by_priority"]["critical"].as_u64().unwrap_or(0) > 0 {
+        if parsed["summary"]["by_priority"]["high"]
+            .as_u64()
+            .unwrap_or(0)
+            > 0
+            || parsed["summary"]["by_priority"]["critical"]
+                .as_u64()
+                .unwrap_or(0)
+                > 0
+        {
             assert!(parsed["quick_fixes"].is_array());
         }
     }

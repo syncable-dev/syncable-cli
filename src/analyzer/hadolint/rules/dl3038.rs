@@ -3,7 +3,7 @@
 //! dnf install should use -y to avoid prompts.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{simple_rule, SimpleRule};
+use crate::analyzer::hadolint::rules::{SimpleRule, simple_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
@@ -12,23 +12,21 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
         "DL3038",
         Severity::Warning,
         "Use the `-y` switch to avoid prompts during `dnf install`.",
-        |instr, shell| {
-            match instr {
-                Instruction::Run(_) => {
-                    if let Some(shell) = shell {
-                        !shell.any_command(|cmd| {
-                            if cmd.name == "dnf" && cmd.has_any_arg(&["install"]) {
-                                !cmd.has_any_flag(&["y", "yes", "assumeyes"])
-                            } else {
-                                false
-                            }
-                        })
-                    } else {
-                        true
-                    }
+        |instr, shell| match instr {
+            Instruction::Run(_) => {
+                if let Some(shell) = shell {
+                    !shell.any_command(|cmd| {
+                        if cmd.name == "dnf" && cmd.has_any_arg(&["install"]) {
+                            !cmd.has_any_flag(&["y", "yes", "assumeyes"])
+                        } else {
+                            false
+                        }
+                    })
+                } else {
+                    true
                 }
-                _ => true,
             }
+            _ => true,
         },
     )
 }
@@ -36,8 +34,8 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::hadolint::lint::{lint, LintResult};
     use crate::analyzer::hadolint::config::HadolintConfig;
+    use crate::analyzer::hadolint::lint::{LintResult, lint};
 
     fn lint_dockerfile(content: &str) -> LintResult {
         lint(content, &HadolintConfig::default())

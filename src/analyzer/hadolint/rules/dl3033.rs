@@ -3,7 +3,7 @@
 //! Yum packages should be pinned to specific versions.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{simple_rule, SimpleRule};
+use crate::analyzer::hadolint::rules::{SimpleRule, simple_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
@@ -72,7 +72,11 @@ fn is_pinned_yum_package(pkg: &str) -> bool {
     if parts.len() >= 2 {
         let potential_version = parts[0];
         // Version typically starts with a digit
-        potential_version.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false)
+        potential_version
+            .chars()
+            .next()
+            .map(|c| c.is_ascii_digit())
+            .unwrap_or(false)
     } else {
         false
     }
@@ -81,8 +85,8 @@ fn is_pinned_yum_package(pkg: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::hadolint::lint::{lint, LintResult};
     use crate::analyzer::hadolint::config::HadolintConfig;
+    use crate::analyzer::hadolint::lint::{LintResult, lint};
 
     fn lint_dockerfile(content: &str) -> LintResult {
         lint(content, &HadolintConfig::default())

@@ -3,7 +3,7 @@
 //! The maintainer label is deprecated. Use org.opencontainers.image.authors instead.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{simple_rule, SimpleRule};
+use crate::analyzer::hadolint::rules::{SimpleRule, simple_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
@@ -12,13 +12,11 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
         "DL3049",
         Severity::Info,
         "Label `maintainer` is deprecated, use `org.opencontainers.image.authors` instead.",
-        |instr, _shell| {
-            match instr {
-                Instruction::Label(pairs) => {
-                    !pairs.iter().any(|(key, _)| key.to_lowercase() == "maintainer")
-                }
-                _ => true,
-            }
+        |instr, _shell| match instr {
+            Instruction::Label(pairs) => !pairs
+                .iter()
+                .any(|(key, _)| key.to_lowercase() == "maintainer"),
+            _ => true,
         },
     )
 }
@@ -26,8 +24,8 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::hadolint::lint::{lint, LintResult};
     use crate::analyzer::hadolint::config::HadolintConfig;
+    use crate::analyzer::hadolint::lint::{LintResult, lint};
 
     fn lint_dockerfile(content: &str) -> LintResult {
         lint(content, &HadolintConfig::default())
@@ -41,7 +39,9 @@ mod tests {
 
     #[test]
     fn test_oci_authors_label() {
-        let result = lint_dockerfile("FROM ubuntu:20.04\nLABEL org.opencontainers.image.authors=\"test@test.com\"");
+        let result = lint_dockerfile(
+            "FROM ubuntu:20.04\nLABEL org.opencontainers.image.authors=\"test@test.com\"",
+        );
         assert!(!result.failures.iter().any(|f| f.code.as_str() == "DL3049"));
     }
 }

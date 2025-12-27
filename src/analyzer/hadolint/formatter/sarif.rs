@@ -137,7 +137,12 @@ fn get_rule_help_uri(code: &str) -> Option<String> {
 }
 
 impl Formatter for SarifFormatter {
-    fn format<W: Write>(&self, result: &LintResult, filename: &str, writer: &mut W) -> std::io::Result<()> {
+    fn format<W: Write>(
+        &self,
+        result: &LintResult,
+        filename: &str,
+        writer: &mut W,
+    ) -> std::io::Result<()> {
         // Collect unique rules for the rules array
         let mut rules: Vec<SarifRule> = Vec::new();
         let mut seen_rules = std::collections::HashSet::new();

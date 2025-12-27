@@ -1,11 +1,9 @@
 use clap::Parser;
 use syncable_cli::{
-    analyzer::{
-        self,
-        analyze_monorepo, vulnerability::VulnerabilitySeverity,
-    },
+    analyzer::{self, analyze_monorepo, vulnerability::VulnerabilitySeverity},
     cli::{
-        ChatProvider, Cli, ColorScheme, Commands, DisplayFormat, OutputFormat, SecurityScanMode, SeverityThreshold, ToolsCommand
+        ChatProvider, Cli, ColorScheme, Commands, DisplayFormat, OutputFormat, SecurityScanMode,
+        SeverityThreshold, ToolsCommand,
     },
     config, generator,
     telemetry::{self},
@@ -13,13 +11,13 @@ use syncable_cli::{
 
 use colored::Colorize;
 use dirs::cache_dir;
+use serde_json::json;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::process;
 use std::time::{Duration, SystemTime};
 use syncable_cli::analyzer::display::BoxDrawer;
-use serde_json::json;
 
 #[tokio::main]
 async fn main() {
@@ -39,21 +37,36 @@ async fn run() -> syncable_cli::Result<()> {
     }
 
     // Suppress update banner when JSON output is requested
-    let suppress_update_banner = cli.json || matches!(
-        &cli.command,
-        Commands::Analyze { json: true, .. }
-            | Commands::Dependencies { format: OutputFormat::Json, .. }
-            | Commands::Vulnerabilities { format: OutputFormat::Json, .. }
-            | Commands::Security { format: OutputFormat::Json, .. }
-            | Commands::Tools { command: ToolsCommand::Status { format: OutputFormat::Json, .. } }
-    );
+    let suppress_update_banner = cli.json
+        || matches!(
+            &cli.command,
+            Commands::Analyze { json: true, .. }
+                | Commands::Dependencies {
+                    format: OutputFormat::Json,
+                    ..
+                }
+                | Commands::Vulnerabilities {
+                    format: OutputFormat::Json,
+                    ..
+                }
+                | Commands::Security {
+                    format: OutputFormat::Json,
+                    ..
+                }
+                | Commands::Tools {
+                    command: ToolsCommand::Status {
+                        format: OutputFormat::Json,
+                        ..
+                    }
+                }
+        );
     check_for_update(suppress_update_banner).await;
 
     // Initialize logging
     cli.init_logging();
 
     log::debug!("Loading configuration...");
-    
+
     // Load configuration
     let mut config = match config::load_config(cli.config.as_deref()) {
         Ok(config) => config,
@@ -63,7 +76,10 @@ async fn run() -> syncable_cli::Result<()> {
         }
     };
 
-    log::debug!("Configuration loaded: telemetry enabled = {}", config.telemetry.enabled);
+    log::debug!(
+        "Configuration loaded: telemetry enabled = {}",
+        config.telemetry.enabled
+    );
 
     // Override telemetry setting if CLI flag is set
     if cli.disable_telemetry {
@@ -71,7 +87,7 @@ async fn run() -> syncable_cli::Result<()> {
     }
 
     log::debug!("Initializing telemetry...");
-    
+
     // Initialize telemetry
     if let Err(e) = telemetry::init_telemetry(&config).await {
         log::warn!("Failed to initialize telemetry: {}", e);
@@ -127,7 +143,7 @@ async fn run() -> syncable_cli::Result<()> {
             // Create telemetry properties
             let mut properties = HashMap::new();
             properties.insert("analysis_mode".to_string(), json!(analysis_mode));
-            
+
             if let Some(color) = color_scheme {
                 let color_str = match color {
                     ColorScheme::Auto => "auto",
@@ -136,16 +152,16 @@ async fn run() -> syncable_cli::Result<()> {
                 };
                 properties.insert("color_scheme".to_string(), json!(color_str));
             }
-            
+
             if let Some(only_filters) = &only {
                 properties.insert("only_filter".to_string(), json!(only_filters));
             }
-            
+
             // Track Analyze Folder event with properties
             if let Some(telemetry_client) = telemetry::get_telemetry_client() {
                 telemetry_client.track_analyze_folder(properties);
             }
-            
+
             match handle_analyze(path, json, detailed, display, only, color_scheme) {
                 Ok(_output) => Ok(()), // The output was already printed by display_analysis_with_return
                 Err(e) => Err(e),
@@ -163,64 +179,64 @@ async fn run() -> syncable_cli::Result<()> {
         } => {
             // Create telemetry properties
             let mut properties = HashMap::new();
-            
+
             if dockerfile {
                 properties.insert("generate_dockerfile".to_string(), json!(true));
             }
-            
+
             if compose {
                 properties.insert("generate_compose".to_string(), json!(true));
             }
-            
+
             if terraform {
                 properties.insert("generate_terraform".to_string(), json!(true));
             }
-            
+
             if all {
                 properties.insert("generate_all".to_string(), json!(true));
             }
-            
+
             if dry_run {
                 properties.insert("dry_run".to_string(), json!(true));
             }
-            
+
             if force {
                 properties.insert("force_overwrite".to_string(), json!(true));
             }
-            
+
             if output.is_some() {
                 properties.insert("custom_output_dir".to_string(), json!(true));
             }
-            
+
             // Track Generate command with properties
             if let Some(telemetry_client) = telemetry::get_telemetry_client() {
                 telemetry_client.track_generate(properties);
             }
-            
+
             handle_generate(
                 path, output, dockerfile, compose, terraform, all, dry_run, force,
             )
-        },
+        }
 
         Commands::Validate { path, types, fix } => {
             // Create telemetry properties
             let mut properties = HashMap::new();
-            
+
             if let Some(ref type_list) = types {
                 properties.insert("validation_types".to_string(), json!(type_list));
             }
-            
+
             if fix {
                 properties.insert("auto_fix".to_string(), json!(true));
             }
-            
+
             // Track Validate command with properties
             if let Some(telemetry_client) = telemetry::get_telemetry_client() {
                 telemetry_client.track_validate(properties);
             }
-            
+
             handle_validate(path, types, fix)
-        },
+        }
         Commands::Support {
             languages,
             frameworks,
@@ -228,26 +244,26 @@ async fn run() -> syncable_cli::Result<()> {
         } => {
             // Create telemetry properties
             let mut properties = HashMap::new();
-            
+
             if languages {
                 properties.insert("show_languages".to_string(), json!(true));
             }
-            
+
             if frameworks {
                 properties.insert("show_frameworks".to_string(), json!(true));
             }
-            
+
             if detailed {
                 properties.insert("detailed".to_string(), json!(true));
             }
-            
+
             // Track Support command with properties
             if let Some(telemetry_client) = telemetry::get_telemetry_client() {
                 telemetry_client.track_support(properties);
             }
-            
+
             handle_support(languages, frameworks, detailed)
-        },
+        }
         Commands::Dependencies {
             path,
             licenses,
@@ -258,23 +274,23 @@ async fn run() -> syncable_cli::Result<()> {
         } => {
             // Create telemetry properties
             let mut properties = HashMap::new();
-            
+
             if licenses {
                 properties.insert("show_licenses".to_string(), json!(true));
             }
-            
+
             if vulnerabilities {
                 properties.insert("check_vulnerabilities".to_string(), json!(true));
             }
-            
+
             if prod_only {
                 properties.insert("prod_only".to_string(), json!(true));
             }
-            
+
             if dev_only {
                 properties.insert("dev_only".to_string(), json!(true));
             }
-            
+
             // Honor global --json flag for output selection
             let effective_format = if cli.json { OutputFormat::Json } else { format };
 
@@ -283,16 +299,23 @@ async fn run() -> syncable_cli::Result<()> {
                 OutputFormat::Json => "json",
             };
             properties.insert("output_format".to_string(), json!(format_str));
-            
+
             // Track Dependencies command with properties
             if let Some(telemetry_client) = telemetry::get_telemetry_client() {
                 telemetry_client.track_dependencies(properties);
             }
-            
-            handle_dependencies(path, licenses, vulnerabilities, prod_only, dev_only, effective_format)
-                .await
-                .map(|_| ())
-        },
+
+            handle_dependencies(
+                path,
+                licenses,
+                vulnerabilities,
+                prod_only,
+                dev_only,
+                effective_format,
+            )
+            .await
+            .map(|_| ())
+        }
         Commands::Vulnerabilities {
             path,
             severity,
@@ -301,7 +324,7 @@ async fn run() -> syncable_cli::Result<()> {
         } => {
             // Create telemetry properties
             let mut properties = HashMap::new();
-            
+
             if let Some(sev) = &severity {
                 let severity_str = match sev {
                     SeverityThreshold::Low => "low",
@@ -311,7 +334,7 @@ async fn run() -> syncable_cli::Result<()> {
                 };
                 properties.insert("severity_threshold".to_string(), json!(severity_str));
             }
-            
+
             // Honor global --json flag for output selection
             let effective_format = if cli.json { OutputFormat::Json } else { format };
 
@@ -320,18 +343,18 @@ async fn run() -> syncable_cli::Result<()> {
                 OutputFormat::Json => "json",
             };
             properties.insert("output_format".to_string(), json!(format_str));
-            
+
             if output.is_some() {
                 properties.insert("export_to_file".to_string(), json!(true));
             }
-            
+
             // Track Vulnerabilities command with properties
             if let Some(telemetry_client) = telemetry::get_telemetry_client() {
                 telemetry_client.track_vulnerabilities(properties);
             }
-            
+
             handle_vulnerabilities(path, severity, effective_format, output).await
-        },
+        }
         Commands::Security {
             path,
             mode,
@@ -347,7 +370,7 @@ async fn run() -> syncable_cli::Result<()> {
         } => {
             // Create telemetry properties
             let mut properties = HashMap::new();
-            
+
             let mode_str = match mode {
                 SecurityScanMode::Lightning => "lightning",
                 SecurityScanMode::Fast => "fast",
@@ -356,31 +379,31 @@ async fn run() -> syncable_cli::Result<()> {
                 SecurityScanMode::Paranoid => "paranoid",
             };
             properties.insert("scan_mode".to_string(), json!(mode_str));
-            
+
             if include_low {
                 properties.insert("include_low_severity".to_string(), json!(true));
             }
-            
+
             if no_secrets {
                 properties.insert("skip_secrets".to_string(), json!(true));
             }
-            
+
             if no_code_patterns {
                 properties.insert("skip_code_patterns".to_string(), json!(true));
             }
-            
+
             if no_infrastructure {
                 properties.insert("skip_infrastructure".to_string(), json!(true));
             }
-            
+
             if no_compliance {
                 properties.insert("skip_compliance".to_string(), json!(true));
             }
-            
+
             if !frameworks.is_empty() {
                 properties.insert("compliance_frameworks".to_string(), json!(frameworks));
             }
-            
+
             // Honor global --json flag for output selection
             let effective_format = if cli.json { OutputFormat::Json } else { format };
 
@@ -389,20 +412,20 @@ async fn run() -> syncable_cli::Result<()> {
                 OutputFormat::Json => "json",
             };
             properties.insert("output_format".to_string(), json!(format_str));
-            
+
             if output.is_some() {
                 properties.insert("export_to_file".to_string(), json!(true));
             }
-            
+
             if fail_on_findings {
                 properties.insert("fail_on_findings".to_string(), json!(true));
             }
-            
+
             // Track Security command with properties
             if let Some(telemetry_client) = telemetry::get_telemetry_client() {
                 telemetry_client.track_security(properties);
             }
-            
+
             handle_security(
                 path,
                 mode,
@@ -416,75 +439,91 @@ async fn run() -> syncable_cli::Result<()> {
                 output,
                 fail_on_findings,
             )
-        },
+        }
         Commands::Tools { command } => {
             // Create telemetry properties based on the subcommand
             let mut properties = HashMap::new();
-            
+
             match &command {
                 ToolsCommand::Status { format, languages } => {
                     properties.insert("subcommand".to_string(), json!("status"));
-                    
+
                     let format_str = match format {
                         OutputFormat::Table => "table",
                         OutputFormat::Json => "json",
                     };
                     properties.insert("output_format".to_string(), json!(format_str));
-                    
+
                     if let Some(langs) = languages {
                         properties.insert("languages".to_string(), json!(langs));
                     }
-                },
-                ToolsCommand::Install { languages, include_owasp, dry_run, yes: _ } => {
+                }
+                ToolsCommand::Install {
+                    languages,
+                    include_owasp,
+                    dry_run,
+                    yes: _,
+                } => {
                     properties.insert("subcommand".to_string(), json!("install"));
-                    
+
                     if let Some(langs) = languages {
                         properties.insert("languages".to_string(), json!(langs));
                     }
-                    
+
                     if *include_owasp {
                         properties.insert("include_owasp".to_string(), json!(true));
                     }
-                    
+
                     if *dry_run {
                         properties.insert("dry_run".to_string(), json!(true));
                     }
-                },
-                ToolsCommand::Verify { languages, detailed } => {
+                }
+                ToolsCommand::Verify {
+                    languages,
+                    detailed,
+                } => {
                     properties.insert("subcommand".to_string(), json!("verify"));
-                    
+
                     if let Some(langs) = languages {
                         properties.insert("languages".to_string(), json!(langs));
                     }
-                    
+
                     if *detailed {
                         properties.insert("detailed".to_string(), json!(true));
                     }
-                },
-                ToolsCommand::Guide { languages, platform } => {
+                }
+                ToolsCommand::Guide {
+                    languages,
+                    platform,
+                } => {
                     properties.insert("subcommand".to_string(), json!("guide"));
-                    
+
                     if let Some(langs) = languages {
                         properties.insert("languages".to_string(), json!(langs));
                     }
-                    
+
                     if let Some(platform) = platform {
                         properties.insert("platform".to_string(), json!(platform));
                     }
-                },
+                }
             }
-            
+
             // Track Tools command with properties
             if let Some(telemetry_client) = telemetry::get_telemetry_client() {
                 telemetry_client.track_tools(properties);
             }
-            
-            handle_tools(command).await
-        },
 
-        Commands::Chat { path, provider, model, query } => {
+            handle_tools(command).await
+        }
+
+        Commands::Chat {
+            path,
+            provider,
+            model,
+            query,
+        } => {
             let mut properties = HashMap::new();
-            
+
             let provider_str = match provider {
                 ChatProvider::Openai => "openai",
                 ChatProvider::Anthropic => "anthropic",
@@ -493,21 +532,33 @@ async fn run() -> syncable_cli::Result<()> {
                 ChatProvider::Auto => "auto",
             };
             properties.insert("provider".to_string(), json!(provider_str));
-            
+
             if let Some(m) = &model {
                 properties.insert("model".to_string(), json!(m));
             }
-            
-            properties.insert("mode".to_string(), json!(if query.is_some() { "query" } else { "interactive" }));
-            
+
+            properties.insert(
+                "mode".to_string(),
+                json!(if query.is_some() {
+                    "query"
+                } else {
+                    "interactive"
+                }),
+            );
+
             // Track Chat command
             if let Some(telemetry_client) = telemetry::get_telemetry_client() {
                 telemetry_client.track_event("chat", properties.clone());
             }
-            
-            syncable_cli::run_command(Commands::Chat { path, provider, model, query }).await
-        },
 
+            syncable_cli::run_command(Commands::Chat {
+                path,
+                provider,
+                model,
+                query,
+            })
+            .await
+        }
     };
 
     // Flush telemetry events before exiting

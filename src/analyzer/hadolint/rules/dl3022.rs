@@ -4,11 +4,12 @@
 //! that was previously defined.
 
 use crate::analyzer::hadolint::parser::instruction::Instruction;
-use crate::analyzer::hadolint::rules::{custom_rule, CustomRule, RuleState};
+use crate::analyzer::hadolint::rules::{CustomRule, RuleState, custom_rule};
 use crate::analyzer::hadolint::shell::ParsedShell;
 use crate::analyzer::hadolint::types::Severity;
 
-pub fn rule() -> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&ParsedShell>) + Send + Sync> {
+pub fn rule()
+-> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&ParsedShell>) + Send + Sync> {
     custom_rule(
         "DL3022",
         Severity::Warning,
@@ -33,7 +34,9 @@ pub fn rule() -> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&P
                         // 3. It's an external image reference
 
                         let is_known_alias = state.data.set_contains("stage_aliases", from);
-                        let is_numeric_index = from.parse::<i64>().ok()
+                        let is_numeric_index = from
+                            .parse::<i64>()
+                            .ok()
                             .map(|n| n < state.data.get_int("stage_count"))
                             .unwrap_or(false);
 
@@ -59,8 +62,8 @@ pub fn rule() -> CustomRule<impl Fn(&mut RuleState, u32, &Instruction, Option<&P
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::hadolint::lint::{lint, LintResult};
     use crate::analyzer::hadolint::config::HadolintConfig;
+    use crate::analyzer::hadolint::lint::{LintResult, lint};
 
     fn lint_dockerfile(content: &str) -> LintResult {
         lint(content, &HadolintConfig::default())
@@ -69,23 +72,22 @@ mod tests {
     #[test]
     fn test_copy_from_valid_alias() {
         let result = lint_dockerfile(
-            "FROM node:18 AS builder\nRUN npm ci\nFROM node:18-alpine\nCOPY --from=builder /app /app"
+            "FROM node:18 AS builder\nRUN npm ci\nFROM node:18-alpine\nCOPY --from=builder /app /app",
         );
         assert!(!result.failures.iter().any(|f| f.code.as_str() == "DL3022"));
     }
 
     #[test]
     fn test_copy_from_invalid_alias() {
-        let result = lint_dockerfile(
-            "FROM node:18\nFROM node:18-alpine\nCOPY --from=nonexistent /app /app"
-        );
+        let result =
+            lint_dockerfile("FROM node:18\nFROM node:18-alpine\nCOPY --from=nonexistent /app /app");
         assert!(result.failures.iter().any(|f| f.code.as_str() == "DL3022"));
     }
 
     #[test]
     fn test_copy_from_numeric_index() {
         let result = lint_dockerfile(
-            "FROM node:18\nRUN npm ci\nFROM node:18-alpine\nCOPY --from=0 /app /app"
+            "FROM node:18\nRUN npm ci\nFROM node:18-alpine\nCOPY --from=0 /app /app",
         );
         assert!(!result.failures.iter().any(|f| f.code.as_str() == "DL3022"));
     }
@@ -93,7 +95,7 @@ mod tests {
     #[test]
     fn test_copy_from_external_image() {
         let result = lint_dockerfile(
-            "FROM node:18\nCOPY --from=nginx:latest /etc/nginx/nginx.conf /etc/nginx/"
+            "FROM node:18\nCOPY --from=nginx:latest /etc/nginx/nginx.conf /etc/nginx/",
         );
         assert!(!result.failures.iter().any(|f| f.code.as_str() == "DL3022"));
     }

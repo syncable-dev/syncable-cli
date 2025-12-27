@@ -3,7 +3,7 @@
 //! Connects to the IDE's MCP server via HTTP SSE and provides methods
 //! for opening diffs and receiving notifications.
 
-use super::detect::{detect_ide, get_ide_process_info, IdeInfo, IdeProcessInfo};
+use super::detect::{IdeInfo, IdeProcessInfo, detect_ide, get_ide_process_info};
 use super::types::*;
 use std::collections::HashMap;
 use std::env;
@@ -161,16 +161,24 @@ impl IdeClient {
 
         // Debug: show where we're looking
         if cfg!(debug_assertions) || env::var("SYNCABLE_DEBUG").is_ok() {
-            eprintln!("[IDE Debug] Looking for port files in temp_dir: {:?}", temp_dir);
+            eprintln!(
+                "[IDE Debug] Looking for port files in temp_dir: {:?}",
+                temp_dir
+            );
         }
 
         // Try Syncable extension first - scan all port files, match by workspace
         let syncable_port_dir = temp_dir.join("syncable").join("ide");
         if cfg!(debug_assertions) || env::var("SYNCABLE_DEBUG").is_ok() {
-            eprintln!("[IDE Debug] Checking Syncable dir: {:?} (exists: {})",
-                     syncable_port_dir, syncable_port_dir.exists());
+            eprintln!(
+                "[IDE Debug] Checking Syncable dir: {:?} (exists: {})",
+                syncable_port_dir,
+                syncable_port_dir.exists()
+            );
         }
-        if let Some(config) = self.find_port_file_by_workspace(&syncable_port_dir, "syncable-ide-server") {
+        if let Some(config) =
+            self.find_port_file_by_workspace(&syncable_port_dir, "syncable-ide-server")
+        {
             if cfg!(debug_assertions) || env::var("SYNCABLE_DEBUG").is_ok() {
                 eprintln!("[IDE Debug] Found Syncable config: port={}", config.port);
             }
@@ -180,10 +188,15 @@ impl IdeClient {
         // Try Gemini CLI extension (for compatibility)
         let gemini_port_dir = temp_dir.join("gemini").join("ide");
         if cfg!(debug_assertions) || env::var("SYNCABLE_DEBUG").is_ok() {
-            eprintln!("[IDE Debug] Checking Gemini dir: {:?} (exists: {})",
-                     gemini_port_dir, gemini_port_dir.exists());
+            eprintln!(
+                "[IDE Debug] Checking Gemini dir: {:?} (exists: {})",
+                gemini_port_dir,
+                gemini_port_dir.exists()
+            );
         }
-        if let Some(config) = self.find_port_file_by_workspace(&gemini_port_dir, "gemini-ide-server") {
+        if let Some(config) =
+            self.find_port_file_by_workspace(&gemini_port_dir, "gemini-ide-server")
+        {
             if cfg!(debug_assertions) || env::var("SYNCABLE_DEBUG").is_ok() {
                 eprintln!("[IDE Debug] Found Gemini config: port={}", config.port);
             }
@@ -212,7 +225,10 @@ impl IdeClient {
                 if let Ok(content) = fs::read_to_string(entry.path()) {
                     if let Ok(config) = serde_json::from_str::<ConnectionConfig>(&content) {
                         if debug {
-                            eprintln!("[IDE Debug] Config workspace_path: {:?}", config.workspace_path);
+                            eprintln!(
+                                "[IDE Debug] Config workspace_path: {:?}",
+                                config.workspace_path
+                            );
                         }
                         if self.validate_workspace_path(&config.workspace_path) {
                             return Some(config);
@@ -255,7 +271,9 @@ impl IdeClient {
 
     /// Establish HTTP connection and initialize MCP session
     async fn establish_connection(&mut self) -> Result<(), IdeError> {
-        let port = self.port.ok_or(IdeError::ConnectionFailed("No port".to_string()))?;
+        let port = self
+            .port
+            .ok_or(IdeError::ConnectionFailed("No port".to_string()))?;
         let url = format!("http://127.0.0.1:{}/mcp", port);
 
         // Build initialize request
@@ -274,7 +292,8 @@ impl IdeClient {
         );
 
         // Send initialize request
-        let mut request = self.http_client
+        let mut request = self
+            .http_client
             .post(&url)
             .header("Accept", "application/json, text/event-stream")
             .json(&init_request);
@@ -301,15 +320,12 @@ impl IdeClient {
             .await
             .map_err(|e| IdeError::ConnectionFailed(e.to_string()))?;
 
-        let response_data: JsonRpcResponse = Self::parse_sse_response(&response_text)
-            .map_err(IdeError::ConnectionFailed)?;
+        let response_data: JsonRpcResponse =
+            Self::parse_sse_response(&response_text).map_err(IdeError::ConnectionFailed)?;
 
         if response_data.error.is_some() {
             return Err(IdeError::ConnectionFailed(
-                response_data
-                    .error
-                    .map(|e| e.message)
-                    .unwrap_or_default(),
+                response_data.error.map(|e| e.message).unwrap_or_default(),
             ));
         }
 
@@ -326,8 +342,7 @@ impl IdeClient {
             }
         }
         // Fallback: try parsing entire response as JSON (for non-SSE responses)
-        serde_json::from_str(text)
-            .map_err(|e| format!("Failed to parse response: {}", e))
+        serde_json::from_str(text).map_err(|e| format!("Failed to parse response: {}", e))
     }
 
     /// Get next request ID
@@ -343,12 +358,15 @@ impl IdeClient {
         method: &str,
         params: serde_json::Value,
     ) -> Result<JsonRpcResponse, IdeError> {
-        let port = self.port.ok_or(IdeError::ConnectionFailed("Not connected".to_string()))?;
+        let port = self
+            .port
+            .ok_or(IdeError::ConnectionFailed("Not connected".to_string()))?;
         let url = format!("http://127.0.0.1:{}/mcp", port);
 
         let request = JsonRpcRequest::new(self.next_request_id(), method, params);
 
-        let mut http_request = self.http_client
+        let mut http_request = self
+            .http_client
             .post(&url)
             .header("Accept", "application/json, text/event-stream")
             .json(&request);
@@ -371,17 +389,22 @@ impl IdeClient {
             .await
             .map_err(|e| IdeError::RequestFailed(e.to_string()))?;
 
-        Self::parse_sse_response(&response_text)
-            .map_err(IdeError::RequestFailed)
+        Self::parse_sse_response(&response_text).map_err(IdeError::RequestFailed)
     }
 
     /// Open a diff view in the IDE
     ///
     /// This sends the file path and new content to the IDE, which will show
     /// a diff view. The method returns when the user accepts or rejects the diff.
-    pub async fn open_diff(&self, file_path: &str, new_content: &str) -> Result<DiffResult, IdeError> {
+    pub async fn open_diff(
+        &self,
+        file_path: &str,
+        new_content: &str,
+    ) -> Result<DiffResult, IdeError> {
         if !self.is_connected() {
-            return Err(IdeError::ConnectionFailed("Not connected to IDE".to_string()));
+            return Err(IdeError::ConnectionFailed(
+                "Not connected to IDE".to_string(),
+            ));
         }
 
         let params = serde_json::to_value(ToolCallParams {
@@ -427,7 +450,9 @@ impl IdeClient {
     /// Close a diff view in the IDE
     pub async fn close_diff(&self, file_path: &str) -> Result<Option<String>, IdeError> {
         if !self.is_connected() {
-            return Err(IdeError::ConnectionFailed("Not connected to IDE".to_string()));
+            return Err(IdeError::ConnectionFailed(
+                "Not connected to IDE".to_string(),
+            ));
         }
 
         let params = serde_json::to_value(ToolCallParams {
@@ -449,7 +474,8 @@ impl IdeClient {
                     if content.content_type == "text" {
                         if let Some(text) = content.text {
                             if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&text) {
-                                if let Some(content) = parsed.get("content").and_then(|c| c.as_str())
+                                if let Some(content) =
+                                    parsed.get("content").and_then(|c| c.as_str())
                                 {
                                     return Ok(Some(content.to_string()));
                                 }
@@ -505,9 +531,14 @@ impl IdeClient {
     ///
     /// If `file_path` is provided, returns diagnostics only for that file.
     /// Otherwise returns all diagnostics across the workspace.
-    pub async fn get_diagnostics(&self, file_path: Option<&str>) -> Result<DiagnosticsResponse, IdeError> {
+    pub async fn get_diagnostics(
+        &self,
+        file_path: Option<&str>,
+    ) -> Result<DiagnosticsResponse, IdeError> {
         if !self.is_connected() {
-            return Err(IdeError::ConnectionFailed("Not connected to IDE".to_string()));
+            return Err(IdeError::ConnectionFailed(
+                "Not connected to IDE".to_string(),
+            ));
         }
 
         let params = serde_json::to_value(ToolCallParams {
@@ -529,13 +560,24 @@ impl IdeClient {
                     if content.content_type == "text" {
                         if let Some(text) = content.text {
                             // Try to parse as DiagnosticsResponse
-                            if let Ok(diag_response) = serde_json::from_str::<DiagnosticsResponse>(&text) {
+                            if let Ok(diag_response) =
+                                serde_json::from_str::<DiagnosticsResponse>(&text)
+                            {
                                 return Ok(diag_response);
                             }
                             // Try parsing as raw array of diagnostics
-                            if let Ok(diagnostics) = serde_json::from_str::<Vec<Diagnostic>>(&text) {
-                                let total_errors = diagnostics.iter().filter(|d| d.severity == DiagnosticSeverity::Error).count() as u32;
-                                let total_warnings = diagnostics.iter().filter(|d| d.severity == DiagnosticSeverity::Warning).count() as u32;
+                            if let Ok(diagnostics) = serde_json::from_str::<Vec<Diagnostic>>(&text)
+                            {
+                                let total_errors = diagnostics
+                                    .iter()
+                                    .filter(|d| d.severity == DiagnosticSeverity::Error)
+                                    .count()
+                                    as u32;
+                                let total_warnings = diagnostics
+                                    .iter()
+                                    .filter(|d| d.severity == DiagnosticSeverity::Warning)
+                                    .count()
+                                    as u32;
                                 return Ok(DiagnosticsResponse {
                                     diagnostics,
                                     total_errors,
