@@ -68,66 +68,59 @@ pub fn detect_languages(
         }
 
         // Check for manifest files
-        if let Some(filename) = file.file_name().and_then(|n| n.to_str()) {
-            if is_manifest_file(filename) {
-                manifest_files.push(file.clone());
-            }
+        if let Some(filename) = file.file_name().and_then(|n| n.to_str())
+            && is_manifest_file(filename)
+        {
+            manifest_files.push(file.clone());
         }
     }
 
     // Second pass: analyze each detected language with manifest parsing
-    if source_files_by_lang.contains_key("rust") || has_manifest(&manifest_files, &["Cargo.toml"]) {
-        if let Ok(info) =
+    if (source_files_by_lang.contains_key("rust") || has_manifest(&manifest_files, &["Cargo.toml"]))
+        && let Ok(info) =
             analyze_rust_project(&manifest_files, source_files_by_lang.get("rust"), config)
-        {
-            language_info.insert("rust", info);
-        }
+    {
+        language_info.insert("rust", info);
     }
 
-    if source_files_by_lang.contains_key("javascript")
-        || has_manifest(&manifest_files, &["package.json"])
-    {
-        if let Ok(info) = analyze_javascript_project(
+    if (source_files_by_lang.contains_key("javascript")
+        || has_manifest(&manifest_files, &["package.json"]))
+        && let Ok(info) = analyze_javascript_project(
             &manifest_files,
             source_files_by_lang.get("javascript"),
             config,
-        ) {
-            language_info.insert("javascript", info);
-        }
+        )
+    {
+        language_info.insert("javascript", info);
     }
 
-    if source_files_by_lang.contains_key("python")
+    if (source_files_by_lang.contains_key("python")
         || has_manifest(
             &manifest_files,
             &["requirements.txt", "Pipfile", "pyproject.toml", "setup.py"],
-        )
-    {
-        if let Ok(info) =
+        ))
+        && let Ok(info) =
             analyze_python_project(&manifest_files, source_files_by_lang.get("python"), config)
-        {
-            language_info.insert("python", info);
-        }
+    {
+        language_info.insert("python", info);
     }
 
-    if source_files_by_lang.contains_key("go") || has_manifest(&manifest_files, &["go.mod"]) {
-        if let Ok(info) =
+    if (source_files_by_lang.contains_key("go") || has_manifest(&manifest_files, &["go.mod"]))
+        && let Ok(info) =
             analyze_go_project(&manifest_files, source_files_by_lang.get("go"), config)
-        {
-            language_info.insert("go", info);
-        }
+    {
+        language_info.insert("go", info);
     }
 
-    if source_files_by_lang.contains_key("jvm")
+    if (source_files_by_lang.contains_key("jvm")
         || has_manifest(
             &manifest_files,
             &["pom.xml", "build.gradle", "build.gradle.kts"],
-        )
-    {
-        if let Ok(info) =
+        ))
+        && let Ok(info) =
             analyze_jvm_project(&manifest_files, source_files_by_lang.get("jvm"), config)
-        {
-            language_info.insert("jvm", info);
-        }
+    {
+        language_info.insert("jvm", info);
     }
 
     // Convert to DetectedLanguage format
@@ -177,45 +170,44 @@ fn analyze_rust_project(
         if manifest.file_name().and_then(|n| n.to_str()) == Some("Cargo.toml") {
             info.manifest_files.push(manifest.clone());
 
-            if let Ok(content) = file_utils::read_file_safe(manifest, config.max_file_size) {
-                if let Ok(cargo_toml) = toml::from_str::<toml::Value>(&content) {
-                    // Extract edition
-                    if let Some(package) = cargo_toml.get("package") {
-                        if let Some(edition) = package.get("edition").and_then(|e| e.as_str()) {
-                            info.edition = Some(edition.to_string());
-                        }
-
-                        // Estimate Rust version from edition
-                        info.version = match info.edition.as_deref() {
-                            Some("2021") => Some("1.56+".to_string()),
-                            Some("2018") => Some("1.31+".to_string()),
-                            Some("2015") => Some("1.0+".to_string()),
-                            _ => Some("unknown".to_string()),
-                        };
-                    }
-
-                    // Extract dependencies
-                    if let Some(deps) = cargo_toml.get("dependencies") {
-                        if let Some(deps_table) = deps.as_table() {
-                            for (name, _) in deps_table {
-                                info.main_dependencies.push(name.clone());
-                            }
-                        }
-                    }
-
-                    // Extract dev dependencies if enabled
-                    if config.include_dev_dependencies {
-                        if let Some(dev_deps) = cargo_toml.get("dev-dependencies") {
-                            if let Some(dev_deps_table) = dev_deps.as_table() {
-                                for (name, _) in dev_deps_table {
-                                    info.dev_dependencies.push(name.clone());
-                                }
-                            }
-                        }
-                    }
-
-                    info.confidence = 0.95; // High confidence with manifest
+            if let Ok(content) = file_utils::read_file_safe(manifest, config.max_file_size)
+                && let Ok(cargo_toml) = toml::from_str::<toml::Value>(&content)
+            {
+                // Extract edition
+                if let Some(package) = cargo_toml.get("package")
+                    && let Some(edition) = package.get("edition").and_then(|e| e.as_str())
+                {
+                    info.edition = Some(edition.to_string());
                 }
+
+                // Estimate Rust version from edition
+                info.version = match info.edition.as_deref() {
+                    Some("2021") => Some("1.56+".to_string()),
+                    Some("2018") => Some("1.31+".to_string()),
+                    Some("2015") => Some("1.0+".to_string()),
+                    _ => Some("unknown".to_string()),
+                };
+
+                // Extract dependencies
+                if let Some(deps_table) = cargo_toml.get("dependencies").and_then(|d| d.as_table())
+                {
+                    for (name, _) in deps_table {
+                        info.main_dependencies.push(name.clone());
+                    }
+                }
+
+                // Extract dev dependencies if enabled
+                if config.include_dev_dependencies
+                    && let Some(dev_deps_table) = cargo_toml
+                        .get("dev-dependencies")
+                        .and_then(|d| d.as_table())
+                {
+                    for (name, _) in dev_deps_table {
+                        info.dev_dependencies.push(name.clone());
+                    }
+                }
+
+                info.confidence = 0.95; // High confidence with manifest
             }
             break;
         }
@@ -269,64 +261,65 @@ fn analyze_javascript_project(
         if manifest.file_name().and_then(|n| n.to_str()) == Some("package.json") {
             info.manifest_files.push(manifest.clone());
 
-            if let Ok(content) = file_utils::read_file_safe(manifest, config.max_file_size) {
-                if let Ok(package_json) = serde_json::from_str::<JsonValue>(&content) {
-                    // Extract Node.js version from engines
-                    if let Some(engines) = package_json.get("engines") {
-                        if let Some(node_version) = engines.get("node").and_then(|v| v.as_str()) {
-                            info.version = Some(node_version.to_string());
-                        }
-                    }
-
-                    // Extract dependencies (always include all buckets for framework detection)
-                    if let Some(deps) = package_json.get("dependencies").and_then(|d| d.as_object())
-                    {
-                        for (name, _) in deps {
-                            info.main_dependencies.push(name.clone());
-                        }
-                    }
-
-                    // Frameworks like Vite/Remix/Next are often in devDependencies; always include
-                    if let Some(dev_deps) = package_json
-                        .get("devDependencies")
-                        .and_then(|d| d.as_object())
-                    {
-                        for (name, _) in dev_deps {
-                            info.main_dependencies.push(name.clone());
-                            info.dev_dependencies.push(name.clone());
-                        }
-                    }
-
-                    // peerDependencies frequently carry framework identity (e.g., react-router)
-                    if let Some(peer_deps) = package_json
-                        .get("peerDependencies")
-                        .and_then(|d| d.as_object())
-                    {
-                        for (name, _) in peer_deps {
-                            info.main_dependencies.push(name.clone());
-                        }
-                    }
-
-                    // optional/bundled deps can also hold framework markers (rare but cheap to add)
-                    if let Some(opt_deps) = package_json
-                        .get("optionalDependencies")
-                        .and_then(|d| d.as_object())
-                    {
-                        for (name, _) in opt_deps {
-                            info.main_dependencies.push(name.clone());
-                        }
-                    }
-                    if let Some(bundle_deps) = package_json
-                        .get("bundledDependencies")
-                        .and_then(|d| d.as_array())
-                    {
-                        for dep in bundle_deps.iter().filter_map(|d| d.as_str()) {
-                            info.main_dependencies.push(dep.to_string());
-                        }
-                    }
-
-                    info.confidence = 0.95; // High confidence with manifest
+            if let Ok(content) = file_utils::read_file_safe(manifest, config.max_file_size)
+                && let Ok(package_json) = serde_json::from_str::<JsonValue>(&content)
+            {
+                // Extract Node.js version from engines
+                if let Some(node_version) = package_json
+                    .get("engines")
+                    .and_then(|e| e.get("node"))
+                    .and_then(|v| v.as_str())
+                {
+                    info.version = Some(node_version.to_string());
                 }
+
+                // Extract dependencies (always include all buckets for framework detection)
+                if let Some(deps) = package_json.get("dependencies").and_then(|d| d.as_object()) {
+                    for (name, _) in deps {
+                        info.main_dependencies.push(name.clone());
+                    }
+                }
+
+                // Frameworks like Vite/Remix/Next are often in devDependencies; always include
+                if let Some(dev_deps) = package_json
+                    .get("devDependencies")
+                    .and_then(|d| d.as_object())
+                {
+                    for (name, _) in dev_deps {
+                        info.main_dependencies.push(name.clone());
+                        info.dev_dependencies.push(name.clone());
+                    }
+                }
+
+                // peerDependencies frequently carry framework identity (e.g., react-router)
+                if let Some(peer_deps) = package_json
+                    .get("peerDependencies")
+                    .and_then(|d| d.as_object())
+                {
+                    for (name, _) in peer_deps {
+                        info.main_dependencies.push(name.clone());
+                    }
+                }
+
+                // optional/bundled deps can also hold framework markers (rare but cheap to add)
+                if let Some(opt_deps) = package_json
+                    .get("optionalDependencies")
+                    .and_then(|d| d.as_object())
+                {
+                    for (name, _) in opt_deps {
+                        info.main_dependencies.push(name.clone());
+                    }
+                }
+                if let Some(bundle_deps) = package_json
+                    .get("bundledDependencies")
+                    .and_then(|d| d.as_array())
+                {
+                    for dep in bundle_deps.iter().filter_map(|d| d.as_str()) {
+                        info.main_dependencies.push(dep.to_string());
+                    }
+                }
+
+                info.confidence = 0.95; // High confidence with manifest
             }
             break;
         }
@@ -337,7 +330,7 @@ fn analyze_javascript_project(
         let has_typescript = files.iter().any(|f| {
             f.extension()
                 .and_then(|e| e.to_str())
-                .map_or(false, |ext| ext == "ts" || ext == "tsx")
+                .is_some_and(|ext| ext == "ts" || ext == "tsx")
         });
 
         if has_typescript {
@@ -463,22 +456,18 @@ fn parse_pipfile(content: &str, info: &mut LanguageInfo, config: &AnalysisConfig
         }
 
         // Extract packages
-        if let Some(packages) = pipfile.get("packages") {
-            if let Some(packages_table) = packages.as_table() {
-                for (name, _) in packages_table {
-                    info.main_dependencies.push(name.clone());
-                }
+        if let Some(packages_table) = pipfile.get("packages").and_then(|p| p.as_table()) {
+            for (name, _) in packages_table {
+                info.main_dependencies.push(name.clone());
             }
         }
 
         // Extract dev packages if enabled
-        if config.include_dev_dependencies {
-            if let Some(dev_packages) = pipfile.get("dev-packages") {
-                if let Some(dev_packages_table) = dev_packages.as_table() {
-                    for (name, _) in dev_packages_table {
-                        info.dev_dependencies.push(name.clone());
-                    }
-                }
+        if config.include_dev_dependencies
+            && let Some(dev_packages_table) = pipfile.get("dev-packages").and_then(|d| d.as_table())
+        {
+            for (name, _) in dev_packages_table {
+                info.dev_dependencies.push(name.clone());
             }
         }
     }
@@ -494,41 +483,36 @@ fn parse_pyproject_toml(content: &str, info: &mut LanguageInfo, config: &Analysi
             }
 
             // Extract dependencies
-            if let Some(dependencies) = project.get("dependencies") {
-                if let Some(deps_array) = dependencies.as_array() {
-                    for dep in deps_array {
-                        if let Some(dep_str) = dep.as_str() {
-                            if let Some(package_name) =
-                                dep_str.split(&['=', '>', '<', '!', '~', ';'][..]).next()
-                            {
-                                let clean_name = package_name.trim();
-                                if !clean_name.is_empty() {
-                                    info.main_dependencies.push(clean_name.to_string());
-                                }
-                            }
+            if let Some(deps_array) = project.get("dependencies").and_then(|d| d.as_array()) {
+                for dep in deps_array {
+                    if let Some(dep_str) = dep.as_str()
+                        && let Some(package_name) =
+                            dep_str.split(&['=', '>', '<', '!', '~', ';'][..]).next()
+                    {
+                        let clean_name = package_name.trim();
+                        if !clean_name.is_empty() {
+                            info.main_dependencies.push(clean_name.to_string());
                         }
                     }
                 }
             }
 
             // Extract optional dependencies (dev dependencies)
-            if config.include_dev_dependencies {
-                if let Some(optional_deps) = project.get("optional-dependencies") {
-                    if let Some(optional_table) = optional_deps.as_table() {
-                        for (_, deps) in optional_table {
-                            if let Some(deps_array) = deps.as_array() {
-                                for dep in deps_array {
-                                    if let Some(dep_str) = dep.as_str() {
-                                        if let Some(package_name) = dep_str
-                                            .split(&['=', '>', '<', '!', '~', ';'][..])
-                                            .next()
-                                        {
-                                            let clean_name = package_name.trim();
-                                            if !clean_name.is_empty() {
-                                                info.dev_dependencies.push(clean_name.to_string());
-                                            }
-                                        }
-                                    }
+            if config.include_dev_dependencies
+                && let Some(optional_table) = project
+                    .get("optional-dependencies")
+                    .and_then(|o| o.as_table())
+            {
+                for (_, deps) in optional_table {
+                    if let Some(deps_array) = deps.as_array() {
+                        for dep in deps_array {
+                            if let Some(dep_str) = dep.as_str()
+                                && let Some(package_name) =
+                                    dep_str.split(&['=', '>', '<', '!', '~', ';'][..]).next()
+                            {
+                                let clean_name = package_name.trim();
+                                if !clean_name.is_empty() {
+                                    info.dev_dependencies.push(clean_name.to_string());
                                 }
                             }
                         }
@@ -538,39 +522,27 @@ fn parse_pyproject_toml(content: &str, info: &mut LanguageInfo, config: &Analysi
         }
 
         // Check for Poetry configuration
-        if pyproject
-            .get("tool")
-            .and_then(|t| t.get("poetry"))
-            .is_some()
-        {
+        if let Some(poetry) = pyproject.get("tool").and_then(|t| t.get("poetry")) {
             info.package_manager = Some("poetry".to_string());
 
             // Extract Poetry dependencies
-            if let Some(tool) = pyproject.get("tool") {
-                if let Some(poetry) = tool.get("poetry") {
-                    if let Some(dependencies) = poetry.get("dependencies") {
-                        if let Some(deps_table) = dependencies.as_table() {
-                            for (name, _) in deps_table {
-                                if name != "python" {
-                                    info.main_dependencies.push(name.clone());
-                                }
-                            }
-                        }
+            if let Some(deps_table) = poetry.get("dependencies").and_then(|d| d.as_table()) {
+                for (name, _) in deps_table {
+                    if name != "python" {
+                        info.main_dependencies.push(name.clone());
                     }
+                }
+            }
 
-                    if config.include_dev_dependencies {
-                        if let Some(dev_dependencies) = poetry
-                            .get("group")
-                            .and_then(|g| g.get("dev"))
-                            .and_then(|d| d.get("dependencies"))
-                        {
-                            if let Some(dev_deps_table) = dev_dependencies.as_table() {
-                                for (name, _) in dev_deps_table {
-                                    info.dev_dependencies.push(name.clone());
-                                }
-                            }
-                        }
-                    }
+            if config.include_dev_dependencies
+                && let Some(dev_deps_table) = poetry
+                    .get("group")
+                    .and_then(|g| g.get("dev"))
+                    .and_then(|d| d.get("dependencies"))
+                    .and_then(|d| d.as_table())
+            {
+                for (name, _) in dev_deps_table {
+                    info.dev_dependencies.push(name.clone());
                 }
             }
         }
@@ -585,16 +557,16 @@ fn parse_setup_py(content: &str, info: &mut LanguageInfo) {
 
         // Look for python_requires
         if line.contains("python_requires") {
-            if let Some(start) = line.find("\"") {
-                if let Some(end) = line[start + 1..].find("\"") {
-                    let version = &line[start + 1..start + 1 + end];
-                    info.version = Some(version.to_string());
-                }
-            } else if let Some(start) = line.find("'") {
-                if let Some(end) = line[start + 1..].find("'") {
-                    let version = &line[start + 1..start + 1 + end];
-                    info.version = Some(version.to_string());
-                }
+            if let Some(start) = line.find('"')
+                && let Some(end) = line[start + 1..].find('"')
+            {
+                let version = &line[start + 1..start + 1 + end];
+                info.version = Some(version.to_string());
+            } else if let Some(start) = line.find('\'')
+                && let Some(end) = line[start + 1..].find('\'')
+            {
+                let version = &line[start + 1..start + 1 + end];
+                info.version = Some(version.to_string());
             }
         }
 
@@ -661,15 +633,14 @@ fn parse_go_mod(content: &str, info: &mut LanguageInfo) {
         let line = line.trim();
 
         // Parse go version directive
-        if line.starts_with("go ") {
-            let version = line[3..].trim();
-            info.version = Some(version.to_string());
+        if let Some(version) = line.strip_prefix("go ") {
+            info.version = Some(version.trim().to_string());
         }
 
         // Parse require block
-        if line.starts_with("require ") {
+        if let Some(require_line) = line.strip_prefix("require ") {
             // Single line require
-            let require_line = &line[8..].trim();
+            let require_line = require_line.trim();
             if let Some(module_name) = require_line.split_whitespace().next() {
                 info.main_dependencies.push(module_name.to_string());
             }
@@ -693,10 +664,11 @@ fn parse_go_mod(content: &str, info: &mut LanguageInfo) {
             }
 
             // Parse dependency line
-            if !line.is_empty() && !line.starts_with("//") {
-                if let Some(module_name) = line.split_whitespace().next() {
-                    info.main_dependencies.push(module_name.to_string());
-                }
+            if !line.is_empty()
+                && !line.starts_with("//")
+                && let Some(module_name) = line.split_whitespace().next()
+            {
+                info.main_dependencies.push(module_name.to_string());
             }
         }
     }
@@ -760,7 +732,7 @@ fn analyze_jvm_project(
         let has_kotlin = files.iter().any(|f| {
             f.extension()
                 .and_then(|e| e.to_str())
-                .map_or(false, |ext| ext == "kt" || ext == "kts")
+                .is_some_and(|ext| ext == "kt" || ext == "kts")
         });
 
         if has_kotlin {
@@ -787,33 +759,35 @@ fn parse_maven_pom(content: &str, info: &mut LanguageInfo, config: &AnalysisConf
         let line = line.trim();
 
         // Look for Java version in properties
-        if line.contains("<maven.compiler.source>") {
-            if let Some(version) = extract_xml_content(line, "maven.compiler.source") {
-                info.version = Some(version);
-            }
-        } else if line.contains("<java.version>") {
-            if let Some(version) = extract_xml_content(line, "java.version") {
-                info.version = Some(version);
-            }
-        } else if line.contains("<maven.compiler.target>") && info.version.is_none() {
-            if let Some(version) = extract_xml_content(line, "maven.compiler.target") {
-                info.version = Some(version);
-            }
+        if line.contains("<maven.compiler.source>")
+            && let Some(version) = extract_xml_content(line, "maven.compiler.source")
+        {
+            info.version = Some(version);
+        } else if line.contains("<java.version>")
+            && let Some(version) = extract_xml_content(line, "java.version")
+        {
+            info.version = Some(version);
+        } else if line.contains("<maven.compiler.target>")
+            && info.version.is_none()
+            && let Some(version) = extract_xml_content(line, "maven.compiler.target")
+        {
+            info.version = Some(version);
         }
 
         // Extract dependencies
-        if line.contains("<groupId>") && line.contains("<artifactId>") {
+        if line.contains("<groupId>")
+            && line.contains("<artifactId>")
+            && let Some(group_id) = extract_xml_content(line, "groupId")
+            && let Some(artifact_id) = extract_xml_content(line, "artifactId")
+        {
             // This is a simplified approach - real XML parsing would be better
-            if let Some(group_id) = extract_xml_content(line, "groupId") {
-                if let Some(artifact_id) = extract_xml_content(line, "artifactId") {
-                    let dependency = format!("{}:{}", group_id, artifact_id);
-                    info.main_dependencies.push(dependency);
-                }
-            }
-        } else if line.contains("<artifactId>") && !line.contains("<groupId>") {
-            if let Some(artifact_id) = extract_xml_content(line, "artifactId") {
-                info.main_dependencies.push(artifact_id);
-            }
+            let dependency = format!("{}:{}", group_id, artifact_id);
+            info.main_dependencies.push(dependency);
+        } else if line.contains("<artifactId>")
+            && !line.contains("<groupId>")
+            && let Some(artifact_id) = extract_xml_content(line, "artifactId")
+        {
+            info.main_dependencies.push(artifact_id);
         }
     }
 
@@ -839,13 +813,14 @@ fn parse_maven_pom(content: &str, info: &mut LanguageInfo, config: &AnalysisConf
             in_test_dependencies = true;
         }
 
-        if in_dependencies && line.contains("<artifactId>") {
-            if let Some(artifact_id) = extract_xml_content(line, "artifactId") {
-                if in_test_dependencies && config.include_dev_dependencies {
-                    info.dev_dependencies.push(artifact_id);
-                } else if !in_test_dependencies {
-                    info.main_dependencies.push(artifact_id);
-                }
+        if in_dependencies
+            && line.contains("<artifactId>")
+            && let Some(artifact_id) = extract_xml_content(line, "artifactId")
+        {
+            if in_test_dependencies && config.include_dev_dependencies {
+                info.dev_dependencies.push(artifact_id);
+            } else if !in_test_dependencies {
+                info.main_dependencies.push(artifact_id);
             }
         }
     }
@@ -857,31 +832,30 @@ fn parse_gradle_build(content: &str, info: &mut LanguageInfo, config: &AnalysisC
         let line = line.trim();
 
         // Look for Java version
-        if line.contains("sourceCompatibility") || line.contains("targetCompatibility") {
-            if let Some(version) = extract_gradle_version(line) {
-                info.version = Some(version);
-            }
-        } else if line.contains("JavaVersion.VERSION_") {
-            if let Some(pos) = line.find("VERSION_") {
-                let version_part = &line[pos + 8..];
-                if let Some(end) = version_part.find(|c: char| !c.is_numeric() && c != '_') {
-                    let version = &version_part[..end].replace('_', ".");
-                    info.version = Some(version.to_string());
-                }
+        if (line.contains("sourceCompatibility") || line.contains("targetCompatibility"))
+            && let Some(version) = extract_gradle_version(line)
+        {
+            info.version = Some(version);
+        } else if line.contains("JavaVersion.VERSION_")
+            && let Some(pos) = line.find("VERSION_")
+        {
+            let version_part = &line[pos + 8..];
+            if let Some(end) = version_part.find(|c: char| !c.is_numeric() && c != '_') {
+                let version = &version_part[..end].replace('_', ".");
+                info.version = Some(version.to_string());
             }
         }
 
         // Look for dependencies
-        if line.starts_with("implementation ") || line.starts_with("compile ") {
-            if let Some(dep) = extract_gradle_dependency(line) {
-                info.main_dependencies.push(dep);
-            }
+        if (line.starts_with("implementation ") || line.starts_with("compile "))
+            && let Some(dep) = extract_gradle_dependency(line)
+        {
+            info.main_dependencies.push(dep);
         } else if (line.starts_with("testImplementation ") || line.starts_with("testCompile "))
             && config.include_dev_dependencies
+            && let Some(dep) = extract_gradle_dependency(line)
         {
-            if let Some(dep) = extract_gradle_dependency(line) {
-                info.dev_dependencies.push(dep);
-            }
+            info.dev_dependencies.push(dep);
         }
     }
 }
@@ -897,12 +871,12 @@ fn extract_xml_content(line: &str, tag: &str) -> Option<String> {
     let open_tag = format!("<{}>", tag);
     let close_tag = format!("</{}>", tag);
 
-    if let Some(start) = line.find(&open_tag) {
-        if let Some(end) = line.find(&close_tag) {
-            let content_start = start + open_tag.len();
-            if content_start < end {
-                return Some(line[content_start..end].trim().to_string());
-            }
+    if let Some(start) = line.find(&open_tag)
+        && let Some(end) = line.find(&close_tag)
+    {
+        let content_start = start + open_tag.len();
+        if content_start < end {
+            return Some(line[content_start..end].trim().to_string());
         }
     }
     None
@@ -911,36 +885,29 @@ fn extract_xml_content(line: &str, tag: &str) -> Option<String> {
 /// Extract version from Gradle configuration line
 fn extract_gradle_version(line: &str) -> Option<String> {
     // Look for patterns like sourceCompatibility = '11' or sourceCompatibility = "11"
-    if let Some(equals_pos) = line.find('=') {
-        let value_part = line[equals_pos + 1..].trim();
-        if let Some(start_quote) = value_part.find(['\'', '"']) {
-            let quote_char = value_part.chars().nth(start_quote).unwrap();
-            if let Some(end_quote) = value_part[start_quote + 1..].find(quote_char) {
-                let version = &value_part[start_quote + 1..start_quote + 1 + end_quote];
-                return Some(version.to_string());
-            }
-        }
-    }
-    None
+    let equals_pos = line.find('=')?;
+    let value_part = line[equals_pos + 1..].trim();
+    let start_quote = value_part.find(['\'', '"'])?;
+    let quote_char = value_part.chars().nth(start_quote)?;
+    let end_quote = value_part[start_quote + 1..].find(quote_char)?;
+    let version = &value_part[start_quote + 1..start_quote + 1 + end_quote];
+    Some(version.to_string())
 }
 
 /// Extract dependency from Gradle dependency line
 fn extract_gradle_dependency(line: &str) -> Option<String> {
     // Look for patterns like implementation 'group:artifact:version' or implementation("group:artifact:version")
-    if let Some(start_quote) = line.find(['\'', '"']) {
-        let quote_char = line.chars().nth(start_quote).unwrap();
-        if let Some(end_quote) = line[start_quote + 1..].find(quote_char) {
-            let dependency = &line[start_quote + 1..start_quote + 1 + end_quote];
-            // Extract just the artifact name for simplicity
-            if let Some(last_colon) = dependency.rfind(':') {
-                if let Some(first_colon) = dependency[..last_colon].rfind(':') {
-                    return Some(dependency[first_colon + 1..last_colon].to_string());
-                }
-            }
-            return Some(dependency.to_string());
-        }
+    let start_quote = line.find(['\'', '"'])?;
+    let quote_char = line.chars().nth(start_quote)?;
+    let end_quote = line[start_quote + 1..].find(quote_char)?;
+    let dependency = &line[start_quote + 1..start_quote + 1 + end_quote];
+    // Extract just the artifact name for simplicity
+    if let Some(last_colon) = dependency.rfind(':')
+        && let Some(first_colon) = dependency[..last_colon].rfind(':')
+    {
+        return Some(dependency[first_colon + 1..last_colon].to_string());
     }
-    None
+    Some(dependency.to_string())
 }
 
 /// Check if a filename is a known manifest file
@@ -971,7 +938,7 @@ fn has_manifest(manifest_files: &[PathBuf], target_files: &[&str]) -> bool {
     manifest_files.iter().any(|path| {
         path.file_name()
             .and_then(|name| name.to_str())
-            .map_or(false, |name| target_files.contains(&name))
+            .is_some_and(|name| target_files.contains(&name))
     })
 }
 

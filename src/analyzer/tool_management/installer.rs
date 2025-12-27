@@ -20,6 +20,7 @@ pub enum ToolInstallationError {
 }
 
 /// Tool installer for vulnerability scanning dependencies
+#[derive(Default)]
 pub struct ToolInstaller {
     installed_tools: HashMap<String, bool>,
     tool_detector: ToolDetector,

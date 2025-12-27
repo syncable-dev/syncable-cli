@@ -46,6 +46,7 @@ impl TaskStatus {
         }
     }
 
+    #[allow(dead_code)]
     fn from_marker(s: &str) -> Option<Self> {
         match s {
             "[ ]" => Some(TaskStatus::Pending),
@@ -63,6 +64,7 @@ pub struct PlanTask {
     pub index: usize, // 1-based index
     pub status: TaskStatus,
     pub description: String,
+    #[allow(dead_code)]
     pub line_number: usize, // Line number in file (1-based)
 }
 
@@ -699,59 +701,59 @@ Shows each plan with:
 
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension().map(|e| e == "md").unwrap_or(false) {
-                if let Ok(content) = fs::read_to_string(&path) {
-                    let tasks = parse_plan_tasks(&content);
-                    let done = tasks
-                        .iter()
-                        .filter(|t| t.status == TaskStatus::Done)
-                        .count();
-                    let pending = tasks
-                        .iter()
-                        .filter(|t| t.status == TaskStatus::Pending)
-                        .count();
-                    let in_progress = tasks
-                        .iter()
-                        .filter(|t| t.status == TaskStatus::InProgress)
-                        .count();
-                    let failed = tasks
-                        .iter()
-                        .filter(|t| t.status == TaskStatus::Failed)
-                        .count();
+            if path.extension().map(|e| e == "md").unwrap_or(false)
+                && let Ok(content) = fs::read_to_string(&path)
+            {
+                let tasks = parse_plan_tasks(&content);
+                let done = tasks
+                    .iter()
+                    .filter(|t| t.status == TaskStatus::Done)
+                    .count();
+                let pending = tasks
+                    .iter()
+                    .filter(|t| t.status == TaskStatus::Pending)
+                    .count();
+                let in_progress = tasks
+                    .iter()
+                    .filter(|t| t.status == TaskStatus::InProgress)
+                    .count();
+                let failed = tasks
+                    .iter()
+                    .filter(|t| t.status == TaskStatus::Failed)
+                    .count();
 
-                    // Apply filter
-                    let include = match filter {
-                        "incomplete" => pending > 0 || in_progress > 0,
-                        "complete" => pending == 0 && in_progress == 0,
-                        _ => true,
-                    };
+                // Apply filter
+                let include = match filter {
+                    "incomplete" => pending > 0 || in_progress > 0,
+                    "complete" => pending == 0 && in_progress == 0,
+                    _ => true,
+                };
 
-                    if include {
-                        let rel_path = path
-                            .strip_prefix(&self.project_path)
-                            .map(|p| p.display().to_string())
-                            .unwrap_or_else(|_| path.display().to_string());
+                if include {
+                    let rel_path = path
+                        .strip_prefix(&self.project_path)
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_else(|_| path.display().to_string());
 
-                        plans.push(json!({
-                            "path": rel_path,
-                            "filename": path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
-                            "tasks": {
-                                "total": tasks.len(),
-                                "done": done,
-                                "pending": pending,
-                                "in_progress": in_progress,
-                                "failed": failed
-                            },
-                            "progress": format!("{}/{}", done, tasks.len()),
-                            "status": if pending == 0 && in_progress == 0 {
-                                if failed > 0 { "completed_with_failures" } else { "complete" }
-                            } else if in_progress > 0 {
-                                "in_progress"
-                            } else {
-                                "pending"
-                            }
-                        }));
-                    }
+                    plans.push(json!({
+                        "path": rel_path,
+                        "filename": path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
+                        "tasks": {
+                            "total": tasks.len(),
+                            "done": done,
+                            "pending": pending,
+                            "in_progress": in_progress,
+                            "failed": failed
+                        },
+                        "progress": format!("{}/{}", done, tasks.len()),
+                        "status": if pending == 0 && in_progress == 0 {
+                            if failed > 0 { "completed_with_failures" } else { "complete" }
+                        } else if in_progress > 0 {
+                            "in_progress"
+                        } else {
+                            "pending"
+                        }
+                    }));
                 }
             }
         }

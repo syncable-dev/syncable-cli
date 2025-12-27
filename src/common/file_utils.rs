@@ -51,11 +51,11 @@ pub fn collect_project_files(
             let path = entry.path();
 
             // Check file size limit
-            if let Ok(metadata) = fs::metadata(path) {
-                if metadata.len() > config.max_file_size as u64 {
-                    log::debug!("Skipping large file: {}", path.display());
-                    continue;
-                }
+            if let Ok(metadata) = fs::metadata(path)
+                && metadata.len() > config.max_file_size as u64
+            {
+                log::debug!("Skipping large file: {}", path.display());
+                continue;
             }
 
             // Only include relevant file types
@@ -81,19 +81,19 @@ fn is_ignored(entry: &DirEntry, ignore_patterns: &[String], root: &Path) -> bool
 
     // Check each component of the relative path
     for component in relative_path.components() {
-        if let std::path::Component::Normal(name) = component {
-            if let Some(name_str) = name.to_str() {
-                // Check if this component matches any ignore pattern
-                for pattern in ignore_patterns {
-                    if name_str == pattern {
-                        return true;
-                    }
-                }
-
-                // Ignore hidden files and directories (starting with .)
-                if name_str.starts_with('.') && name_str != ".env" {
+        if let std::path::Component::Normal(name) = component
+            && let Some(name_str) = name.to_str()
+        {
+            // Check if this component matches any ignore pattern
+            for pattern in ignore_patterns {
+                if name_str == pattern {
                     return true;
                 }
+            }
+
+            // Ignore hidden files and directories (starting with .)
+            if name_str.starts_with('.') && name_str != ".env" {
+                return true;
             }
         }
     }
@@ -238,10 +238,10 @@ pub fn find_files_by_patterns(
         // Use glob to find matching files
         if let Ok(entries) = glob(&pattern_str) {
             for entry in entries {
-                if let Ok(path) = entry {
-                    if path.is_file() {
-                        files.push(path);
-                    }
+                if let Ok(path) = entry
+                    && path.is_file()
+                {
+                    files.push(path);
                 }
             }
         }
@@ -260,10 +260,11 @@ pub fn find_files_by_patterns(
 
         if let Ok(entries) = glob(&pattern_str) {
             for entry in entries {
-                if let Ok(path) = entry {
-                    if path.is_file() && !files.contains(&path) {
-                        files.push(path);
-                    }
+                if let Ok(path) = entry
+                    && path.is_file()
+                    && !files.contains(&path)
+                {
+                    files.push(path);
                 }
             }
         }

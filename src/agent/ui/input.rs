@@ -374,44 +374,44 @@ impl InputState {
 
     /// Move selection up
     fn select_up(&mut self) {
-        if self.showing_suggestions && !self.suggestions.is_empty() {
-            if self.selected > 0 {
-                self.selected -= 1;
-            }
+        if self.showing_suggestions && !self.suggestions.is_empty() && self.selected > 0 {
+            self.selected -= 1;
         }
     }
 
     /// Move selection down
     fn select_down(&mut self) {
-        if self.showing_suggestions && !self.suggestions.is_empty() {
-            if self.selected < self.suggestions.len() as i32 - 1 {
-                self.selected += 1;
-            }
+        if self.showing_suggestions
+            && !self.suggestions.is_empty()
+            && self.selected < self.suggestions.len() as i32 - 1
+        {
+            self.selected += 1;
         }
     }
 
     /// Accept the current selection
     fn accept_selection(&mut self) -> bool {
-        if self.showing_suggestions && self.selected >= 0 {
-            if let Some(suggestion) = self.suggestions.get(self.selected as usize) {
-                if let Some(start) = self.completion_start {
-                    // Replace @filter with @value
-                    let before = self.text.chars().take(start).collect::<String>();
-                    let after = self.text.chars().skip(self.cursor).collect::<String>();
+        if self.showing_suggestions
+            && self.selected >= 0
+            && let Some(suggestion) = self.suggestions.get(self.selected as usize)
+        {
+            if let Some(start) = self.completion_start {
+                // Replace @filter with @value
+                let before = self.text.chars().take(start).collect::<String>();
+                let after = self.text.chars().skip(self.cursor).collect::<String>();
 
-                    // For files, use @path format; for commands, use /command
-                    let replacement = if suggestion.value.starts_with('/') {
-                        format!("{} ", suggestion.value)
-                    } else {
-                        format!("@{} ", suggestion.value)
-                    };
+                // For files, use @path format; for commands, use /command
+                let replacement = if suggestion.value.starts_with('/') {
+                    format!("{} ", suggestion.value)
+                } else {
+                    format!("@{} ", suggestion.value)
+                };
 
-                    self.text = format!("{}{}{}", before, replacement, after);
-                    self.cursor = before.len() + replacement.len();
-                }
-                self.close_suggestions();
-                return true;
+                self.text = format!("{}{}{}", before, replacement, after);
+                self.cursor = before.len() + replacement.len();
             }
+            self.close_suggestions();
+            return true;
         }
         false
     }
@@ -679,7 +679,7 @@ fn clear_suggestions(num_lines: usize, stdout: &mut io::Stdout) -> io::Result<()
 /// If `plan_mode` is true, shows the plan mode indicator below the prompt
 pub fn read_input_with_file_picker(
     prompt: &str,
-    project_path: &PathBuf,
+    project_path: &std::path::Path,
     plan_mode: bool,
 ) -> InputResult {
     let mut stdout = io::stdout();
@@ -708,7 +708,7 @@ pub fn read_input_with_file_picker(
     let _ = stdout.flush();
 
     // Create state after printing prompt so start_row is correct
-    let mut state = InputState::new(project_path.clone(), plan_mode);
+    let mut state = InputState::new(project_path.to_path_buf(), plan_mode);
 
     let result = loop {
         match event::read() {
@@ -789,10 +789,10 @@ pub fn read_input_with_file_picker(
                     KeyCode::Left => {
                         state.cursor_left();
                         // Close suggestions if cursor moves before @
-                        if let Some(start) = state.completion_start {
-                            if state.cursor <= start {
-                                state.close_suggestions();
-                            }
+                        if let Some(start) = state.completion_start
+                            && state.cursor <= start
+                        {
+                            state.close_suggestions();
                         }
                     }
                     KeyCode::Right => {

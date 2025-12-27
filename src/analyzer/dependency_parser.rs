@@ -108,6 +108,7 @@ pub struct DependencyAnalysis {
 }
 
 /// New dependency parser for vulnerability checking
+#[derive(Default)]
 pub struct DependencyParser;
 
 impl DependencyParser {
@@ -244,25 +245,26 @@ impl DependencyParser {
             // Parse package list from Cargo.lock
             if let Some(packages) = parsed.get("package").and_then(|p| p.as_array()) {
                 for package in packages {
-                    if let Some(package_table) = package.as_table() {
-                        if let (Some(name), Some(version)) = (
-                            package_table.get("name").and_then(|n| n.as_str()),
-                            package_table.get("version").and_then(|v| v.as_str()),
-                        ) {
-                            // Determine if it's a direct dependency by checking Cargo.toml
-                            let dep_type = self.get_rust_dependency_type(name, &cargo_toml);
+                    let Some(package_table) = package.as_table() else {
+                        continue;
+                    };
+                    let (Some(name), Some(version)) = (
+                        package_table.get("name").and_then(|n| n.as_str()),
+                        package_table.get("version").and_then(|v| v.as_str()),
+                    ) else {
+                        continue;
+                    };
+                    // Determine if it's a direct dependency by checking Cargo.toml
+                    let dep_type = self.get_rust_dependency_type(name, &cargo_toml);
 
-                            deps.push(DependencyInfo {
-                                name: name.to_string(),
-                                version: version.to_string(),
-                                dep_type,
-                                license: detect_rust_license(name)
-                                    .unwrap_or_else(|| "Unknown".to_string()),
-                                source: Some("crates.io".to_string()),
-                                language: Language::Rust,
-                            });
-                        }
-                    }
+                    deps.push(DependencyInfo {
+                        name: name.to_string(),
+                        version: version.to_string(),
+                        dep_type,
+                        license: detect_rust_license(name).unwrap_or_else(|| "Unknown".to_string()),
+                        source: Some("crates.io".to_string()),
+                        language: Language::Rust,
+                    });
                 }
             }
         } else if cargo_toml.exists() {
@@ -313,21 +315,21 @@ impl DependencyParser {
             return DependencyType::Production;
         }
 
-        if let Ok(content) = fs::read_to_string(cargo_toml_path) {
-            if let Ok(parsed) = toml::from_str::<toml::Value>(&content) {
-                // Check if it's in dev-dependencies
-                if let Some(dev_deps) = parsed.get("dev-dependencies").and_then(|d| d.as_table()) {
-                    if dev_deps.contains_key(dep_name) {
-                        return DependencyType::Dev;
-                    }
-                }
+        if let Ok(content) = fs::read_to_string(cargo_toml_path)
+            && let Ok(parsed) = toml::from_str::<toml::Value>(&content)
+        {
+            // Check if it's in dev-dependencies
+            if let Some(dev_deps) = parsed.get("dev-dependencies").and_then(|d| d.as_table())
+                && dev_deps.contains_key(dep_name)
+            {
+                return DependencyType::Dev;
+            }
 
-                // Check if it's in regular dependencies
-                if let Some(deps) = parsed.get("dependencies").and_then(|d| d.as_table()) {
-                    if deps.contains_key(dep_name) {
-                        return DependencyType::Production;
-                    }
-                }
+            // Check if it's in regular dependencies
+            if let Some(deps) = parsed.get("dependencies").and_then(|d| d.as_table())
+                && deps.contains_key(dep_name)
+            {
+                return DependencyType::Production;
             }
         }
 
@@ -349,32 +351,34 @@ impl DependencyParser {
         // Parse regular dependencies
         if let Some(dependencies) = parsed.get("dependencies").and_then(|d| d.as_object()) {
             for (name, version) in dependencies {
-                if let Some(ver_str) = version.as_str() {
-                    deps.push(DependencyInfo {
-                        name: name.clone(),
-                        version: ver_str.to_string(),
-                        dep_type: DependencyType::Production,
-                        license: detect_npm_license(name).unwrap_or_else(|| "Unknown".to_string()),
-                        source: Some("npm".to_string()),
-                        language: Language::JavaScript,
-                    });
-                }
+                let Some(ver_str) = version.as_str() else {
+                    continue;
+                };
+                deps.push(DependencyInfo {
+                    name: name.clone(),
+                    version: ver_str.to_string(),
+                    dep_type: DependencyType::Production,
+                    license: detect_npm_license(name).unwrap_or_else(|| "Unknown".to_string()),
+                    source: Some("npm".to_string()),
+                    language: Language::JavaScript,
+                });
             }
         }
 
         // Parse dev dependencies
         if let Some(dev_deps) = parsed.get("devDependencies").and_then(|d| d.as_object()) {
             for (name, version) in dev_deps {
-                if let Some(ver_str) = version.as_str() {
-                    deps.push(DependencyInfo {
-                        name: name.clone(),
-                        version: ver_str.to_string(),
-                        dep_type: DependencyType::Dev,
-                        license: detect_npm_license(name).unwrap_or_else(|| "Unknown".to_string()),
-                        source: Some("npm".to_string()),
-                        language: Language::JavaScript,
-                    });
-                }
+                let Some(ver_str) = version.as_str() else {
+                    continue;
+                };
+                deps.push(DependencyInfo {
+                    name: name.clone(),
+                    version: ver_str.to_string(),
+                    dep_type: DependencyType::Dev,
+                    license: detect_npm_license(name).unwrap_or_else(|| "Unknown".to_string()),
+                    source: Some("npm".to_string()),
+                    language: Language::JavaScript,
+                });
             }
         }
 
@@ -454,18 +458,19 @@ impl DependencyParser {
                 {
                     debug!("Found PEP 621 dependencies in pyproject.toml");
                     for dep in project_deps {
-                        if let Some(dep_str) = dep.as_str() {
-                            let (name, version) = self.parse_python_requirement_spec(dep_str);
-                            deps.push(DependencyInfo {
-                                name: name.clone(),
-                                version,
-                                dep_type: DependencyType::Production,
-                                license: detect_pypi_license(&name)
-                                    .unwrap_or_else(|| "Unknown".to_string()),
-                                source: Some("pypi".to_string()),
-                                language: Language::Python,
-                            });
-                        }
+                        let Some(dep_str) = dep.as_str() else {
+                            continue;
+                        };
+                        let (name, version) = self.parse_python_requirement_spec(dep_str);
+                        deps.push(DependencyInfo {
+                            name: name.clone(),
+                            version,
+                            dep_type: DependencyType::Production,
+                            license: detect_pypi_license(&name)
+                                .unwrap_or_else(|| "Unknown".to_string()),
+                            source: Some("pypi".to_string()),
+                            language: Language::Python,
+                        });
                     }
                 }
 
@@ -477,27 +482,28 @@ impl DependencyParser {
                 {
                     debug!("Found PEP 621 optional dependencies in pyproject.toml");
                     for (group_name, group_deps) in optional_deps {
-                        if let Some(deps_array) = group_deps.as_array() {
-                            let is_dev = group_name.contains("dev") || group_name.contains("test");
-                            for dep in deps_array {
-                                if let Some(dep_str) = dep.as_str() {
-                                    let (name, version) =
-                                        self.parse_python_requirement_spec(dep_str);
-                                    deps.push(DependencyInfo {
-                                        name: name.clone(),
-                                        version,
-                                        dep_type: if is_dev {
-                                            DependencyType::Dev
-                                        } else {
-                                            DependencyType::Optional
-                                        },
-                                        license: detect_pypi_license(&name)
-                                            .unwrap_or_else(|| "Unknown".to_string()),
-                                        source: Some("pypi".to_string()),
-                                        language: Language::Python,
-                                    });
-                                }
-                            }
+                        let Some(deps_array) = group_deps.as_array() else {
+                            continue;
+                        };
+                        let is_dev = group_name.contains("dev") || group_name.contains("test");
+                        for dep in deps_array {
+                            let Some(dep_str) = dep.as_str() else {
+                                continue;
+                            };
+                            let (name, version) = self.parse_python_requirement_spec(dep_str);
+                            deps.push(DependencyInfo {
+                                name: name.clone(),
+                                version,
+                                dep_type: if is_dev {
+                                    DependencyType::Dev
+                                } else {
+                                    DependencyType::Optional
+                                },
+                                license: detect_pypi_license(&name)
+                                    .unwrap_or_else(|| "Unknown".to_string()),
+                                source: Some("pypi".to_string()),
+                                language: Language::Python,
+                            });
                         }
                     }
                 }
@@ -511,22 +517,23 @@ impl DependencyParser {
                 {
                     debug!("Found PDM dev dependencies in pyproject.toml");
                     for (_group_name, group_deps) in pdm_deps {
-                        if let Some(deps_array) = group_deps.as_array() {
-                            for dep in deps_array {
-                                if let Some(dep_str) = dep.as_str() {
-                                    let (name, version) =
-                                        self.parse_python_requirement_spec(dep_str);
-                                    deps.push(DependencyInfo {
-                                        name: name.clone(),
-                                        version,
-                                        dep_type: DependencyType::Dev,
-                                        license: detect_pypi_license(&name)
-                                            .unwrap_or_else(|| "Unknown".to_string()),
-                                        source: Some("pypi".to_string()),
-                                        language: Language::Python,
-                                    });
-                                }
-                            }
+                        let Some(deps_array) = group_deps.as_array() else {
+                            continue;
+                        };
+                        for dep in deps_array {
+                            let Some(dep_str) = dep.as_str() else {
+                                continue;
+                            };
+                            let (name, version) = self.parse_python_requirement_spec(dep_str);
+                            deps.push(DependencyInfo {
+                                name: name.clone(),
+                                version,
+                                dep_type: DependencyType::Dev,
+                                license: detect_pypi_license(&name)
+                                    .unwrap_or_else(|| "Unknown".to_string()),
+                                source: Some("pypi".to_string()),
+                                language: Language::Python,
+                            });
                         }
                     }
                 }
@@ -541,18 +548,19 @@ impl DependencyParser {
                 {
                     debug!("Found setuptools dependencies in pyproject.toml");
                     for dep in setuptools_deps {
-                        if let Some(dep_str) = dep.as_str() {
-                            let (name, version) = self.parse_python_requirement_spec(dep_str);
-                            deps.push(DependencyInfo {
-                                name: name.clone(),
-                                version,
-                                dep_type: DependencyType::Production,
-                                license: detect_pypi_license(&name)
-                                    .unwrap_or_else(|| "Unknown".to_string()),
-                                source: Some("pypi".to_string()),
-                                language: Language::Python,
-                            });
-                        }
+                        let Some(dep_str) = dep.as_str() else {
+                            continue;
+                        };
+                        let (name, version) = self.parse_python_requirement_spec(dep_str);
+                        deps.push(DependencyInfo {
+                            name: name.clone(),
+                            version,
+                            dep_type: DependencyType::Production,
+                            license: detect_pypi_license(&name)
+                                .unwrap_or_else(|| "Unknown".to_string()),
+                            source: Some("pypi".to_string()),
+                            language: Language::Python,
+                        });
                     }
                 }
             }
@@ -766,14 +774,14 @@ impl DependencyParser {
             let content = fs::read_to_string(&pom_xml)?;
 
             // Try to use the dependency:list Maven command first for accurate results
-            if let Ok(maven_deps) = self.parse_maven_dependencies_with_command(project_root) {
-                if !maven_deps.is_empty() {
-                    debug!(
-                        "Successfully parsed {} Maven dependencies using mvn command",
-                        maven_deps.len()
-                    );
-                    deps.extend(maven_deps);
-                }
+            if let Ok(maven_deps) = self.parse_maven_dependencies_with_command(project_root)
+                && !maven_deps.is_empty()
+            {
+                debug!(
+                    "Successfully parsed {} Maven dependencies using mvn command",
+                    maven_deps.len()
+                );
+                deps.extend(maven_deps);
             }
 
             // If no deps from command, fall back to XML parsing
@@ -793,14 +801,14 @@ impl DependencyParser {
             debug!("Found Gradle build file, parsing Gradle dependencies");
 
             // Try to use the dependencies Gradle command first
-            if let Ok(gradle_deps) = self.parse_gradle_dependencies_with_command(project_root) {
-                if !gradle_deps.is_empty() {
-                    debug!(
-                        "Successfully parsed {} Gradle dependencies using gradle command",
-                        gradle_deps.len()
-                    );
-                    deps.extend(gradle_deps);
-                }
+            if let Ok(gradle_deps) = self.parse_gradle_dependencies_with_command(project_root)
+                && !gradle_deps.is_empty()
+            {
+                debug!(
+                    "Successfully parsed {} Gradle dependencies using gradle command",
+                    gradle_deps.len()
+                );
+                deps.extend(gradle_deps);
             }
 
             // If no deps from command, fall back to build file parsing
@@ -848,7 +856,7 @@ impl DependencyParser {
         use std::process::Command;
 
         let output = Command::new("mvn")
-            .args(&[
+            .args([
                 "dependency:list",
                 "-DoutputFile=deps.txt",
                 "-DappendOutput=false",
@@ -891,7 +899,7 @@ impl DependencyParser {
 
         for gradle_cmd in gradle_cmds {
             let output = Command::new(gradle_cmd)
-                .args(&[
+                .args([
                     "dependencies",
                     "--configuration=runtimeClasspath",
                     "--console=plain",
@@ -1097,36 +1105,35 @@ impl DependencyParser {
             let trimmed = line.trim();
 
             // Look for dependency declarations
-            if trimmed.starts_with("implementation ")
+            let is_dependency = trimmed.starts_with("implementation ")
                 || trimmed.starts_with("compile ")
                 || trimmed.starts_with("api ")
                 || trimmed.starts_with("runtimeOnly ")
                 || trimmed.starts_with("testImplementation ")
-                || trimmed.starts_with("testCompile ")
-            {
-                if let Some(dep_str) = extract_gradle_dependency(trimmed) {
-                    let parts: Vec<&str> = dep_str.split(':').collect();
-                    if parts.len() >= 3 {
-                        let group_id = parts[0];
-                        let artifact_id = parts[1];
-                        let version = parts[2].trim_matches('"').trim_matches('\'');
+                || trimmed.starts_with("testCompile ");
 
-                        let name = format!("{}:{}", group_id, artifact_id);
-                        let dep_type = if trimmed.starts_with("test") {
-                            DependencyType::Dev
-                        } else {
-                            DependencyType::Production
-                        };
+            if is_dependency && let Some(dep_str) = extract_gradle_dependency(trimmed) {
+                let parts: Vec<&str> = dep_str.split(':').collect();
+                if parts.len() >= 3 {
+                    let group_id = parts[0];
+                    let artifact_id = parts[1];
+                    let version = parts[2].trim_matches('"').trim_matches('\'');
 
-                        deps.push(DependencyInfo {
-                            name,
-                            version: version.to_string(),
-                            dep_type,
-                            license: "Unknown".to_string(),
-                            source: Some("gradle".to_string()),
-                            language: Language::Java,
-                        });
-                    }
+                    let name = format!("{}:{}", group_id, artifact_id);
+                    let dep_type = if trimmed.starts_with("test") {
+                        DependencyType::Dev
+                    } else {
+                        DependencyType::Production
+                    };
+
+                    deps.push(DependencyInfo {
+                        name,
+                        version: version.to_string(),
+                        dep_type,
+                        license: "Unknown".to_string(),
+                        source: Some("gradle".to_string()),
+                        language: Language::Java,
+                    });
                 }
             }
         }
@@ -1183,7 +1190,7 @@ pub async fn parse_detailed_dependencies(
         };
 
         // Update license summary
-        for (_, dep_info) in &deps {
+        for dep_info in deps.values() {
             if let Some(license) = &dep_info.license {
                 *license_summary.entry(license.clone()).or_insert(0) += 1;
             }
@@ -1204,7 +1211,7 @@ pub async fn parse_detailed_dependencies(
         if let Some(vulns) = vulnerability_map.get(dep_name) {
             dep_info.vulnerabilities = vulns
                 .iter()
-                .map(|v| DependencyParser::convert_vulnerability_info(v))
+                .map(DependencyParser::convert_vulnerability_info)
                 .collect();
         }
     }
@@ -1693,18 +1700,18 @@ fn parse_jvm_dependencies(project_root: &Path) -> Result<DependencyMap> {
                 let mut artifact_id = "";
                 let mut version = "";
 
-                for j in i..lines.len() {
-                    if lines[j].contains("</dependency>") {
+                for line in &lines[i..] {
+                    if line.contains("</dependency>") {
                         break;
                     }
-                    if lines[j].contains("<groupId>") {
-                        group_id = extract_xml_value(lines[j], "groupId");
+                    if line.contains("<groupId>") {
+                        group_id = extract_xml_value(line, "groupId");
                     }
-                    if lines[j].contains("<artifactId>") {
-                        artifact_id = extract_xml_value(lines[j], "artifactId");
+                    if line.contains("<artifactId>") {
+                        artifact_id = extract_xml_value(line, "artifactId");
                     }
-                    if lines[j].contains("<version>") {
-                        version = extract_xml_value(lines[j], "version");
+                    if line.contains("<version>") {
+                        version = extract_xml_value(line, "version");
                     }
                 }
 
@@ -1724,24 +1731,23 @@ fn parse_jvm_dependencies(project_root: &Path) -> Result<DependencyMap> {
         // Simple pattern matching for Gradle dependencies
         for line in content.lines() {
             let trimmed = line.trim();
-            if trimmed.starts_with("implementation")
+            let is_dep = trimmed.starts_with("implementation")
                 || trimmed.starts_with("compile")
                 || trimmed.starts_with("testImplementation")
-                || trimmed.starts_with("testCompile")
-            {
-                if let Some(dep_str) = extract_gradle_dependency(trimmed) {
-                    let parts: Vec<&str> = dep_str.split(':').collect();
-                    if parts.len() >= 3 {
-                        let name = format!("{}:{}", parts[0], parts[1]);
-                        let version = parts[2];
-                        let is_test = trimmed.starts_with("test");
-                        let key = if is_test {
-                            format!("{} (test)", name)
-                        } else {
-                            name
-                        };
-                        deps.insert(key, version.to_string());
-                    }
+                || trimmed.starts_with("testCompile");
+
+            if is_dep && let Some(dep_str) = extract_gradle_dependency(trimmed) {
+                let parts: Vec<&str> = dep_str.split(':').collect();
+                if parts.len() >= 3 {
+                    let name = format!("{}:{}", parts[0], parts[1]);
+                    let version = parts[2];
+                    let is_test = trimmed.starts_with("test");
+                    let key = if is_test {
+                        format!("{} (test)", name)
+                    } else {
+                        name
+                    };
+                    deps.insert(key, version.to_string());
                 }
             }
         }
@@ -1767,21 +1773,21 @@ fn parse_jvm_dependencies_detailed(project_root: &Path) -> Result<DetailedDepend
                 let mut version = "";
                 let mut scope = "compile";
 
-                for j in i..lines.len() {
-                    if lines[j].contains("</dependency>") {
+                for line in &lines[i..] {
+                    if line.contains("</dependency>") {
                         break;
                     }
-                    if lines[j].contains("<groupId>") {
-                        group_id = extract_xml_value(lines[j], "groupId");
+                    if line.contains("<groupId>") {
+                        group_id = extract_xml_value(line, "groupId");
                     }
-                    if lines[j].contains("<artifactId>") {
-                        artifact_id = extract_xml_value(lines[j], "artifactId");
+                    if line.contains("<artifactId>") {
+                        artifact_id = extract_xml_value(line, "artifactId");
                     }
-                    if lines[j].contains("<version>") {
-                        version = extract_xml_value(lines[j], "version");
+                    if line.contains("<version>") {
+                        version = extract_xml_value(line, "version");
                     }
-                    if lines[j].contains("<scope>") {
-                        scope = extract_xml_value(lines[j], "scope");
+                    if line.contains("<scope>") {
+                        scope = extract_xml_value(line, "scope");
                     }
                 }
 
@@ -1809,29 +1815,28 @@ fn parse_jvm_dependencies_detailed(project_root: &Path) -> Result<DetailedDepend
 
         for line in content.lines() {
             let trimmed = line.trim();
-            if trimmed.starts_with("implementation")
+            let is_dep = trimmed.starts_with("implementation")
                 || trimmed.starts_with("compile")
                 || trimmed.starts_with("testImplementation")
-                || trimmed.starts_with("testCompile")
-            {
-                if let Some(dep_str) = extract_gradle_dependency(trimmed) {
-                    let parts: Vec<&str> = dep_str.split(':').collect();
-                    if parts.len() >= 3 {
-                        let name = format!("{}:{}", parts[0], parts[1]);
-                        let version = parts[2];
-                        let is_test = trimmed.starts_with("test");
+                || trimmed.starts_with("testCompile");
 
-                        deps.insert(
-                            name.clone(),
-                            LegacyDependencyInfo {
-                                version: version.to_string(),
-                                is_dev: is_test,
-                                license: detect_maven_license(&name),
-                                vulnerabilities: vec![],
-                                source: "gradle".to_string(),
-                            },
-                        );
-                    }
+            if is_dep && let Some(dep_str) = extract_gradle_dependency(trimmed) {
+                let parts: Vec<&str> = dep_str.split(':').collect();
+                if parts.len() >= 3 {
+                    let name = format!("{}:{}", parts[0], parts[1]);
+                    let version = parts[2];
+                    let is_test = trimmed.starts_with("test");
+
+                    deps.insert(
+                        name.clone(),
+                        LegacyDependencyInfo {
+                            version: version.to_string(),
+                            is_dev: is_test,
+                            license: detect_maven_license(&name),
+                            vulnerabilities: vec![],
+                            source: "gradle".to_string(),
+                        },
+                    );
                 }
             }
         }
@@ -1858,29 +1863,27 @@ fn extract_xml_value<'a>(line: &'a str, tag: &str) -> &'a str {
     let start_tag = format!("<{}>", tag);
     let end_tag = format!("</{}>", tag);
 
-    if let Some(start) = line.find(&start_tag) {
-        if let Some(end) = line.find(&end_tag) {
-            return &line[start + start_tag.len()..end];
-        }
+    if let Some(start) = line.find(&start_tag)
+        && let Some(end) = line.find(&end_tag)
+    {
+        return &line[start + start_tag.len()..end];
     }
     ""
 }
 
 fn extract_gradle_dependency(line: &str) -> Option<&str> {
     // Handle various Gradle dependency formats
-    if let Some(start) = line.find('\'') {
-        if let Some(end) = line.rfind('\'') {
-            if start < end {
-                return Some(&line[start + 1..end]);
-            }
-        }
+    if let Some(start) = line.find('\'')
+        && let Some(end) = line.rfind('\'')
+        && start < end
+    {
+        return Some(&line[start + 1..end]);
     }
-    if let Some(start) = line.find('"') {
-        if let Some(end) = line.rfind('"') {
-            if start < end {
-                return Some(&line[start + 1..end]);
-            }
-        }
+    if let Some(start) = line.find('"')
+        && let Some(end) = line.rfind('"')
+        && start < end
+    {
+        return Some(&line[start + 1..end]);
     }
     None
 }

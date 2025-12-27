@@ -113,14 +113,14 @@ fn scan_rust_file_for_context(
     for pattern in &port_patterns {
         let regex = create_regex(pattern)?;
         for cap in regex.captures_iter(&content) {
-            if let Some(port_str) = cap.get(1) {
-                if let Ok(port) = port_str.as_str().parse::<u16>() {
-                    ports.insert(Port {
-                        number: port,
-                        protocol: Protocol::Http,
-                        description: Some("Rust web server".to_string()),
-                    });
-                }
+            if let Some(port_str) = cap.get(1)
+                && let Ok(port) = port_str.as_str().parse::<u16>()
+            {
+                ports.insert(Port {
+                    number: port,
+                    protocol: Protocol::Http,
+                    description: Some("Rust web server".to_string()),
+                });
             }
         }
     }

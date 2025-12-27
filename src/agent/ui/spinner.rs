@@ -181,7 +181,7 @@ async fn run_spinner(
 
                 // Cycle phrases if idle
                 if current_tool.is_none() && last_phrase_change.elapsed().as_secs() >= PHRASE_CHANGE_INTERVAL_SECS {
-                    if rng.gen_bool(0.25) && !TIPS.is_empty() {
+                    if rng.gen_bool(0.25) {
                         let tip_idx = rng.gen_range(0..TIPS.len());
                         current_text = TIPS[tip_idx].to_string();
                     } else {
@@ -194,13 +194,12 @@ async fn run_spinner(
                 if has_printed_tool_line {
                     // Move up to tool line, update it, move back down to spinner line
                     if let Some(ref tool) = current_tool {
-                        print!("{}{}  {}🔧 {}{}{}",
+                        println!("{}{}  {}🔧 {}{}", // Move back down
                             ansi::CURSOR_UP,
                             ansi::CLEAR_LINE,
                             ansi::PURPLE,
                             tool,
                             ansi::RESET,
-                            "\n" // Move back down
                         );
                     }
                     // Now update spinner line
@@ -239,12 +238,12 @@ async fn run_spinner(
                     SpinnerMessage::ToolExecuting { name, description } => {
                         if !has_printed_tool_line {
                             // First tool - print tool line then newline for spinner
-                            print!("\r{}  {}🔧 {}{}{}\n",
+                            // Spinner will be on next line
+                            print!("\r{}  {}🔧 {}{}\n",
                                 ansi::CLEAR_LINE,
                                 ansi::PURPLE,
                                 name,
                                 ansi::RESET,
-                                "" // Spinner will be on next line
                             );
                             has_printed_tool_line = true;
                         }

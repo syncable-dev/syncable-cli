@@ -147,10 +147,10 @@ pub async fn get_ide_process_info() -> Option<IdeProcessInfo> {
                 let mut ide_pid = parent_pid;
 
                 // Try to get the grandparent (the actual IDE)
-                if let Some((grandparent_pid, _, _)) = get_process_info(parent_pid) {
-                    if grandparent_pid > 1 {
-                        ide_pid = grandparent_pid;
-                    }
+                if let Some((grandparent_pid, _, _)) = get_process_info(parent_pid)
+                    && grandparent_pid > 1
+                {
+                    ide_pid = grandparent_pid;
                 }
 
                 // Get the command of the IDE process

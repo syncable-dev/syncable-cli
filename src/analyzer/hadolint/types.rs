@@ -13,13 +13,14 @@ use std::fmt;
 ///
 /// Ordered from most severe to least severe:
 /// `Error > Warning > Info > Style > Ignore`
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Severity {
     /// Critical issues that should always be fixed
     Error,
     /// Important issues that should usually be fixed
     Warning,
     /// Informational suggestions for improvement
+    #[default]
     Info,
     /// Style recommendations
     Style,
@@ -29,7 +30,7 @@ pub enum Severity {
 
 impl Severity {
     /// Parse a severity from a string (case-insensitive).
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "error" => Some(Self::Error),
             "warning" => Some(Self::Warning),
@@ -55,12 +56,6 @@ impl Severity {
 impl fmt::Display for Severity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.as_str())
-    }
-}
-
-impl Default for Severity {
-    fn default() -> Self {
-        Self::Info
     }
 }
 
@@ -262,13 +257,13 @@ mod tests {
 
     #[test]
     fn test_severity_from_str() {
-        assert_eq!(Severity::from_str("error"), Some(Severity::Error));
-        assert_eq!(Severity::from_str("WARNING"), Some(Severity::Warning));
-        assert_eq!(Severity::from_str("Info"), Some(Severity::Info));
-        assert_eq!(Severity::from_str("style"), Some(Severity::Style));
-        assert_eq!(Severity::from_str("ignore"), Some(Severity::Ignore));
-        assert_eq!(Severity::from_str("none"), Some(Severity::Ignore));
-        assert_eq!(Severity::from_str("invalid"), None);
+        assert_eq!(Severity::parse("error"), Some(Severity::Error));
+        assert_eq!(Severity::parse("WARNING"), Some(Severity::Warning));
+        assert_eq!(Severity::parse("Info"), Some(Severity::Info));
+        assert_eq!(Severity::parse("style"), Some(Severity::Style));
+        assert_eq!(Severity::parse("ignore"), Some(Severity::Ignore));
+        assert_eq!(Severity::parse("none"), Some(Severity::Ignore));
+        assert_eq!(Severity::parse("invalid"), None);
     }
 
     #[test]

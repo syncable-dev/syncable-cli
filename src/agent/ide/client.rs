@@ -56,7 +56,8 @@ pub struct IdeClient {
     status: Arc<Mutex<ConnectionStatus>>,
     /// Detected IDE info
     ide_info: Option<IdeInfo>,
-    /// IDE process info
+    /// IDE process info (for future use)
+    #[allow(dead_code)]
     process_info: Option<IdeProcessInfo>,
     /// Server port
     port: Option<u16>,
@@ -68,7 +69,8 @@ pub struct IdeClient {
     request_id: Arc<Mutex<u64>>,
     /// Pending diff responses
     diff_responses: Arc<Mutex<HashMap<String, oneshot::Sender<DiffResult>>>>,
-    /// SSE event receiver
+    /// SSE event receiver (for future use)
+    #[allow(dead_code)]
     sse_receiver: Option<mpsc::Receiver<JsonRpcNotification>>,
 }
 
@@ -136,15 +138,15 @@ impl IdeClient {
         }
 
         // Try environment variables as fallback
-        if let Ok(port_str) = env::var("SYNCABLE_CLI_IDE_SERVER_PORT") {
-            if let Ok(port) = port_str.parse::<u16>() {
-                self.port = Some(port);
-                self.auth_token = env::var("SYNCABLE_CLI_IDE_AUTH_TOKEN").ok();
+        if let Ok(port_str) = env::var("SYNCABLE_CLI_IDE_SERVER_PORT")
+            && let Ok(port) = port_str.parse::<u16>()
+        {
+            self.port = Some(port);
+            self.auth_token = env::var("SYNCABLE_CLI_IDE_AUTH_TOKEN").ok();
 
-                if self.establish_connection().await.is_ok() {
-                    *self.status.lock().unwrap() = ConnectionStatus::Connected;
-                    return Ok(());
-                }
+            if self.establish_connection().await.is_ok() {
+                *self.status.lock().unwrap() = ConnectionStatus::Connected;
+                return Ok(());
             }
         }
 
@@ -222,20 +224,20 @@ impl IdeClient {
                 if debug {
                     eprintln!("[IDE Debug] Found port file: {:?}", entry.path());
                 }
-                if let Ok(content) = fs::read_to_string(entry.path()) {
-                    if let Ok(config) = serde_json::from_str::<ConnectionConfig>(&content) {
-                        if debug {
-                            eprintln!(
-                                "[IDE Debug] Config workspace_path: {:?}",
-                                config.workspace_path
-                            );
-                        }
-                        if self.validate_workspace_path(&config.workspace_path) {
-                            return Some(config);
-                        } else if debug {
-                            let cwd = env::current_dir().ok();
-                            eprintln!("[IDE Debug] Workspace path did not match cwd: {:?}", cwd);
-                        }
+                if let Ok(content) = fs::read_to_string(entry.path())
+                    && let Ok(config) = serde_json::from_str::<ConnectionConfig>(&content)
+                {
+                    if debug {
+                        eprintln!(
+                            "[IDE Debug] Config workspace_path: {:?}",
+                            config.workspace_path
+                        );
+                    }
+                    if self.validate_workspace_path(&config.workspace_path) {
+                        return Some(config);
+                    } else if debug {
+                        let cwd = env::current_dir().ok();
+                        eprintln!("[IDE Debug] Workspace path did not match cwd: {:?}", cwd);
                     }
                 }
             }
@@ -308,10 +310,10 @@ impl IdeClient {
             .map_err(|e| IdeError::ConnectionFailed(e.to_string()))?;
 
         // Get session ID from response header
-        if let Some(session_id) = response.headers().get("mcp-session-id") {
-            if let Ok(id) = session_id.to_str() {
-                *self.session_id.lock().unwrap() = Some(id.to_string());
-            }
+        if let Some(session_id) = response.headers().get("mcp-session-id")
+            && let Ok(id) = session_id.to_str()
+        {
+            *self.session_id.lock().unwrap() = Some(id.to_string());
         }
 
         // Parse response (SSE format: "event: message\ndata: {json}")
@@ -468,20 +470,16 @@ impl IdeClient {
         let response = self.send_request("tools/call", params).await?;
 
         // Parse the response to get content if available
-        if let Some(result) = response.result {
-            if let Ok(tool_result) = serde_json::from_value::<ToolCallResult>(result) {
-                for content in tool_result.content {
-                    if content.content_type == "text" {
-                        if let Some(text) = content.text {
-                            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&text) {
-                                if let Some(content) =
-                                    parsed.get("content").and_then(|c| c.as_str())
-                                {
-                                    return Ok(Some(content.to_string()));
-                                }
-                            }
-                        }
-                    }
+        if let Some(result) = response.result
+            && let Ok(tool_result) = serde_json::from_value::<ToolCallResult>(result)
+        {
+            for content in tool_result.content {
+                if content.content_type == "text"
+                    && let Some(text) = content.text
+                    && let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&text)
+                    && let Some(content) = parsed.get("content").and_then(|c| c.as_str())
+                {
+                    return Ok(Some(content.to_string()));
                 }
             }
         }
@@ -553,38 +551,33 @@ impl IdeClient {
         let response = self.send_request("tools/call", params).await?;
 
         // Parse the response
-        if let Some(result) = response.result {
-            if let Ok(tool_result) = serde_json::from_value::<ToolCallResult>(result) {
-                // Look for the text content with diagnostics
-                for content in tool_result.content {
-                    if content.content_type == "text" {
-                        if let Some(text) = content.text {
-                            // Try to parse as DiagnosticsResponse
-                            if let Ok(diag_response) =
-                                serde_json::from_str::<DiagnosticsResponse>(&text)
-                            {
-                                return Ok(diag_response);
-                            }
-                            // Try parsing as raw array of diagnostics
-                            if let Ok(diagnostics) = serde_json::from_str::<Vec<Diagnostic>>(&text)
-                            {
-                                let total_errors = diagnostics
-                                    .iter()
-                                    .filter(|d| d.severity == DiagnosticSeverity::Error)
-                                    .count()
-                                    as u32;
-                                let total_warnings = diagnostics
-                                    .iter()
-                                    .filter(|d| d.severity == DiagnosticSeverity::Warning)
-                                    .count()
-                                    as u32;
-                                return Ok(DiagnosticsResponse {
-                                    diagnostics,
-                                    total_errors,
-                                    total_warnings,
-                                });
-                            }
-                        }
+        if let Some(result) = response.result
+            && let Ok(tool_result) = serde_json::from_value::<ToolCallResult>(result)
+        {
+            // Look for the text content with diagnostics
+            for content in tool_result.content {
+                if content.content_type == "text"
+                    && let Some(text) = content.text
+                {
+                    // Try to parse as DiagnosticsResponse
+                    if let Ok(diag_response) = serde_json::from_str::<DiagnosticsResponse>(&text) {
+                        return Ok(diag_response);
+                    }
+                    // Try parsing as raw array of diagnostics
+                    if let Ok(diagnostics) = serde_json::from_str::<Vec<Diagnostic>>(&text) {
+                        let total_errors = diagnostics
+                            .iter()
+                            .filter(|d| d.severity == DiagnosticSeverity::Error)
+                            .count() as u32;
+                        let total_warnings = diagnostics
+                            .iter()
+                            .filter(|d| d.severity == DiagnosticSeverity::Warning)
+                            .count() as u32;
+                        return Ok(DiagnosticsResponse {
+                            diagnostics,
+                            total_errors,
+                            total_warnings,
+                        });
                     }
                 }
             }

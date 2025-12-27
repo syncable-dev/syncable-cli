@@ -72,7 +72,7 @@ impl Formatter for JsonFormatter {
         } else {
             serde_json::to_string(&failures)
         }
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        .map_err(std::io::Error::other)?;
 
         writeln!(writer, "{}", json)
     }

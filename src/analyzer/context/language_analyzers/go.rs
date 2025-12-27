@@ -29,21 +29,21 @@ pub(crate) fn analyze_go_project(
 
     // Check cmd directory for multiple binaries
     let cmd_dir = root.join("cmd");
-    if cmd_dir.is_dir() {
-        if let Ok(entries) = std::fs::read_dir(&cmd_dir) {
-            for entry in entries.flatten() {
-                if entry.file_type()?.is_dir() {
-                    let main_file = entry.path().join("main.go");
-                    if is_readable_file(&main_file) {
-                        let cmd_name = entry.file_name().to_string_lossy().to_string();
-                        entry_points.push(EntryPoint {
-                            file: main_file.clone(),
-                            function: Some("main".to_string()),
-                            command: Some(format!("go run ./cmd/{}", cmd_name)),
-                        });
+    if cmd_dir.is_dir()
+        && let Ok(entries) = std::fs::read_dir(&cmd_dir)
+    {
+        for entry in entries.flatten() {
+            if entry.file_type()?.is_dir() {
+                let main_file = entry.path().join("main.go");
+                if is_readable_file(&main_file) {
+                    let cmd_name = entry.file_name().to_string_lossy().to_string();
+                    entry_points.push(EntryPoint {
+                        file: main_file.clone(),
+                        function: Some("main".to_string()),
+                        command: Some(format!("go run ./cmd/{}", cmd_name)),
+                    });
 
-                        scan_go_file_for_context(&main_file, ports, env_vars, config)?;
-                    }
+                    scan_go_file_for_context(&main_file, ports, env_vars, config)?;
                 }
             }
         }
@@ -100,14 +100,14 @@ fn scan_go_file_for_context(
     for pattern in &port_patterns {
         let regex = create_regex(pattern)?;
         for cap in regex.captures_iter(&content) {
-            if let Some(port_str) = cap.get(1) {
-                if let Ok(port) = port_str.as_str().parse::<u16>() {
-                    ports.insert(Port {
-                        number: port,
-                        protocol: Protocol::Http,
-                        description: Some("Go web server".to_string()),
-                    });
-                }
+            if let Some(port_str) = cap.get(1)
+                && let Ok(port) = port_str.as_str().parse::<u16>()
+            {
+                ports.insert(Port {
+                    number: port,
+                    protocol: Protocol::Http,
+                    description: Some("Go web server".to_string()),
+                });
             }
         }
     }

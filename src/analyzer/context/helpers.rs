@@ -24,14 +24,14 @@ pub fn extract_ports_from_command(command: &str, ports: &mut HashSet<Port>) {
     for pattern in &patterns {
         if let Ok(regex) = Regex::new(pattern) {
             for cap in regex.captures_iter(command) {
-                if let Some(port_str) = cap.get(1) {
-                    if let Ok(port) = port_str.as_str().parse::<u16>() {
-                        ports.insert(Port {
-                            number: port,
-                            protocol: Protocol::Http,
-                            description: Some("Port from command".to_string()),
-                        });
-                    }
+                if let Some(port_str) = cap.get(1)
+                    && let Ok(port) = port_str.as_str().parse::<u16>()
+                {
+                    ports.insert(Port {
+                        number: port,
+                        protocol: Protocol::Http,
+                        description: Some("Port from command".to_string()),
+                    });
                 }
             }
         }

@@ -25,18 +25,14 @@ pub fn install_pip_audit(
     for (cmd, args) in install_commands {
         debug!("Trying installation command: {} {}", cmd, args.join(" "));
 
-        if InstallationUtils::is_command_available(cmd) {
-            if let Ok(success) = InstallationUtils::execute_command(
-                cmd,
-                &args.iter().map(|s| *s).collect::<Vec<_>>(),
-            ) {
-                if success {
-                    info!("✅ pip-audit installed successfully using {}", cmd);
-                    installed_tools.insert("pip-audit".to_string(), true);
-                    tool_detector.clear_cache();
-                    return Ok(());
-                }
-            }
+        if InstallationUtils::is_command_available(cmd)
+            && let Ok(success) = InstallationUtils::execute_command(cmd, &args.to_vec())
+            && success
+        {
+            info!("✅ pip-audit installed successfully using {}", cmd);
+            installed_tools.insert("pip-audit".to_string(), true);
+            tool_detector.clear_cache();
+            return Ok(());
         }
     }
 

@@ -184,7 +184,7 @@ where
         let state = self.state.clone();
 
         // Capture usage from response for token tracking
-        let usage = response.usage.clone();
+        let usage = response.usage;
 
         // Check if response contains tool calls - if so, any text is "thinking"
         // If no tool calls, this is the final response - don't show as thinking
@@ -200,7 +200,7 @@ where
             .filter_map(|content| {
                 if let AssistantContent::Reasoning(Reasoning { reasoning, .. }) = content {
                     // Join all reasoning strings
-                    let text = reasoning.iter().cloned().collect::<Vec<_>>().join("\n");
+                    let text = reasoning.to_vec().join("\n");
                     if !text.trim().is_empty() {
                         Some(text)
                     } else {
@@ -331,9 +331,8 @@ fn print_agent_thinking(text: &str) {
                 .or_else(|| trimmed.strip_prefix("* "))
                 .unwrap_or(trimmed);
             println!(
-                "{}  {} {}{}",
+                "{}  • {}{}",
                 brand::PEACH,
-                "•",
                 format_thinking_inline(content),
                 brand::RESET
             );
@@ -388,33 +387,36 @@ fn format_thinking_inline(text: &str) -> String {
 
     while i < chars.len() {
         // Handle `code`
-        if chars[i] == '`' && (i + 1 >= chars.len() || chars[i + 1] != '`') {
-            if let Some(end) = chars[i + 1..].iter().position(|&c| c == '`') {
-                let code_text: String = chars[i + 1..i + 1 + end].iter().collect();
-                result.push_str(brand::CYAN);
-                result.push('`');
-                result.push_str(&code_text);
-                result.push('`');
-                result.push_str(brand::RESET);
-                result.push_str(brand::PEACH);
-                i = i + 2 + end;
-                continue;
-            }
+        if chars[i] == '`'
+            && (i + 1 >= chars.len() || chars[i + 1] != '`')
+            && let Some(end) = chars[i + 1..].iter().position(|&c| c == '`')
+        {
+            let code_text: String = chars[i + 1..i + 1 + end].iter().collect();
+            result.push_str(brand::CYAN);
+            result.push('`');
+            result.push_str(&code_text);
+            result.push('`');
+            result.push_str(brand::RESET);
+            result.push_str(brand::PEACH);
+            i = i + 2 + end;
+            continue;
         }
 
         // Handle **bold**
-        if i + 1 < chars.len() && chars[i] == '*' && chars[i + 1] == '*' {
-            if let Some(end_offset) = find_double_star(&chars, i + 2) {
-                let bold_text: String = chars[i + 2..i + 2 + end_offset].iter().collect();
-                result.push_str(brand::RESET);
-                result.push_str(brand::CORAL);
-                result.push_str(brand::BOLD);
-                result.push_str(&bold_text);
-                result.push_str(brand::RESET);
-                result.push_str(brand::PEACH);
-                i = i + 4 + end_offset;
-                continue;
-            }
+        if i + 1 < chars.len()
+            && chars[i] == '*'
+            && chars[i + 1] == '*'
+            && let Some(end_offset) = find_double_star(&chars, i + 2)
+        {
+            let bold_text: String = chars[i + 2..i + 2 + end_offset].iter().collect();
+            result.push_str(brand::RESET);
+            result.push_str(brand::CORAL);
+            result.push_str(brand::BOLD);
+            result.push_str(&bold_text);
+            result.push_str(brand::RESET);
+            result.push_str(brand::PEACH);
+            i = i + 4 + end_offset;
+            continue;
         }
 
         result.push(chars[i]);
@@ -961,33 +963,32 @@ fn format_hadolint_result(
         }
 
         // Then high priority
-        if shown < MAX_PREVIEW {
-            if let Some(high_issues) = action_plan
+        if shown < MAX_PREVIEW
+            && let Some(high_issues) = action_plan
                 .and_then(|a| a.get("high"))
                 .and_then(|h| h.as_array())
-            {
-                for issue in high_issues.iter().take(MAX_PREVIEW - shown) {
-                    lines.push(format_hadolint_issue(issue, "🟠", ansi::HIGH));
-                    shown += 1;
-                }
+        {
+            for issue in high_issues.iter().take(MAX_PREVIEW - shown) {
+                lines.push(format_hadolint_issue(issue, "🟠", ansi::HIGH));
+                shown += 1;
             }
         }
 
         // Show quick fix hint for most important issue
-        if let Some(quick_fixes) = v.get("quick_fixes").and_then(|q| q.as_array()) {
-            if let Some(first_fix) = quick_fixes.first().and_then(|f| f.as_str()) {
-                let truncated = if first_fix.len() > 70 {
-                    format!("{}...", &first_fix[..67])
-                } else {
-                    first_fix.to_string()
-                };
-                lines.push(format!(
-                    "{}  → Fix: {}{}",
-                    ansi::INFO_BLUE,
-                    truncated,
-                    ansi::RESET
-                ));
-            }
+        if let Some(quick_fixes) = v.get("quick_fixes").and_then(|q| q.as_array())
+            && let Some(first_fix) = quick_fixes.first().and_then(|f| f.as_str())
+        {
+            let truncated = if first_fix.len() > 70 {
+                format!("{}...", &first_fix[..67])
+            } else {
+                first_fix.to_string()
+            };
+            lines.push(format!(
+                "{}  → Fix: {}{}",
+                ansi::INFO_BLUE,
+                truncated,
+                ansi::RESET
+            ));
         }
 
         // Note about remaining issues

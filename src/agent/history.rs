@@ -297,7 +297,7 @@ impl ConversationHistory {
 
         // Convert message indices to turn indices
         let start_turn = range.start / 2;
-        let end_turn = (range.end + 1) / 2;
+        let end_turn = range.end.div_ceil(2);
 
         if start_turn >= end_turn || end_turn > self.turns.len() {
             return None;

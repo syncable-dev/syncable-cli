@@ -27,16 +27,14 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
                         }
 
                         // Check if lists are cleaned
-                        let has_cleanup = shell.any_command(|cmd| {
+                        shell.any_command(|cmd| {
                             // rm -rf /var/lib/apt/lists/*
                             (cmd.name == "rm" && cmd.arguments.iter().any(|arg| {
                                 arg.contains("/var/lib/apt/lists")
                             }))
                             // Or apt-get clean
                             || (cmd.name == "apt-get" && cmd.has_any_arg(&["clean", "autoclean"]))
-                        });
-
-                        has_cleanup
+                        })
                     } else {
                         true
                     }

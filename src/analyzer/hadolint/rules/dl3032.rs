@@ -27,16 +27,14 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
                         }
 
                         // Check if cleanup is done
-                        let has_cleanup = shell.any_command(|cmd| {
+                        shell.any_command(|cmd| {
                             (cmd.name == "yum" && cmd.has_any_arg(&["clean"]))
                                 || (cmd.name == "rm"
                                     && cmd
                                         .arguments
                                         .iter()
                                         .any(|arg| arg.contains("/var/cache/yum")))
-                        });
-
-                        has_cleanup
+                        })
                     } else {
                         true
                     }

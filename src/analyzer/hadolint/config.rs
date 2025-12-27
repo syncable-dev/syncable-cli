@@ -34,7 +34,7 @@ pub enum LabelType {
 
 impl LabelType {
     /// Parse a label type from a string.
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "email" => Some(Self::Email),
             "hash" => Some(Self::GitHash),
@@ -179,10 +179,10 @@ impl HadolintConfig {
         // Parse label schema
         if let Some(schema) = value.get("label-schema").and_then(|v| v.as_mapping()) {
             for (key, val) in schema {
-                if let (Some(label), Some(type_str)) = (key.as_str(), val.as_str()) {
-                    if let Some(label_type) = LabelType::from_str(type_str) {
-                        config.label_schema.insert(label.to_string(), label_type);
-                    }
+                if let (Some(label), Some(type_str)) = (key.as_str(), val.as_str())
+                    && let Some(label_type) = LabelType::parse(type_str)
+                {
+                    config.label_schema.insert(label.to_string(), label_type);
                 }
             }
         }
@@ -199,10 +199,10 @@ impl HadolintConfig {
         }
 
         // Parse failure threshold
-        if let Some(threshold) = value.get("failure-threshold").and_then(|v| v.as_str()) {
-            if let Some(severity) = Severity::from_str(threshold) {
-                config.failure_threshold = severity;
-            }
+        if let Some(threshold) = value.get("failure-threshold").and_then(|v| v.as_str())
+            && let Some(severity) = Severity::parse(threshold)
+        {
+            config.failure_threshold = severity;
         }
 
         Ok(config)
@@ -220,30 +220,30 @@ impl HadolintConfig {
 
         for path in &search_paths {
             let path = Path::new(path);
-            if path.exists() {
-                if let Ok(config) = Self::from_yaml_file(path) {
-                    return Some(config);
-                }
+            if path.exists()
+                && let Ok(config) = Self::from_yaml_file(path)
+            {
+                return Some(config);
             }
         }
 
         // Try XDG config directory
         if let Some(config_dir) = dirs::config_dir() {
             let xdg_path = config_dir.join("hadolint.yaml");
-            if xdg_path.exists() {
-                if let Ok(config) = Self::from_yaml_file(&xdg_path) {
-                    return Some(config);
-                }
+            if xdg_path.exists()
+                && let Ok(config) = Self::from_yaml_file(&xdg_path)
+            {
+                return Some(config);
             }
         }
 
         // Try home directory
         if let Some(home_dir) = dirs::home_dir() {
             let home_path = home_dir.join(".hadolint.yaml");
-            if home_path.exists() {
-                if let Ok(config) = Self::from_yaml_file(&home_path) {
-                    return Some(config);
-                }
+            if home_path.exists()
+                && let Ok(config) = Self::from_yaml_file(&home_path)
+            {
+                return Some(config);
             }
         }
 
