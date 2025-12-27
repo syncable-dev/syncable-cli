@@ -81,10 +81,10 @@ fn detect_frameworks_from_files(
     }
 
     // If no config-based detections, check project structure (medium priority)
-    if detected.is_empty() {
-        if let Some(structure_detections) = detect_by_project_structure(language, rules) {
-            detected.extend(structure_detections);
-        }
+    if detected.is_empty()
+        && let Some(structure_detections) = detect_by_project_structure(language, rules)
+    {
+        detected.extend(structure_detections);
     }
 
     // Check source code patterns (lower priority)
@@ -132,99 +132,97 @@ fn detect_by_config_files(
                         .iter()
                         .any(|dep| dep.contains("tanstack") || dep.contains("vinxi"));
 
-                    if has_expo_deps && !has_tanstack_deps {
-                        if let Some(expo_rule) = rules.iter().find(|r| r.name == "Expo") {
-                            detected.push(DetectedTechnology {
-                                name: expo_rule.name.clone(),
-                                version: None,
-                                category: expo_rule.category.clone(),
-                                confidence: 1.0, // High confidence from config file with Expo content
-                                requires: expo_rule.requires.clone(),
-                                conflicts_with: expo_rule.conflicts_with.clone(),
-                                is_primary: expo_rule.is_primary_indicator,
-                                file_indicators: expo_rule.file_indicators.clone(),
-                            });
-                        }
-                    } else if has_tanstack_deps && !has_expo_deps {
-                        if let Some(tanstack_rule) =
-                            rules.iter().find(|r| r.name == "Tanstack Start")
-                        {
-                            detected.push(DetectedTechnology {
-                                name: tanstack_rule.name.clone(),
-                                version: None,
-                                category: tanstack_rule.category.clone(),
-                                confidence: 1.0, // High confidence from config file with TanStack content
-                                requires: tanstack_rule.requires.clone(),
-                                conflicts_with: tanstack_rule.conflicts_with.clone(),
-                                is_primary: tanstack_rule.is_primary_indicator,
-                                file_indicators: tanstack_rule.file_indicators.clone(),
-                            });
-                        }
-                    }
-                    // If we can't determine, we'll skip for now
-                } else {
-                    // For app.json, we can assume it's Expo
-                    if let Some(expo_rule) = rules.iter().find(|r| r.name == "Expo") {
+                    if has_expo_deps
+                        && !has_tanstack_deps
+                        && let Some(expo_rule) = rules.iter().find(|r| r.name == "Expo")
+                    {
                         detected.push(DetectedTechnology {
                             name: expo_rule.name.clone(),
                             version: None,
                             category: expo_rule.category.clone(),
-                            confidence: 1.0, // High confidence from config file
+                            confidence: 1.0, // High confidence from config file with Expo content
                             requires: expo_rule.requires.clone(),
                             conflicts_with: expo_rule.conflicts_with.clone(),
                             is_primary: expo_rule.is_primary_indicator,
                             file_indicators: expo_rule.file_indicators.clone(),
                         });
+                    } else if has_tanstack_deps
+                        && !has_expo_deps
+                        && let Some(tanstack_rule) =
+                            rules.iter().find(|r| r.name == "Tanstack Start")
+                    {
+                        detected.push(DetectedTechnology {
+                            name: tanstack_rule.name.clone(),
+                            version: None,
+                            category: tanstack_rule.category.clone(),
+                            confidence: 1.0, // High confidence from config file with TanStack content
+                            requires: tanstack_rule.requires.clone(),
+                            conflicts_with: tanstack_rule.conflicts_with.clone(),
+                            is_primary: tanstack_rule.is_primary_indicator,
+                            file_indicators: tanstack_rule.file_indicators.clone(),
+                        });
                     }
+                    // If we can't determine, we'll skip for now
+                } else if let Some(expo_rule) = rules.iter().find(|r| r.name == "Expo") {
+                    // For app.json, we can assume it's Expo
+                    detected.push(DetectedTechnology {
+                        name: expo_rule.name.clone(),
+                        version: None,
+                        category: expo_rule.category.clone(),
+                        confidence: 1.0, // High confidence from config file
+                        requires: expo_rule.requires.clone(),
+                        conflicts_with: expo_rule.conflicts_with.clone(),
+                        is_primary: expo_rule.is_primary_indicator,
+                        file_indicators: expo_rule.file_indicators.clone(),
+                    });
                 }
             }
             // Check for Next.js config files
-            else if file_name.starts_with("next.config.") {
-                if let Some(nextjs_rule) = rules.iter().find(|r| r.name == "Next.js") {
-                    detected.push(DetectedTechnology {
-                        name: nextjs_rule.name.clone(),
-                        version: None,
-                        category: nextjs_rule.category.clone(),
-                        confidence: 1.0, // High confidence from config file
-                        requires: nextjs_rule.requires.clone(),
-                        conflicts_with: nextjs_rule.conflicts_with.clone(),
-                        is_primary: nextjs_rule.is_primary_indicator,
-                        file_indicators: nextjs_rule.file_indicators.clone(),
-                    });
-                }
+            else if file_name.starts_with("next.config.")
+                && let Some(nextjs_rule) = rules.iter().find(|r| r.name == "Next.js")
+            {
+                detected.push(DetectedTechnology {
+                    name: nextjs_rule.name.clone(),
+                    version: None,
+                    category: nextjs_rule.category.clone(),
+                    confidence: 1.0, // High confidence from config file
+                    requires: nextjs_rule.requires.clone(),
+                    conflicts_with: nextjs_rule.conflicts_with.clone(),
+                    is_primary: nextjs_rule.is_primary_indicator,
+                    file_indicators: nextjs_rule.file_indicators.clone(),
+                });
             }
             // Check for React Native config files
-            else if file_name == "react-native.config.js" {
-                if let Some(rn_rule) = rules.iter().find(|r| r.name == "React Native") {
-                    detected.push(DetectedTechnology {
-                        name: rn_rule.name.clone(),
-                        version: None,
-                        category: rn_rule.category.clone(),
-                        confidence: 1.0, // High confidence from config file
-                        requires: rn_rule.requires.clone(),
-                        conflicts_with: rn_rule.conflicts_with.clone(),
-                        is_primary: rn_rule.is_primary_indicator,
-                        file_indicators: rn_rule.file_indicators.clone(),
-                    });
-                }
+            else if file_name == "react-native.config.js"
+                && let Some(rn_rule) = rules.iter().find(|r| r.name == "React Native")
+            {
+                detected.push(DetectedTechnology {
+                    name: rn_rule.name.clone(),
+                    version: None,
+                    category: rn_rule.category.clone(),
+                    confidence: 1.0, // High confidence from config file
+                    requires: rn_rule.requires.clone(),
+                    conflicts_with: rn_rule.conflicts_with.clone(),
+                    is_primary: rn_rule.is_primary_indicator,
+                    file_indicators: rn_rule.file_indicators.clone(),
+                });
             }
             // Check for Encore config files
-            else if file_name == "encore.app"
+            else if (file_name == "encore.app"
                 || file_name == "encore.service.ts"
-                || file_name == "encore.service.js"
+                || file_name == "encore.service.js")
+                && let Some(encore_rule) = rules.iter().find(|r| r.name == "Encore")
             {
-                if let Some(encore_rule) = rules.iter().find(|r| r.name == "Encore") {
-                    detected.push(DetectedTechnology {
-                        name: encore_rule.name.clone(),
-                        version: None,
-                        category: encore_rule.category.clone(),
-                        confidence: 1.0, // High confidence from config file
-                        requires: encore_rule.requires.clone(),
-                        conflicts_with: encore_rule.conflicts_with.clone(),
-                        is_primary: encore_rule.is_primary_indicator,
-                        file_indicators: encore_rule.file_indicators.clone(),
-                    });
-                }
+                detected.push(DetectedTechnology {
+                    name: encore_rule.name.clone(),
+                    version: None,
+                    category: encore_rule.category.clone(),
+                    confidence: 1.0, // High confidence from config file
+                    requires: encore_rule.requires.clone(),
+                    conflicts_with: encore_rule.conflicts_with.clone(),
+                    is_primary: encore_rule.is_primary_indicator,
+                    file_indicators: encore_rule.file_indicators.clone(),
+                });
             }
         }
     }
@@ -431,67 +429,68 @@ fn detect_by_source_patterns(
             if content.contains("expo")
                 && (content.contains("from 'expo'")
                     || content.contains("import {") && content.contains("registerRootComponent"))
+                && let Some(expo_rule) = rules.iter().find(|r| r.name == "Expo")
             {
-                if let Some(expo_rule) = rules.iter().find(|r| r.name == "Expo") {
-                    detected.push(DetectedTechnology {
-                        name: expo_rule.name.clone(),
-                        version: None,
-                        category: expo_rule.category.clone(),
-                        confidence: 0.8, // Higher confidence from more specific source patterns
-                        requires: expo_rule.requires.clone(),
-                        conflicts_with: expo_rule.conflicts_with.clone(),
-                        is_primary: expo_rule.is_primary_indicator,
-                        file_indicators: expo_rule.file_indicators.clone(),
-                    });
-                }
+                detected.push(DetectedTechnology {
+                    name: expo_rule.name.clone(),
+                    version: None,
+                    category: expo_rule.category.clone(),
+                    confidence: 0.8, // Higher confidence from more specific source patterns
+                    requires: expo_rule.requires.clone(),
+                    conflicts_with: expo_rule.conflicts_with.clone(),
+                    is_primary: expo_rule.is_primary_indicator,
+                    file_indicators: expo_rule.file_indicators.clone(),
+                });
             }
 
             // Check for Next.js source patterns
-            if content.contains("next/") {
-                if let Some(nextjs_rule) = rules.iter().find(|r| r.name == "Next.js") {
-                    detected.push(DetectedTechnology {
-                        name: nextjs_rule.name.clone(),
-                        version: None,
-                        category: nextjs_rule.category.clone(),
-                        confidence: 0.7, // Medium confidence from source patterns
-                        requires: nextjs_rule.requires.clone(),
-                        conflicts_with: nextjs_rule.conflicts_with.clone(),
-                        is_primary: nextjs_rule.is_primary_indicator,
-                        file_indicators: nextjs_rule.file_indicators.clone(),
-                    });
-                }
+            if content.contains("next/")
+                && let Some(nextjs_rule) = rules.iter().find(|r| r.name == "Next.js")
+            {
+                detected.push(DetectedTechnology {
+                    name: nextjs_rule.name.clone(),
+                    version: None,
+                    category: nextjs_rule.category.clone(),
+                    confidence: 0.7, // Medium confidence from source patterns
+                    requires: nextjs_rule.requires.clone(),
+                    conflicts_with: nextjs_rule.conflicts_with.clone(),
+                    is_primary: nextjs_rule.is_primary_indicator,
+                    file_indicators: nextjs_rule.file_indicators.clone(),
+                });
             }
 
             // Check for TanStack Router patterns
-            if content.contains("@tanstack/react-router") && content.contains("createFileRoute") {
-                if let Some(tanstack_rule) = rules.iter().find(|r| r.name == "Tanstack Start") {
-                    detected.push(DetectedTechnology {
-                        name: tanstack_rule.name.clone(),
-                        version: None,
-                        category: tanstack_rule.category.clone(),
-                        confidence: 0.7, // Medium confidence from source patterns
-                        requires: tanstack_rule.requires.clone(),
-                        conflicts_with: tanstack_rule.conflicts_with.clone(),
-                        is_primary: tanstack_rule.is_primary_indicator,
-                        file_indicators: tanstack_rule.file_indicators.clone(),
-                    });
-                }
+            if content.contains("@tanstack/react-router")
+                && content.contains("createFileRoute")
+                && let Some(tanstack_rule) = rules.iter().find(|r| r.name == "Tanstack Start")
+            {
+                detected.push(DetectedTechnology {
+                    name: tanstack_rule.name.clone(),
+                    version: None,
+                    category: tanstack_rule.category.clone(),
+                    confidence: 0.7, // Medium confidence from source patterns
+                    requires: tanstack_rule.requires.clone(),
+                    conflicts_with: tanstack_rule.conflicts_with.clone(),
+                    is_primary: tanstack_rule.is_primary_indicator,
+                    file_indicators: tanstack_rule.file_indicators.clone(),
+                });
             }
 
             // Check for React Router patterns
-            if content.contains("react-router") && content.contains("BrowserRouter") {
-                if let Some(rr_rule) = rules.iter().find(|r| r.name == "React Router v7") {
-                    detected.push(DetectedTechnology {
-                        name: rr_rule.name.clone(),
-                        version: None,
-                        category: rr_rule.category.clone(),
-                        confidence: 0.7, // Medium confidence from source patterns
-                        requires: rr_rule.requires.clone(),
-                        conflicts_with: rr_rule.conflicts_with.clone(),
-                        is_primary: rr_rule.is_primary_indicator,
-                        file_indicators: rr_rule.file_indicators.clone(),
-                    });
-                }
+            if content.contains("react-router")
+                && content.contains("BrowserRouter")
+                && let Some(rr_rule) = rules.iter().find(|r| r.name == "React Router v7")
+            {
+                detected.push(DetectedTechnology {
+                    name: rr_rule.name.clone(),
+                    version: None,
+                    category: rr_rule.category.clone(),
+                    confidence: 0.7, // Medium confidence from source patterns
+                    requires: rr_rule.requires.clone(),
+                    conflicts_with: rr_rule.conflicts_with.clone(),
+                    is_primary: rr_rule.is_primary_indicator,
+                    file_indicators: rr_rule.file_indicators.clone(),
+                });
             }
         }
     }
@@ -514,72 +513,72 @@ fn detect_technologies_from_source_files(
     for file_path in &language.files {
         if let Ok(content) = fs::read_to_string(file_path) {
             // Analyze Drizzle ORM usage patterns
-            if let Some(drizzle_confidence) = analyze_drizzle_usage(&content, file_path) {
-                if let Some(drizzle_rule) = rules.iter().find(|r| r.name == "Drizzle ORM") {
-                    detected.push(DetectedTechnology {
-                        name: "Drizzle ORM".to_string(),
-                        version: None,
-                        category: TechnologyCategory::Database,
-                        confidence: drizzle_confidence,
-                        requires: vec![],
-                        conflicts_with: vec![],
-                        is_primary: false,
-                        file_indicators: drizzle_rule.file_indicators.clone(),
-                    });
-                }
+            if let Some(drizzle_confidence) = analyze_drizzle_usage(&content, file_path)
+                && let Some(drizzle_rule) = rules.iter().find(|r| r.name == "Drizzle ORM")
+            {
+                detected.push(DetectedTechnology {
+                    name: "Drizzle ORM".to_string(),
+                    version: None,
+                    category: TechnologyCategory::Database,
+                    confidence: drizzle_confidence,
+                    requires: vec![],
+                    conflicts_with: vec![],
+                    is_primary: false,
+                    file_indicators: drizzle_rule.file_indicators.clone(),
+                });
             }
 
             // Analyze Prisma usage patterns
-            if let Some(prisma_confidence) = analyze_prisma_usage(&content, file_path) {
-                if let Some(prisma_rule) = rules.iter().find(|r| r.name == "Prisma") {
-                    detected.push(DetectedTechnology {
-                        name: "Prisma".to_string(),
-                        version: None,
-                        category: TechnologyCategory::Database,
-                        confidence: prisma_confidence,
-                        requires: vec![],
-                        conflicts_with: vec![],
-                        is_primary: false,
-                        file_indicators: prisma_rule.file_indicators.clone(),
-                    });
-                }
+            if let Some(prisma_confidence) = analyze_prisma_usage(&content, file_path)
+                && let Some(prisma_rule) = rules.iter().find(|r| r.name == "Prisma")
+            {
+                detected.push(DetectedTechnology {
+                    name: "Prisma".to_string(),
+                    version: None,
+                    category: TechnologyCategory::Database,
+                    confidence: prisma_confidence,
+                    requires: vec![],
+                    conflicts_with: vec![],
+                    is_primary: false,
+                    file_indicators: prisma_rule.file_indicators.clone(),
+                });
             }
 
             // Analyze Encore usage patterns
-            if let Some(encore_confidence) = analyze_encore_usage(&content, file_path) {
-                if let Some(encore_rule) = rules.iter().find(|r| r.name == "Encore") {
-                    detected.push(DetectedTechnology {
-                        name: "Encore".to_string(),
-                        version: None,
-                        category: TechnologyCategory::BackendFramework,
-                        confidence: encore_confidence,
-                        requires: vec![],
-                        conflicts_with: vec![],
-                        is_primary: true,
-                        file_indicators: encore_rule.file_indicators.clone(),
-                    });
-                }
+            if let Some(encore_confidence) = analyze_encore_usage(&content, file_path)
+                && let Some(encore_rule) = rules.iter().find(|r| r.name == "Encore")
+            {
+                detected.push(DetectedTechnology {
+                    name: "Encore".to_string(),
+                    version: None,
+                    category: TechnologyCategory::BackendFramework,
+                    confidence: encore_confidence,
+                    requires: vec![],
+                    conflicts_with: vec![],
+                    is_primary: true,
+                    file_indicators: encore_rule.file_indicators.clone(),
+                });
             }
 
             // Analyze Tanstack Start usage patterns
-            if let Some(tanstack_confidence) = analyze_tanstack_start_usage(&content, file_path) {
-                if let Some(tanstack_rule) = rules.iter().find(|r| r.name == "Tanstack Start") {
-                    detected.push(DetectedTechnology {
-                        name: "Tanstack Start".to_string(),
-                        version: None,
-                        category: TechnologyCategory::MetaFramework,
-                        confidence: tanstack_confidence,
-                        requires: vec!["React".to_string()],
-                        conflicts_with: vec![
-                            "Next.js".to_string(),
-                            "React Router v7".to_string(),
-                            "SvelteKit".to_string(),
-                            "Nuxt.js".to_string(),
-                        ],
-                        is_primary: true,
-                        file_indicators: tanstack_rule.file_indicators.clone(),
-                    });
-                }
+            if let Some(tanstack_confidence) = analyze_tanstack_start_usage(&content, file_path)
+                && let Some(tanstack_rule) = rules.iter().find(|r| r.name == "Tanstack Start")
+            {
+                detected.push(DetectedTechnology {
+                    name: "Tanstack Start".to_string(),
+                    version: None,
+                    category: TechnologyCategory::MetaFramework,
+                    confidence: tanstack_confidence,
+                    requires: vec!["React".to_string()],
+                    conflicts_with: vec![
+                        "Next.js".to_string(),
+                        "React Router v7".to_string(),
+                        "SvelteKit".to_string(),
+                        "Nuxt.js".to_string(),
+                    ],
+                    is_primary: true,
+                    file_indicators: tanstack_rule.file_indicators.clone(),
+                });
             }
         }
     }
@@ -669,14 +668,13 @@ fn analyze_prisma_usage(content: &str, file_path: &Path) -> Option<f32> {
     }
 
     // Prisma schema files (very specific)
-    if file_name == "schema.prisma" {
-        if content.contains("model ")
+    if file_name == "schema.prisma"
+        && (content.contains("model ")
             || content.contains("generator ")
-            || content.contains("datasource ")
-        {
-            confidence += 0.6;
-            has_prisma_import = true;
-        }
+            || content.contains("datasource "))
+    {
+        confidence += 0.6;
+        has_prisma_import = true;
     }
 
     // Only check for client usage if we have confirmed Prisma imports
@@ -777,11 +775,11 @@ fn analyze_tanstack_start_usage(content: &str, file_path: &Path) -> Option<f32> 
     let mut has_start_patterns = false;
 
     // Configuration files (high confidence)
-    if file_name == "app.config.ts" || file_name == "app.config.js" {
-        if content.contains("@tanstack/react-start") || content.contains("tanstack") {
-            confidence += 0.5;
-            has_start_patterns = true;
-        }
+    if (file_name == "app.config.ts" || file_name == "app.config.js")
+        && (content.contains("@tanstack/react-start") || content.contains("tanstack"))
+    {
+        confidence += 0.5;
+        has_start_patterns = true;
     }
 
     // Router configuration patterns (very high confidence)
@@ -798,13 +796,12 @@ fn analyze_tanstack_start_usage(content: &str, file_path: &Path) -> Option<f32> 
     }
 
     // Server entry point patterns
-    if file_name == "ssr.tsx" || file_name == "ssr.ts" {
-        if content.contains("createStartHandler")
-            || content.contains("@tanstack/react-start/server")
-        {
-            confidence += 0.5;
-            has_start_patterns = true;
-        }
+    if (file_name == "ssr.tsx" || file_name == "ssr.ts")
+        && (content.contains("createStartHandler")
+            || content.contains("@tanstack/react-start/server"))
+    {
+        confidence += 0.5;
+        has_start_patterns = true;
     }
 
     // Client entry point patterns
@@ -832,11 +829,12 @@ fn analyze_tanstack_start_usage(content: &str, file_path: &Path) -> Option<f32> 
     }
 
     // Route files with createFileRoute
-    if file_path.to_string_lossy().contains("routes/") {
-        if content.contains("createFileRoute") && content.contains("@tanstack/react-router") {
-            confidence += 0.3;
-            has_start_patterns = true;
-        }
+    if file_path.to_string_lossy().contains("routes/")
+        && content.contains("createFileRoute")
+        && content.contains("@tanstack/react-router")
+    {
+        confidence += 0.3;
+        has_start_patterns = true;
     }
 
     // Server functions (key Tanstack Start feature)

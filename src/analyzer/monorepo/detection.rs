@@ -90,19 +90,16 @@ fn should_exclude_directory(dir_name: &str, config: &MonorepoDetectionConfig) ->
 fn is_project_directory(path: &Path) -> Result<bool> {
     // If package.json exists but has a template placeholder name, treat as non-project
     let pkg = path.join("package.json");
-    if pkg.exists() {
-        if let Ok(content) = std::fs::read_to_string(&pkg) {
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                if json
-                    .get("name")
-                    .and_then(|n| n.as_str())
-                    .map(|s| s.contains("${") || s.contains("}}"))
-                    == Some(true)
-                {
-                    return Ok(false);
-                }
-            }
-        }
+    if pkg.exists()
+        && let Ok(content) = std::fs::read_to_string(&pkg)
+        && let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
+        && json
+            .get("name")
+            .and_then(|n| n.as_str())
+            .map(|s| s.contains("${") || s.contains("}}"))
+            == Some(true)
+    {
+        return Ok(false);
     }
 
     // Common project indicator files
@@ -156,10 +153,8 @@ fn is_project_directory(path: &Path) -> Result<bool> {
                     }
                 }
             }
-        } else {
-            if path.join(indicator).exists() {
-                return Ok(true);
-            }
+        } else if path.join(indicator).exists() {
+            return Ok(true);
         }
     }
 
@@ -180,6 +175,7 @@ fn is_placeholder_dir(path: &Path) -> bool {
 }
 
 /// Checks if a directory contains source code files
+#[allow(dead_code)]
 fn directory_contains_code(path: &Path) -> Result<bool> {
     let code_extensions = [
         "js", "ts", "jsx", "tsx", "py", "rs", "go", "java", "kt", "cs", "rb", "php",
@@ -187,19 +183,16 @@ fn directory_contains_code(path: &Path) -> Result<bool> {
 
     if let Ok(entries) = std::fs::read_dir(path) {
         for entry in entries.flatten() {
-            if let Some(extension) = entry.path().extension() {
-                if let Some(ext_str) = extension.to_str() {
-                    if code_extensions.contains(&ext_str) {
-                        return Ok(true);
-                    }
-                }
+            if let Some(extension) = entry.path().extension()
+                && let Some(ext_str) = extension.to_str()
+                && code_extensions.contains(&ext_str)
+            {
+                return Ok(true);
             }
 
             // Recursively check subdirectories (limited depth)
-            if entry.file_type()?.is_dir() {
-                if directory_contains_code(&entry.path())? {
-                    return Ok(true);
-                }
+            if entry.file_type()?.is_dir() && directory_contains_code(&entry.path())? {
+                return Ok(true);
             }
         }
     }
@@ -289,15 +282,12 @@ pub(crate) fn determine_if_monorepo(
 
     // Check package.json for workspace configuration
     let package_json_path = root_path.join("package.json");
-    if package_json_path.exists() {
-        if let Ok(content) = std::fs::read_to_string(&package_json_path) {
-            if let Ok(package_json) = serde_json::from_str::<JsonValue>(&content) {
-                // Check for workspaces
-                if package_json.get("workspaces").is_some() {
-                    return Ok(true);
-                }
-            }
-        }
+    if package_json_path.exists()
+        && let Ok(content) = std::fs::read_to_string(&package_json_path)
+        && let Ok(package_json) = serde_json::from_str::<JsonValue>(&content)
+        && package_json.get("workspaces").is_some()
+    {
+        return Ok(true);
     }
 
     Ok(false)

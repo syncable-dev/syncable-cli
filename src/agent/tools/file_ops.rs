@@ -639,14 +639,12 @@ The tool will create parent directories automatically if they don't exist."#.to_
 
         // Create parent directories if needed
         let create_dirs = args.create_dirs.unwrap_or(true);
-        if create_dirs {
-            if let Some(parent) = file_path.parent() {
-                if !parent.exists() {
-                    fs::create_dir_all(parent).map_err(|e| {
-                        WriteFileError(format!("Failed to create directories: {}", e))
-                    })?;
-                }
-            }
+        if create_dirs
+            && let Some(parent) = file_path.parent()
+            && !parent.exists()
+        {
+            fs::create_dir_all(parent)
+                .map_err(|e| WriteFileError(format!("Failed to create directories: {}", e)))?;
         }
 
         // Check if file exists (for reporting)
@@ -935,17 +933,16 @@ All files are written atomically. Parent directories are created automatically."
             }
 
             // Create parent directories if needed
-            if create_dirs {
-                if let Some(parent) = file_path.parent() {
-                    if !parent.exists() {
-                        fs::create_dir_all(parent).map_err(|e| {
-                            WriteFilesError(format!(
-                                "Failed to create directories for {}: {}",
-                                file.path, e
-                            ))
-                        })?;
-                    }
-                }
+            if create_dirs
+                && let Some(parent) = file_path.parent()
+                && !parent.exists()
+            {
+                fs::create_dir_all(parent).map_err(|e| {
+                    WriteFilesError(format!(
+                        "Failed to create directories for {}: {}",
+                        file.path, e
+                    ))
+                })?;
             }
 
             let file_existed = file_path.exists();

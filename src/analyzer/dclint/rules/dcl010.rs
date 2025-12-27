@@ -74,7 +74,7 @@ fn fix(source: &str) -> Option<String> {
     let mut in_depends_on = false;
     let mut depends_on_indent = 0;
     let mut deps: Vec<String> = Vec::new();
-    let mut deps_start_line = 0;
+    let mut _deps_start_line = 0;
     let mut collected_lines: Vec<String> = Vec::new();
 
     for (idx, line) in source.lines().enumerate() {
@@ -85,7 +85,7 @@ fn fix(source: &str) -> Option<String> {
         if trimmed.starts_with("depends_on:") {
             in_depends_on = true;
             depends_on_indent = indent;
-            deps_start_line = idx;
+            _deps_start_line = idx;
             deps.clear();
             result.push_str(line);
             result.push('\n');

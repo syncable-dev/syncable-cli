@@ -220,10 +220,10 @@ impl DclintConfig {
             // Simple glob matching
             if pattern.contains('*') {
                 let pattern_regex = pattern.replace('.', "\\.").replace('*', ".*");
-                if let Ok(re) = regex::Regex::new(&format!("^{}$", pattern_regex)) {
-                    if re.is_match(path) {
-                        return true;
-                    }
+                if let Ok(re) = regex::Regex::new(&format!("^{}$", pattern_regex))
+                    && re.is_match(path)
+                {
+                    return true;
                 }
             } else if path.contains(pattern) {
                 return true;

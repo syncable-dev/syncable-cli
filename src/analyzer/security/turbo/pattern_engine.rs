@@ -152,7 +152,7 @@ impl PatternEngine {
         for (line_num, line) in lines.iter().enumerate() {
             for (regex, pattern) in &self.complex_patterns {
                 if let Some(mat) = regex.find(line) {
-                    let confidence = self.calculate_confidence(line, content, &pattern, file_meta);
+                    let confidence = self.calculate_confidence(line, content, pattern, file_meta);
 
                     matches.push(PatternMatch {
                         pattern: Arc::clone(pattern),
@@ -829,13 +829,12 @@ impl PatternEngine {
         }
 
         // Additional React/JSX specific reductions
-        if content_lower.contains("react")
+        if (content_lower.contains("react")
             || content_lower.contains("jsx")
-            || content_lower.contains("component")
+            || content_lower.contains("component"))
+            && (line.contains("${") || line.contains("props.") || line.contains("state."))
         {
-            if line.contains("${") || line.contains("props.") || line.contains("state.") {
-                confidence -= 0.5;
-            }
+            confidence -= 0.5;
         }
 
         confidence

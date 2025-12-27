@@ -96,14 +96,14 @@ fn analyze_application_properties(
     // Look for server.port
     let port_regex = create_regex(r"server\.port\s*[=:]\s*(\d{1,5})")?;
     for cap in port_regex.captures_iter(&content) {
-        if let Some(port_str) = cap.get(1) {
-            if let Ok(port) = port_str.as_str().parse::<u16>() {
-                ports.insert(Port {
-                    number: port,
-                    protocol: Protocol::Http,
-                    description: Some("Spring Boot server".to_string()),
-                });
-            }
+        if let Some(port_str) = cap.get(1)
+            && let Ok(port) = port_str.as_str().parse::<u16>()
+        {
+            ports.insert(Port {
+                number: port,
+                protocol: Protocol::Http,
+                description: Some("Spring Boot server".to_string()),
+            });
         }
     }
 

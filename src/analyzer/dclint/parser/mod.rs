@@ -44,14 +44,14 @@ pub fn find_line_for_key(source: &str, path: &[&str]) -> Option<u32> {
         let target_key = path[path_idx];
         let key_pattern = format!("{}:", target_key);
 
-        if trimmed.starts_with(&key_pattern) || trimmed == target_key {
-            if path_idx == 0 || indent > current_indent {
-                path_idx += 1;
-                current_indent = indent;
+        if (trimmed.starts_with(&key_pattern) || trimmed == target_key)
+            && (path_idx == 0 || indent > current_indent)
+        {
+            path_idx += 1;
+            current_indent = indent;
 
-                if path_idx == path.len() {
-                    return Some((line_num + 1) as u32); // 1-indexed
-                }
+            if path_idx == path.len() {
+                return Some((line_num + 1) as u32); // 1-indexed
             }
         }
     }

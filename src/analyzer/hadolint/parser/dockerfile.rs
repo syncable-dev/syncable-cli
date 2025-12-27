@@ -57,9 +57,9 @@ pub fn parse_dockerfile(input: &str) -> Result<Vec<InstructionPos>, ParseError> 
             source_text.push('\n');
 
             let trimmed = line.trim_end();
-            if trimmed.ends_with('\\') {
+            if let Some(stripped) = trimmed.strip_suffix('\\') {
                 // Line continuation - remove backslash and continue
-                combined_line.push_str(&trimmed[..trimmed.len() - 1]);
+                combined_line.push_str(stripped);
                 combined_line.push(' ');
                 i += 1;
                 line_number += 1;
@@ -92,8 +92,8 @@ pub fn parse_dockerfile(input: &str) -> Result<Vec<InstructionPos>, ParseError> 
             }
             Err(_) => {
                 // Try to parse as comment
-                if trimmed.starts_with('#') {
-                    let comment = trimmed[1..].trim().to_string();
+                if let Some(rest) = trimmed.strip_prefix('#') {
+                    let comment = rest.trim().to_string();
                     instructions.push(InstructionPos::new(
                         Instruction::Comment(comment),
                         start_line,
@@ -170,7 +170,7 @@ fn parse_from(input: &str) -> IResult<&str, Instruction> {
     let base_image = parse_image_reference(
         image_ref,
         platform.map(|s| s.to_string()),
-        alias.map(|s| ImageAlias::new(s)),
+        alias.map(ImageAlias::new),
     );
 
     Ok((input, Instruction::From(base_image)))
@@ -369,7 +369,7 @@ fn parse_mount_options(s: &str) -> RunMount {
             mode: opts.get("mode").map(|s| s.to_string()),
             uid: opts.get("uid").and_then(|s| s.parse().ok()),
             gid: opts.get("gid").and_then(|s| s.parse().ok()),
-            read_only: opts.get("ro").is_some() || opts.get("readonly").is_some(),
+            read_only: opts.contains_key("ro") || opts.contains_key("readonly"),
         }),
         "tmpfs" => RunMount::Tmpfs(TmpOpts {
             target: opts.get("target").map(|s| s.to_string()),
@@ -395,7 +395,7 @@ fn parse_mount_options(s: &str) -> RunMount {
             target: opts.get("target").map(|s| s.to_string()),
             source: opts.get("source").map(|s| s.to_string()),
             from: opts.get("from").map(|s| s.to_string()),
-            read_only: opts.get("ro").is_some() || opts.get("readonly").is_some(),
+            read_only: opts.contains_key("ro") || opts.contains_key("readonly"),
         }),
     }
 }
@@ -512,12 +512,12 @@ fn parse_copy_flags(input: &str) -> IResult<&str, CopyFlags> {
 /// Parse COPY arguments.
 fn parse_copy_args(input: &str) -> IResult<&str, CopyArgs> {
     // Try exec form first
-    if let Ok((remaining, items)) = parse_json_array(input) {
-        if items.len() >= 2 {
-            let dest = items.last().unwrap().clone();
-            let sources = items[..items.len() - 1].to_vec();
-            return Ok((remaining, CopyArgs::new(sources, dest)));
-        }
+    if let Ok((remaining, items)) = parse_json_array(input)
+        && items.len() >= 2
+    {
+        let dest = items.last().unwrap().clone();
+        let sources = items[..items.len() - 1].to_vec();
+        return Ok((remaining, CopyArgs::new(sources, dest)));
     }
 
     // Shell form: space-separated paths
@@ -655,7 +655,7 @@ fn parse_key_value_pairs(input: &str) -> Vec<(String, String)> {
                 let value = if remaining.starts_with('"') {
                     let end = find_closing_quote(remaining);
                     let val = &remaining[1..end];
-                    remaining = &remaining[end + 1..];
+                    // Note: remaining not updated here as we break immediately after
                     val.to_string()
                 } else {
                     remaining.to_string()
@@ -858,8 +858,9 @@ fn parse_healthcheck(input: &str) -> IResult<&str, Instruction> {
 
     // Parse CMD
     remaining = remaining.trim_start();
-    if remaining.to_uppercase().starts_with("CMD") {
-        remaining = &remaining[3..].trim_start();
+    let remaining_upper = remaining.to_uppercase();
+    if remaining_upper.starts_with("CMD") {
+        remaining = remaining[3..].trim_start();
     }
 
     let (_, arguments) = parse_arguments(remaining)?;

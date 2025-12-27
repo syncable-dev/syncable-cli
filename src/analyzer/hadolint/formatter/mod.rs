@@ -45,7 +45,7 @@ pub enum OutputFormat {
 
 impl OutputFormat {
     /// Parse format from string (case-insensitive).
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "tty" | "terminal" | "color" => Some(Self::Tty),
             "json" => Some(Self::Json),

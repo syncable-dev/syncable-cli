@@ -368,13 +368,19 @@ pub struct CommandPicker {
     pub filtered_commands: Vec<&'static SlashCommand>,
 }
 
-impl CommandPicker {
-    pub fn new() -> Self {
+impl Default for CommandPicker {
+    fn default() -> Self {
         Self {
             filter: String::new(),
             selected_index: 0,
             filtered_commands: SLASH_COMMANDS.iter().collect(),
         }
+    }
+}
+
+impl CommandPicker {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Update filter and refresh filtered commands
@@ -483,11 +489,10 @@ pub fn show_command_picker(initial_filter: &str) -> Option<String> {
 
     let mut stdout = io::stdout();
     let mut input_buffer = format!("/{}", initial_filter);
-    let mut last_rendered_lines = 0;
 
     // Initial render
     println!(); // Move to new line for suggestions
-    last_rendered_lines = picker.render_suggestions();
+    let mut last_rendered_lines = picker.render_suggestions();
 
     // Move back up to input line and position cursor
     let _ = execute!(
@@ -592,12 +597,7 @@ fn show_simple_picker(picker: &CommandPicker) -> Option<String> {
     println!();
 
     for (i, cmd) in picker.filtered_commands.iter().enumerate() {
-        print!(
-            "  {} {}/{:<12}",
-            format!("[{}]", i + 1),
-            ansi::PURPLE,
-            cmd.name
-        );
+        print!("  [{}] {}/{:<12}", i + 1, ansi::PURPLE, cmd.name);
         if let Some(alias) = cmd.alias {
             print!(" ({})", alias);
         }
@@ -620,10 +620,11 @@ fn show_simple_picker(picker: &CommandPicker) -> Option<String> {
     let mut input = String::new();
     if io::stdin().read_line(&mut input).is_ok() {
         let input = input.trim();
-        if let Ok(num) = input.parse::<usize>() {
-            if num >= 1 && num <= picker.filtered_commands.len() {
-                return Some(picker.filtered_commands[num - 1].name.to_string());
-            }
+        if let Ok(num) = input.parse::<usize>()
+            && num >= 1
+            && num <= picker.filtered_commands.len()
+        {
+            return Some(picker.filtered_commands[num - 1].name.to_string());
         }
     }
 

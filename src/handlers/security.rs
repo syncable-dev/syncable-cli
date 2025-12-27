@@ -305,7 +305,7 @@ fn calculate_relative_path(file_path: Option<&PathBuf>, project_path: &std::path
     }
 }
 
-fn format_fallback_path(file_path: &PathBuf, project_path: &std::path::Path) -> String {
+fn format_fallback_path(file_path: &std::path::Path, project_path: &std::path::Path) -> String {
     let path_str = file_path.to_string_lossy();
     if path_str.starts_with('/') {
         // For absolute paths, try to extract meaningful relative portion

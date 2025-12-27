@@ -40,13 +40,10 @@ fn display_plan_box(plan_path: &str, task_count: usize) {
 
     // Top border with title
     println!(
-        "{}",
-        format!(
-            "{}{}{}",
-            "┌─ Plan Created ".bright_green(),
-            "─".repeat(inner_width.saturating_sub(15)).dimmed(),
-            "┐".dimmed()
-        )
+        "{}{}{}",
+        "┌─ Plan Created ".bright_green(),
+        "─".repeat(inner_width.saturating_sub(15)).dimmed(),
+        "┐".dimmed()
     );
 
     // Plan path
@@ -71,13 +68,10 @@ fn display_plan_box(plan_path: &str, task_count: usize) {
 
     // Bottom border
     println!(
-        "{}",
-        format!(
-            "{}{}{}",
-            "└".dimmed(),
-            "─".repeat(box_width - 2).dimmed(),
-            "┘".dimmed()
-        )
+        "{}{}{}",
+        "└".dimmed(),
+        "─".repeat(box_width - 2).dimmed(),
+        "┘".dimmed()
     );
     println!();
 }

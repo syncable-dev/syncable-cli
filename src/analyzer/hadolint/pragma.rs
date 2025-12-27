@@ -33,19 +33,18 @@ impl PragmaState {
         }
 
         // Check line-specific ignores (check previous line, as pragma applies to next line)
-        if let Some(ignored) = self.ignored.get(&line) {
-            if ignored.contains(code) {
-                return true;
-            }
+        if let Some(ignored) = self.ignored.get(&line)
+            && ignored.contains(code)
+        {
+            return true;
         }
 
         // Also check if the pragma was on the line before
-        if line > 0 {
-            if let Some(ignored) = self.ignored.get(&(line - 1)) {
-                if ignored.contains(code) {
-                    return true;
-                }
-            }
+        if line > 0
+            && let Some(ignored) = self.ignored.get(&(line - 1))
+            && ignored.contains(code)
+        {
+            return true;
         }
 
         false
@@ -62,8 +61,8 @@ pub fn parse_pragma(comment: &str) -> Option<Pragma> {
     let pragma_content = &comment[pragma_start + "hadolint".len()..].trim();
 
     // Parse global ignore
-    if pragma_content.starts_with("global") {
-        let rest = &pragma_content["global".len()..].trim();
+    if let Some(rest) = pragma_content.strip_prefix("global") {
+        let rest = rest.trim();
         if let Some(codes) = parse_ignore_list(rest) {
             return Some(Pragma::GlobalIgnore(codes));
         }
@@ -75,8 +74,8 @@ pub fn parse_pragma(comment: &str) -> Option<Pragma> {
     }
 
     // Parse shell
-    if pragma_content.starts_with("shell=") {
-        let shell = &pragma_content["shell=".len()..].trim();
+    if let Some(shell) = pragma_content.strip_prefix("shell=") {
+        let shell = shell.trim();
         return Some(Pragma::Shell(shell.to_string()));
     }
 
@@ -101,7 +100,7 @@ fn parse_ignore_list(s: &str) -> Option<Vec<RuleCode>> {
         .split(',')
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
-        .map(|s| RuleCode::new(s))
+        .map(RuleCode::new)
         .collect();
 
     if codes.is_empty() { None } else { Some(codes) }
@@ -127,24 +126,23 @@ pub fn extract_pragmas(
     for instr in instructions {
         if let crate::analyzer::hadolint::parser::instruction::Instruction::Comment(comment) =
             &instr.instruction
+            && let Some(pragma) = parse_pragma(comment)
         {
-            if let Some(pragma) = parse_pragma(comment) {
-                match pragma {
-                    Pragma::Ignore(codes) => {
-                        // Ignore applies to the next line
-                        let entry = state.ignored.entry(instr.line_number).or_default();
-                        for code in codes {
-                            entry.insert(code);
-                        }
+            match pragma {
+                Pragma::Ignore(codes) => {
+                    // Ignore applies to the next line
+                    let entry = state.ignored.entry(instr.line_number).or_default();
+                    for code in codes {
+                        entry.insert(code);
                     }
-                    Pragma::GlobalIgnore(codes) => {
-                        for code in codes {
-                            state.global_ignored.insert(code);
-                        }
+                }
+                Pragma::GlobalIgnore(codes) => {
+                    for code in codes {
+                        state.global_ignored.insert(code);
                     }
-                    Pragma::Shell(shell) => {
-                        state.shell = Some(shell);
-                    }
+                }
+                Pragma::Shell(shell) => {
+                    state.shell = Some(shell);
                 }
             }
         }

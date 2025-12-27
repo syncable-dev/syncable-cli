@@ -13,11 +13,12 @@ use std::fmt;
 ///
 /// Ordered from most severe to least severe:
 /// `Error > Warning > Info > Style`
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Severity {
     /// Critical issues that should always be fixed
     Error,
     /// Important issues that should usually be fixed
+    #[default]
     Warning,
     /// Informational suggestions for improvement
     Info,
@@ -27,7 +28,7 @@ pub enum Severity {
 
 impl Severity {
     /// Parse a severity from a string (case-insensitive).
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "error" | "critical" | "major" => Some(Self::Error),
             "warning" | "minor" => Some(Self::Warning),
@@ -51,12 +52,6 @@ impl Severity {
 impl fmt::Display for Severity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.as_str())
-    }
-}
-
-impl Default for Severity {
-    fn default() -> Self {
-        Self::Warning
     }
 }
 
@@ -273,13 +268,14 @@ impl RuleMeta {
 }
 
 /// Configuration level for a rule (matches TypeScript ConfigRuleLevel).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ConfigLevel {
     /// Rule is disabled
     Off = 0,
     /// Rule produces warnings
     Warn = 1,
     /// Rule produces errors
+    #[default]
     Error = 2,
 }
 
@@ -304,12 +300,6 @@ impl ConfigLevel {
     }
 }
 
-impl Default for ConfigLevel {
-    fn default() -> Self {
-        Self::Error
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -323,14 +313,14 @@ mod tests {
 
     #[test]
     fn test_severity_from_str() {
-        assert_eq!(Severity::from_str("error"), Some(Severity::Error));
-        assert_eq!(Severity::from_str("WARNING"), Some(Severity::Warning));
-        assert_eq!(Severity::from_str("Info"), Some(Severity::Info));
-        assert_eq!(Severity::from_str("style"), Some(Severity::Style));
-        assert_eq!(Severity::from_str("critical"), Some(Severity::Error));
-        assert_eq!(Severity::from_str("major"), Some(Severity::Error));
-        assert_eq!(Severity::from_str("minor"), Some(Severity::Warning));
-        assert_eq!(Severity::from_str("invalid"), None);
+        assert_eq!(Severity::parse("error"), Some(Severity::Error));
+        assert_eq!(Severity::parse("WARNING"), Some(Severity::Warning));
+        assert_eq!(Severity::parse("Info"), Some(Severity::Info));
+        assert_eq!(Severity::parse("style"), Some(Severity::Style));
+        assert_eq!(Severity::parse("critical"), Some(Severity::Error));
+        assert_eq!(Severity::parse("major"), Some(Severity::Error));
+        assert_eq!(Severity::parse("minor"), Some(Severity::Warning));
+        assert_eq!(Severity::parse("invalid"), None);
     }
 
     #[test]

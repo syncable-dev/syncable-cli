@@ -6,52 +6,46 @@ use std::path::Path;
 pub(crate) fn extract_project_name(project_path: &Path, _analysis: &ProjectAnalysis) -> String {
     // Try to get name from package.json
     let package_json_path = project_path.join("package.json");
-    if package_json_path.exists() {
-        if let Ok(content) = std::fs::read_to_string(&package_json_path) {
-            if let Ok(package_json) = serde_json::from_str::<JsonValue>(&content) {
-                if let Some(name) = package_json.get("name").and_then(|n| n.as_str()) {
-                    return name.to_string();
-                }
-            }
-        }
+    if package_json_path.exists()
+        && let Ok(content) = std::fs::read_to_string(&package_json_path)
+        && let Ok(package_json) = serde_json::from_str::<JsonValue>(&content)
+        && let Some(name) = package_json.get("name").and_then(|n| n.as_str())
+    {
+        return name.to_string();
     }
 
     // Try to get name from Cargo.toml
     let cargo_toml_path = project_path.join("Cargo.toml");
-    if cargo_toml_path.exists() {
-        if let Ok(content) = std::fs::read_to_string(&cargo_toml_path) {
-            if let Ok(cargo_toml) = toml::from_str::<toml::Value>(&content) {
-                if let Some(name) = cargo_toml
-                    .get("package")
-                    .and_then(|p| p.get("name"))
-                    .and_then(|n| n.as_str())
-                {
-                    return name.to_string();
-                }
-            }
-        }
+    if cargo_toml_path.exists()
+        && let Ok(content) = std::fs::read_to_string(&cargo_toml_path)
+        && let Ok(cargo_toml) = toml::from_str::<toml::Value>(&content)
+        && let Some(name) = cargo_toml
+            .get("package")
+            .and_then(|p| p.get("name"))
+            .and_then(|n| n.as_str())
+    {
+        return name.to_string();
     }
 
     // Try to get name from pyproject.toml
     let pyproject_toml_path = project_path.join("pyproject.toml");
-    if pyproject_toml_path.exists() {
-        if let Ok(content) = std::fs::read_to_string(&pyproject_toml_path) {
-            if let Ok(pyproject) = toml::from_str::<toml::Value>(&content) {
-                if let Some(name) = pyproject
-                    .get("project")
-                    .and_then(|p| p.get("name"))
-                    .and_then(|n| n.as_str())
-                {
-                    return name.to_string();
-                } else if let Some(name) = pyproject
-                    .get("tool")
-                    .and_then(|t| t.get("poetry"))
-                    .and_then(|p| p.get("name"))
-                    .and_then(|n| n.as_str())
-                {
-                    return name.to_string();
-                }
-            }
+    if pyproject_toml_path.exists()
+        && let Ok(content) = std::fs::read_to_string(&pyproject_toml_path)
+        && let Ok(pyproject) = toml::from_str::<toml::Value>(&content)
+    {
+        if let Some(name) = pyproject
+            .get("project")
+            .and_then(|p| p.get("name"))
+            .and_then(|n| n.as_str())
+        {
+            return name.to_string();
+        } else if let Some(name) = pyproject
+            .get("tool")
+            .and_then(|t| t.get("poetry"))
+            .and_then(|p| p.get("name"))
+            .and_then(|n| n.as_str())
+        {
+            return name.to_string();
         }
     }
 

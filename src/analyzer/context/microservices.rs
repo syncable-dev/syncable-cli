@@ -3,6 +3,7 @@ use std::path::Path;
 
 /// Represents a detected microservice within the project
 #[derive(Debug)]
+#[allow(dead_code)]
 pub(crate) struct MicroserviceInfo {
     pub name: String,
     pub has_db: bool,

@@ -88,11 +88,11 @@ impl FileScanner {
                     let mut count = critical_count.lock();
                     *count += critical_findings;
 
-                    if let Some(max) = max_critical {
-                        if *count >= max {
-                            *should_terminate.write() = true;
-                            debug!("Critical findings limit reached, triggering early termination");
-                        }
+                    if let Some(max) = max_critical
+                        && *count >= max
+                    {
+                        *should_terminate.write() = true;
+                        debug!("Critical findings limit reached, triggering early termination");
                     }
                 }
             }
@@ -534,7 +534,7 @@ impl FileScanner {
         use std::process::Command;
 
         Command::new("git")
-            .args(&["ls-files", "--error-unmatch"])
+            .args(["ls-files", "--error-unmatch"])
             .arg(file_path)
             .output()
             .map(|output| output.status.success())
@@ -556,13 +556,13 @@ impl FileScanner {
             .unwrap_or("");
 
         // Downgrade severity for known public/client-side keys in specific files.
-        if filename == "GoogleService-Info.plist" || filename.ends_with(".plist") {
-            if matches!(
+        if (filename == "GoogleService-Info.plist" || filename.ends_with(".plist"))
+            && matches!(
                 severity,
                 SecuritySeverity::Critical | SecuritySeverity::High
-            ) {
-                return SecuritySeverity::Medium; // It's a client-side key, less critical.
-            }
+            )
+        {
+            return SecuritySeverity::Medium; // It's a client-side key, less critical.
         }
 
         // Upgrade severity for unprotected files

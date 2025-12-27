@@ -14,19 +14,19 @@ pub fn rule()
         Severity::Error,
         "`FROM` aliases (stage names) must be unique.",
         |state, line, instr, _shell| {
-            if let Instruction::From(base) = instr {
-                if let Some(alias) = &base.alias {
-                    let alias_str = alias.as_str();
-                    if state.data.set_contains("seen_aliases", alias_str) {
-                        state.add_failure(
-                            "DL3024",
-                            Severity::Error,
-                            format!("Duplicate `FROM` alias `{}`.", alias_str),
-                            line,
-                        );
-                    } else {
-                        state.data.insert_to_set("seen_aliases", alias_str);
-                    }
+            if let Instruction::From(base) = instr
+                && let Some(alias) = &base.alias
+            {
+                let alias_str = alias.as_str();
+                if state.data.set_contains("seen_aliases", alias_str) {
+                    state.add_failure(
+                        "DL3024",
+                        Severity::Error,
+                        format!("Duplicate `FROM` alias `{}`.", alias_str),
+                        line,
+                    );
+                } else {
+                    state.data.insert_to_set("seen_aliases", alias_str);
                 }
             }
         },

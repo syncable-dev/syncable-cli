@@ -96,13 +96,10 @@ fn display_command_box(command: &str, working_dir: &str) {
 
     // Top border
     println!(
-        "{}",
-        format!(
-            "{}{}{}",
-            "┌─ Bash command ".dimmed(),
-            "─".repeat(inner_width.saturating_sub(15)).dimmed(),
-            "┐".dimmed()
-        )
+        "{}{}{}",
+        "┌─ Bash command ".dimmed(),
+        "─".repeat(inner_width.saturating_sub(15)).dimmed(),
+        "┐".dimmed()
     );
 
     // Command content (may wrap)
@@ -128,13 +125,10 @@ fn display_command_box(command: &str, working_dir: &str) {
 
     // Bottom border
     println!(
-        "{}",
-        format!(
-            "{}{}{}",
-            "└".dimmed(),
-            "─".repeat(box_width - 2).dimmed(),
-            "┘".dimmed()
-        )
+        "{}{}{}",
+        "└".dimmed(),
+        "─".repeat(box_width - 2).dimmed(),
+        "┘".dimmed()
     );
     println!();
 }

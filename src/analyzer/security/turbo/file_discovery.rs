@@ -109,7 +109,7 @@ impl FileDiscovery {
     /// Get tracked files from git
     fn get_git_tracked_files(&self, project_root: &Path) -> Result<Vec<PathBuf>, SecurityError> {
         let output = Command::new("git")
-            .args(&["ls-files", "-z"]) // -z for null-terminated output
+            .args(["ls-files", "-z"]) // -z for null-terminated output
             .current_dir(project_root)
             .output()
             .map_err(|e| SecurityError::FileDiscovery(format!("Git ls-files failed: {}", e)))?;
@@ -154,25 +154,25 @@ impl FileDiscovery {
         for pattern in secret_patterns {
             // First, get untracked files that are NOT gitignored (potential accidental exposure)
             let output = Command::new("git")
-                .args(&["ls-files", "--others", "--exclude-standard", pattern])
+                .args(["ls-files", "--others", "--exclude-standard", pattern])
                 .current_dir(project_root)
                 .output();
 
-            if let Ok(output) = output {
-                if output.status.success() {
-                    let paths: Vec<PathBuf> = String::from_utf8_lossy(&output.stdout)
-                        .lines()
-                        .filter(|line| !line.is_empty())
-                        .map(|line| project_root.join(line))
-                        .collect();
-                    untracked_files.extend(paths);
-                }
+            if let Ok(output) = output
+                && output.status.success()
+            {
+                let paths: Vec<PathBuf> = String::from_utf8_lossy(&output.stdout)
+                    .lines()
+                    .filter(|line| !line.is_empty())
+                    .map(|line| project_root.join(line))
+                    .collect();
+                untracked_files.extend(paths);
             }
 
             // Also get gitignored files - these should be scanned to verify they exist
             // and contain real secrets (important for security audit completeness)
             let output = Command::new("git")
-                .args(&[
+                .args([
                     "ls-files",
                     "--others",
                     "--ignored",
@@ -182,15 +182,15 @@ impl FileDiscovery {
                 .current_dir(project_root)
                 .output();
 
-            if let Ok(output) = output {
-                if output.status.success() {
-                    let paths: Vec<PathBuf> = String::from_utf8_lossy(&output.stdout)
-                        .lines()
-                        .filter(|line| !line.is_empty())
-                        .map(|line| project_root.join(line))
-                        .collect();
-                    untracked_files.extend(paths);
-                }
+            if let Ok(output) = output
+                && output.status.success()
+            {
+                let paths: Vec<PathBuf> = String::from_utf8_lossy(&output.stdout)
+                    .lines()
+                    .filter(|line| !line.is_empty())
+                    .map(|line| project_root.join(line))
+                    .collect();
+                untracked_files.extend(paths);
             }
         }
 
@@ -277,7 +277,7 @@ impl FileDiscovery {
     fn check_gitignore_batch(&self, path: &Path, project_root: &Path) -> bool {
         // Quick check using git check-ignore
         let output = Command::new("git")
-            .args(&["check-ignore", path.to_str().unwrap_or("")])
+            .args(["check-ignore", path.to_str().unwrap_or("")])
             .current_dir(project_root)
             .output();
 
@@ -338,10 +338,10 @@ impl FileDiscovery {
 
     /// Enhanced binary file detection
     fn is_binary_file(&self, meta: &FileMetadata) -> bool {
-        if let Some(ext) = &meta.extension {
-            if self.binary_extensions.contains(ext.as_str()) {
-                return true;
-            }
+        if let Some(ext) = &meta.extension
+            && self.binary_extensions.contains(ext.as_str())
+        {
+            return true;
         }
 
         // Check filename patterns
@@ -361,10 +361,10 @@ impl FileDiscovery {
 
     /// Check if file is an asset (images, fonts, media)
     fn is_asset_file(&self, meta: &FileMetadata) -> bool {
-        if let Some(ext) = &meta.extension {
-            if self.asset_extensions.contains(ext.as_str()) {
-                return true;
-            }
+        if let Some(ext) = &meta.extension
+            && self.asset_extensions.contains(ext.as_str())
+        {
+            return true;
         }
 
         // Check for asset directories
@@ -685,10 +685,10 @@ impl FileDiscovery {
         ];
         let config_names = ["config", "settings", "configuration", ".env"];
 
-        if let Some(ext) = extension {
-            if config_extensions.contains(&ext.as_str()) {
-                return true;
-            }
+        if let Some(ext) = extension
+            && config_extensions.contains(&ext.as_str())
+        {
+            return true;
         }
 
         config_names.iter().any(|&n| name.contains(n))

@@ -79,7 +79,7 @@ pub trait Rule: Send + Sync {
     }
 
     /// Get a message for this rule violation.
-    fn get_message(&self, details: &std::collections::HashMap<String, String>) -> String {
+    fn get_message(&self, _details: &std::collections::HashMap<String, String>) -> String {
         self.meta().description.clone()
     }
 }

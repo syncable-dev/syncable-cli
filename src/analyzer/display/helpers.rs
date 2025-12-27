@@ -153,10 +153,7 @@ pub fn display_technologies_detailed_legacy(technologies: &[DetectedTechnology])
         std::collections::HashMap::new();
 
     for tech in technologies {
-        by_category
-            .entry(&tech.category)
-            .or_insert_with(Vec::new)
-            .push(tech);
+        by_category.entry(&tech.category).or_default().push(tech);
     }
 
     // Find and display primary technology
@@ -197,8 +194,39 @@ pub fn display_technologies_detailed_legacy(technologies: &[DetectedTechnology])
     ];
 
     for (category, label) in &categories {
-        if let Some(techs) = by_category.get(category) {
-            if !techs.is_empty() {
+        if let Some(techs) = by_category.get(category)
+            && !techs.is_empty()
+        {
+            println!("\n   {}:", label);
+            for tech in techs {
+                println!(
+                    "      • {} (confidence: {:.1}%)",
+                    tech.name,
+                    tech.confidence * 100.0
+                );
+                if let Some(version) = &tech.version {
+                    println!("        Version: {}", version);
+                }
+            }
+        }
+    }
+
+    // Handle other Library types separately
+    for (cat, techs) in &by_category {
+        if let TechnologyCategory::Library(lib_type) = cat {
+            let label = match lib_type {
+                LibraryType::StateManagement => "🔄 State Management",
+                LibraryType::DataFetching => "🔃 Data Fetching",
+                LibraryType::Routing => "🗺️  Routing",
+                LibraryType::Styling => "🎨 Styling",
+                LibraryType::HttpClient => "🌐 HTTP Clients",
+                LibraryType::Authentication => "🔐 Authentication",
+                LibraryType::Other(_) => "📦 Other Libraries",
+                _ => continue, // Skip already handled UI and Utility
+            };
+
+            // Only print if not already handled above
+            if !matches!(lib_type, LibraryType::UI | LibraryType::Utility) && !techs.is_empty() {
                 println!("\n   {}:", label);
                 for tech in techs {
                     println!(
@@ -211,41 +239,6 @@ pub fn display_technologies_detailed_legacy(technologies: &[DetectedTechnology])
                     }
                 }
             }
-        }
-    }
-
-    // Handle other Library types separately
-    for (cat, techs) in &by_category {
-        match cat {
-            TechnologyCategory::Library(lib_type) => {
-                let label = match lib_type {
-                    LibraryType::StateManagement => "🔄 State Management",
-                    LibraryType::DataFetching => "🔃 Data Fetching",
-                    LibraryType::Routing => "🗺️  Routing",
-                    LibraryType::Styling => "🎨 Styling",
-                    LibraryType::HttpClient => "🌐 HTTP Clients",
-                    LibraryType::Authentication => "🔐 Authentication",
-                    LibraryType::Other(_) => "📦 Other Libraries",
-                    _ => continue, // Skip already handled UI and Utility
-                };
-
-                // Only print if not already handled above
-                if !matches!(lib_type, LibraryType::UI | LibraryType::Utility) && !techs.is_empty()
-                {
-                    println!("\n   {}:", label);
-                    for tech in techs {
-                        println!(
-                            "      • {} (confidence: {:.1}%)",
-                            tech.name,
-                            tech.confidence * 100.0
-                        );
-                        if let Some(version) = &tech.version {
-                            println!("        Version: {}", version);
-                        }
-                    }
-                }
-            }
-            _ => {} // Other categories already handled in the array
         }
     }
 }
@@ -261,10 +254,7 @@ pub fn display_technologies_detailed_legacy_to_string(
         std::collections::HashMap::new();
 
     for tech in technologies {
-        by_category
-            .entry(&tech.category)
-            .or_insert_with(Vec::new)
-            .push(tech);
+        by_category.entry(&tech.category).or_default().push(tech);
     }
 
     // Find and display primary technology
@@ -305,8 +295,39 @@ pub fn display_technologies_detailed_legacy_to_string(
     ];
 
     for (category, label) in &categories {
-        if let Some(techs) = by_category.get(category) {
-            if !techs.is_empty() {
+        if let Some(techs) = by_category.get(category)
+            && !techs.is_empty()
+        {
+            output.push_str(&format!("\n   {}:\n", label));
+            for tech in techs {
+                output.push_str(&format!(
+                    "      • {} (confidence: {:.1}%)\n",
+                    tech.name,
+                    tech.confidence * 100.0
+                ));
+                if let Some(version) = &tech.version {
+                    output.push_str(&format!("        Version: {}\n", version));
+                }
+            }
+        }
+    }
+
+    // Handle other Library types separately
+    for (cat, techs) in &by_category {
+        if let TechnologyCategory::Library(lib_type) = cat {
+            let label = match lib_type {
+                LibraryType::StateManagement => "🔄 State Management",
+                LibraryType::DataFetching => "🔃 Data Fetching",
+                LibraryType::Routing => "🗺️  Routing",
+                LibraryType::Styling => "🎨 Styling",
+                LibraryType::HttpClient => "🌐 HTTP Clients",
+                LibraryType::Authentication => "🔐 Authentication",
+                LibraryType::Other(_) => "📦 Other Libraries",
+                _ => continue, // Skip already handled UI and Utility
+            };
+
+            // Only print if not already handled above
+            if !matches!(lib_type, LibraryType::UI | LibraryType::Utility) && !techs.is_empty() {
                 output.push_str(&format!("\n   {}:\n", label));
                 for tech in techs {
                     output.push_str(&format!(
@@ -319,41 +340,6 @@ pub fn display_technologies_detailed_legacy_to_string(
                     }
                 }
             }
-        }
-    }
-
-    // Handle other Library types separately
-    for (cat, techs) in &by_category {
-        match cat {
-            TechnologyCategory::Library(lib_type) => {
-                let label = match lib_type {
-                    LibraryType::StateManagement => "🔄 State Management",
-                    LibraryType::DataFetching => "🔃 Data Fetching",
-                    LibraryType::Routing => "🗺️  Routing",
-                    LibraryType::Styling => "🎨 Styling",
-                    LibraryType::HttpClient => "🌐 HTTP Clients",
-                    LibraryType::Authentication => "🔐 Authentication",
-                    LibraryType::Other(_) => "📦 Other Libraries",
-                    _ => continue, // Skip already handled UI and Utility
-                };
-
-                // Only print if not already handled above
-                if !matches!(lib_type, LibraryType::UI | LibraryType::Utility) && !techs.is_empty()
-                {
-                    output.push_str(&format!("\n   {}:\n", label));
-                    for tech in techs {
-                        output.push_str(&format!(
-                            "      • {} (confidence: {:.1}%)\n",
-                            tech.name,
-                            tech.confidence * 100.0
-                        ));
-                        if let Some(version) = &tech.version {
-                            output.push_str(&format!("        Version: {}\n", version));
-                        }
-                    }
-                }
-            }
-            _ => {} // Other categories already handled in the array
         }
     }
 

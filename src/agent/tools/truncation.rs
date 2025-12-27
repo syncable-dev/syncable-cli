@@ -40,6 +40,7 @@ pub struct TruncatedFileContent {
     /// Whether content was truncated
     pub was_truncated: bool,
     /// Number of lines with truncated characters
+    #[allow(dead_code)]
     pub lines_char_truncated: usize,
 }
 

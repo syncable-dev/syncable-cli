@@ -128,14 +128,12 @@ impl DiagnosticsTool {
         let mut diagnostics = Vec::new();
 
         for line in stdout.lines() {
-            if let Ok(msg) = serde_json::from_str::<serde_json::Value>(line) {
-                if msg.get("reason").and_then(|r| r.as_str()) == Some("compiler-message") {
-                    if let Some(message) = msg.get("message") {
-                        if let Some(diag) = self.parse_cargo_message(message) {
-                            diagnostics.push(diag);
-                        }
-                    }
-                }
+            if let Ok(msg) = serde_json::from_str::<serde_json::Value>(line)
+                && msg.get("reason").and_then(|r| r.as_str()) == Some("compiler-message")
+                && let Some(message) = msg.get("message")
+                && let Some(diag) = self.parse_cargo_message(message)
+            {
+                diagnostics.push(diag);
             }
         }
 
@@ -218,12 +216,12 @@ impl DiagnosticsTool {
             .output()
             .await;
 
-        if let Ok(output) = output {
-            if output.status.success() || !output.stdout.is_empty() {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                if let Ok(results) = serde_json::from_str::<Vec<serde_json::Value>>(&stdout) {
-                    return Ok(self.parse_eslint_output(&results));
-                }
+        if let Ok(output) = output
+            && (output.status.success() || !output.stdout.is_empty())
+        {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if let Ok(results) = serde_json::from_str::<Vec<serde_json::Value>>(&stdout) {
+                return Ok(self.parse_eslint_output(&results));
             }
         }
 

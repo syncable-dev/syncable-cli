@@ -15,10 +15,10 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
         |instr, _shell| match instr {
             Instruction::Label(pairs) => {
                 for (key, value) in pairs {
-                    if key == "org.opencontainers.image.created" {
-                        if value.is_empty() || !is_valid_rfc3339(value) {
-                            return false;
-                        }
+                    if key == "org.opencontainers.image.created"
+                        && (value.is_empty() || !is_valid_rfc3339(value))
+                    {
+                        return false;
                     }
                 }
                 true

@@ -225,10 +225,11 @@ pub fn fix_content(content: &str, config: &DclintConfig) -> String {
 
     // Apply fixes from all fixable rules
     for rule in rules {
-        if rule.is_fixable() && !config.is_rule_ignored(rule.code()) {
-            if let Some(new_content) = rule.fix(&fixed) {
-                fixed = new_content;
-            }
+        if rule.is_fixable()
+            && !config.is_rule_ignored(rule.code())
+            && let Some(new_content) = rule.fix(&fixed)
+        {
+            fixed = new_content;
         }
     }
 

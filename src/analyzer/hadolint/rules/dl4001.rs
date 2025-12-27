@@ -16,35 +16,35 @@ pub fn rule() -> VeryCustomRule<
         Severity::Warning,
         "Either use `wget` or `curl`, but not both.",
         |state, line, instr, shell| {
-            if let Instruction::Run(_) = instr {
-                if let Some(shell) = shell {
-                    if shell.any_command(|cmd| cmd.name == "wget") {
-                        // Store wget lines as comma-separated string
-                        let existing = state
-                            .data
-                            .get_string("wget_lines")
-                            .unwrap_or("")
-                            .to_string();
-                        let new = if existing.is_empty() {
-                            line.to_string()
-                        } else {
-                            format!("{},{}", existing, line)
-                        };
-                        state.data.set_string("wget_lines", new);
-                    }
-                    if shell.any_command(|cmd| cmd.name == "curl") {
-                        let existing = state
-                            .data
-                            .get_string("curl_lines")
-                            .unwrap_or("")
-                            .to_string();
-                        let new = if existing.is_empty() {
-                            line.to_string()
-                        } else {
-                            format!("{},{}", existing, line)
-                        };
-                        state.data.set_string("curl_lines", new);
-                    }
+            if let Instruction::Run(_) = instr
+                && let Some(shell) = shell
+            {
+                if shell.any_command(|cmd| cmd.name == "wget") {
+                    // Store wget lines as comma-separated string
+                    let existing = state
+                        .data
+                        .get_string("wget_lines")
+                        .unwrap_or("")
+                        .to_string();
+                    let new = if existing.is_empty() {
+                        line.to_string()
+                    } else {
+                        format!("{},{}", existing, line)
+                    };
+                    state.data.set_string("wget_lines", new);
+                }
+                if shell.any_command(|cmd| cmd.name == "curl") {
+                    let existing = state
+                        .data
+                        .get_string("curl_lines")
+                        .unwrap_or("")
+                        .to_string();
+                    let new = if existing.is_empty() {
+                        line.to_string()
+                    } else {
+                        format!("{},{}", existing, line)
+                    };
+                    state.data.set_string("curl_lines", new);
                 }
             }
         },

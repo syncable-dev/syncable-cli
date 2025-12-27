@@ -14,12 +14,9 @@ pub fn rule() -> SimpleRule<impl Fn(&Instruction, Option<&ParsedShell>) -> bool 
         "Valid UNIX ports range from 0 to 65535.",
         |instr, _shell| {
             match instr {
-                Instruction::Expose(ports) => {
-                    // All ports must be valid (0-65535)
-                    // The parser already validates this as u16, so this should always pass
-                    // But we check anyway for safety
-                    ports.iter().all(|p| p.number <= 65535)
-                }
+                // All ports are already validated as u16 (0-65535) during parsing
+                // This rule is effectively a no-op but kept for documentation
+                Instruction::Expose(_) => true,
                 _ => true,
             }
         },

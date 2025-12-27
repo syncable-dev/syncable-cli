@@ -64,9 +64,9 @@ fn severity_to_codeclimate(severity: Severity) -> &'static str {
 
 fn get_categories(code: &str) -> Vec<&'static str> {
     // Categorize based on rule code prefix
-    if code.starts_with("DL") {
+    if let Some(suffix) = code.strip_prefix("DL") {
         // Dockerfile linting rules
-        let rule_num: u32 = code[2..].parse().unwrap_or(0);
+        let rule_num: u32 = suffix.parse().unwrap_or(0);
         match rule_num {
             // Security-related rules
             3000..=3010 => vec!["Security", "Bug Risk"],
@@ -148,8 +148,7 @@ impl Formatter for CodeClimateFormatter {
 
         // CodeClimate expects newline-delimited JSON (NDJSON)
         for issue in &issues {
-            let json = serde_json::to_string(issue)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            let json = serde_json::to_string(issue).map_err(std::io::Error::other)?;
             writeln!(writer, "{}", json)?;
         }
 

@@ -591,13 +591,11 @@ fn clear_update_cache() {
                 eprintln!("⚠️  Failed to remove update cache: {}", e);
             }
         }
-    } else {
-        if std::env::var("SYNC_CTL_DEBUG").is_ok() {
-            eprintln!(
-                "🗑️  No update cache file found at: {}",
-                cache_file.display()
-            );
-        }
+    } else if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+        eprintln!(
+            "🗑️  No update cache file found at: {}",
+            cache_file.display()
+        );
     }
 }
 
@@ -715,10 +713,9 @@ async fn check_for_update(suppress_output: bool) {
                             if !latest.is_empty()
                                 && latest != current
                                 && is_version_newer(current, latest)
+                                && !suppress_output
                             {
-                                if !suppress_output {
-                                    show_update_notification(current, latest);
-                                }
+                                show_update_notification(current, latest);
                             }
                         }
                         Err(e) => {
@@ -959,7 +956,7 @@ fn handle_validate(
 }
 
 fn handle_support(languages: bool, frameworks: bool, _detailed: bool) -> syncable_cli::Result<()> {
-    if languages || (!languages && !frameworks) {
+    if languages || !frameworks {
         println!("🌐 Supported Languages:");
         println!("├── Rust");
         println!("├── JavaScript/TypeScript");
@@ -969,7 +966,7 @@ fn handle_support(languages: bool, frameworks: bool, _detailed: bool) -> syncabl
         println!("└── (More coming soon...)");
     }
 
-    if frameworks || (!languages && !frameworks) {
+    if frameworks || !languages {
         println!("\n🚀 Supported Frameworks:");
         println!("├── Web: Express.js, Next.js, React, Vue.js, Actix Web");
         println!("├── Database: PostgreSQL, MySQL, MongoDB, Redis");
@@ -1094,7 +1091,7 @@ pub async fn handle_vulnerabilities(
 
             let mut output = String::new();
 
-            output.push_str(&format!("\n🛡️  Vulnerability Scan Report\n"));
+            output.push_str("\n🛡️  Vulnerability Scan Report\n");
             output.push_str(&format!("{}\n", "=".repeat(80).bright_blue()));
             output.push_str(&format!(
                 "Scanned at: {}\n",
@@ -1106,7 +1103,7 @@ pub async fn handle_vulnerabilities(
                 output.push_str(&format!("Severity filter: >= {:?}\n", threshold));
             }
 
-            output.push_str(&format!("\nSummary:\n"));
+            output.push_str("\nSummary:\n");
             output.push_str(&format!(
                 "Total vulnerabilities: {}\n",
                 filtered_report.total_vulnerabilities
@@ -1175,7 +1172,7 @@ pub async fn handle_vulnerabilities(
                             output.push_str(&format!("     ✅ Fix: Upgrade to {}\n", patched));
                         }
                     }
-                    output.push_str("\n");
+                    output.push('\n');
                 }
             } else {
                 output.push_str("\n✅ No vulnerabilities found!\n");
