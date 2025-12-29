@@ -30,6 +30,8 @@ pub mod icons {
     pub const HIGH: &str = "🟠";
     pub const MEDIUM: &str = "🟡";
     pub const LOW: &str = "🟢";
+    pub const KUBERNETES: &str = "☸";
+    pub const HELM: &str = "⎈";
 }
 
 /// ANSI escape codes for direct terminal control
