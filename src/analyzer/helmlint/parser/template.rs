@@ -374,11 +374,11 @@ fn analyze_action(
 
 /// Extract variable references from action content.
 fn extract_variables(content: &str, variables: &mut HashSet<String>) {
-    let mut chars = content.chars().peekable();
+    let chars = content.chars();
     let mut current_var = String::new();
     let mut in_var = false;
 
-    while let Some(c) = chars.next() {
+    for c in chars {
         if c == '.' && !in_var {
             // Start of a variable reference
             in_var = true;

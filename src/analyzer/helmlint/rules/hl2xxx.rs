@@ -173,7 +173,7 @@ impl Rule for HL2004 {
             // Check if the value has a non-empty default
             if let Some(value) = values.get(path) {
                 let has_hardcoded_value = match value {
-                    serde_yaml::Value::String(s) => !s.is_empty() && s != "" && !s.starts_with("$"),
+                    serde_yaml::Value::String(s) => !s.is_empty() && !s.starts_with("$"),
                     _ => false,
                 };
 
@@ -242,7 +242,7 @@ impl Rule for HL2005 {
             if is_port_field {
                 if let Some(value) = values.get(path) {
                     if let Some(port) = extract_port_number(value) {
-                        if port < 1 || port > 65535 {
+                        if !(1..=65535).contains(&port) {
                             let line = values.line_for_path(path).unwrap_or(1);
                             failures.push(CheckFailure::new(
                                 "HL2005",
@@ -297,22 +297,20 @@ impl Rule for HL2007 {
         for path in &values.defined_paths {
             let lower_path = path.to_lowercase();
             if lower_path.ends_with(".tag") || lower_path.ends_with("imagetag") {
-                if let Some(value) = values.get(path) {
-                    if let serde_yaml::Value::String(tag) = value {
-                        if tag == "latest" {
-                            let line = values.line_for_path(path).unwrap_or(1);
-                            failures.push(CheckFailure::new(
-                                "HL2007",
-                                Severity::Warning,
-                                format!(
-                                    "Image tag at '{}' is 'latest'. Pin to a specific version for reproducibility",
-                                    path
-                                ),
-                                "values.yaml",
-                                line,
-                                RuleCategory::Values,
-                            ));
-                        }
+                if let Some(serde_yaml::Value::String(tag)) = values.get(path) {
+                    if tag == "latest" {
+                        let line = values.line_for_path(path).unwrap_or(1);
+                        failures.push(CheckFailure::new(
+                            "HL2007",
+                            Severity::Warning,
+                            format!(
+                                "Image tag at '{}' is 'latest'. Pin to a specific version for reproducibility",
+                                path
+                            ),
+                            "values.yaml",
+                            line,
+                            RuleCategory::Values,
+                        ));
                     }
                 }
             }

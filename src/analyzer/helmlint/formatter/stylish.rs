@@ -93,15 +93,14 @@ pub fn format(result: &LintResult) -> String {
             };
 
             output.push_str(&format!(
-                "  {}{}:{:>8}{}  {}  {}{}{}",
+                "  {}{}:{:>8}{}  {}  {}  {}",
                 colors::DIM,
                 location,
                 severity_color,
                 severity_text,
                 colors::RESET,
                 failure.message,
-                colors::DIM,
-                format!("  {}", failure.code),
+                failure.code,
             ));
             output.push_str(colors::RESET);
             output.push('\n');
@@ -116,26 +115,24 @@ pub fn format(result: &LintResult) -> String {
     let infos = total - errors - warnings;
 
     if total > 0 {
+        let status_color = if errors > 0 {
+            colors::RED
+        } else {
+            colors::YELLOW
+        };
         output.push_str(&format!(
-            "{}{}{}",
+            "{}{}✖ {} {} ({} {}, {} {}, {} info)\n{}",
             colors::BOLD,
-            if errors > 0 {
-                colors::RED
-            } else {
-                colors::YELLOW
-            },
-            format!(
-                "✖ {} {} ({} {}, {} {}, {} info)\n",
-                total,
-                if total == 1 { "problem" } else { "problems" },
-                errors,
-                if errors == 1 { "error" } else { "errors" },
-                warnings,
-                if warnings == 1 { "warning" } else { "warnings" },
-                infos
-            )
+            status_color,
+            total,
+            if total == 1 { "problem" } else { "problems" },
+            errors,
+            if errors == 1 { "error" } else { "errors" },
+            warnings,
+            if warnings == 1 { "warning" } else { "warnings" },
+            infos,
+            colors::RESET,
         ));
-        output.push_str(colors::RESET);
     }
 
     output

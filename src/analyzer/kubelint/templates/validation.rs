@@ -432,17 +432,17 @@ impl CheckFunc for MismatchingSelectorCheck {
         let (selector, pod_labels) = match &object.k8s_object {
             K8sObject::Deployment(d) => {
                 let selector = d.selector.as_ref().and_then(|s| s.match_labels.as_ref());
-                let pod_labels = d.pod_spec.as_ref().and_then(|_| d.labels.as_ref());
+                let pod_labels = d.pod_spec.as_ref().and(d.labels.as_ref());
                 (selector, pod_labels)
             }
             K8sObject::StatefulSet(s) => {
                 let selector = s.selector.as_ref().and_then(|s| s.match_labels.as_ref());
-                let pod_labels = s.pod_spec.as_ref().and_then(|_| s.labels.as_ref());
+                let pod_labels = s.pod_spec.as_ref().and(s.labels.as_ref());
                 (selector, pod_labels)
             }
             K8sObject::DaemonSet(d) => {
                 let selector = d.selector.as_ref().and_then(|s| s.match_labels.as_ref());
-                let pod_labels = d.pod_spec.as_ref().and_then(|_| d.labels.as_ref());
+                let pod_labels = d.pod_spec.as_ref().and(d.labels.as_ref());
                 (selector, pod_labels)
             }
             _ => (None, None),

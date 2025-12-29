@@ -298,7 +298,7 @@ pub async fn confirm_file_write_with_ide(
 
         // Spawn terminal input on blocking thread
         let path_owned = path.to_string();
-        let ide_name = client.ide_name().unwrap_or("IDE").to_string();
+        let _ide_name = client.ide_name().unwrap_or("IDE").to_string();
         let terminal_handle = tokio::task::spawn_blocking(move || {
             let options = vec![
                 "Yes, allow once".to_string(),
@@ -306,11 +306,6 @@ pub async fn confirm_file_write_with_ide(
                 "Type here to suggest changes".to_string(),
             ];
 
-            println!(
-                "{} Diff opened in {} - respond here or in the IDE",
-                "→".cyan(),
-                ide_name
-            );
             println!("{}", "Apply this change?".white());
 
             // Signal that the menu is about to be displayed
