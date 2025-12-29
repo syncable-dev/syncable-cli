@@ -1421,6 +1421,92 @@ impl ChatSession {
         Ok(())
     }
 
+    /// Handle /resume command - browse and select a session to resume
+    pub fn handle_resume_command(&self) -> AgentResult<()> {
+        use crate::agent::persistence::{SessionSelector, browse_sessions, format_relative_time};
+
+        let selector = SessionSelector::new(&self.project_path);
+        let sessions = selector.list_sessions();
+
+        if sessions.is_empty() {
+            println!(
+                "\n{}",
+                "No previous sessions found for this project.".yellow()
+            );
+            println!(
+                "{}",
+                "Sessions are automatically saved during conversations.".dimmed()
+            );
+            return Ok(());
+        }
+
+        // Show the interactive browser
+        if let Some(selected) = browse_sessions(&self.project_path) {
+            // User selected a session
+            let time = format_relative_time(selected.last_updated);
+            println!(
+                "\n{} Selected: {} ({}, {} messages)",
+                "✓".green(),
+                selected.display_name.white().bold(),
+                time.dimmed(),
+                selected.message_count
+            );
+            println!(
+                "{}",
+                "Note: To load the session, restart with: sync-ctl chat --resume <ID>".dimmed()
+            );
+            println!("  Session ID: {}", selected.id.cyan());
+        }
+
+        Ok(())
+    }
+
+    /// Handle /sessions command - list available sessions
+    pub fn handle_list_sessions_command(&self) {
+        use crate::agent::persistence::{SessionSelector, format_relative_time};
+
+        let selector = SessionSelector::new(&self.project_path);
+        let sessions = selector.list_sessions();
+
+        if sessions.is_empty() {
+            println!(
+                "\n{}",
+                "No previous sessions found for this project.".yellow()
+            );
+            return;
+        }
+
+        println!(
+            "\n{}",
+            format!("📋 Sessions ({})", sessions.len()).cyan().bold()
+        );
+        println!();
+
+        for session in &sessions {
+            let time = format_relative_time(session.last_updated);
+            println!(
+                "  {} {} {}",
+                format!("[{}]", session.index).cyan(),
+                session.display_name.white(),
+                format!("({})", time).dimmed()
+            );
+            println!(
+                "      {} messages · ID: {}",
+                session.message_count.to_string().dimmed(),
+                session.id[..8].to_string().dimmed()
+            );
+        }
+
+        println!();
+        println!("{}", "To resume a session:".dimmed());
+        println!(
+            "  {} or {}",
+            "/resume".cyan(),
+            "sync-ctl chat --resume <NUMBER|ID>".cyan()
+        );
+        println!();
+    }
+
     /// List all profiles
     fn list_profiles(&self, config: &crate::config::types::AgentConfig) {
         let active = config.active_profile.as_deref();
@@ -1747,6 +1833,14 @@ impl ChatSession {
             "/plans" => {
                 self.handle_plans_command()?;
             }
+            "/resume" | "/s" => {
+                // Resume is handled specially - needs to return session data
+                // The command just shows the browser, actual loading happens in mod.rs
+                self.handle_resume_command()?;
+            }
+            "/sessions" | "/ls" => {
+                self.handle_list_sessions_command();
+            }
             _ => {
                 if cmd.starts_with('/') {
                     // Unknown command - interactive picker already handled in read_input
@@ -1808,7 +1902,7 @@ impl ChatSession {
         use crate::agent::ui::input::read_input_with_file_picker;
 
         Ok(read_input_with_file_picker(
-            "You:",
+            ">",
             &self.project_path,
             self.plan_mode.is_planning(),
         ))

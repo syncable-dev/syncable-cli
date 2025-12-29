@@ -203,7 +203,7 @@ impl CheckFunc for AccessToSecretsCheck {
                         && rule
                             .api_groups
                             .iter()
-                            .any(|g| g == "" || g == "*" || g == "core");
+                            .any(|g| g.is_empty() || g == "*" || g == "core");
 
                 if grants_secret_access {
                     // Check for sensitive verbs
@@ -281,7 +281,7 @@ impl CheckFunc for AccessToCreatePodsCheck {
                     && rule
                         .api_groups
                         .iter()
-                        .any(|g| g == "" || g == "*" || g == "core")
+                        .any(|g| g.is_empty() || g == "*" || g == "core")
                     && rule.verbs.iter().any(|v| v == "create" || v == "*");
 
                 if grants_pod_create {

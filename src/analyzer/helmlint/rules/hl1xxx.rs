@@ -701,7 +701,7 @@ fn is_valid_semver(version: &str) -> bool {
     for (i, part) in parts.iter().enumerate() {
         // Allow pre-release and build metadata on the last part
         let numeric_part = if i == parts.len() - 1 {
-            part.split(|c| c == '-' || c == '+').next().unwrap_or(part)
+            part.split(['-', '+']).next().unwrap_or(part)
         } else {
             part
         };

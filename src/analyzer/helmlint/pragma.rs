@@ -161,7 +161,7 @@ pub fn extract_template_pragmas(content: &str) -> PragmaState {
             }
 
             // Process the comment
-            process_comment(&comment_content.trim(), comment_line, &mut state);
+            process_comment(comment_content.trim(), comment_line, &mut state);
             continue;
         }
 
@@ -216,7 +216,7 @@ fn process_comment(comment: &str, line: u32, state: &mut PragmaState) {
 /// Parse a comma-separated list of rule codes.
 fn parse_rule_list(input: &str) -> Vec<String> {
     input
-        .split(|c| c == ',' || c == ' ')
+        .split([',', ' '])
         .map(|s| s.trim())
         .filter(|s| !s.is_empty() && s.starts_with("HL"))
         .map(|s| s.to_string())
