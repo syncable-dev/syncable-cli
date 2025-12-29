@@ -9,7 +9,10 @@ use std::process::Command;
 ///
 /// This function shells out to the `helm template` command to render
 /// the chart and then parses the resulting YAML.
-pub fn render_helm_chart(chart_path: &Path, values: Option<&Path>) -> Result<Vec<Object>, HelmError> {
+pub fn render_helm_chart(
+    chart_path: &Path,
+    values: Option<&Path>,
+) -> Result<Vec<Object>, HelmError> {
     // Check if helm binary is available
     if !is_helm_available() {
         return Err(HelmError::HelmNotFound);
@@ -27,7 +30,9 @@ pub fn render_helm_chart(chart_path: &Path, values: Option<&Path>) -> Result<Vec
     }
 
     // Execute helm template
-    let output = cmd.output().map_err(|e| HelmError::RenderError(e.to_string()))?;
+    let output = cmd
+        .output()
+        .map_err(|e| HelmError::RenderError(e.to_string()))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -51,9 +56,7 @@ pub fn render_helm_chart_with_values(
     }
 
     let mut cmd = Command::new("helm");
-    cmd.arg("template")
-        .arg("release-name")
-        .arg(chart_path);
+    cmd.arg("template").arg("release-name").arg(chart_path);
 
     // Add all values files
     for values_path in values_files {
@@ -65,7 +68,9 @@ pub fn render_helm_chart_with_values(
         cmd.arg("--set").arg(format!("{}={}", key, value));
     }
 
-    let output = cmd.output().map_err(|e| HelmError::RenderError(e.to_string()))?;
+    let output = cmd
+        .output()
+        .map_err(|e| HelmError::RenderError(e.to_string()))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

@@ -46,9 +46,8 @@ impl CheckFunc for EnvVarSecretCheck {
         let mut diagnostics = Vec::new();
 
         // Patterns for secret-looking env var names
-        let secret_name_pattern = Regex::new(
-            r"(?i)(password|secret|key|token|credential|api_key|apikey|auth)"
-        ).unwrap();
+        let secret_name_pattern =
+            Regex::new(r"(?i)(password|secret|key|token|credential|api_key|apikey|auth)").unwrap();
 
         if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object) {
             for container in extract::container::all_containers(pod_spec) {

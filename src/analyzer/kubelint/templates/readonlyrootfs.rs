@@ -57,7 +57,7 @@ impl CheckFunc for ReadOnlyRootFsCheck {
                             container.name
                         ),
                         remediation: Some(
-                            "Set securityContext.readOnlyRootFilesystem to true.".to_string()
+                            "Set securityContext.readOnlyRootFilesystem to true.".to_string(),
                         ),
                     });
                 }

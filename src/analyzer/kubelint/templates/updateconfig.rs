@@ -1,7 +1,7 @@
 //! Update strategy detection templates.
 
-use crate::analyzer::kubelint::context::object::K8sObject;
 use crate::analyzer::kubelint::context::Object;
+use crate::analyzer::kubelint::context::object::K8sObject;
 use crate::analyzer::kubelint::templates::{CheckFunc, ParameterDesc, Template, TemplateError};
 use crate::analyzer::kubelint::types::{Diagnostic, ObjectKindsDesc};
 
@@ -73,7 +73,8 @@ impl CheckFunc for RollingUpdateStrategyCheck {
                             ),
                             remediation: Some(
                                 "Configure strategy.rollingUpdate.maxSurge and maxUnavailable \
-                                 for controlled rollouts.".to_string()
+                                 for controlled rollouts."
+                                    .to_string(),
                             ),
                         });
                     }

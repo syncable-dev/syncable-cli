@@ -119,7 +119,11 @@ pub fn format(result: &LintResult) -> String {
         output.push_str(&format!(
             "{}{}{}",
             colors::BOLD,
-            if errors > 0 { colors::RED } else { colors::YELLOW },
+            if errors > 0 {
+                colors::RED
+            } else {
+                colors::YELLOW
+            },
             format!(
                 "✖ {} {} ({} {}, {} {}, {} info)\n",
                 total,

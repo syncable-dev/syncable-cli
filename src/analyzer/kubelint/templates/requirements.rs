@@ -33,7 +33,9 @@ impl Template for CpuRequirementsTemplate {
         &self,
         _params: &serde_yaml::Value,
     ) -> Result<Box<dyn CheckFunc>, TemplateError> {
-        Ok(Box::new(CpuRequirementsCheck { require_limits: false }))
+        Ok(Box::new(CpuRequirementsCheck {
+            require_limits: false,
+        }))
     }
 }
 
@@ -68,7 +70,7 @@ impl CheckFunc for CpuRequirementsCheck {
                             container.name
                         ),
                         remediation: Some(
-                            "Set resources.requests.cpu for proper scheduling.".to_string()
+                            "Set resources.requests.cpu for proper scheduling.".to_string(),
                         ),
                     });
                 }
@@ -80,7 +82,7 @@ impl CheckFunc for CpuRequirementsCheck {
                             container.name
                         ),
                         remediation: Some(
-                            "Set resources.limits.cpu to prevent resource exhaustion.".to_string()
+                            "Set resources.limits.cpu to prevent resource exhaustion.".to_string(),
                         ),
                     });
                 }
@@ -119,7 +121,9 @@ impl Template for MemoryRequirementsTemplate {
         &self,
         _params: &serde_yaml::Value,
     ) -> Result<Box<dyn CheckFunc>, TemplateError> {
-        Ok(Box::new(MemoryRequirementsCheck { require_limits: false }))
+        Ok(Box::new(MemoryRequirementsCheck {
+            require_limits: false,
+        }))
     }
 }
 
@@ -154,7 +158,7 @@ impl CheckFunc for MemoryRequirementsCheck {
                             container.name
                         ),
                         remediation: Some(
-                            "Set resources.requests.memory for proper scheduling.".to_string()
+                            "Set resources.requests.memory for proper scheduling.".to_string(),
                         ),
                     });
                 }
@@ -166,7 +170,7 @@ impl CheckFunc for MemoryRequirementsCheck {
                             container.name
                         ),
                         remediation: Some(
-                            "Set resources.limits.memory to prevent OOM kills.".to_string()
+                            "Set resources.limits.memory to prevent OOM kills.".to_string(),
                         ),
                     });
                 }

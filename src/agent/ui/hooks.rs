@@ -1099,11 +1099,26 @@ fn format_kubelint_result(
                         } else {
                             err_str.to_string()
                         };
-                        lines.push(format!("{}  {} {}{}", ansi::HIGH, if i == errors.len().min(3) - 1 { "└" } else { "│" }, truncated, ansi::RESET));
+                        lines.push(format!(
+                            "{}  {} {}{}",
+                            ansi::HIGH,
+                            if i == errors.len().min(3) - 1 {
+                                "└"
+                            } else {
+                                "│"
+                            },
+                            truncated,
+                            ansi::RESET
+                        ));
                     }
                 }
                 if errors.len() > 3 {
-                    lines.push(format!("{}  +{} more errors{}", ansi::GRAY, errors.len() - 3, ansi::RESET));
+                    lines.push(format!(
+                        "{}  +{} more errors{}",
+                        ansi::GRAY,
+                        errors.len() - 3,
+                        ansi::RESET
+                    ));
                 }
                 // If we only have parse errors and no lint issues, return early
                 if total == 0 {
@@ -1146,13 +1161,23 @@ fn format_kubelint_result(
         // Summary with priority breakdown
         let mut priority_parts = Vec::new();
         if critical > 0 {
-            priority_parts.push(format!("{}🔴 {} critical{}", ansi::CRITICAL, critical, ansi::RESET));
+            priority_parts.push(format!(
+                "{}🔴 {} critical{}",
+                ansi::CRITICAL,
+                critical,
+                ansi::RESET
+            ));
         }
         if high > 0 {
             priority_parts.push(format!("{}🟠 {} high{}", ansi::HIGH, high, ansi::RESET));
         }
         if medium > 0 {
-            priority_parts.push(format!("{}🟡 {} medium{}", ansi::MEDIUM, medium, ansi::RESET));
+            priority_parts.push(format!(
+                "{}🟡 {} medium{}",
+                ansi::MEDIUM,
+                medium,
+                ansi::RESET
+            ));
         }
         if low > 0 {
             priority_parts.push(format!("{}🟢 {} low{}", ansi::LOW, low, ansi::RESET));
@@ -1211,7 +1236,12 @@ fn format_kubelint_result(
                 } else {
                     first_fix.to_string()
                 };
-                lines.push(format!("{}  → Fix: {}{}", ansi::INFO_BLUE, truncated, ansi::RESET));
+                lines.push(format!(
+                    "{}  → Fix: {}{}",
+                    ansi::INFO_BLUE,
+                    truncated,
+                    ansi::RESET
+                ));
             }
         }
 
@@ -1258,9 +1288,16 @@ fn format_kubelint_issue(issue: &serde_json::Value, icon: &str, color: &str) -> 
 
     format!(
         "{}{} L{}:{} {}{}[{}]{} {} {}",
-        color, icon, line_num, ansi::RESET,
-        ansi::CYAN, ansi::BOLD, check, ansi::RESET,
-        badge, msg_display
+        color,
+        icon,
+        line_num,
+        ansi::RESET,
+        ansi::CYAN,
+        ansi::BOLD,
+        check,
+        ansi::RESET,
+        badge,
+        msg_display
     )
 }
 
@@ -1298,11 +1335,26 @@ fn format_helmlint_result(
                         } else {
                             err_str.to_string()
                         };
-                        lines.push(format!("{}  {} {}{}", ansi::HIGH, if i == errors.len().min(3) - 1 { "└" } else { "│" }, truncated, ansi::RESET));
+                        lines.push(format!(
+                            "{}  {} {}{}",
+                            ansi::HIGH,
+                            if i == errors.len().min(3) - 1 {
+                                "└"
+                            } else {
+                                "│"
+                            },
+                            truncated,
+                            ansi::RESET
+                        ));
                     }
                 }
                 if errors.len() > 3 {
-                    lines.push(format!("{}  +{} more errors{}", ansi::GRAY, errors.len() - 3, ansi::RESET));
+                    lines.push(format!(
+                        "{}  +{} more errors{}",
+                        ansi::GRAY,
+                        errors.len() - 3,
+                        ansi::RESET
+                    ));
                 }
                 // If we only have parse errors and no lint issues, return early
                 if total == 0 {
@@ -1345,13 +1397,23 @@ fn format_helmlint_result(
         // Summary with priority breakdown
         let mut priority_parts = Vec::new();
         if critical > 0 {
-            priority_parts.push(format!("{}🔴 {} critical{}", ansi::CRITICAL, critical, ansi::RESET));
+            priority_parts.push(format!(
+                "{}🔴 {} critical{}",
+                ansi::CRITICAL,
+                critical,
+                ansi::RESET
+            ));
         }
         if high > 0 {
             priority_parts.push(format!("{}🟠 {} high{}", ansi::HIGH, high, ansi::RESET));
         }
         if medium > 0 {
-            priority_parts.push(format!("{}🟡 {} medium{}", ansi::MEDIUM, medium, ansi::RESET));
+            priority_parts.push(format!(
+                "{}🟡 {} medium{}",
+                ansi::MEDIUM,
+                medium,
+                ansi::RESET
+            ));
         }
         if low > 0 {
             priority_parts.push(format!("{}🟢 {} low{}", ansi::LOW, low, ansi::RESET));
@@ -1410,7 +1472,12 @@ fn format_helmlint_result(
                 } else {
                     first_fix.to_string()
                 };
-                lines.push(format!("{}  → Fix: {}{}", ansi::INFO_BLUE, truncated, ansi::RESET));
+                lines.push(format!(
+                    "{}  → Fix: {}{}",
+                    ansi::INFO_BLUE,
+                    truncated,
+                    ansi::RESET
+                ));
             }
         }
 
@@ -1465,9 +1532,17 @@ fn format_helmlint_issue(issue: &serde_json::Value, icon: &str, color: &str) -> 
 
     format!(
         "{}{} {}:{}:{} {}{}[{}]{} {} {}",
-        color, icon, file_short, line_num, ansi::RESET,
-        ansi::CYAN, ansi::BOLD, code, ansi::RESET,
-        badge, msg_display
+        color,
+        icon,
+        file_short,
+        line_num,
+        ansi::RESET,
+        ansi::CYAN,
+        ansi::BOLD,
+        code,
+        ansi::RESET,
+        badge,
+        msg_display
     )
 }
 

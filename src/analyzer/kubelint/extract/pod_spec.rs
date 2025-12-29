@@ -1,7 +1,7 @@
 //! PodSpec extraction utilities.
 
-use crate::analyzer::kubelint::context::object::*;
 use crate::analyzer::kubelint::context::K8sObject;
+use crate::analyzer::kubelint::context::object::*;
 
 /// Extract the PodSpec from a Kubernetes object, if it has one.
 pub fn extract_pod_spec(obj: &K8sObject) -> Option<&PodSpec> {

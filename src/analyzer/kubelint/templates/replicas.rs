@@ -1,6 +1,6 @@
 //! Replica count check templates.
 
-use crate::analyzer::kubelint::context::{Object, K8sObject};
+use crate::analyzer::kubelint::context::{K8sObject, Object};
 use crate::analyzer::kubelint::templates::{CheckFunc, ParameterDesc, Template, TemplateError};
 use crate::analyzer::kubelint::types::{Diagnostic, ObjectKindsDesc};
 
@@ -34,10 +34,7 @@ impl Template for ReplicasTemplate {
         }]
     }
 
-    fn instantiate(
-        &self,
-        params: &serde_yaml::Value,
-    ) -> Result<Box<dyn CheckFunc>, TemplateError> {
+    fn instantiate(&self, params: &serde_yaml::Value) -> Result<Box<dyn CheckFunc>, TemplateError> {
         let min_replicas = params
             .get("minReplicas")
             .and_then(|v| v.as_i64())

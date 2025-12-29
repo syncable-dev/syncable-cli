@@ -71,10 +71,7 @@ pub trait Template: Send + Sync {
     fn parameters(&self) -> Vec<ParameterDesc>;
 
     /// Instantiate a check function with the given parameters.
-    fn instantiate(
-        &self,
-        params: &serde_yaml::Value,
-    ) -> Result<Box<dyn CheckFunc>, TemplateError>;
+    fn instantiate(&self, params: &serde_yaml::Value) -> Result<Box<dyn CheckFunc>, TemplateError>;
 }
 
 /// Template instantiation errors.
@@ -189,10 +186,7 @@ pub fn registry() -> &'static HashMap<String, Box<dyn Template>> {
         );
 
         // Replica and scaling templates
-        map.insert(
-            "replicas".to_string(),
-            Box::new(replicas::ReplicasTemplate),
-        );
+        map.insert("replicas".to_string(), Box::new(replicas::ReplicasTemplate));
 
         // Unsafe proc mount template
         map.insert(
@@ -219,10 +213,7 @@ pub fn registry() -> &'static HashMap<String, Box<dyn Template>> {
             "privileged-ports".to_string(),
             Box::new(ports::PrivilegedPortsTemplate),
         );
-        map.insert(
-            "ssh-port".to_string(),
-            Box::new(ports::SSHPortTemplate),
-        );
+        map.insert("ssh-port".to_string(), Box::new(ports::SSHPortTemplate));
         map.insert(
             "liveness-port".to_string(),
             Box::new(ports::LivenessPortTemplate),
@@ -311,10 +302,7 @@ pub fn registry() -> &'static HashMap<String, Box<dyn Template>> {
         );
 
         // Misc templates
-        map.insert(
-            "sysctls".to_string(),
-            Box::new(misc::SysctlsTemplate),
-        );
+        map.insert("sysctls".to_string(), Box::new(misc::SysctlsTemplate));
         map.insert(
             "dnsconfig-options".to_string(),
             Box::new(misc::DnsConfigOptionsTemplate),
