@@ -30,10 +30,7 @@ pub fn format(result: &LintResult) -> String {
     if result.failures.is_empty() {
         output.push_str("No lint errors found.\n");
     } else {
-        output.push_str(&format!(
-            "\nFound {} issue(s).\n",
-            result.failures.len()
-        ));
+        output.push_str(&format!("\nFound {} issue(s).\n", result.failures.len()));
     }
 
     output

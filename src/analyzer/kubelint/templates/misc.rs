@@ -55,10 +55,15 @@ impl CheckFunc for SysctlsCheck {
         if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object) {
             if let Some(sc) = &pod_spec.security_context {
                 for sysctl in &sc.sysctls {
-                    let is_unsafe = unsafe_sysctls.iter().any(|prefix| sysctl.name.starts_with(prefix));
+                    let is_unsafe = unsafe_sysctls
+                        .iter()
+                        .any(|prefix| sysctl.name.starts_with(prefix));
                     if is_unsafe {
                         diagnostics.push(Diagnostic {
-                            message: format!("Pod uses potentially unsafe sysctl '{}'", sysctl.name),
+                            message: format!(
+                                "Pod uses potentially unsafe sysctl '{}'",
+                                sysctl.name
+                            ),
                             remediation: Some(
                                 "Ensure this sysctl is allowed by the cluster's PodSecurityPolicy \
                                  or PodSecurityStandard and is necessary for your workload."
@@ -185,12 +190,15 @@ impl CheckFunc for StartupPortCheck {
         if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object) {
             for container in extract::container::containers(pod_spec) {
                 if let Some(probe) = &container.startup_probe {
-                    let probe_port = probe.http_get.as_ref().map(|h| h.port)
+                    let probe_port = probe
+                        .http_get
+                        .as_ref()
+                        .map(|h| h.port)
                         .or_else(|| probe.tcp_socket.as_ref().map(|t| t.port));
 
                     if let Some(port_num) = probe_port {
-                        let has_matching_port = container.ports.iter()
-                            .any(|p| p.container_port == port_num);
+                        let has_matching_port =
+                            container.ports.iter().any(|p| p.container_port == port_num);
 
                         if !has_matching_port && !container.ports.is_empty() {
                             diagnostics.push(Diagnostic {

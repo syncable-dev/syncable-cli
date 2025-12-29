@@ -126,7 +126,8 @@ impl CheckFunc for WritableHostMountCheck {
                                 ),
                                 remediation: Some(
                                     "Set volumeMounts.readOnly to true for host path mounts, \
-                                     or avoid using hostPath volumes entirely.".to_string()
+                                     or avoid using hostPath volumes entirely."
+                                        .to_string(),
                                 ),
                             });
                         }

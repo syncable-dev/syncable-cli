@@ -446,7 +446,8 @@ impl Rule for HL3011 {
     fn check(&self, ctx: &LintContext) -> Vec<CheckFailure> {
         let mut failures = Vec::new();
 
-        let defined_helpers: std::collections::HashSet<&str> = ctx.helper_names().into_iter().collect();
+        let defined_helpers: std::collections::HashSet<&str> =
+            ctx.helper_names().into_iter().collect();
         let referenced = ctx.template_references();
 
         for ref_name in referenced {

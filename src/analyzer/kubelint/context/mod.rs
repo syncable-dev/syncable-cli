@@ -5,7 +5,7 @@
 
 pub mod object;
 
-pub use object::{K8sObject, Object, ObjectMetadata, InvalidObject};
+pub use object::{InvalidObject, K8sObject, Object, ObjectMetadata};
 
 /// A lint context provides access to all parsed Kubernetes objects.
 pub trait LintContext: Send + Sync {

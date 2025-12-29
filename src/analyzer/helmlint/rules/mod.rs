@@ -164,11 +164,9 @@ pub fn list_rule_codes() -> Vec<&'static str> {
         "HL2001", "HL2002", "HL2003", "HL2004", "HL2005", "HL2006", "HL2007", "HL2008", "HL2009",
         // HL3xxx
         "HL3001", "HL3002", "HL3003", "HL3004", "HL3005", "HL3006", "HL3007", "HL3008", "HL3009",
-        "HL3010", "HL3011",
-        // HL4xxx
+        "HL3010", "HL3011", // HL4xxx
         "HL4001", "HL4002", "HL4003", "HL4004", "HL4005", "HL4006", "HL4007", "HL4008", "HL4009",
-        "HL4010", "HL4011", "HL4012",
-        // HL5xxx
+        "HL4010", "HL4011", "HL4012", // HL5xxx
         "HL5001", "HL5002", "HL5003", "HL5004", "HL5005", "HL5006",
     ]
 }
@@ -189,11 +187,7 @@ mod tests {
         let mut codes = HashSet::new();
         for rule in rules {
             let code = rule.code();
-            assert!(
-                codes.insert(code),
-                "Duplicate rule code: {}",
-                code
-            );
+            assert!(codes.insert(code), "Duplicate rule code: {}", code);
         }
     }
 }

@@ -18,8 +18,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
 
-use crate::analyzer::helmlint::{lint_chart, HelmlintConfig, LintResult, Severity};
 use crate::analyzer::helmlint::types::RuleCategory;
+use crate::analyzer::helmlint::{HelmlintConfig, LintResult, Severity, lint_chart};
 
 /// Arguments for the helmlint tool
 #[derive(Debug, Deserialize)]
@@ -94,7 +94,9 @@ impl HelmlintTool {
             "HL1001" => "Create a Chart.yaml file in the chart root directory.",
             "HL1002" => "Add 'apiVersion: v2' (for Helm 3) or 'apiVersion: v1' to Chart.yaml.",
             "HL1003" => "Add a 'name' field to Chart.yaml matching the chart directory name.",
-            "HL1004" => "Add a 'version' field with semantic versioning (e.g., '1.0.0') to Chart.yaml.",
+            "HL1004" => {
+                "Add a 'version' field with semantic versioning (e.g., '1.0.0') to Chart.yaml."
+            }
             "HL1005" => "Use semantic versioning format (MAJOR.MINOR.PATCH) for the version field.",
             "HL1006" => "Add a 'description' field explaining what the chart does.",
             "HL1007" => "Add a 'maintainers' list with name and email for chart ownership.",
@@ -430,7 +432,12 @@ spec:
 
         let result = tool.call(args).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("No chart specified"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("No chart specified")
+        );
     }
 
     #[tokio::test]

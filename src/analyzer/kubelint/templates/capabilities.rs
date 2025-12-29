@@ -50,7 +50,9 @@ impl CheckFunc for DropNetRawCheck {
                     .as_ref()
                     .and_then(|sc| sc.capabilities.as_ref())
                     .map(|caps| {
-                        caps.drop.iter().any(|c| c == "NET_RAW" || c == "ALL" || c == "all")
+                        caps.drop
+                            .iter()
+                            .any(|c| c == "NET_RAW" || c == "ALL" || c == "all")
                     })
                     .unwrap_or(false);
 

@@ -1,7 +1,7 @@
 //! RBAC-related check templates.
 
-use crate::analyzer::kubelint::context::Object;
 use crate::analyzer::kubelint::context::K8sObject;
+use crate::analyzer::kubelint::context::Object;
 use crate::analyzer::kubelint::templates::{CheckFunc, ParameterDesc, Template, TemplateError};
 use crate::analyzer::kubelint::types::{Diagnostic, ObjectKindsDesc};
 
@@ -198,13 +198,21 @@ impl CheckFunc for AccessToSecretsCheck {
         if let Some(rules) = rules {
             for rule in rules {
                 // Check if rule grants access to secrets
-                let grants_secret_access = rule.resources.iter().any(|r| r == "secrets" || r == "*")
-                    && rule.api_groups.iter().any(|g| g == "" || g == "*" || g == "core");
+                let grants_secret_access =
+                    rule.resources.iter().any(|r| r == "secrets" || r == "*")
+                        && rule
+                            .api_groups
+                            .iter()
+                            .any(|g| g == "" || g == "*" || g == "core");
 
                 if grants_secret_access {
                     // Check for sensitive verbs
                     let sensitive_verbs = ["get", "list", "watch", "*"];
-                    if rule.verbs.iter().any(|v| sensitive_verbs.contains(&v.as_str())) {
+                    if rule
+                        .verbs
+                        .iter()
+                        .any(|v| sensitive_verbs.contains(&v.as_str()))
+                    {
                         diagnostics.push(Diagnostic {
                             message: "Rule grants read access to secrets".to_string(),
                             remediation: Some(
@@ -270,7 +278,10 @@ impl CheckFunc for AccessToCreatePodsCheck {
             for rule in rules {
                 // Check if rule grants create access to pods
                 let grants_pod_create = rule.resources.iter().any(|r| r == "pods" || r == "*")
-                    && rule.api_groups.iter().any(|g| g == "" || g == "*" || g == "core")
+                    && rule
+                        .api_groups
+                        .iter()
+                        .any(|g| g == "" || g == "*" || g == "core")
                     && rule.verbs.iter().any(|v| v == "create" || v == "*");
 
                 if grants_pod_create {

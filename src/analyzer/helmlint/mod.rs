@@ -59,6 +59,6 @@ pub mod types;
 
 // Re-export main types and functions
 pub use config::HelmlintConfig;
-pub use formatter::{format_result, format_result_to_string, OutputFormat};
-pub use lint::{lint_chart, lint_chart_file, LintResult};
+pub use formatter::{OutputFormat, format_result, format_result_to_string};
+pub use lint::{LintResult, lint_chart, lint_chart_file};
 pub use types::{CheckFailure, RuleCode, Severity};

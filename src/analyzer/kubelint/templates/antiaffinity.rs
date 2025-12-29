@@ -1,7 +1,7 @@
 //! Anti-affinity detection template.
 
-use crate::analyzer::kubelint::context::object::K8sObject;
 use crate::analyzer::kubelint::context::Object;
+use crate::analyzer::kubelint::context::object::K8sObject;
 use crate::analyzer::kubelint::extract;
 use crate::analyzer::kubelint::templates::{CheckFunc, ParameterDesc, Template, TemplateError};
 use crate::analyzer::kubelint::types::{Diagnostic, ObjectKindsDesc};
@@ -65,8 +65,11 @@ impl CheckFunc for AntiAffinityCheck {
                 .as_ref()
                 .and_then(|a| a.pod_anti_affinity.as_ref())
                 .map(|paa| {
-                    !paa.required_during_scheduling_ignored_during_execution.is_empty()
-                        || !paa.preferred_during_scheduling_ignored_during_execution.is_empty()
+                    !paa.required_during_scheduling_ignored_during_execution
+                        .is_empty()
+                        || !paa
+                            .preferred_during_scheduling_ignored_during_execution
+                            .is_empty()
                 })
                 .unwrap_or(false);
 

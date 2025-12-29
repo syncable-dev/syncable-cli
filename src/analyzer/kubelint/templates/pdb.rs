@@ -1,7 +1,7 @@
 //! PodDisruptionBudget check templates.
 
-use crate::analyzer::kubelint::context::Object;
 use crate::analyzer::kubelint::context::K8sObject;
+use crate::analyzer::kubelint::context::Object;
 use crate::analyzer::kubelint::templates::{CheckFunc, ParameterDesc, Template, TemplateError};
 use crate::analyzer::kubelint::types::{Diagnostic, ObjectKindsDesc};
 
@@ -48,7 +48,9 @@ impl CheckFunc for PdbMaxUnavailableCheck {
                 // Check if it's set to 0 or 0%
                 if max_unavailable == "0" || max_unavailable == "0%" {
                     diagnostics.push(Diagnostic {
-                        message: "PDB maxUnavailable is set to 0, which blocks all voluntary disruptions".to_string(),
+                        message:
+                            "PDB maxUnavailable is set to 0, which blocks all voluntary disruptions"
+                                .to_string(),
                         remediation: Some(
                             "Set maxUnavailable to at least 1 or a non-zero percentage to allow \
                              voluntary disruptions during cluster maintenance."

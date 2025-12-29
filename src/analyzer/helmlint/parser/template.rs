@@ -9,10 +9,7 @@ use std::path::Path;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TemplateToken {
     /// Raw text outside of template delimiters
-    Text {
-        content: String,
-        line: u32,
-    },
+    Text { content: String, line: u32 },
     /// Template action: {{ ... }}
     Action {
         content: String,
@@ -21,10 +18,7 @@ pub enum TemplateToken {
         trim_right: bool,
     },
     /// Template comment: {{/* ... */}}
-    Comment {
-        content: String,
-        line: u32,
-    },
+    Comment { content: String, line: u32 },
 }
 
 impl TemplateToken {
@@ -410,18 +404,72 @@ fn extract_variables(content: &str, variables: &mut HashSet<String>) {
 }
 
 /// Extract function calls from action content.
-fn extract_functions(content: &str, functions: &mut HashSet<String>, referenced: &mut HashSet<String>) {
+fn extract_functions(
+    content: &str,
+    functions: &mut HashSet<String>,
+    referenced: &mut HashSet<String>,
+) {
     // Common Helm/Sprig functions to detect
     let known_functions = [
-        "include", "tpl", "lookup", "required", "default", "empty", "coalesce",
-        "toYaml", "toJson", "fromYaml", "fromJson", "indent", "nindent",
-        "trim", "trimAll", "trimPrefix", "trimSuffix", "quote", "squote",
-        "upper", "lower", "title", "untitle", "substr", "replace", "trunc",
-        "list", "dict", "get", "set", "unset", "hasKey", "keys", "values",
-        "merge", "mergeOverwrite", "append", "prepend", "concat", "first", "last",
-        "printf", "print", "println", "fail", "kindOf", "typeOf", "deepEqual",
-        "b64enc", "b64dec", "sha256sum", "randAlphaNum", "randAlpha",
-        "now", "date", "dateModify", "toDate", "env", "expandenv",
+        "include",
+        "tpl",
+        "lookup",
+        "required",
+        "default",
+        "empty",
+        "coalesce",
+        "toYaml",
+        "toJson",
+        "fromYaml",
+        "fromJson",
+        "indent",
+        "nindent",
+        "trim",
+        "trimAll",
+        "trimPrefix",
+        "trimSuffix",
+        "quote",
+        "squote",
+        "upper",
+        "lower",
+        "title",
+        "untitle",
+        "substr",
+        "replace",
+        "trunc",
+        "list",
+        "dict",
+        "get",
+        "set",
+        "unset",
+        "hasKey",
+        "keys",
+        "values",
+        "merge",
+        "mergeOverwrite",
+        "append",
+        "prepend",
+        "concat",
+        "first",
+        "last",
+        "printf",
+        "print",
+        "println",
+        "fail",
+        "kindOf",
+        "typeOf",
+        "deepEqual",
+        "b64enc",
+        "b64dec",
+        "sha256sum",
+        "randAlphaNum",
+        "randAlpha",
+        "now",
+        "date",
+        "dateModify",
+        "toDate",
+        "env",
+        "expandenv",
     ];
 
     for func in known_functions {

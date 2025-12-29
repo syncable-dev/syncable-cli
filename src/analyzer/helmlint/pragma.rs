@@ -126,7 +126,8 @@ pub fn extract_template_pragmas(content: &str) -> PragmaState {
         if i + 4 < chars.len()
             && chars[i] == '{'
             && chars[i + 1] == '{'
-            && (chars[i + 2] == '/' || (chars[i + 2] == '-' && i + 5 < chars.len() && chars[i + 3] == '/'))
+            && (chars[i + 2] == '/'
+                || (chars[i + 2] == '-' && i + 5 < chars.len() && chars[i + 3] == '/'))
         {
             let _comment_start = i;
             let comment_line = line_num;

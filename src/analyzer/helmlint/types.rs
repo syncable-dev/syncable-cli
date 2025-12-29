@@ -438,6 +438,9 @@ mod tests {
         assert_eq!(failures[0].line, 3);
         assert_eq!(failures[1].line, 5);
         assert_eq!(failures[2].line, 10);
-        assert_eq!(failures[3].file.to_str().unwrap(), "templates/deployment.yaml");
+        assert_eq!(
+            failures[3].file.to_str().unwrap(),
+            "templates/deployment.yaml"
+        );
     }
 }
