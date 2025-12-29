@@ -20,6 +20,8 @@ pub mod docker_analyzer;
 pub mod framework_detector;
 pub mod frameworks;
 pub mod hadolint;
+pub mod helmlint;
+pub mod kubelint;
 pub mod language_detector;
 pub mod monorepo;
 pub mod runtime;
