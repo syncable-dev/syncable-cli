@@ -18,7 +18,7 @@ use serde_json::json;
 use std::path::PathBuf;
 
 use crate::analyzer::kubelint::{
-    lint, lint_content, lint_file, KubelintConfig, LintResult, Severity,
+    KubelintConfig, LintResult, Severity, lint, lint_content, lint_file,
 };
 
 /// Arguments for the kubelint tool
@@ -86,35 +86,62 @@ impl KubelintTool {
     fn get_check_category(code: &str) -> &'static str {
         match code {
             // Security checks
-            "privileged-container" | "privilege-escalation" | "run-as-non-root"
-            | "read-only-root-fs" | "drop-net-raw-capability" | "hostnetwork" | "hostpid"
-            | "hostipc" | "host-mounts" | "writable-host-mount" | "docker-sock"
-            | "unsafe-proc-mount" | "scc-deny-privileged-container" => "security",
+            "privileged-container"
+            | "privilege-escalation"
+            | "run-as-non-root"
+            | "read-only-root-fs"
+            | "drop-net-raw-capability"
+            | "hostnetwork"
+            | "hostpid"
+            | "hostipc"
+            | "host-mounts"
+            | "writable-host-mount"
+            | "docker-sock"
+            | "unsafe-proc-mount"
+            | "scc-deny-privileged-container" => "security",
 
             // Best practice checks
-            "latest-tag" | "no-liveness-probe" | "no-readiness-probe" | "unset-cpu-requirements"
-            | "unset-memory-requirements" | "minimum-replicas" | "no-anti-affinity"
-            | "no-rolling-update-strategy" | "default-service-account"
-            | "deprecated-service-account" | "env-var-secret" | "read-secret-from-env-var"
-            | "priority-class-name" | "no-node-affinity" | "restart-policy" | "sysctls"
+            "latest-tag"
+            | "no-liveness-probe"
+            | "no-readiness-probe"
+            | "unset-cpu-requirements"
+            | "unset-memory-requirements"
+            | "minimum-replicas"
+            | "no-anti-affinity"
+            | "no-rolling-update-strategy"
+            | "default-service-account"
+            | "deprecated-service-account"
+            | "env-var-secret"
+            | "read-secret-from-env-var"
+            | "priority-class-name"
+            | "no-node-affinity"
+            | "restart-policy"
+            | "sysctls"
             | "dnsconfig-options" => "best-practice",
 
             // RBAC checks
-            "access-to-secrets" | "access-to-create-pods" | "cluster-admin-role-binding"
+            "access-to-secrets"
+            | "access-to-create-pods"
+            | "cluster-admin-role-binding"
             | "wildcard-in-rules" => "rbac",
 
             // Validation checks
-            "dangling-service" | "dangling-ingress" | "dangling-horizontalpodautoscaler"
-            | "dangling-networkpolicy" | "mismatching-selector" | "duplicate-env-var"
-            | "invalid-target-ports" | "non-existent-service-account" | "non-isolated-pod"
-            | "use-namespace" | "env-var-value-from" | "job-ttl-seconds-after-finished" => {
-                "validation"
-            }
+            "dangling-service"
+            | "dangling-ingress"
+            | "dangling-horizontalpodautoscaler"
+            | "dangling-networkpolicy"
+            | "mismatching-selector"
+            | "duplicate-env-var"
+            | "invalid-target-ports"
+            | "non-existent-service-account"
+            | "non-isolated-pod"
+            | "use-namespace"
+            | "env-var-value-from"
+            | "job-ttl-seconds-after-finished" => "validation",
 
             // Port checks
-            "ssh-port" | "privileged-ports" | "liveness-port" | "readiness-port" | "startup-port" => {
-                "ports"
-            }
+            "ssh-port" | "privileged-ports" | "liveness-port" | "readiness-port"
+            | "startup-port" => "ports",
 
             // PDB checks
             "pdb-max-unavailable" | "pdb-min-available" | "pdb-unhealthy-pod-eviction-policy" => {
@@ -383,8 +410,8 @@ impl Tool for KubelintTool {
                 "deployment",
                 "helm",
                 "charts",
-                "test-lint",      // For testing
-                "test-lint/k8s",  // For testing
+                "test-lint",     // For testing
+                "test-lint/k8s", // For testing
                 ".",
             ];
 
@@ -402,14 +429,12 @@ impl Tool for KubelintTool {
                     }
                     // Check for YAML files
                     if let Ok(entries) = std::fs::read_dir(&candidate_path) {
-                        let has_yaml = entries
-                            .filter_map(|e| e.ok())
-                            .any(|e| {
-                                e.path()
-                                    .extension()
-                                    .map(|ext| ext == "yaml" || ext == "yml")
-                                    .unwrap_or(false)
-                            });
+                        let has_yaml = entries.filter_map(|e| e.ok()).any(|e| {
+                            e.path()
+                                .extension()
+                                .map(|ext| ext == "yaml" || ext == "yml")
+                                .unwrap_or(false)
+                        });
                         if has_yaml {
                             found = Some((candidate_path, candidate.to_string()));
                             break;
@@ -471,10 +496,7 @@ spec:
         let args = KubelintArgs {
             path: None,
             content: Some(yaml.to_string()),
-            include: vec![
-                "privileged-container".to_string(),
-                "latest-tag".to_string(),
-            ],
+            include: vec!["privileged-container".to_string(), "latest-tag".to_string()],
             exclude: vec![],
             threshold: None,
         };
@@ -523,10 +545,7 @@ spec:
         let args = KubelintArgs {
             path: None,
             content: Some(yaml.to_string()),
-            include: vec![
-                "privileged-container".to_string(),
-                "latest-tag".to_string(),
-            ],
+            include: vec!["privileged-container".to_string(), "latest-tag".to_string()],
             exclude: vec![],
             threshold: None,
         };
@@ -582,7 +601,12 @@ spec:
         let result = tool.call(args).await.unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
 
-        assert!(parsed["source"].as_str().unwrap().contains("deployment.yaml"));
+        assert!(
+            parsed["source"]
+                .as_str()
+                .unwrap()
+                .contains("deployment.yaml")
+        );
         assert!(parsed["summary"]["objects_analyzed"].as_u64().unwrap_or(0) >= 1);
     }
 
@@ -613,7 +637,7 @@ spec:
         let args = KubelintArgs {
             path: None,
             content: Some(yaml.to_string()),
-            include: vec![],  // Use all defaults + builtin
+            include: vec![], // Use all defaults + builtin
             exclude: vec![],
             threshold: None,
         };
@@ -624,11 +648,19 @@ spec:
         let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
 
         // Verify structure
-        assert!(parsed["summary"]["total_issues"].as_u64().unwrap() > 0,
-            "Expected issues but got none. Output: {}", result);
-        assert!(!parsed["action_plan"]["critical"].as_array().unwrap().is_empty() ||
-                !parsed["action_plan"]["high"].as_array().unwrap().is_empty(),
-            "Expected critical or high priority issues");
+        assert!(
+            parsed["summary"]["total_issues"].as_u64().unwrap() > 0,
+            "Expected issues but got none. Output: {}",
+            result
+        );
+        assert!(
+            !parsed["action_plan"]["critical"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+                || !parsed["action_plan"]["high"].as_array().unwrap().is_empty(),
+            "Expected critical or high priority issues"
+        );
     }
 
     #[tokio::test]
@@ -659,10 +691,7 @@ spec:
             path: None,
             content: Some(yaml.to_string()),
             include: vec![],
-            exclude: vec![
-                "privileged-container".to_string(),
-                "latest-tag".to_string(),
-            ],
+            exclude: vec!["privileged-container".to_string(), "latest-tag".to_string()],
             threshold: None,
         };
 
@@ -680,9 +709,11 @@ spec:
             })
             .collect();
 
-        assert!(!all_issues
-            .iter()
-            .any(|i| i["check"] == "privileged-container"));
+        assert!(
+            !all_issues
+                .iter()
+                .any(|i| i["check"] == "privileged-container")
+        );
         assert!(!all_issues.iter().any(|i| i["check"] == "latest-tag"));
     }
 }

@@ -110,12 +110,64 @@ pub async fn run_command(command: Commands) -> Result<()> {
             provider,
             model,
             query,
+            resume,
+            list_sessions: _, // Handled in main.rs
         } => {
             use agent::ProviderType;
             use cli::ChatProvider;
             use config::load_agent_config;
 
             let project_path = path.canonicalize().unwrap_or(path);
+
+            // Handle --resume flag
+            if let Some(ref resume_arg) = resume {
+                use agent::persistence::{SessionSelector, format_relative_time};
+
+                let selector = SessionSelector::new(&project_path);
+                if let Some(session_info) = selector.resolve_session(resume_arg) {
+                    let time = format_relative_time(session_info.last_updated);
+                    println!(
+                        "\nResuming session: {} ({}, {} messages)",
+                        session_info.display_name, time, session_info.message_count
+                    );
+                    println!("Session ID: {}\n", session_info.id);
+
+                    // Load the session
+                    match selector.load_conversation(&session_info) {
+                        Ok(record) => {
+                            // Display previous messages as context
+                            println!("--- Previous conversation ---");
+                            for msg in record.messages.iter().take(5) {
+                                let role = match msg.role {
+                                    agent::persistence::MessageRole::User => "You",
+                                    agent::persistence::MessageRole::Assistant => "AI",
+                                    agent::persistence::MessageRole::System => "System",
+                                };
+                                let preview = if msg.content.len() > 100 {
+                                    format!("{}...", &msg.content[..100])
+                                } else {
+                                    msg.content.clone()
+                                };
+                                println!("  {}: {}", role, preview);
+                            }
+                            if record.messages.len() > 5 {
+                                println!("  ... and {} more messages", record.messages.len() - 5);
+                            }
+                            println!("--- End of history ---\n");
+                            // TODO: Load history into conversation context
+                        }
+                        Err(e) => {
+                            eprintln!("Warning: Failed to load session history: {}", e);
+                        }
+                    }
+                } else {
+                    eprintln!(
+                        "Session '{}' not found. Use --list-sessions to see available sessions.",
+                        resume_arg
+                    );
+                    return Ok(());
+                }
+            }
 
             // Load saved config for Auto mode
             let agent_config = load_agent_config();

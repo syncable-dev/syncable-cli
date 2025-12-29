@@ -66,7 +66,10 @@ impl Rule for HL2002 {
                     failures.push(CheckFailure::new(
                         "HL2002",
                         Severity::Warning,
-                        format!("Value '.Values.{}' is referenced but not defined in values.yaml", ref_path),
+                        format!(
+                            "Value '.Values.{}' is referenced but not defined in values.yaml",
+                            ref_path
+                        ),
                         "values.yaml",
                         1,
                         RuleCategory::Values,
@@ -110,14 +113,16 @@ impl Rule for HL2003 {
         // Check each defined value
         for path in &values.defined_paths {
             // Skip if any template references this path or a child path
-            let is_used = ctx.template_value_refs.iter().any(|ref_path| {
-                ref_path == path || ref_path.starts_with(&format!("{}.", path))
-            });
+            let is_used = ctx
+                .template_value_refs
+                .iter()
+                .any(|ref_path| ref_path == path || ref_path.starts_with(&format!("{}.", path)));
 
             // Also skip if a parent path is referenced (e.g., toYaml .Values.config)
-            let parent_is_used = ctx.template_value_refs.iter().any(|ref_path| {
-                path.starts_with(&format!("{}.", ref_path))
-            });
+            let parent_is_used = ctx
+                .template_value_refs
+                .iter()
+                .any(|ref_path| path.starts_with(&format!("{}.", ref_path)));
 
             if !is_used && !parent_is_used {
                 let line = values.line_for_path(path).unwrap_or(1);
@@ -168,7 +173,7 @@ impl Rule for HL2004 {
             // Check if the value has a non-empty default
             if let Some(value) = values.get(path) {
                 let has_hardcoded_value = match value {
-                    serde_yaml::Value::String(s) => !s.is_empty() && s != "" && !s.starts_with("$"),
+                    serde_yaml::Value::String(s) => !s.is_empty() && !s.starts_with("$"),
                     _ => false,
                 };
 
@@ -222,7 +227,13 @@ impl Rule for HL2005 {
         };
 
         // Look for common port patterns
-        let port_patterns = ["port", "containerPort", "targetPort", "hostPort", "nodePort"];
+        let port_patterns = [
+            "port",
+            "containerPort",
+            "targetPort",
+            "hostPort",
+            "nodePort",
+        ];
 
         for path in &values.defined_paths {
             let lower_path = path.to_lowercase();
@@ -231,7 +242,7 @@ impl Rule for HL2005 {
             if is_port_field {
                 if let Some(value) = values.get(path) {
                     if let Some(port) = extract_port_number(value) {
-                        if port < 1 || port > 65535 {
+                        if !(1..=65535).contains(&port) {
                             let line = values.line_for_path(path).unwrap_or(1);
                             failures.push(CheckFailure::new(
                                 "HL2005",
@@ -286,22 +297,20 @@ impl Rule for HL2007 {
         for path in &values.defined_paths {
             let lower_path = path.to_lowercase();
             if lower_path.ends_with(".tag") || lower_path.ends_with("imagetag") {
-                if let Some(value) = values.get(path) {
-                    if let serde_yaml::Value::String(tag) = value {
-                        if tag == "latest" {
-                            let line = values.line_for_path(path).unwrap_or(1);
-                            failures.push(CheckFailure::new(
-                                "HL2007",
-                                Severity::Warning,
-                                format!(
-                                    "Image tag at '{}' is 'latest'. Pin to a specific version for reproducibility",
-                                    path
-                                ),
-                                "values.yaml",
-                                line,
-                                RuleCategory::Values,
-                            ));
-                        }
+                if let Some(serde_yaml::Value::String(tag)) = values.get(path) {
+                    if tag == "latest" {
+                        let line = values.line_for_path(path).unwrap_or(1);
+                        failures.push(CheckFailure::new(
+                            "HL2007",
+                            Severity::Warning,
+                            format!(
+                                "Image tag at '{}' is 'latest'. Pin to a specific version for reproducibility",
+                                path
+                            ),
+                            "values.yaml",
+                            line,
+                            RuleCategory::Values,
+                        ));
                     }
                 }
             }
@@ -399,9 +408,6 @@ mod tests {
             extract_port_number(&serde_yaml::Value::String("8080".to_string())),
             Some(8080)
         );
-        assert_eq!(
-            extract_port_number(&serde_yaml::Value::Bool(true)),
-            None
-        );
+        assert_eq!(extract_port_number(&serde_yaml::Value::Bool(true)), None);
     }
 }

@@ -1,7 +1,7 @@
 //! General validation check templates.
 
-use crate::analyzer::kubelint::context::Object;
 use crate::analyzer::kubelint::context::K8sObject;
+use crate::analyzer::kubelint::context::Object;
 use crate::analyzer::kubelint::extract;
 use crate::analyzer::kubelint::templates::{CheckFunc, ParameterDesc, Template, TemplateError};
 use crate::analyzer::kubelint::types::{Diagnostic, ObjectKindsDesc};
@@ -169,10 +169,7 @@ impl Template for RequiredAnnotationTemplate {
         ]
     }
 
-    fn instantiate(
-        &self,
-        params: &serde_yaml::Value,
-    ) -> Result<Box<dyn CheckFunc>, TemplateError> {
+    fn instantiate(&self, params: &serde_yaml::Value) -> Result<Box<dyn CheckFunc>, TemplateError> {
         let key = params
             .get("key")
             .and_then(|v| v.as_str())
@@ -265,10 +262,7 @@ impl Template for RequiredLabelTemplate {
         ]
     }
 
-    fn instantiate(
-        &self,
-        params: &serde_yaml::Value,
-    ) -> Result<Box<dyn CheckFunc>, TemplateError> {
+    fn instantiate(&self, params: &serde_yaml::Value) -> Result<Box<dyn CheckFunc>, TemplateError> {
         let key = params
             .get("key")
             .and_then(|v| v.as_str())
@@ -374,9 +368,8 @@ impl CheckFunc for DisallowedGVKCheck {
             // Check for deprecated extensions/v1beta1 API
             if api_version == "extensions/v1beta1" {
                 diagnostics.push(Diagnostic {
-                    message: format!(
-                        "Resource uses deprecated API version 'extensions/v1beta1'"
-                    ),
+                    message: "Resource uses deprecated API version 'extensions/v1beta1'"
+                        .to_string(),
                     remediation: Some(
                         "Migrate to apps/v1 for Deployments, DaemonSets, ReplicaSets; \
                          networking.k8s.io/v1 for Ingress and NetworkPolicy."
@@ -388,10 +381,7 @@ impl CheckFunc for DisallowedGVKCheck {
             // Check for deprecated apps/v1beta1 and apps/v1beta2
             if api_version == "apps/v1beta1" || api_version == "apps/v1beta2" {
                 diagnostics.push(Diagnostic {
-                    message: format!(
-                        "Resource uses deprecated API version '{}'",
-                        api_version
-                    ),
+                    message: format!("Resource uses deprecated API version '{}'", api_version),
                     remediation: Some("Migrate to apps/v1.".to_string()),
                 });
             }
@@ -442,17 +432,17 @@ impl CheckFunc for MismatchingSelectorCheck {
         let (selector, pod_labels) = match &object.k8s_object {
             K8sObject::Deployment(d) => {
                 let selector = d.selector.as_ref().and_then(|s| s.match_labels.as_ref());
-                let pod_labels = d.pod_spec.as_ref().and_then(|_| d.labels.as_ref());
+                let pod_labels = d.pod_spec.as_ref().and(d.labels.as_ref());
                 (selector, pod_labels)
             }
             K8sObject::StatefulSet(s) => {
                 let selector = s.selector.as_ref().and_then(|s| s.match_labels.as_ref());
-                let pod_labels = s.pod_spec.as_ref().and_then(|_| s.labels.as_ref());
+                let pod_labels = s.pod_spec.as_ref().and(s.labels.as_ref());
                 (selector, pod_labels)
             }
             K8sObject::DaemonSet(d) => {
                 let selector = d.selector.as_ref().and_then(|s| s.match_labels.as_ref());
-                let pod_labels = d.pod_spec.as_ref().and_then(|_| d.labels.as_ref());
+                let pod_labels = d.pod_spec.as_ref().and(d.labels.as_ref());
                 (selector, pod_labels)
             }
             _ => (None, None),
@@ -528,8 +518,7 @@ impl CheckFunc for NodeAffinityCheck {
                 diagnostics.push(Diagnostic {
                     message: "Pod does not have node affinity configured".to_string(),
                     remediation: Some(
-                        "Consider adding node affinity rules to control pod placement."
-                            .to_string(),
+                        "Consider adding node affinity rules to control pod placement.".to_string(),
                     ),
                 });
             }
@@ -636,8 +625,7 @@ impl CheckFunc for PriorityClassNameCheck {
                 diagnostics.push(Diagnostic {
                     message: "Pod does not have priorityClassName set".to_string(),
                     remediation: Some(
-                        "Set priorityClassName to control pod scheduling priority."
-                            .to_string(),
+                        "Set priorityClassName to control pod scheduling priority.".to_string(),
                     ),
                 });
             }
@@ -680,10 +668,7 @@ impl Template for ServiceTypeTemplate {
         }]
     }
 
-    fn instantiate(
-        &self,
-        params: &serde_yaml::Value,
-    ) -> Result<Box<dyn CheckFunc>, TemplateError> {
+    fn instantiate(&self, params: &serde_yaml::Value) -> Result<Box<dyn CheckFunc>, TemplateError> {
         let disallowed = params
             .get("disallowedTypes")
             .and_then(|v| v.as_sequence())
@@ -753,10 +738,7 @@ impl Template for HpaMinReplicasTemplate {
         }]
     }
 
-    fn instantiate(
-        &self,
-        params: &serde_yaml::Value,
-    ) -> Result<Box<dyn CheckFunc>, TemplateError> {
+    fn instantiate(&self, params: &serde_yaml::Value) -> Result<Box<dyn CheckFunc>, TemplateError> {
         let min_replicas = params
             .get("minReplicas")
             .and_then(|v| v.as_i64())

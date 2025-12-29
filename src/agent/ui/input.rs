@@ -684,6 +684,10 @@ pub fn read_input_with_file_picker(
 ) -> InputResult {
     let mut stdout = io::stdout();
 
+    // Always ensure cursor is visible at start of input (may have been hidden by progress indicator)
+    print!("{}", ansi::SHOW_CURSOR);
+    let _ = stdout.flush();
+
     // Enable raw mode
     if terminal::enable_raw_mode().is_err() {
         return read_simple_input(prompt);

@@ -126,7 +126,8 @@ pub fn extract_template_pragmas(content: &str) -> PragmaState {
         if i + 4 < chars.len()
             && chars[i] == '{'
             && chars[i + 1] == '{'
-            && (chars[i + 2] == '/' || (chars[i + 2] == '-' && i + 5 < chars.len() && chars[i + 3] == '/'))
+            && (chars[i + 2] == '/'
+                || (chars[i + 2] == '-' && i + 5 < chars.len() && chars[i + 3] == '/'))
         {
             let _comment_start = i;
             let comment_line = line_num;
@@ -160,7 +161,7 @@ pub fn extract_template_pragmas(content: &str) -> PragmaState {
             }
 
             // Process the comment
-            process_comment(&comment_content.trim(), comment_line, &mut state);
+            process_comment(comment_content.trim(), comment_line, &mut state);
             continue;
         }
 
@@ -215,7 +216,7 @@ fn process_comment(comment: &str, line: u32, state: &mut PragmaState) {
 /// Parse a comma-separated list of rule codes.
 fn parse_rule_list(input: &str) -> Vec<String> {
     input
-        .split(|c| c == ',' || c == ' ')
+        .split([',', ' '])
         .map(|s| s.trim())
         .filter(|s| !s.is_empty() && s.starts_with("HL"))
         .map(|s| s.to_string())

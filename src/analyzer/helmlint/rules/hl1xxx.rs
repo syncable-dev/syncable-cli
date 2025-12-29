@@ -242,7 +242,13 @@ impl Rule for HL1006 {
 
     fn check(&self, ctx: &LintContext) -> Vec<CheckFailure> {
         if let Some(chart) = ctx.chart_metadata {
-            if chart.description.is_none() || chart.description.as_ref().map(|d| d.is_empty()).unwrap_or(true) {
+            if chart.description.is_none()
+                || chart
+                    .description
+                    .as_ref()
+                    .map(|d| d.is_empty())
+                    .unwrap_or(true)
+            {
                 return vec![CheckFailure::new(
                     "HL1006",
                     Severity::Info,
@@ -359,7 +365,10 @@ impl Rule for HL1009 {
             }
         }
 
-        let has_templates = ctx.files.iter().any(|f| f.starts_with("templates/") || f.contains("/templates/"));
+        let has_templates = ctx
+            .files
+            .iter()
+            .any(|f| f.starts_with("templates/") || f.contains("/templates/"));
         if !has_templates && ctx.templates.is_empty() {
             return vec![CheckFailure::new(
                 "HL1009",
@@ -616,7 +625,9 @@ impl Rule for HL1016 {
         let mut failures = Vec::new();
         if let Some(chart) = ctx.chart_metadata {
             for dep in &chart.dependencies {
-                if dep.version.is_none() || dep.version.as_ref().map(|v| v.is_empty()).unwrap_or(true) {
+                if dep.version.is_none()
+                    || dep.version.as_ref().map(|v| v.is_empty()).unwrap_or(true)
+                {
                     failures.push(CheckFailure::new(
                         "HL1016",
                         Severity::Warning,
@@ -656,7 +667,13 @@ impl Rule for HL1017 {
         let mut failures = Vec::new();
         if let Some(chart) = ctx.chart_metadata {
             for dep in &chart.dependencies {
-                if dep.repository.is_none() || dep.repository.as_ref().map(|r| r.is_empty()).unwrap_or(true) {
+                if dep.repository.is_none()
+                    || dep
+                        .repository
+                        .as_ref()
+                        .map(|r| r.is_empty())
+                        .unwrap_or(true)
+                {
                     // Skip if it's a file:// reference (local dependency)
                     failures.push(CheckFailure::new(
                         "HL1017",
@@ -684,7 +701,7 @@ fn is_valid_semver(version: &str) -> bool {
     for (i, part) in parts.iter().enumerate() {
         // Allow pre-release and build metadata on the last part
         let numeric_part = if i == parts.len() - 1 {
-            part.split(|c| c == '-' || c == '+').next().unwrap_or(part)
+            part.split(['-', '+']).next().unwrap_or(part)
         } else {
             part
         };
@@ -704,12 +721,18 @@ fn is_valid_chart_name(name: &str) -> bool {
     }
 
     // Must start with a letter
-    if !name.chars().next().map(|c| c.is_ascii_lowercase()).unwrap_or(false) {
+    if !name
+        .chars()
+        .next()
+        .map(|c| c.is_ascii_lowercase())
+        .unwrap_or(false)
+    {
         return false;
     }
 
     // Must contain only lowercase letters, numbers, and hyphens
-    name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    name.chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
 #[cfg(test)]

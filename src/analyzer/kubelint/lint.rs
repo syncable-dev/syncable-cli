@@ -163,7 +163,10 @@ pub fn lint_content(content: &str, config: &KubelintConfig) -> LintResult {
 
 /// Load a lint context from a path.
 /// Returns (context, optional_warning) - warning is set if fallback was used.
-fn load_context(path: &Path, _config: &KubelintConfig) -> Result<(LintContextImpl, Option<String>), String> {
+fn load_context(
+    path: &Path,
+    _config: &KubelintConfig,
+) -> Result<(LintContextImpl, Option<String>), String> {
     let mut ctx = LintContextImpl::new();
     let mut warning: Option<String> = None;
 
@@ -403,7 +406,10 @@ mod tests {
         // First test: lint from content
         let result_content = lint_content(&content, &config);
         println!("\n=== Lint Content Result ===");
-        println!("Objects analyzed: {}", result_content.summary.objects_analyzed);
+        println!(
+            "Objects analyzed: {}",
+            result_content.summary.objects_analyzed
+        );
         println!("Checks run: {}", result_content.summary.checks_run);
         println!("Failures: {}", result_content.failures.len());
         for f in &result_content.failures {
@@ -427,8 +433,10 @@ mod tests {
         }
 
         // Assert we found issues
-        assert!(result_content.has_failures() || result_file.has_failures(),
-            "Expected to find security issues in the test file!");
+        assert!(
+            result_content.has_failures() || result_file.has_failures(),
+            "Expected to find security issues in the test file!"
+        );
     }
 
     #[test]
@@ -457,17 +465,25 @@ spec:
         let result = lint_content(yaml, &config);
 
         // Should find issues: privileged container, latest tag, no probes, no resources, etc.
-        assert!(result.has_failures(), "Expected linting failures for insecure deployment");
+        assert!(
+            result.has_failures(),
+            "Expected linting failures for insecure deployment"
+        );
 
         // Verify we found the privileged container issue
-        let privileged_failures: Vec<_> = result.failures
+        let privileged_failures: Vec<_> = result
+            .failures
             .iter()
             .filter(|f| f.code.as_str() == "privileged-container")
             .collect();
-        assert!(!privileged_failures.is_empty(), "Should detect privileged container");
+        assert!(
+            !privileged_failures.is_empty(),
+            "Should detect privileged container"
+        );
 
         // Verify we found the latest tag issue
-        let latest_tag_failures: Vec<_> = result.failures
+        let latest_tag_failures: Vec<_> = result
+            .failures
             .iter()
             .filter(|f| f.code.as_str() == "latest-tag")
             .collect();
@@ -526,14 +542,18 @@ spec:
         let result = lint_content(yaml, &config);
 
         // Should not find privileged or latest-tag issues
-        let critical_failures: Vec<_> = result.failures
+        let critical_failures: Vec<_> = result
+            .failures
             .iter()
             .filter(|f| {
-                f.code.as_str() == "privileged-container" ||
-                f.code.as_str() == "latest-tag"
+                f.code.as_str() == "privileged-container" || f.code.as_str() == "latest-tag"
             })
             .collect();
-        assert!(critical_failures.is_empty(), "Secure deployment should not have privileged/latest-tag failures: {:?}", critical_failures);
+        assert!(
+            critical_failures.is_empty(),
+            "Secure deployment should not have privileged/latest-tag failures: {:?}",
+            critical_failures
+        );
     }
 
     #[test]
@@ -563,10 +583,14 @@ spec:
         let result = lint_content(yaml, &config);
 
         // Should NOT find privileged container issue due to ignore annotation
-        let privileged_failures: Vec<_> = result.failures
+        let privileged_failures: Vec<_> = result
+            .failures
             .iter()
             .filter(|f| f.code.as_str() == "privileged-container")
             .collect();
-        assert!(privileged_failures.is_empty(), "Ignored check should not produce failures");
+        assert!(
+            privileged_failures.is_empty(),
+            "Ignored check should not produce failures"
+        );
     }
 }

@@ -5,7 +5,7 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use crate::analyzer::helmlint::parser::template::{parse_template, ParsedTemplate, TemplateToken};
+use crate::analyzer::helmlint::parser::template::{ParsedTemplate, TemplateToken, parse_template};
 
 /// A helper template definition.
 #[derive(Debug, Clone)]
@@ -126,7 +126,9 @@ pub fn parse_helpers(content: &str, path: &str) -> ParsedHelpers {
                         // several lines before the define if it's a multi-line comment
                         let doc_comment = last_comment
                             .take()
-                            .filter(|(_, comment_line)| *line > *comment_line && *line - *comment_line <= 5)
+                            .filter(|(_, comment_line)| {
+                                *line > *comment_line && *line - *comment_line <= 5
+                            })
                             .map(|(c, _)| c);
 
                         helpers.push(HelperDefinition {
@@ -242,11 +244,13 @@ app.kubernetes.io/instance: {{ .Release.Name }}
         // Check documentation comment
         let name_helper = parsed.get_helper("mychart.name").unwrap();
         assert!(name_helper.doc_comment.is_some());
-        assert!(name_helper
-            .doc_comment
-            .as_ref()
-            .unwrap()
-            .contains("Get the name"));
+        assert!(
+            name_helper
+                .doc_comment
+                .as_ref()
+                .unwrap()
+                .contains("Get the name")
+        );
     }
 
     #[test]

@@ -4,11 +4,12 @@
 //! - Beautiful response formatting with markdown rendering
 //! - Real-time streaming response display
 //! - Visible tool call execution with status indicators
-//! - Animated spinners with witty phrases during processing
+//! - Animated progress bar with token counter during generation
 //! - Thinking/reasoning indicators
 //! - Elapsed time tracking
 //! - Interactive tool confirmation prompts
 //! - Diff rendering for file changes
+//! - ANSI scroll regions for split layout (output + fixed input)
 
 pub mod autocomplete;
 pub mod colors;
@@ -19,7 +20,9 @@ pub mod helmlint_display;
 pub mod hooks;
 pub mod input;
 pub mod kubelint_display;
+pub mod layout;
 pub mod plan_menu;
+pub mod progress;
 pub mod response;
 pub mod shell_output;
 pub mod spinner;
@@ -35,7 +38,9 @@ pub use helmlint_display::*;
 pub use hooks::*;
 pub use input::*;
 pub use kubelint_display::*;
+pub use layout::*;
 pub use plan_menu::*;
+pub use progress::*;
 pub use response::*;
 pub use shell_output::*;
 pub use spinner::*;

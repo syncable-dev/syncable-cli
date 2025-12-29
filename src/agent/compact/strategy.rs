@@ -169,8 +169,8 @@ impl CompactionStrategy {
             // We're evicting a tool call - need to also evict its result
             // Find the tool result with matching ID
             if let Some(tool_id) = &last_evicted.tool_id {
-                for i in end..messages.len().min(end + 5) {
-                    if messages[i].is_tool_result && messages[i].tool_id.as_ref() == Some(tool_id) {
+                for (i, msg) in messages.iter().enumerate().skip(end).take(5) {
+                    if msg.is_tool_result && msg.tool_id.as_ref() == Some(tool_id) {
                         // Found matching result - extend eviction to include it
                         end = i + 1;
                         break;

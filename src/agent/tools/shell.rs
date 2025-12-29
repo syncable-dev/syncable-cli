@@ -272,21 +272,22 @@ impl Tool for ShellTool {
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
             name: Self::NAME.to_string(),
-            description: r#"Execute shell commands for validation and building. This tool is restricted to safe DevOps commands.
+            description: r#"Execute shell commands for building and validation. RESTRICTED to commands that CANNOT be done with native tools.
 
-Allowed commands:
-- Docker: docker build, docker compose
-- Terraform: terraform init, terraform validate, terraform plan, terraform fmt
-- Helm: helm lint, helm template, helm dependency
-- Kubernetes: kubectl apply --dry-run, kubectl diff
-- Build: make, npm run, cargo build, go build
-- Linting: hadolint, tflint, yamllint, shellcheck
+**DO NOT use shell for linting - use NATIVE tools instead:**
+- Dockerfile linting → use `hadolint` tool (NOT shell hadolint)
+- docker-compose linting → use `dclint` tool (NOT shell docker-compose config)
+- Helm chart linting → use `helmlint` tool (NOT shell helm lint)
+- Kubernetes YAML linting → use `kubelint` tool (NOT shell kubectl/kubeval)
 
-Use this to validate generated configurations:
-- `docker build -t test .` - Validate Dockerfile
-- `terraform validate` - Validate Terraform configuration
-- `helm lint ./chart` - Validate Helm chart
-- `hadolint Dockerfile` - Lint Dockerfile"#.to_string(),
+**Use shell ONLY for:**
+- `docker build` - Actually building Docker images
+- `terraform init/validate/plan` - Terraform workflows
+- `make`, `npm run`, `cargo build` - Build commands
+- `git` commands - Version control operations
+
+The native linting tools return AI-optimized JSON with priorities and fix recommendations.
+Shell linting produces plain text that's harder to parse and act on."#.to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {

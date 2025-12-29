@@ -79,6 +79,18 @@ pub const SLASH_COMMANDS: &[SlashCommand] = &[
         auto_execute: true,
     },
     SlashCommand {
+        name: "resume",
+        alias: Some("s"),
+        description: "Browse and resume previous sessions",
+        auto_execute: true,
+    },
+    SlashCommand {
+        name: "sessions",
+        alias: Some("ls"),
+        description: "List available sessions for this project",
+        auto_execute: true,
+    },
+    SlashCommand {
         name: "exit",
         alias: Some("q"),
         description: "Exit the chat",

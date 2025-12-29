@@ -34,6 +34,7 @@ pub mod commands;
 pub mod compact;
 pub mod history;
 pub mod ide;
+pub mod persistence;
 pub mod prompts;
 pub mod session;
 pub mod tools;
@@ -117,7 +118,7 @@ fn get_system_prompt(project_path: &Path, query: Option<&str>, plan_mode: PlanMo
         }
         // Then check if it's DevOps generation (Docker, Terraform, Helm)
         if prompts::is_generation_query(q) {
-            return prompts::get_devops_prompt(project_path);
+            return prompts::get_devops_prompt(project_path, Some(q));
         }
     }
     // Default to analysis prompt
@@ -133,6 +134,10 @@ pub async fn run_interactive(
     use tools::*;
 
     let mut session = ChatSession::new(project_path, provider, model);
+
+    // Terminal layout for split screen is disabled for now - see notes below
+    // let terminal_layout = ui::TerminalLayout::new();
+    // let layout_state = terminal_layout.state();
 
     // Initialize conversation history with compaction support
     let mut conversation_history = ConversationHistory::new();
@@ -176,6 +181,19 @@ pub async fn run_interactive(
 
     session.print_banner();
 
+    // NOTE: Terminal layout with ANSI scroll regions is disabled for now.
+    // The scroll region approach conflicts with the existing input/output flow.
+    // TODO: Implement proper scroll region support that integrates with the input handler.
+    // For now, we rely on the pause/resume mechanism in progress indicator.
+    //
+    // if let Err(e) = terminal_layout.init() {
+    //     eprintln!(
+    //         "{}",
+    //         format!("Note: Terminal layout initialization failed: {}. Using fallback mode.", e)
+    //             .dimmed()
+    //     );
+    // }
+
     // Raw Rig messages for multi-turn - preserves Reasoning blocks for thinking
     // Our ConversationHistory only stores text summaries, but rig needs full Message structure
     let mut raw_chat_history: Vec<rig::completion::Message> = Vec::new();
@@ -184,6 +202,9 @@ pub async fn run_interactive(
     let mut pending_input: Option<String> = None;
     // Auto-accept mode for plan execution (skips write confirmations)
     let mut auto_accept_writes = false;
+
+    // Initialize session recorder for conversation persistence
+    let mut session_recorder = persistence::SessionRecorder::new(project_path);
 
     loop {
         // Show conversation status if we have history
@@ -323,6 +344,12 @@ pub async fn run_interactive(
             // Create hook for Claude Code style tool display
             let hook = ToolDisplayHook::new();
 
+            // Create progress indicator for visual feedback during generation
+            let progress = ui::GenerationIndicator::new();
+            // Layout connection disabled - using inline progress mode
+            // progress.state().set_layout(layout_state.clone());
+            hook.set_progress_state(progress.state()).await;
+
             let project_path_buf = session.project_path.clone();
             // Select prompt based on query type (analysis vs generation) and plan mode
             let preamble = get_system_prompt(
@@ -336,7 +363,24 @@ pub async fn run_interactive(
             // Note: using raw_chat_history directly which preserves Reasoning blocks
             // This is needed for extended thinking to work with multi-turn conversations
 
-            let response = match session.provider {
+            // Get progress state for interrupt detection
+            let progress_state = progress.state();
+
+            // Use tokio::select! to race the API call against Ctrl+C
+            // This allows immediate cancellation, not just between tool calls
+            let mut user_interrupted = false;
+
+            // API call with Ctrl+C interrupt support
+            let response = tokio::select! {
+                biased; // Check ctrl_c first for faster response
+
+                _ = tokio::signal::ctrl_c() => {
+                    user_interrupted = true;
+                    Err::<String, String>("User cancelled".to_string())
+                }
+
+                result = async {
+                    match session.provider {
                 ProviderType::OpenAI => {
                     let client = openai::Client::from_env();
                     // For GPT-5.x reasoning models, enable reasoning with summary output
@@ -368,7 +412,8 @@ pub async fn run_interactive(
                         .tool(TerraformValidateTool::new(project_path_buf.clone()))
                         .tool(TerraformInstallTool::new())
                         .tool(ReadFileTool::new(project_path_buf.clone()))
-                        .tool(ListDirectoryTool::new(project_path_buf.clone()));
+                        .tool(ListDirectoryTool::new(project_path_buf.clone()))
+                        .tool(WebFetchTool::new());
 
                     // Add tools based on mode
                     if is_planning {
@@ -446,7 +491,8 @@ pub async fn run_interactive(
                         .tool(TerraformValidateTool::new(project_path_buf.clone()))
                         .tool(TerraformInstallTool::new())
                         .tool(ReadFileTool::new(project_path_buf.clone()))
-                        .tool(ListDirectoryTool::new(project_path_buf.clone()));
+                        .tool(ListDirectoryTool::new(project_path_buf.clone()))
+                        .tool(WebFetchTool::new());
 
                     // Add tools based on mode
                     if is_planning {
@@ -528,7 +574,8 @@ pub async fn run_interactive(
                         .tool(TerraformValidateTool::new(project_path_buf.clone()))
                         .tool(TerraformInstallTool::new())
                         .tool(ReadFileTool::new(project_path_buf.clone()))
-                        .tool(ListDirectoryTool::new(project_path_buf.clone()));
+                        .tool(ListDirectoryTool::new(project_path_buf.clone()))
+                        .tool(WebFetchTool::new());
 
                     // Add tools based on mode
                     if is_planning {
@@ -579,8 +626,16 @@ pub async fn run_interactive(
                         .with_hook(hook.clone())
                         .multi_turn(50)
                         .await
-                }
+                    }
+                }.map_err(|e| e.to_string())
+            } => result
             };
+
+            // Stop the progress indicator before handling the response
+            progress.stop().await;
+
+            // Suppress unused variable warnings
+            let _ = (&progress_state, user_interrupted);
 
             match response {
                 Ok(text) => {
@@ -663,6 +718,16 @@ pub async fn run_interactive(
                         .history
                         .push(("assistant".to_string(), text.clone()));
 
+                    // Record to persistent session storage
+                    session_recorder.record_user_message(&input);
+                    session_recorder.record_assistant_message(&text, Some(&tool_calls));
+                    if let Err(e) = session_recorder.save() {
+                        eprintln!(
+                            "{}",
+                            format!("  Warning: Failed to save session: {}", e).dimmed()
+                        );
+                    }
+
                     // Check if plan_create was called - show interactive menu
                     if let Some(plan_info) = find_plan_create_call(&tool_calls) {
                         println!(); // Space before menu
@@ -713,6 +778,32 @@ pub async fn run_interactive(
                     let err_str = e.to_string();
 
                     println!();
+
+                    // Check if this was a user-initiated cancellation (Ctrl+C)
+                    if err_str.contains("cancelled") || err_str.contains("Cancelled") {
+                        // Extract any completed work before cancellation
+                        let completed_tools = extract_tool_calls_from_hook(&hook).await;
+                        let tool_count = completed_tools.len();
+
+                        eprintln!("{}", "⚠ Generation interrupted.".yellow());
+                        if tool_count > 0 {
+                            eprintln!(
+                                "{}",
+                                format!("  {} tool calls completed before interrupt.", tool_count)
+                                    .dimmed()
+                            );
+                            // Add partial progress to history
+                            conversation_history.add_turn(
+                                current_input.clone(),
+                                format!("[Interrupted after {} tool calls]", tool_count),
+                                completed_tools,
+                            );
+                        }
+                        eprintln!("{}", "  Type your next message to continue.".dimmed());
+
+                        // Don't retry, don't mark as succeeded - just break to return to prompt
+                        break;
+                    }
 
                     // Check if this is a max depth error - handle as checkpoint
                     if err_str.contains("MaxDepth")
@@ -1067,8 +1158,20 @@ pub async fn run_interactive(
         println!();
     }
 
+    // Clean up terminal layout before exiting (disabled - layout not initialized)
+    // if let Err(e) = terminal_layout.cleanup() {
+    //     eprintln!(
+    //         "{}",
+    //         format!("Warning: Terminal cleanup failed: {}", e).dimmed()
+    //     );
+    // }
+
     Ok(())
 }
+
+// NOTE: wait_for_interrupt function removed - ESC interrupt feature disabled
+// due to terminal corruption issues with spawn_blocking raw mode handling.
+// TODO: Re-implement using tool hook callbacks for cleaner interruption.
 
 /// Extract tool call records from the hook state for history tracking
 async fn extract_tool_calls_from_hook(hook: &ToolDisplayHook) -> Vec<ToolCallRecord> {
@@ -1422,7 +1525,8 @@ pub async fn run_query(
                 .tool(TerraformValidateTool::new(project_path_buf.clone()))
                 .tool(TerraformInstallTool::new())
                 .tool(ReadFileTool::new(project_path_buf.clone()))
-                .tool(ListDirectoryTool::new(project_path_buf.clone()));
+                .tool(ListDirectoryTool::new(project_path_buf.clone()))
+                .tool(WebFetchTool::new());
 
             // Add generation tools if this is a generation query
             if is_generation {
@@ -1467,7 +1571,8 @@ pub async fn run_query(
                 .tool(TerraformValidateTool::new(project_path_buf.clone()))
                 .tool(TerraformInstallTool::new())
                 .tool(ReadFileTool::new(project_path_buf.clone()))
-                .tool(ListDirectoryTool::new(project_path_buf.clone()));
+                .tool(ListDirectoryTool::new(project_path_buf.clone()))
+                .tool(WebFetchTool::new());
 
             // Add generation tools if this is a generation query
             if is_generation {
@@ -1515,7 +1620,8 @@ pub async fn run_query(
                 .tool(TerraformValidateTool::new(project_path_buf.clone()))
                 .tool(TerraformInstallTool::new())
                 .tool(ReadFileTool::new(project_path_buf.clone()))
-                .tool(ListDirectoryTool::new(project_path_buf.clone()));
+                .tool(ListDirectoryTool::new(project_path_buf.clone()))
+                .tool(WebFetchTool::new());
 
             // Add generation tools if this is a generation query
             if is_generation {

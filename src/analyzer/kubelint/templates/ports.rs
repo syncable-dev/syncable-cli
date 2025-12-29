@@ -110,10 +110,7 @@ impl CheckFunc for SSHPortCheck {
                 for port in &container.ports {
                     if port.container_port == 22 {
                         diagnostics.push(Diagnostic {
-                            message: format!(
-                                "Container '{}' exposes SSH port 22",
-                                container.name
-                            ),
+                            message: format!("Container '{}' exposes SSH port 22", container.name),
                             remediation: Some(
                                 "SSH access in containers is generally discouraged. \
                                  Use kubectl exec for debugging or remove SSH."
@@ -170,12 +167,15 @@ impl CheckFunc for LivenessPortCheck {
         if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object) {
             for container in extract::container::containers(pod_spec) {
                 if let Some(probe) = &container.liveness_probe {
-                    let probe_port = probe.http_get.as_ref().map(|h| h.port)
+                    let probe_port = probe
+                        .http_get
+                        .as_ref()
+                        .map(|h| h.port)
                         .or_else(|| probe.tcp_socket.as_ref().map(|t| t.port));
 
                     if let Some(port_num) = probe_port {
-                        let has_matching_port = container.ports.iter()
-                            .any(|p| p.container_port == port_num);
+                        let has_matching_port =
+                            container.ports.iter().any(|p| p.container_port == port_num);
 
                         if !has_matching_port && !container.ports.is_empty() {
                             diagnostics.push(Diagnostic {
@@ -239,12 +239,15 @@ impl CheckFunc for ReadinessPortCheck {
         if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object) {
             for container in extract::container::containers(pod_spec) {
                 if let Some(probe) = &container.readiness_probe {
-                    let probe_port = probe.http_get.as_ref().map(|h| h.port)
+                    let probe_port = probe
+                        .http_get
+                        .as_ref()
+                        .map(|h| h.port)
                         .or_else(|| probe.tcp_socket.as_ref().map(|t| t.port));
 
                     if let Some(port_num) = probe_port {
-                        let has_matching_port = container.ports.iter()
-                            .any(|p| p.container_port == port_num);
+                        let has_matching_port =
+                            container.ports.iter().any(|p| p.container_port == port_num);
 
                         if !has_matching_port && !container.ports.is_empty() {
                             diagnostics.push(Diagnostic {
