@@ -246,13 +246,37 @@ impl Rule for HL5005 {
 
         // Deprecated APIs and their replacements
         let deprecated_apis = [
-            ("extensions/v1beta1", "apps/v1", "Deployment, DaemonSet, ReplicaSet"),
+            (
+                "extensions/v1beta1",
+                "apps/v1",
+                "Deployment, DaemonSet, ReplicaSet",
+            ),
             ("apps/v1beta1", "apps/v1", "Deployment, StatefulSet"),
-            ("apps/v1beta2", "apps/v1", "Deployment, StatefulSet, DaemonSet, ReplicaSet"),
-            ("networking.k8s.io/v1beta1", "networking.k8s.io/v1", "Ingress"),
-            ("rbac.authorization.k8s.io/v1beta1", "rbac.authorization.k8s.io/v1", "Role, ClusterRole, RoleBinding"),
-            ("admissionregistration.k8s.io/v1beta1", "admissionregistration.k8s.io/v1", "MutatingWebhookConfiguration, ValidatingWebhookConfiguration"),
-            ("apiextensions.k8s.io/v1beta1", "apiextensions.k8s.io/v1", "CustomResourceDefinition"),
+            (
+                "apps/v1beta2",
+                "apps/v1",
+                "Deployment, StatefulSet, DaemonSet, ReplicaSet",
+            ),
+            (
+                "networking.k8s.io/v1beta1",
+                "networking.k8s.io/v1",
+                "Ingress",
+            ),
+            (
+                "rbac.authorization.k8s.io/v1beta1",
+                "rbac.authorization.k8s.io/v1",
+                "Role, ClusterRole, RoleBinding",
+            ),
+            (
+                "admissionregistration.k8s.io/v1beta1",
+                "admissionregistration.k8s.io/v1",
+                "MutatingWebhookConfiguration, ValidatingWebhookConfiguration",
+            ),
+            (
+                "apiextensions.k8s.io/v1beta1",
+                "apiextensions.k8s.io/v1",
+                "CustomResourceDefinition",
+            ),
             ("policy/v1beta1", "policy/v1", "PodDisruptionBudget"),
             ("batch/v1beta1", "batch/v1", "CronJob"),
         ];
@@ -317,11 +341,14 @@ impl Rule for HL5006 {
         ];
 
         // Check if helpers define standard labels
-        let has_labels_helper = ctx.helpers.map(|h| {
-            h.helpers.iter().any(|helper| {
-                helper.name.contains("labels") || helper.name.contains("selectorLabels")
+        let has_labels_helper = ctx
+            .helpers
+            .map(|h| {
+                h.helpers.iter().any(|helper| {
+                    helper.name.contains("labels") || helper.name.contains("selectorLabels")
+                })
             })
-        }).unwrap_or(false);
+            .unwrap_or(false);
 
         if !has_labels_helper {
             // Check templates for any recommended labels

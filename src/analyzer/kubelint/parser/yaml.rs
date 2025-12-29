@@ -1,7 +1,7 @@
 //! YAML parsing for Kubernetes manifests.
 
-use crate::analyzer::kubelint::context::object::*;
 use crate::analyzer::kubelint::context::Object;
+use crate::analyzer::kubelint::context::object::*;
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -71,11 +71,7 @@ pub fn parse_yaml_dir(path: &Path) -> Result<Vec<Object>, YamlParseError> {
                     Ok(mut objs) => objects.append(&mut objs),
                     Err(e) => {
                         // Log warning but continue parsing other files
-                        eprintln!(
-                            "Warning: failed to parse {}: {}",
-                            entry_path.display(),
-                            e
-                        );
+                        eprintln!("Warning: failed to parse {}: {}", entry_path.display(), e);
                     }
                 }
             }
@@ -146,14 +142,17 @@ fn get_string_map(value: &serde_yaml::Value, key: &str) -> Option<BTreeMap<Strin
             map.insert(key.to_string(), val.to_string());
         }
     }
-    if map.is_empty() {
-        None
-    } else {
-        Some(map)
-    }
+    if map.is_empty() { None } else { Some(map) }
 }
 
-fn parse_metadata(value: &serde_yaml::Value) -> (String, Option<String>, Option<BTreeMap<String, String>>, Option<BTreeMap<String, String>>) {
+fn parse_metadata(
+    value: &serde_yaml::Value,
+) -> (
+    String,
+    Option<String>,
+    Option<BTreeMap<String, String>>,
+    Option<BTreeMap<String, String>>,
+) {
     let metadata = value.get("metadata");
     let name = metadata
         .and_then(|m| get_string(m, "name"))
@@ -527,15 +526,19 @@ fn parse_deployment(value: &serde_yaml::Value) -> DeploymentData {
         replicas: spec.and_then(|s| get_i32(s, "replicas")),
         selector: parse_label_selector(value.get("spec").unwrap_or(value)),
         pod_spec: parse_pod_spec(value),
-        strategy: spec.and_then(|s| s.get("strategy")).map(|strat| DeploymentStrategy {
-            type_: get_string(strat, "type"),
-            rolling_update: strat.get("rollingUpdate").map(|ru| RollingUpdateDeployment {
-                max_unavailable: get_string(ru, "maxUnavailable")
-                    .or_else(|| get_i32(ru, "maxUnavailable").map(|n| n.to_string())),
-                max_surge: get_string(ru, "maxSurge")
-                    .or_else(|| get_i32(ru, "maxSurge").map(|n| n.to_string())),
+        strategy: spec
+            .and_then(|s| s.get("strategy"))
+            .map(|strat| DeploymentStrategy {
+                type_: get_string(strat, "type"),
+                rolling_update: strat
+                    .get("rollingUpdate")
+                    .map(|ru| RollingUpdateDeployment {
+                        max_unavailable: get_string(ru, "maxUnavailable")
+                            .or_else(|| get_i32(ru, "maxUnavailable").map(|n| n.to_string())),
+                        max_surge: get_string(ru, "maxSurge")
+                            .or_else(|| get_i32(ru, "maxSurge").map(|n| n.to_string())),
+                    }),
             }),
-        }),
     }
 }
 
@@ -565,8 +568,10 @@ fn parse_daemonset(value: &serde_yaml::Value) -> DaemonSetData {
         annotations,
         selector: parse_label_selector(value.get("spec").unwrap_or(value)),
         pod_spec: parse_pod_spec(value),
-        update_strategy: spec.and_then(|s| s.get("updateStrategy")).map(|us| DaemonSetUpdateStrategy {
-            type_: get_string(us, "type"),
+        update_strategy: spec.and_then(|s| s.get("updateStrategy")).map(|us| {
+            DaemonSetUpdateStrategy {
+                type_: get_string(us, "type"),
+            }
         }),
     }
 }
@@ -616,9 +621,7 @@ fn parse_cronjob(value: &serde_yaml::Value) -> CronJobData {
     let (name, namespace, labels, annotations) = parse_metadata(value);
 
     // CronJob has jobTemplate.spec.template.spec
-    let job_template = value
-        .get("spec")
-        .and_then(|s| s.get("jobTemplate"));
+    let job_template = value.get("spec").and_then(|s| s.get("jobTemplate"));
 
     let job_spec = job_template.map(|jt| {
         let (_, _, job_labels, job_annotations) = jt
@@ -644,7 +647,8 @@ fn parse_cronjob(value: &serde_yaml::Value) -> CronJobData {
                     .and_then(|t| t.get("spec"))
                     .map(parse_pod_spec_inner)
             }),
-            ttl_seconds_after_finished: job_spec.and_then(|s| get_i32(s, "ttlSecondsAfterFinished")),
+            ttl_seconds_after_finished: job_spec
+                .and_then(|s| get_i32(s, "ttlSecondsAfterFinished")),
         }
     });
 
@@ -748,9 +752,11 @@ fn parse_network_policy(value: &serde_yaml::Value) -> NetworkPolicyData {
         namespace,
         labels,
         annotations,
-        pod_selector: spec.and_then(|s| s.get("podSelector")).map(|ps| LabelSelector {
-            match_labels: get_string_map(ps, "matchLabels"),
-        }),
+        pod_selector: spec
+            .and_then(|s| s.get("podSelector"))
+            .map(|ps| LabelSelector {
+                match_labels: get_string_map(ps, "matchLabels"),
+            }),
     }
 }
 
@@ -890,15 +896,20 @@ fn parse_pdb(value: &serde_yaml::Value) -> PdbData {
         labels,
         annotations,
         min_available: spec.and_then(|s| {
-            get_string(s, "minAvailable").or_else(|| get_i32(s, "minAvailable").map(|n| n.to_string()))
+            get_string(s, "minAvailable")
+                .or_else(|| get_i32(s, "minAvailable").map(|n| n.to_string()))
         }),
         max_unavailable: spec.and_then(|s| {
-            get_string(s, "maxUnavailable").or_else(|| get_i32(s, "maxUnavailable").map(|n| n.to_string()))
+            get_string(s, "maxUnavailable")
+                .or_else(|| get_i32(s, "maxUnavailable").map(|n| n.to_string()))
         }),
-        selector: spec.and_then(|s| s.get("selector")).map(|sel| LabelSelector {
-            match_labels: get_string_map(sel, "matchLabels"),
-        }),
-        unhealthy_pod_eviction_policy: spec.and_then(|s| get_string(s, "unhealthyPodEvictionPolicy")),
+        selector: spec
+            .and_then(|s| s.get("selector"))
+            .map(|sel| LabelSelector {
+                match_labels: get_string_map(sel, "matchLabels"),
+            }),
+        unhealthy_pod_eviction_policy: spec
+            .and_then(|s| get_string(s, "unhealthyPodEvictionPolicy")),
     }
 }
 
@@ -991,7 +1002,10 @@ spec:
             let pod_spec = dep.pod_spec.as_ref().unwrap();
             assert_eq!(pod_spec.containers.len(), 1);
             assert_eq!(pod_spec.containers[0].name, "nginx");
-            assert_eq!(pod_spec.containers[0].image, Some("nginx:1.14.2".to_string()));
+            assert_eq!(
+                pod_spec.containers[0].image,
+                Some("nginx:1.14.2".to_string())
+            );
         } else {
             panic!("Expected Deployment");
         }

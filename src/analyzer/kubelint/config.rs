@@ -252,19 +252,11 @@ impl CheckSpec {
 }
 
 /// Scope configuration for a check.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CheckScope {
     /// Which object kinds this check applies to.
     #[serde(default, rename = "objectKinds")]
     pub object_kinds: ObjectKindsDesc,
-}
-
-impl Default for CheckScope {
-    fn default() -> Self {
-        Self {
-            object_kinds: ObjectKindsDesc::default(),
-        }
-    }
 }
 
 impl CheckScope {

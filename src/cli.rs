@@ -247,6 +247,14 @@ pub enum Commands {
         /// Run a single query instead of interactive mode
         #[arg(long)]
         query: Option<String>,
+
+        /// Resume a previous session (accepts: "latest", session number, or UUID)
+        #[arg(long, short = 'r')]
+        resume: Option<String>,
+
+        /// List available sessions for this project and exit
+        #[arg(long)]
+        list_sessions: bool,
     },
 }
 

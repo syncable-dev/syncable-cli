@@ -13,8 +13,55 @@
 //! - <error_reflection_protocol> - How to handle errors without self-doubt
 //! - <thinking_guidelines> - How to reason without "oops" patterns
 
-/// Docker generation prompt with self-correction protocol
+/// Docker generation prompt with self-correction protocol (full reference)
 pub const DOCKER_GENERATION: &str = include_str!("docker_self_correct.md");
+
+/// Docker validation protocol - appended to prompts when Dockerfile queries are detected
+const DOCKER_VALIDATION_PROTOCOL: &str = r#"
+<docker_validation_protocol>
+**CRITICAL: When creating or modifying Dockerfiles, you MUST NOT stop after writing the file.**
+
+## Mandatory Validation Sequence
+After writing any Dockerfile or docker-compose.yml, execute this sequence IN ORDER:
+
+1. **Lint with hadolint** (native tool):
+   - Use `hadolint` tool (NOT shell hadolint)
+   - If errors: fix the file, re-run hadolint
+   - Continue only when lint passes
+
+2. **Validate compose config** (if docker-compose.yml exists):
+   - Run: `shell("docker compose config")`
+   - If errors: fix the file, re-run
+
+3. **Build the image**:
+   - Run: `shell("docker build -t <app-name>:test .")` or `shell("docker compose build")`
+   - This is NOT optional - you MUST build to verify the Dockerfile works
+   - If build fails: analyze error, fix Dockerfile, restart from step 1
+
+4. **Test the container** (if applicable):
+   - Run: `shell("docker compose up -d")` or `shell("docker run -d --name test-<app-name> <app-name>:test")`
+   - Wait: `shell("sleep 3")`
+   - Verify: `shell("docker compose ps")` or `shell("docker ps | grep test-<app-name>")`
+   - If container is not running/healthy: check logs, fix, rebuild
+
+5. **Cleanup** (if test was successful):
+   - Run: `shell("docker compose down")` or `shell("docker rm -f test-<app-name>")`
+
+## Error Handling
+- If ANY step fails, analyze the error and fix the artifact
+- After fixing, restart the validation sequence from step 1 (hadolint)
+- If the same error persists after 2 attempts, report the issue to the user
+
+## Success Criteria
+The task is ONLY complete when:
+- Dockerfile passes hadolint validation
+- docker-compose.yml passes config validation (if present)
+- Image builds successfully
+- Container runs without immediate crash
+
+Do NOT ask the user "should I build this?" - just build it as part of the validation.
+</docker_validation_protocol>
+"#;
 
 /// Agent identity section - DevOps/Platform/Security specialization
 const AGENT_IDENTITY: &str = r#"
@@ -108,6 +155,41 @@ const THINKING_GUIDELINES: &str = r#"
 </thinking_guidelines>
 "#;
 
+/// IaC tool selection rules - CRITICAL for ensuring native tools are used
+const IAC_TOOL_SELECTION_RULES: &str = r#"
+<iac_tool_selection_rules>
+**CRITICAL: Use NATIVE tools - DO NOT use shell commands**
+
+## File Discovery (NOT shell find/ls/grep)
+| Task | USE THIS | DO NOT USE |
+|------|----------|------------|
+| List files | `list_directory` | shell(ls...), shell(find...) |
+| Understand structure | `analyze_project(path: "folder")` | shell(tree...), shell(find...) |
+| Read file | `read_file` | shell(cat...), shell(head...) |
+
+**analyze_project tips:**
+- For project overview: `analyze_project()` on root is fine
+- For specific folder: use `path` parameter: `analyze_project(path: "tests/test-lint")`
+- Be context-aware: if user gave specific folders, analyze those, not root
+
+## IaC Linting (NOT shell linting commands)
+| File Type | USE THIS TOOL | DO NOT USE |
+|-----------|---------------|------------|
+| Dockerfile | `hadolint` | shell(hadolint...), shell(docker...) |
+| docker-compose.yml | `dclint` | shell(docker-compose config...) |
+| Kubernetes YAML | `kubelint` | shell(kubectl...), shell(kubeval...) |
+| Helm charts | `helmlint` + `kubelint` | shell(helm lint...) |
+
+**WHY native tools:**
+- AI-optimized JSON with priorities and fix recommendations
+- No external binaries needed (self-contained)
+- Faster (no process spawn)
+- Consistent output format
+
+Shell should ONLY be used for: docker build, terraform commands, make/npm run/cargo build, git
+</iac_tool_selection_rules>
+"#;
+
 /// Get system information section
 fn get_system_info(project_path: &std::path::Path) -> String {
     format!(
@@ -138,6 +220,8 @@ pub fn get_analysis_prompt(project_path: &std::path::Path) -> String {
 {error_protocol}
 
 {thinking}
+
+{iac_tool_rules}
 
 <capabilities>
 You have access to tools to help analyze and understand the project:
@@ -206,7 +290,8 @@ Task status in plan files:
         tool_usage = TOOL_USAGE_INSTRUCTIONS,
         non_negotiable = NON_NEGOTIABLE_RULES,
         error_protocol = ERROR_REFLECTION_PROTOCOL,
-        thinking = THINKING_GUIDELINES
+        thinking = THINKING_GUIDELINES,
+        iac_tool_rules = IAC_TOOL_SELECTION_RULES
     )
 }
 
@@ -224,6 +309,8 @@ pub fn get_code_development_prompt(project_path: &std::path::Path) -> String {
 {error_protocol}
 
 {thinking}
+
+{iac_tool_rules}
 
 <capabilities>
 **Analysis Tools:**
@@ -289,13 +376,15 @@ Don't endlessly analyze - make progress by writing.
         tool_usage = TOOL_USAGE_INSTRUCTIONS,
         non_negotiable = NON_NEGOTIABLE_RULES,
         error_protocol = ERROR_REFLECTION_PROTOCOL,
-        thinking = THINKING_GUIDELINES
+        thinking = THINKING_GUIDELINES,
+        iac_tool_rules = IAC_TOOL_SELECTION_RULES
     )
 }
 
 /// Get the DevOps generation prompt (Docker, Terraform, Helm, K8s)
-pub fn get_devops_prompt(project_path: &std::path::Path) -> String {
-    format!(
+/// If query is provided and is a Dockerfile-related query, appends the Docker validation protocol
+pub fn get_devops_prompt(project_path: &std::path::Path, query: Option<&str>) -> String {
+    let base_prompt = format!(
         r#"{system_info}
 
 {agent_identity}
@@ -307,6 +396,8 @@ pub fn get_devops_prompt(project_path: &std::path::Path) -> String {
 {error_protocol}
 
 {thinking}
+
+{iac_tool_rules}
 
 <capabilities>
 **Analysis Tools:**
@@ -419,8 +510,16 @@ When the user says "execute the plan" or similar:
         tool_usage = TOOL_USAGE_INSTRUCTIONS,
         non_negotiable = NON_NEGOTIABLE_RULES,
         error_protocol = ERROR_REFLECTION_PROTOCOL,
-        thinking = THINKING_GUIDELINES
-    )
+        thinking = THINKING_GUIDELINES,
+        iac_tool_rules = IAC_TOOL_SELECTION_RULES
+    );
+
+    // Append Docker validation protocol if this is a Dockerfile-related query
+    if query.is_some_and(is_dockerfile_query) {
+        format!("{}\n\n{}", base_prompt, DOCKER_VALIDATION_PROTOCOL)
+    } else {
+        base_prompt
+    }
 }
 
 /// Get prompt for Terraform-specific generation
@@ -539,28 +638,57 @@ pub fn get_planning_prompt(project_path: &std::path::Path) -> String {
 
 {tool_usage}
 
+{iac_tool_rules}
+
 <plan_mode_rules>
 **PLAN MODE ACTIVE** - You are in read-only exploration mode.
 
 ## What You CAN Do:
-- Read and analyze files using read_file
-- List directories using list_directory
-- Run read-only shell commands: ls, cat, head, tail, grep, find, git status, git log, git diff
+- Read files using `read_file` (PREFERRED over shell cat/head/tail)
+- List directories using `list_directory` (PREFERRED over shell ls/find)
+- Lint IaC files using native tools (hadolint, dclint, kubelint, helmlint)
+- Run shell for git commands only: git status, git log, git diff
 - Analyze project structure and patterns
-- Explain code and architecture
 - **CREATE STRUCTURED PLANS** using plan_create tool
-- Answer questions about the codebase
 
 ## What You CANNOT Do:
 - Create or modify source files (write_file, write_files are disabled)
 - Run write commands (rm, mv, cp, mkdir, echo >, etc.)
 - Execute build/test commands that modify state
+- Use shell for file discovery when user gave explicit paths
 
 ## Your Role in Plan Mode:
 1. Research thoroughly - read relevant files, understand patterns
 2. Analyze the user's request
 3. Create a structured plan using the `plan_create` tool with task checkboxes
 4. Tell user to switch to standard mode (Shift+Tab) and say "execute the plan"
+
+## CRITICAL: Plan Scope Rules
+**DO NOT over-engineer plans.** Stay focused on what the user explicitly asked.
+
+### What to INCLUDE in the plan:
+- Tasks that directly address the user's request
+- All findings from linting/analysis that need fixing
+- Quality improvements within the scope (security, best practices)
+
+### What to EXCLUDE from the plan (unless explicitly requested):
+- "Documentation & Standards" phases - don't create README, GUIDE, STANDARDS docs
+- "Testing & Validation" phases - don't add CI/CD, test infrastructure, security scanning setup
+- "Template Repository" tasks - don't create reference templates
+- Anything that goes beyond "analyze and improve" into "establish ongoing processes"
+
+### When the user says "analyze and improve X":
+- Analyze X thoroughly
+- Fix all issues found in X
+- DONE. Do not add phases for documenting standards or setting up CI/CD.
+
+### Follow-up suggestions:
+Instead of embedding extra phases in the plan, mention them AFTER the plan summary:
+"📋 Plan created with X tasks. After completion, you may also want to consider:
+- Adding CI/CD validation for these files
+- Creating a standards document for team reference"
+
+This lets the user decide if they want to do more, rather than assuming they do.
 
 ## Creating Plans:
 Use the `plan_create` tool to create executable plans. Each task must use checkbox format:
@@ -575,9 +703,10 @@ Brief description of what we're implementing.
 
 - [ ] First task - create/modify this file
 - [ ] Second task - implement this feature
-- [ ] Third task - add tests
-- [ ] Fourth task - validate everything works
+- [ ] Third task - validate the changes work
 ```
+
+Keep plans **concise and actionable**. Group related fixes logically but don't pad with extra phases.
 
 Task status markers:
 - `[ ]` PENDING - Not started
@@ -587,29 +716,35 @@ Task status markers:
 </plan_mode_rules>
 
 <capabilities>
-**Available Tools (Plan Mode):**
-- read_file - Read file contents
-- list_directory - List files and directories
-- shell - Run read-only commands only (ls, cat, grep, find, git status/log/diff)
-- analyze_project - Analyze project architecture, dependencies
+**File Discovery (ALWAYS use these, NOT shell find/ls):**
+- list_directory - List files in a directory (fast, simple)
+- analyze_project - Understand project structure, languages, frameworks
+  • Root analysis: `analyze_project()` - good for project overview
+  • Targeted analysis: `analyze_project(path: "folder")` - when user gave specific paths
+- read_file - Read file contents (NOT shell cat/head/tail)
 
-**Linting Tools (read-only analysis):**
-- hadolint - Lint Dockerfiles for best practices
-- dclint - Lint docker-compose files
-- kubelint - Lint K8s manifests for security/best practices (works on YAML, Helm charts, Kustomize)
-- helmlint - Lint Helm chart structure and templates
+**IaC Linting Tools (ALWAYS use these, NOT shell):**
+- hadolint - Lint Dockerfiles (NOT shell hadolint)
+- dclint - Lint docker-compose files (NOT shell docker-compose config)
+- kubelint - Lint K8s manifests, Helm charts, Kustomize (NOT shell kubectl/kubeval)
+- helmlint - Lint Helm chart structure and templates (NOT shell helm lint)
 
 **Planning Tools:**
 - **plan_create** - Create structured plan files with task checkboxes
 - **plan_list** - List existing plans in plans/ directory
 
+**Shell (use ONLY for git commands):**
+- shell - ONLY for: git status, git log, git diff, git show
+
 **NOT Available in Plan Mode:**
 - write_file, write_files - File creation/modification disabled
-- Shell commands that modify files - Blocked
+- Shell for file discovery (use list_directory instead)
+- Shell for linting (use native tools instead)
 </capabilities>"#,
         system_info = get_system_info(project_path),
         agent_identity = AGENT_IDENTITY,
-        tool_usage = TOOL_USAGE_INSTRUCTIONS
+        tool_usage = TOOL_USAGE_INSTRUCTIONS,
+        iac_tool_rules = IAC_TOOL_SELECTION_RULES
     )
 }
 
@@ -646,6 +781,24 @@ pub fn is_plan_continuation_query(query: &str) -> bool {
     }
 
     false
+}
+
+/// Detect if a query is specifically about Dockerfile creation/modification
+pub fn is_dockerfile_query(query: &str) -> bool {
+    let query_lower = query.to_lowercase();
+    let dockerfile_keywords = [
+        "dockerfile",
+        "docker-compose",
+        "docker compose",
+        "containerize",
+        "containerise",
+        "docker image",
+        "docker build",
+    ];
+
+    dockerfile_keywords
+        .iter()
+        .any(|kw| query_lower.contains(kw))
 }
 
 /// Detect if a query is specifically about code development (not DevOps)

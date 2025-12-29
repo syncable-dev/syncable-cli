@@ -202,11 +202,7 @@ fn build_line_map(content: &str) -> (HashMap<String, u32>, HashSet<String>) {
 /// E.g., ".Values.image.repository" -> "image.repository"
 pub fn extract_values_path(expr: &str) -> Option<&str> {
     let trimmed = expr.trim();
-    if trimmed.starts_with(".Values.") {
-        Some(&trimmed[8..])
-    } else {
-        None
-    }
+    trimmed.strip_prefix(".Values.")
 }
 
 #[cfg(test)]
@@ -243,10 +239,7 @@ service:
             values.get("image.repository"),
             Some(&Value::String("nginx".to_string()))
         );
-        assert_eq!(
-            values.get("service.port"),
-            Some(&Value::Number(80.into()))
-        );
+        assert_eq!(values.get("service.port"), Some(&Value::Number(80.into())));
         assert_eq!(values.get("nonexistent"), None);
     }
 

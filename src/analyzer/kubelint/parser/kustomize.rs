@@ -165,7 +165,10 @@ impl std::fmt::Display for KustomizeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::KustomizeNotFound => {
-                write!(f, "kustomize binary not found in PATH (tried 'kustomize' and 'kubectl kustomize')")
+                write!(
+                    f,
+                    "kustomize binary not found in PATH (tried 'kustomize' and 'kubectl kustomize')"
+                )
             }
             Self::BuildError(msg) => write!(f, "Build error: {}", msg),
         }

@@ -55,7 +55,7 @@ impl AccumulatedUsage {
 }
 
 /// Shared state for the display
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct DisplayState {
     pub tool_calls: Vec<ToolCallState>,
     pub agent_messages: Vec<String>,
@@ -63,6 +63,10 @@ pub struct DisplayState {
     pub last_expandable_index: Option<usize>,
     /// Accumulated token usage from API responses
     pub usage: AccumulatedUsage,
+    /// Optional progress indicator state for real-time token display
+    pub progress_state: Option<std::sync::Arc<crate::agent::ui::progress::ProgressState>>,
+    /// Cancel signal from rig - stored for external cancellation trigger
+    pub cancel_signal: Option<CancelSignal>,
 }
 
 /// A hook that shows Claude Code style tool execution
@@ -94,6 +98,36 @@ impl ToolDisplayHook {
         let mut state = self.state.lock().await;
         state.usage = AccumulatedUsage::default();
     }
+
+    /// Set the progress indicator state for real-time token display
+    pub async fn set_progress_state(
+        &self,
+        progress: std::sync::Arc<crate::agent::ui::progress::ProgressState>,
+    ) {
+        let mut state = self.state.lock().await;
+        state.progress_state = Some(progress);
+    }
+
+    /// Clear the progress state
+    pub async fn clear_progress_state(&self) {
+        let mut state = self.state.lock().await;
+        state.progress_state = None;
+    }
+
+    /// Trigger cancellation of the current request.
+    /// This will cause rig to stop after the current tool/response completes.
+    pub async fn cancel(&self) {
+        let state = self.state.lock().await;
+        if let Some(ref cancel_sig) = state.cancel_signal {
+            cancel_sig.cancel();
+        }
+    }
+
+    /// Check if cancellation is possible (a cancel signal is stored)
+    pub async fn can_cancel(&self) -> bool {
+        let state = self.state.lock().await;
+        state.cancel_signal.is_some()
+    }
 }
 
 impl Default for ToolDisplayHook {
@@ -111,15 +145,50 @@ where
         tool_name: &str,
         _tool_call_id: Option<String>,
         args: &str,
-        _cancel: CancelSignal,
+        cancel: CancelSignal,
     ) -> impl std::future::Future<Output = ()> + Send {
         let state = self.state.clone();
         let name = tool_name.to_string();
         let args_str = args.to_string();
 
         async move {
-            // Print tool header
+            // Store the cancel signal for external cancellation
+            {
+                let mut s = state.lock().await;
+                s.cancel_signal = Some(cancel);
+            }
+            // Pause progress indicator before printing
+            {
+                let s = state.lock().await;
+                if let Some(ref progress) = s.progress_state {
+                    progress.pause();
+                }
+            }
+
+            // Clear any progress line that might still be visible (timing issue)
+            // Progress loop will also clear, but we do it here to avoid race
+            print!("\r{}", ansi::CLEAR_LINE);
+            let _ = io::stdout().flush();
+
+            // Print tool header with spacing
+            println!(); // Add blank line before tool output
             print_tool_header(&name, &args_str);
+
+            // Update progress indicator with current action (for when it resumes)
+            {
+                let s = state.lock().await;
+                if let Some(ref progress) = s.progress_state {
+                    // Set action based on tool type
+                    let action = tool_to_action(&name);
+                    progress.set_action(&action);
+
+                    // Set focus to tool details
+                    let focus = tool_to_focus(&name, &args_str);
+                    if let Some(f) = focus {
+                        progress.set_focus(&f);
+                    }
+                }
+            }
 
             // Store in state
             let mut s = state.lock().await;
@@ -172,6 +241,13 @@ where
                 }
             }
             s.current_tool_index = None;
+
+            // Resume progress indicator after tool completes
+            if let Some(ref progress) = s.progress_state {
+                progress.set_action("Thinking");
+                progress.clear_focus();
+                progress.resume();
+            }
         }
     }
 
@@ -179,12 +255,16 @@ where
         &self,
         _prompt: &Message,
         response: &CompletionResponse<M::Response>,
-        _cancel: CancelSignal,
+        cancel: CancelSignal,
     ) -> impl std::future::Future<Output = ()> + Send {
         let state = self.state.clone();
 
         // Capture usage from response for token tracking
         let usage = response.usage;
+
+        // Store the cancel signal immediately - this is called before tool calls
+        // so we can support Ctrl+C during initial "Thinking" phase
+        let cancel_for_store = cancel.clone();
 
         // Check if response contains tool calls - if so, any text is "thinking"
         // If no tool calls, this is the final response - don't show as thinking
@@ -232,23 +312,47 @@ where
             .collect();
 
         async move {
+            // Store the cancel signal first - enables Ctrl+C during initial "Thinking"
+            {
+                let mut s = state.lock().await;
+                s.cancel_signal = Some(cancel_for_store);
+            }
+
             // Accumulate usage tokens from this response
             {
                 let mut s = state.lock().await;
                 s.usage.add(&usage);
+
+                // Update progress indicator if connected
+                if let Some(ref progress) = s.progress_state {
+                    progress.update_tokens(usage.input_tokens, usage.output_tokens);
+                }
             }
 
             // First, show reasoning content if available (GPT-5.2 thinking)
             if !reasoning_parts.is_empty() {
                 let thinking_text = reasoning_parts.join("\n");
 
-                // Store in state for history tracking
+                // Store in state for history tracking and pause progress
                 let mut s = state.lock().await;
                 s.agent_messages.push(thinking_text.clone());
+                if let Some(ref progress) = s.progress_state {
+                    progress.pause();
+                }
                 drop(s);
 
-                // Display reasoning as thinking
+                // Clear any progress line (race condition prevention)
+                print!("\r{}", ansi::CLEAR_LINE);
+                let _ = io::stdout().flush();
+
+                // Display reasoning as thinking (minimal style - no redundant header)
                 print_agent_thinking(&thinking_text);
+
+                // Resume progress after
+                let s = state.lock().await;
+                if let Some(ref progress) = s.progress_state {
+                    progress.resume();
+                }
             }
 
             // Also show text content if it's intermediate (has tool calls)
@@ -256,33 +360,39 @@ where
             if !text_parts.is_empty() && has_tool_calls {
                 let thinking_text = text_parts.join("\n");
 
-                // Store in state for history tracking
+                // Store in state for history tracking and pause progress
                 let mut s = state.lock().await;
                 s.agent_messages.push(thinking_text.clone());
+                if let Some(ref progress) = s.progress_state {
+                    progress.pause();
+                }
                 drop(s);
 
-                // Display as thinking
+                // Clear any progress line (race condition prevention)
+                print!("\r{}", ansi::CLEAR_LINE);
+                let _ = io::stdout().flush();
+
+                // Display as thinking (minimal style)
                 print_agent_thinking(&thinking_text);
+
+                // Resume progress after
+                let s = state.lock().await;
+                if let Some(ref progress) = s.progress_state {
+                    progress.resume();
+                }
             }
         }
     }
 }
 
 /// Print agent thinking/reasoning text with nice formatting
+/// Note: No header needed - progress indicator shows "Thinking" action
 fn print_agent_thinking(text: &str) {
     use crate::agent::ui::response::brand;
 
     println!();
 
-    // Print thinking header in peach/coral
-    println!(
-        "{}{}  💭 Thinking...{}",
-        brand::CORAL,
-        brand::ITALIC,
-        brand::RESET
-    );
-
-    // Format the content with markdown support
+    // Format the content with markdown support (subtle style)
     let mut in_code_block = false;
 
     for line in text.lines() {
@@ -1099,11 +1209,26 @@ fn format_kubelint_result(
                         } else {
                             err_str.to_string()
                         };
-                        lines.push(format!("{}  {} {}{}", ansi::HIGH, if i == errors.len().min(3) - 1 { "└" } else { "│" }, truncated, ansi::RESET));
+                        lines.push(format!(
+                            "{}  {} {}{}",
+                            ansi::HIGH,
+                            if i == errors.len().min(3) - 1 {
+                                "└"
+                            } else {
+                                "│"
+                            },
+                            truncated,
+                            ansi::RESET
+                        ));
                     }
                 }
                 if errors.len() > 3 {
-                    lines.push(format!("{}  +{} more errors{}", ansi::GRAY, errors.len() - 3, ansi::RESET));
+                    lines.push(format!(
+                        "{}  +{} more errors{}",
+                        ansi::GRAY,
+                        errors.len() - 3,
+                        ansi::RESET
+                    ));
                 }
                 // If we only have parse errors and no lint issues, return early
                 if total == 0 {
@@ -1146,13 +1271,23 @@ fn format_kubelint_result(
         // Summary with priority breakdown
         let mut priority_parts = Vec::new();
         if critical > 0 {
-            priority_parts.push(format!("{}🔴 {} critical{}", ansi::CRITICAL, critical, ansi::RESET));
+            priority_parts.push(format!(
+                "{}🔴 {} critical{}",
+                ansi::CRITICAL,
+                critical,
+                ansi::RESET
+            ));
         }
         if high > 0 {
             priority_parts.push(format!("{}🟠 {} high{}", ansi::HIGH, high, ansi::RESET));
         }
         if medium > 0 {
-            priority_parts.push(format!("{}🟡 {} medium{}", ansi::MEDIUM, medium, ansi::RESET));
+            priority_parts.push(format!(
+                "{}🟡 {} medium{}",
+                ansi::MEDIUM,
+                medium,
+                ansi::RESET
+            ));
         }
         if low > 0 {
             priority_parts.push(format!("{}🟢 {} low{}", ansi::LOW, low, ansi::RESET));
@@ -1211,7 +1346,12 @@ fn format_kubelint_result(
                 } else {
                     first_fix.to_string()
                 };
-                lines.push(format!("{}  → Fix: {}{}", ansi::INFO_BLUE, truncated, ansi::RESET));
+                lines.push(format!(
+                    "{}  → Fix: {}{}",
+                    ansi::INFO_BLUE,
+                    truncated,
+                    ansi::RESET
+                ));
             }
         }
 
@@ -1258,9 +1398,16 @@ fn format_kubelint_issue(issue: &serde_json::Value, icon: &str, color: &str) -> 
 
     format!(
         "{}{} L{}:{} {}{}[{}]{} {} {}",
-        color, icon, line_num, ansi::RESET,
-        ansi::CYAN, ansi::BOLD, check, ansi::RESET,
-        badge, msg_display
+        color,
+        icon,
+        line_num,
+        ansi::RESET,
+        ansi::CYAN,
+        ansi::BOLD,
+        check,
+        ansi::RESET,
+        badge,
+        msg_display
     )
 }
 
@@ -1298,11 +1445,26 @@ fn format_helmlint_result(
                         } else {
                             err_str.to_string()
                         };
-                        lines.push(format!("{}  {} {}{}", ansi::HIGH, if i == errors.len().min(3) - 1 { "└" } else { "│" }, truncated, ansi::RESET));
+                        lines.push(format!(
+                            "{}  {} {}{}",
+                            ansi::HIGH,
+                            if i == errors.len().min(3) - 1 {
+                                "└"
+                            } else {
+                                "│"
+                            },
+                            truncated,
+                            ansi::RESET
+                        ));
                     }
                 }
                 if errors.len() > 3 {
-                    lines.push(format!("{}  +{} more errors{}", ansi::GRAY, errors.len() - 3, ansi::RESET));
+                    lines.push(format!(
+                        "{}  +{} more errors{}",
+                        ansi::GRAY,
+                        errors.len() - 3,
+                        ansi::RESET
+                    ));
                 }
                 // If we only have parse errors and no lint issues, return early
                 if total == 0 {
@@ -1345,13 +1507,23 @@ fn format_helmlint_result(
         // Summary with priority breakdown
         let mut priority_parts = Vec::new();
         if critical > 0 {
-            priority_parts.push(format!("{}🔴 {} critical{}", ansi::CRITICAL, critical, ansi::RESET));
+            priority_parts.push(format!(
+                "{}🔴 {} critical{}",
+                ansi::CRITICAL,
+                critical,
+                ansi::RESET
+            ));
         }
         if high > 0 {
             priority_parts.push(format!("{}🟠 {} high{}", ansi::HIGH, high, ansi::RESET));
         }
         if medium > 0 {
-            priority_parts.push(format!("{}🟡 {} medium{}", ansi::MEDIUM, medium, ansi::RESET));
+            priority_parts.push(format!(
+                "{}🟡 {} medium{}",
+                ansi::MEDIUM,
+                medium,
+                ansi::RESET
+            ));
         }
         if low > 0 {
             priority_parts.push(format!("{}🟢 {} low{}", ansi::LOW, low, ansi::RESET));
@@ -1410,7 +1582,12 @@ fn format_helmlint_result(
                 } else {
                     first_fix.to_string()
                 };
-                lines.push(format!("{}  → Fix: {}{}", ansi::INFO_BLUE, truncated, ansi::RESET));
+                lines.push(format!(
+                    "{}  → Fix: {}{}",
+                    ansi::INFO_BLUE,
+                    truncated,
+                    ansi::RESET
+                ));
             }
         }
 
@@ -1465,10 +1642,87 @@ fn format_helmlint_issue(issue: &serde_json::Value, icon: &str, color: &str) -> 
 
     format!(
         "{}{} {}:{}:{} {}{}[{}]{} {} {}",
-        color, icon, file_short, line_num, ansi::RESET,
-        ansi::CYAN, ansi::BOLD, code, ansi::RESET,
-        badge, msg_display
+        color,
+        icon,
+        file_short,
+        line_num,
+        ansi::RESET,
+        ansi::CYAN,
+        ansi::BOLD,
+        code,
+        ansi::RESET,
+        badge,
+        msg_display
     )
+}
+
+/// Convert tool name to a friendly action description for progress indicator
+fn tool_to_action(tool_name: &str) -> String {
+    match tool_name {
+        "read_file" => "Reading file".to_string(),
+        "write_file" | "write_files" => "Writing file".to_string(),
+        "list_directory" => "Listing directory".to_string(),
+        "shell" => "Running command".to_string(),
+        "analyze_project" => "Analyzing project".to_string(),
+        "security_scan" | "check_vulnerabilities" => "Scanning security".to_string(),
+        "hadolint" => "Linting Dockerfile".to_string(),
+        "dclint" => "Linting docker-compose".to_string(),
+        "kubelint" => "Linting Kubernetes".to_string(),
+        "helmlint" => "Linting Helm chart".to_string(),
+        "terraform_fmt" => "Formatting Terraform".to_string(),
+        "terraform_validate" => "Validating Terraform".to_string(),
+        "plan_create" => "Creating plan".to_string(),
+        "plan_list" => "Listing plans".to_string(),
+        "plan_next" | "plan_update" => "Updating plan".to_string(),
+        _ => "Processing".to_string(),
+    }
+}
+
+/// Extract focus/detail from tool arguments for progress indicator
+fn tool_to_focus(tool_name: &str, args: &str) -> Option<String> {
+    let parsed: Result<serde_json::Value, _> = serde_json::from_str(args);
+    let parsed = parsed.ok()?;
+
+    match tool_name {
+        "read_file" | "write_file" => {
+            parsed.get("path").and_then(|p| p.as_str()).map(|p| {
+                // Shorten long paths
+                if p.len() > 50 {
+                    format!("...{}", &p[p.len().saturating_sub(47)..])
+                } else {
+                    p.to_string()
+                }
+            })
+        }
+        "list_directory" => parsed
+            .get("path")
+            .and_then(|p| p.as_str())
+            .map(|p| p.to_string()),
+        "shell" => parsed.get("command").and_then(|c| c.as_str()).map(|cmd| {
+            // Truncate long commands
+            if cmd.len() > 60 {
+                format!("{}...", &cmd[..57])
+            } else {
+                cmd.to_string()
+            }
+        }),
+        "hadolint" | "dclint" | "kubelint" | "helmlint" => parsed
+            .get("path")
+            .and_then(|p| p.as_str())
+            .map(|p| p.to_string())
+            .or_else(|| {
+                if parsed.get("content").is_some() {
+                    Some("<inline content>".to_string())
+                } else {
+                    Some("<auto-detect>".to_string())
+                }
+            }),
+        "plan_create" => parsed
+            .get("name")
+            .and_then(|n| n.as_str())
+            .map(|n| n.to_string()),
+        _ => None,
+    }
 }
 
 // Legacy exports for compatibility

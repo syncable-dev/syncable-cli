@@ -523,14 +523,7 @@ mod tests {
             "Service",
         )
         .with_line(5);
-        let f3 = CheckFailure::new(
-            "check3",
-            Severity::Info,
-            "msg3",
-            "b.yaml",
-            "obj3",
-            "Pod",
-        );
+        let f3 = CheckFailure::new("check3", Severity::Info, "msg3", "b.yaml", "obj3", "Pod");
 
         let mut failures = vec![f1.clone(), f2.clone(), f3.clone()];
         failures.sort();

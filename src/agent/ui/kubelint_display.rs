@@ -57,12 +57,7 @@ impl KubelintDisplay {
         );
 
         // Empty line
-        let _ = writeln!(
-            handle,
-            "{}│{}",
-            brand::DIM,
-            " ".repeat(BOX_WIDTH - 1)
-        );
+        let _ = writeln!(handle, "{}│{}", brand::DIM, " ".repeat(BOX_WIDTH - 1));
 
         // Decision context
         if let Some(context) = result["decision_context"].as_str() {
@@ -95,12 +90,7 @@ impl KubelintDisplay {
         }
 
         // Empty line
-        let _ = writeln!(
-            handle,
-            "{}│{}",
-            brand::DIM,
-            " ".repeat(BOX_WIDTH - 1)
-        );
+        let _ = writeln!(handle, "{}│{}", brand::DIM, " ".repeat(BOX_WIDTH - 1));
 
         // Summary counts
         if let Some(summary) = result.get("summary") {
@@ -121,12 +111,7 @@ impl KubelintDisplay {
                 let objects = summary["objects_analyzed"].as_u64().unwrap_or(0);
                 let checks = summary["checks_run"].as_u64().unwrap_or(0);
                 let stats = format!("{} objects analyzed • {} checks run", objects, checks);
-                let _ = writeln!(
-                    handle,
-                    "{}│{}",
-                    brand::DIM,
-                    " ".repeat(BOX_WIDTH - 1)
-                );
+                let _ = writeln!(handle, "{}│{}", brand::DIM, " ".repeat(BOX_WIDTH - 1));
                 let _ = writeln!(
                     handle,
                     "{}│  {}{}{}{}",
@@ -179,12 +164,7 @@ impl KubelintDisplay {
         if let Some(quick_fixes) = result.get("quick_fixes").and_then(|f| f.as_array())
             && !quick_fixes.is_empty()
         {
-            let _ = writeln!(
-                handle,
-                "{}│{}",
-                brand::DIM,
-                " ".repeat(BOX_WIDTH - 1)
-            );
+            let _ = writeln!(handle, "{}│{}", brand::DIM, " ".repeat(BOX_WIDTH - 1));
             let _ = writeln!(
                 handle,
                 "{}│  {}{} Quick Fixes:{}{}",
@@ -242,7 +222,13 @@ impl KubelintDisplay {
         }
 
         // Critical and High priority issues with details
-        Self::print_priority_section(&mut handle, result, "critical", "Critical Issues", brand::CORAL);
+        Self::print_priority_section(
+            &mut handle,
+            result,
+            "critical",
+            "Critical Issues",
+            brand::CORAL,
+        );
         Self::print_priority_section(&mut handle, result, "high", "High Priority", brand::PEACH);
 
         // Medium/Low summary
@@ -257,16 +243,15 @@ impl KubelintDisplay {
         let other_count = medium_count + low_count;
 
         if other_count > 0 {
-            let _ = writeln!(
-                handle,
-                "{}│{}",
-                brand::DIM,
-                " ".repeat(BOX_WIDTH - 1)
-            );
+            let _ = writeln!(handle, "{}│{}", brand::DIM, " ".repeat(BOX_WIDTH - 1));
             let msg = format!(
                 "{} {} priority issue{} (use --verbose to see all)",
                 other_count,
-                if medium_count > 0 { "medium/low" } else { "low" },
+                if medium_count > 0 {
+                    "medium/low"
+                } else {
+                    "low"
+                },
                 if other_count == 1 { "" } else { "s" }
             );
             let _ = writeln!(
@@ -306,12 +291,7 @@ impl KubelintDisplay {
                 return;
             }
 
-            let _ = writeln!(
-                handle,
-                "{}│{}",
-                brand::DIM,
-                " ".repeat(BOX_WIDTH - 1)
-            );
+            let _ = writeln!(handle, "{}│{}", brand::DIM, " ".repeat(BOX_WIDTH - 1));
             let _ = writeln!(
                 handle,
                 "{}│  {}{}:{}{}",

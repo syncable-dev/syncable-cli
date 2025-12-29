@@ -7,4 +7,4 @@
 
 pub mod api_versions;
 
-pub use api_versions::{DeprecatedApi, K8sVersion, is_api_deprecated, get_replacement_api};
+pub use api_versions::{DeprecatedApi, K8sVersion, get_replacement_api, is_api_deprecated};

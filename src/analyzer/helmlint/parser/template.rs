@@ -9,10 +9,7 @@ use std::path::Path;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TemplateToken {
     /// Raw text outside of template delimiters
-    Text {
-        content: String,
-        line: u32,
-    },
+    Text { content: String, line: u32 },
     /// Template action: {{ ... }}
     Action {
         content: String,
@@ -21,10 +18,7 @@ pub enum TemplateToken {
         trim_right: bool,
     },
     /// Template comment: {{/* ... */}}
-    Comment {
-        content: String,
-        line: u32,
-    },
+    Comment { content: String, line: u32 },
 }
 
 impl TemplateToken {
@@ -380,11 +374,11 @@ fn analyze_action(
 
 /// Extract variable references from action content.
 fn extract_variables(content: &str, variables: &mut HashSet<String>) {
-    let mut chars = content.chars().peekable();
+    let chars = content.chars();
     let mut current_var = String::new();
     let mut in_var = false;
 
-    while let Some(c) = chars.next() {
+    for c in chars {
         if c == '.' && !in_var {
             // Start of a variable reference
             in_var = true;
@@ -410,18 +404,72 @@ fn extract_variables(content: &str, variables: &mut HashSet<String>) {
 }
 
 /// Extract function calls from action content.
-fn extract_functions(content: &str, functions: &mut HashSet<String>, referenced: &mut HashSet<String>) {
+fn extract_functions(
+    content: &str,
+    functions: &mut HashSet<String>,
+    referenced: &mut HashSet<String>,
+) {
     // Common Helm/Sprig functions to detect
     let known_functions = [
-        "include", "tpl", "lookup", "required", "default", "empty", "coalesce",
-        "toYaml", "toJson", "fromYaml", "fromJson", "indent", "nindent",
-        "trim", "trimAll", "trimPrefix", "trimSuffix", "quote", "squote",
-        "upper", "lower", "title", "untitle", "substr", "replace", "trunc",
-        "list", "dict", "get", "set", "unset", "hasKey", "keys", "values",
-        "merge", "mergeOverwrite", "append", "prepend", "concat", "first", "last",
-        "printf", "print", "println", "fail", "kindOf", "typeOf", "deepEqual",
-        "b64enc", "b64dec", "sha256sum", "randAlphaNum", "randAlpha",
-        "now", "date", "dateModify", "toDate", "env", "expandenv",
+        "include",
+        "tpl",
+        "lookup",
+        "required",
+        "default",
+        "empty",
+        "coalesce",
+        "toYaml",
+        "toJson",
+        "fromYaml",
+        "fromJson",
+        "indent",
+        "nindent",
+        "trim",
+        "trimAll",
+        "trimPrefix",
+        "trimSuffix",
+        "quote",
+        "squote",
+        "upper",
+        "lower",
+        "title",
+        "untitle",
+        "substr",
+        "replace",
+        "trunc",
+        "list",
+        "dict",
+        "get",
+        "set",
+        "unset",
+        "hasKey",
+        "keys",
+        "values",
+        "merge",
+        "mergeOverwrite",
+        "append",
+        "prepend",
+        "concat",
+        "first",
+        "last",
+        "printf",
+        "print",
+        "println",
+        "fail",
+        "kindOf",
+        "typeOf",
+        "deepEqual",
+        "b64enc",
+        "b64dec",
+        "sha256sum",
+        "randAlphaNum",
+        "randAlpha",
+        "now",
+        "date",
+        "dateModify",
+        "toDate",
+        "env",
+        "expandenv",
     ];
 
     for func in known_functions {

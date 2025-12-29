@@ -521,7 +521,35 @@ async fn run() -> syncable_cli::Result<()> {
             provider,
             model,
             query,
+            resume,
+            list_sessions,
         } => {
+            // Handle --list-sessions flag first (before starting chat)
+            if list_sessions {
+                use syncable_cli::agent::persistence::{SessionSelector, format_relative_time};
+
+                let selector = SessionSelector::new(&path);
+                let sessions = selector.list_sessions();
+
+                if sessions.is_empty() {
+                    println!("No previous sessions found for this project.");
+                    return Ok(());
+                }
+
+                println!("\nSessions for this project ({}):\n", sessions.len());
+                for session in &sessions {
+                    let time = format_relative_time(session.last_updated);
+                    println!("  [{}] {} ({})", session.index, session.display_name, time);
+                    println!(
+                        "      {} messages · ID: {}",
+                        session.message_count,
+                        &session.id[..8]
+                    );
+                }
+                println!("\nTo resume: sync-ctl chat --resume <NUMBER|ID>");
+                return Ok(());
+            }
+
             let mut properties = HashMap::new();
 
             let provider_str = match provider {
@@ -541,6 +569,8 @@ async fn run() -> syncable_cli::Result<()> {
                 "mode".to_string(),
                 json!(if query.is_some() {
                     "query"
+                } else if resume.is_some() {
+                    "resume"
                 } else {
                     "interactive"
                 }),
@@ -556,6 +586,8 @@ async fn run() -> syncable_cli::Result<()> {
                 provider,
                 model,
                 query,
+                resume,
+                list_sessions,
             })
             .await
         }

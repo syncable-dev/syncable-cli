@@ -174,6 +174,7 @@ impl Default for MarkdownFormat {
 
 impl MarkdownFormat {
     /// Create a new MarkdownFormat with Syncable brand colors
+    #[allow(clippy::field_reassign_with_default)]
     pub fn new() -> Self {
         let mut skin = MadSkin::default();
 

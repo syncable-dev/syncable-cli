@@ -61,7 +61,10 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         kind: Some("Deployment"),
         replacement: "apps/v1",
         deprecated_in: K8sVersion { major: 1, minor: 9 },
-        removed_in: K8sVersion { major: 1, minor: 16 },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 16,
+        },
         notes: None,
     },
     DeprecatedApi {
@@ -69,7 +72,10 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         kind: Some("DaemonSet"),
         replacement: "apps/v1",
         deprecated_in: K8sVersion { major: 1, minor: 9 },
-        removed_in: K8sVersion { major: 1, minor: 16 },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 16,
+        },
         notes: None,
     },
     DeprecatedApi {
@@ -77,15 +83,24 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         kind: Some("ReplicaSet"),
         replacement: "apps/v1",
         deprecated_in: K8sVersion { major: 1, minor: 9 },
-        removed_in: K8sVersion { major: 1, minor: 16 },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 16,
+        },
         notes: None,
     },
     DeprecatedApi {
         api_version: "extensions/v1beta1",
         kind: Some("Ingress"),
         replacement: "networking.k8s.io/v1",
-        deprecated_in: K8sVersion { major: 1, minor: 14 },
-        removed_in: K8sVersion { major: 1, minor: 22 },
+        deprecated_in: K8sVersion {
+            major: 1,
+            minor: 14,
+        },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 22,
+        },
         notes: None,
     },
     DeprecatedApi {
@@ -93,15 +108,24 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         kind: Some("NetworkPolicy"),
         replacement: "networking.k8s.io/v1",
         deprecated_in: K8sVersion { major: 1, minor: 9 },
-        removed_in: K8sVersion { major: 1, minor: 16 },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 16,
+        },
         notes: None,
     },
     DeprecatedApi {
         api_version: "extensions/v1beta1",
         kind: Some("PodSecurityPolicy"),
         replacement: "policy/v1beta1",
-        deprecated_in: K8sVersion { major: 1, minor: 10 },
-        removed_in: K8sVersion { major: 1, minor: 16 },
+        deprecated_in: K8sVersion {
+            major: 1,
+            minor: 10,
+        },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 16,
+        },
         notes: Some("PodSecurityPolicy is deprecated entirely in 1.21 and removed in 1.25"),
     },
     // apps/v1beta1 deprecations
@@ -110,7 +134,10 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         kind: Some("Deployment"),
         replacement: "apps/v1",
         deprecated_in: K8sVersion { major: 1, minor: 9 },
-        removed_in: K8sVersion { major: 1, minor: 16 },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 16,
+        },
         notes: None,
     },
     DeprecatedApi {
@@ -118,7 +145,10 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         kind: Some("StatefulSet"),
         replacement: "apps/v1",
         deprecated_in: K8sVersion { major: 1, minor: 9 },
-        removed_in: K8sVersion { major: 1, minor: 16 },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 16,
+        },
         notes: None,
     },
     // apps/v1beta2 deprecations
@@ -127,7 +157,10 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         kind: Some("Deployment"),
         replacement: "apps/v1",
         deprecated_in: K8sVersion { major: 1, minor: 9 },
-        removed_in: K8sVersion { major: 1, minor: 16 },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 16,
+        },
         notes: None,
     },
     DeprecatedApi {
@@ -135,7 +168,10 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         kind: Some("DaemonSet"),
         replacement: "apps/v1",
         deprecated_in: K8sVersion { major: 1, minor: 9 },
-        removed_in: K8sVersion { major: 1, minor: 16 },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 16,
+        },
         notes: None,
     },
     DeprecatedApi {
@@ -143,7 +179,10 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         kind: Some("ReplicaSet"),
         replacement: "apps/v1",
         deprecated_in: K8sVersion { major: 1, minor: 9 },
-        removed_in: K8sVersion { major: 1, minor: 16 },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 16,
+        },
         notes: None,
     },
     DeprecatedApi {
@@ -151,7 +190,10 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         kind: Some("StatefulSet"),
         replacement: "apps/v1",
         deprecated_in: K8sVersion { major: 1, minor: 9 },
-        removed_in: K8sVersion { major: 1, minor: 16 },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 16,
+        },
         notes: None,
     },
     // networking.k8s.io/v1beta1 deprecations
@@ -159,16 +201,28 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         api_version: "networking.k8s.io/v1beta1",
         kind: Some("Ingress"),
         replacement: "networking.k8s.io/v1",
-        deprecated_in: K8sVersion { major: 1, minor: 19 },
-        removed_in: K8sVersion { major: 1, minor: 22 },
+        deprecated_in: K8sVersion {
+            major: 1,
+            minor: 19,
+        },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 22,
+        },
         notes: None,
     },
     DeprecatedApi {
         api_version: "networking.k8s.io/v1beta1",
         kind: Some("IngressClass"),
         replacement: "networking.k8s.io/v1",
-        deprecated_in: K8sVersion { major: 1, minor: 19 },
-        removed_in: K8sVersion { major: 1, minor: 22 },
+        deprecated_in: K8sVersion {
+            major: 1,
+            minor: 19,
+        },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 22,
+        },
         notes: None,
     },
     // rbac.authorization.k8s.io/v1beta1 deprecations
@@ -176,8 +230,14 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         api_version: "rbac.authorization.k8s.io/v1beta1",
         kind: None,
         replacement: "rbac.authorization.k8s.io/v1",
-        deprecated_in: K8sVersion { major: 1, minor: 17 },
-        removed_in: K8sVersion { major: 1, minor: 22 },
+        deprecated_in: K8sVersion {
+            major: 1,
+            minor: 17,
+        },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 22,
+        },
         notes: Some("Applies to Role, ClusterRole, RoleBinding, ClusterRoleBinding"),
     },
     // admissionregistration.k8s.io/v1beta1 deprecations
@@ -185,8 +245,14 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         api_version: "admissionregistration.k8s.io/v1beta1",
         kind: None,
         replacement: "admissionregistration.k8s.io/v1",
-        deprecated_in: K8sVersion { major: 1, minor: 16 },
-        removed_in: K8sVersion { major: 1, minor: 22 },
+        deprecated_in: K8sVersion {
+            major: 1,
+            minor: 16,
+        },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 22,
+        },
         notes: Some("Applies to MutatingWebhookConfiguration, ValidatingWebhookConfiguration"),
     },
     // apiextensions.k8s.io/v1beta1 deprecations
@@ -194,8 +260,14 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         api_version: "apiextensions.k8s.io/v1beta1",
         kind: Some("CustomResourceDefinition"),
         replacement: "apiextensions.k8s.io/v1",
-        deprecated_in: K8sVersion { major: 1, minor: 16 },
-        removed_in: K8sVersion { major: 1, minor: 22 },
+        deprecated_in: K8sVersion {
+            major: 1,
+            minor: 16,
+        },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 22,
+        },
         notes: None,
     },
     // policy/v1beta1 deprecations
@@ -203,16 +275,28 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         api_version: "policy/v1beta1",
         kind: Some("PodDisruptionBudget"),
         replacement: "policy/v1",
-        deprecated_in: K8sVersion { major: 1, minor: 21 },
-        removed_in: K8sVersion { major: 1, minor: 25 },
+        deprecated_in: K8sVersion {
+            major: 1,
+            minor: 21,
+        },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 25,
+        },
         notes: None,
     },
     DeprecatedApi {
         api_version: "policy/v1beta1",
         kind: Some("PodSecurityPolicy"),
         replacement: "None (use Pod Security Admission)",
-        deprecated_in: K8sVersion { major: 1, minor: 21 },
-        removed_in: K8sVersion { major: 1, minor: 25 },
+        deprecated_in: K8sVersion {
+            major: 1,
+            minor: 21,
+        },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 25,
+        },
         notes: Some("PodSecurityPolicy is removed. Use Pod Security Admission instead"),
     },
     // batch/v1beta1 deprecations
@@ -220,8 +304,14 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         api_version: "batch/v1beta1",
         kind: Some("CronJob"),
         replacement: "batch/v1",
-        deprecated_in: K8sVersion { major: 1, minor: 21 },
-        removed_in: K8sVersion { major: 1, minor: 25 },
+        deprecated_in: K8sVersion {
+            major: 1,
+            minor: 21,
+        },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 25,
+        },
         notes: None,
     },
     // certificates.k8s.io/v1beta1 deprecations
@@ -229,8 +319,14 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         api_version: "certificates.k8s.io/v1beta1",
         kind: Some("CertificateSigningRequest"),
         replacement: "certificates.k8s.io/v1",
-        deprecated_in: K8sVersion { major: 1, minor: 19 },
-        removed_in: K8sVersion { major: 1, minor: 22 },
+        deprecated_in: K8sVersion {
+            major: 1,
+            minor: 19,
+        },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 22,
+        },
         notes: None,
     },
     // coordination.k8s.io/v1beta1 deprecations
@@ -238,8 +334,14 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         api_version: "coordination.k8s.io/v1beta1",
         kind: Some("Lease"),
         replacement: "coordination.k8s.io/v1",
-        deprecated_in: K8sVersion { major: 1, minor: 14 },
-        removed_in: K8sVersion { major: 1, minor: 22 },
+        deprecated_in: K8sVersion {
+            major: 1,
+            minor: 14,
+        },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 22,
+        },
         notes: None,
     },
     // storage.k8s.io/v1beta1 deprecations
@@ -247,16 +349,28 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         api_version: "storage.k8s.io/v1beta1",
         kind: Some("CSIDriver"),
         replacement: "storage.k8s.io/v1",
-        deprecated_in: K8sVersion { major: 1, minor: 19 },
-        removed_in: K8sVersion { major: 1, minor: 22 },
+        deprecated_in: K8sVersion {
+            major: 1,
+            minor: 19,
+        },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 22,
+        },
         notes: None,
     },
     DeprecatedApi {
         api_version: "storage.k8s.io/v1beta1",
         kind: Some("CSINode"),
         replacement: "storage.k8s.io/v1",
-        deprecated_in: K8sVersion { major: 1, minor: 17 },
-        removed_in: K8sVersion { major: 1, minor: 22 },
+        deprecated_in: K8sVersion {
+            major: 1,
+            minor: 17,
+        },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 22,
+        },
         notes: None,
     },
     DeprecatedApi {
@@ -264,15 +378,24 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         kind: Some("StorageClass"),
         replacement: "storage.k8s.io/v1",
         deprecated_in: K8sVersion { major: 1, minor: 6 },
-        removed_in: K8sVersion { major: 1, minor: 22 },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 22,
+        },
         notes: None,
     },
     DeprecatedApi {
         api_version: "storage.k8s.io/v1beta1",
         kind: Some("VolumeAttachment"),
         replacement: "storage.k8s.io/v1",
-        deprecated_in: K8sVersion { major: 1, minor: 13 },
-        removed_in: K8sVersion { major: 1, minor: 22 },
+        deprecated_in: K8sVersion {
+            major: 1,
+            minor: 13,
+        },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 22,
+        },
         notes: None,
     },
     // scheduling.k8s.io/v1beta1 deprecations
@@ -280,8 +403,14 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         api_version: "scheduling.k8s.io/v1beta1",
         kind: Some("PriorityClass"),
         replacement: "scheduling.k8s.io/v1",
-        deprecated_in: K8sVersion { major: 1, minor: 14 },
-        removed_in: K8sVersion { major: 1, minor: 22 },
+        deprecated_in: K8sVersion {
+            major: 1,
+            minor: 14,
+        },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 22,
+        },
         notes: None,
     },
     // discovery.k8s.io/v1beta1 deprecations
@@ -289,8 +418,14 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         api_version: "discovery.k8s.io/v1beta1",
         kind: Some("EndpointSlice"),
         replacement: "discovery.k8s.io/v1",
-        deprecated_in: K8sVersion { major: 1, minor: 21 },
-        removed_in: K8sVersion { major: 1, minor: 25 },
+        deprecated_in: K8sVersion {
+            major: 1,
+            minor: 21,
+        },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 25,
+        },
         notes: None,
     },
     // events.k8s.io/v1beta1 deprecations
@@ -298,8 +433,14 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         api_version: "events.k8s.io/v1beta1",
         kind: Some("Event"),
         replacement: "events.k8s.io/v1",
-        deprecated_in: K8sVersion { major: 1, minor: 19 },
-        removed_in: K8sVersion { major: 1, minor: 25 },
+        deprecated_in: K8sVersion {
+            major: 1,
+            minor: 19,
+        },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 25,
+        },
         notes: None,
     },
     // autoscaling/v2beta1 deprecations
@@ -307,8 +448,14 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         api_version: "autoscaling/v2beta1",
         kind: Some("HorizontalPodAutoscaler"),
         replacement: "autoscaling/v2",
-        deprecated_in: K8sVersion { major: 1, minor: 23 },
-        removed_in: K8sVersion { major: 1, minor: 26 },
+        deprecated_in: K8sVersion {
+            major: 1,
+            minor: 23,
+        },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 26,
+        },
         notes: None,
     },
     // autoscaling/v2beta2 deprecations
@@ -316,17 +463,23 @@ static DEPRECATED_APIS: &[DeprecatedApi] = &[
         api_version: "autoscaling/v2beta2",
         kind: Some("HorizontalPodAutoscaler"),
         replacement: "autoscaling/v2",
-        deprecated_in: K8sVersion { major: 1, minor: 23 },
-        removed_in: K8sVersion { major: 1, minor: 26 },
+        deprecated_in: K8sVersion {
+            major: 1,
+            minor: 23,
+        },
+        removed_in: K8sVersion {
+            major: 1,
+            minor: 26,
+        },
         notes: None,
     },
 ];
 
 /// Check if an API version is deprecated for a given kind.
 pub fn is_api_deprecated(api_version: &str, kind: Option<&str>) -> Option<&'static DeprecatedApi> {
-    DEPRECATED_APIS.iter().find(|api| {
-        api.api_version == api_version && (api.kind.is_none() || api.kind == kind)
-    })
+    DEPRECATED_APIS
+        .iter()
+        .find(|api| api.api_version == api_version && (api.kind.is_none() || api.kind == kind))
 }
 
 /// Get the replacement API for a deprecated API.

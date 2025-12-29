@@ -8,11 +8,13 @@ use std::path::Path;
 
 use crate::analyzer::helmlint::config::HelmlintConfig;
 use crate::analyzer::helmlint::parser::chart::parse_chart_yaml;
-use crate::analyzer::helmlint::parser::helpers::{parse_helpers, ParsedHelpers};
+use crate::analyzer::helmlint::parser::helpers::{ParsedHelpers, parse_helpers};
 use crate::analyzer::helmlint::parser::template::parse_template;
 use crate::analyzer::helmlint::parser::values::parse_values_yaml;
-use crate::analyzer::helmlint::pragma::{extract_template_pragmas, extract_yaml_pragmas, PragmaState};
-use crate::analyzer::helmlint::rules::{all_rules, LintContext};
+use crate::analyzer::helmlint::pragma::{
+    PragmaState, extract_template_pragmas, extract_yaml_pragmas,
+};
+use crate::analyzer::helmlint::rules::{LintContext, all_rules};
 use crate::analyzer::helmlint::types::{CheckFailure, Severity};
 
 /// Result of linting a Helm chart.
@@ -134,7 +136,9 @@ pub fn lint_chart(path: &Path, config: &HelmlintConfig) -> LintResult {
                 }
             },
             Err(e) => {
-                result.parse_errors.push(format!("Failed to read Chart.yaml: {}", e));
+                result
+                    .parse_errors
+                    .push(format!("Failed to read Chart.yaml: {}", e));
                 None
             }
         }
@@ -154,7 +158,9 @@ pub fn lint_chart(path: &Path, config: &HelmlintConfig) -> LintResult {
                 }
             },
             Err(e) => {
-                result.parse_errors.push(format!("Failed to read values.yaml: {}", e));
+                result
+                    .parse_errors
+                    .push(format!("Failed to read values.yaml: {}", e));
                 None
             }
         }
@@ -200,10 +206,9 @@ pub fn lint_chart(path: &Path, config: &HelmlintConfig) -> LintResult {
                                 templates.push(parsed);
                             }
                             Err(e) => {
-                                result.parse_errors.push(format!(
-                                    "Failed to read {}: {}",
-                                    relative_path, e
-                                ));
+                                result
+                                    .parse_errors
+                                    .push(format!("Failed to read {}: {}", relative_path, e));
                             }
                         }
                     }
@@ -280,13 +285,7 @@ pub fn lint_chart(path: &Path, config: &HelmlintConfig) -> LintResult {
                 !all_pragmas.is_ignored(&f.code, f.line)
             }
         })
-        .filter(|f| {
-            if config.fixable_only {
-                f.fixable
-            } else {
-                true
-            }
-        })
+        .filter(|f| if config.fixable_only { f.fixable } else { true })
         .map(|mut f| {
             // Apply severity overrides
             f.severity = config.effective_severity(f.code.as_str(), f.severity);

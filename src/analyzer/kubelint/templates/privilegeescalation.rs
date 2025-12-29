@@ -60,7 +60,7 @@ impl CheckFunc for PrivilegeEscalationCheck {
                             container.name
                         ),
                         remediation: Some(
-                            "Set securityContext.allowPrivilegeEscalation to false.".to_string()
+                            "Set securityContext.allowPrivilegeEscalation to false.".to_string(),
                         ),
                     });
                 }
