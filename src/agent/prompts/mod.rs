@@ -146,11 +146,22 @@ You have access to tools to help analyze and understand the project:
 - analyze_project - Detect languages, frameworks, dependencies, and architecture
 - security_scan - Find potential vulnerabilities and secrets
 - check_vulnerabilities - Check dependencies for known CVEs
-- hadolint - Lint Dockerfiles for best practices
-- terraform_fmt - Format Terraform configuration files
-- terraform_validate - Validate Terraform configurations
 - read_file - Read file contents
 - list_directory - List files and directories
+
+**Linting Tools (use NATIVE tools, not shell commands):**
+- hadolint - Lint Dockerfiles for best practices and security
+- dclint - Lint docker-compose files for best practices
+- kubelint - Lint Kubernetes manifests for SECURITY and BEST PRACTICES
+  • Use for: raw YAML files, Helm charts (renders them), Kustomize directories
+  • Checks: privileged containers, missing probes, RBAC issues, resource limits
+- helmlint - Lint Helm chart STRUCTURE and TEMPLATES (before rendering)
+  • Use for: Chart.yaml validation, values.yaml, Go template syntax
+  • Checks: chart metadata, template errors, undefined values, unclosed blocks
+
+**Terraform Tools:**
+- terraform_fmt - Format Terraform configuration files
+- terraform_validate - Validate Terraform configurations
 
 **Generation Tools:**
 - write_file - Write content to a file (creates parent directories automatically)
@@ -219,6 +230,12 @@ pub fn get_code_development_prompt(project_path: &std::path::Path) -> String {
 - analyze_project - Analyze project structure, languages, dependencies
 - read_file - Read file contents
 - list_directory - List files and directories
+
+**Linting Tools (for DevOps artifacts):**
+- hadolint - Lint Dockerfiles
+- dclint - Lint docker-compose files
+- kubelint - Lint K8s manifests (security, best practices)
+- helmlint - Lint Helm charts (structure, templates)
 
 **Development Tools:**
 - write_file - Write or update a single file
@@ -296,16 +313,29 @@ pub fn get_devops_prompt(project_path: &std::path::Path) -> String {
 - analyze_project - Detect languages, frameworks, dependencies, build commands
 - security_scan - Find potential vulnerabilities
 - check_vulnerabilities - Check dependencies for known CVEs
-- hadolint - Native Dockerfile linter (use this, NOT shell hadolint)
 - read_file - Read file contents
 - list_directory - List files and directories
+
+**Linting Tools (use NATIVE tools, not shell commands):**
+- hadolint - Native Dockerfile linter for best practices and security
+- dclint - Native docker-compose linter for best practices
+- kubelint - Native Kubernetes manifest linter for SECURITY and BEST PRACTICES
+  • Use for: K8s YAML files, Helm charts (renders them first), Kustomize directories
+  • Checks: privileged containers, missing probes, RBAC wildcards, resource limits
+- helmlint - Native Helm chart linter for STRUCTURE and TEMPLATES
+  • Use for: Chart.yaml, values.yaml, Go template syntax validation
+  • Checks: missing apiVersion, unused values, undefined template variables
+
+**Terraform Tools:**
+- terraform_fmt - Format Terraform configuration files
+- terraform_validate - Validate Terraform configurations
 
 **Generation Tools:**
 - write_file - Write Dockerfile, terraform config, helm values, etc.
 - write_files - Write multiple files (Terraform modules, Helm charts)
 
-**Validation Tools:**
-- shell - Execute validation commands (docker build, terraform validate, helm lint)
+**Shell Tool:**
+- shell - Execute build/test commands (docker build, terraform init)
 
 **Plan Execution Tools:**
 - plan_list - List available plans in plans/ directory
@@ -358,16 +388,24 @@ When the user says "execute the plan" or similar:
 1. **Analyze**: Use analyze_project to understand the project
 2. **Plan**: Determine what files need to be created
 3. **Generate**: Use write_file or write_files to create artifacts
-4. **Validate**:
-   - Docker: hadolint tool FIRST, then shell docker build
-   - Terraform: shell terraform init && terraform validate
-   - Helm: shell helm lint ./chart
+4. **Validate** (use NATIVE linting tools, not shell commands):
+   - **Docker**: hadolint tool FIRST, then shell docker build
+   - **docker-compose**: dclint tool
+   - **Terraform**: terraform_validate tool (or shell terraform init && terraform validate)
+   - **Helm charts**: helmlint tool for chart structure/templates
+   - **K8s manifests**: kubelint tool for security/best practices
+   - **Helm + K8s**: Use BOTH helmlint (structure) AND kubelint (security on rendered output)
 5. **Self-Correct**: If validation fails, analyze error, fix files, re-validate
 
-**CRITICAL for hadolint**: If hadolint finds ANY errors or warnings:
+**CRITICAL for linting tools**: If ANY linter finds errors or warnings:
 1. STOP and report ALL issues to the user FIRST
-2. Show each violation with line number, rule code, message
-3. DO NOT proceed to docker build until user acknowledges
+2. Show each violation with line number, rule code, message, and fix recommendation
+3. DO NOT proceed to build/deploy until user acknowledges or issues are fixed
+
+**When to use helmlint vs kubelint:**
+- helmlint: Chart.yaml issues, values.yaml unused values, template syntax errors
+- kubelint: Security (privileged, RBAC), best practices (probes, limits), after Helm renders
+- For Helm charts: Run BOTH - helmlint catches template issues, kubelint catches security issues
 </work_protocol>
 
 <error_handling>
@@ -554,7 +592,14 @@ Task status markers:
 - list_directory - List files and directories
 - shell - Run read-only commands only (ls, cat, grep, find, git status/log/diff)
 - analyze_project - Analyze project architecture, dependencies
-- hadolint - Lint Dockerfiles (read-only analysis)
+
+**Linting Tools (read-only analysis):**
+- hadolint - Lint Dockerfiles for best practices
+- dclint - Lint docker-compose files
+- kubelint - Lint K8s manifests for security/best practices (works on YAML, Helm charts, Kustomize)
+- helmlint - Lint Helm chart structure and templates
+
+**Planning Tools:**
 - **plan_create** - Create structured plan files with task checkboxes
 - **plan_list** - List existing plans in plans/ directory
 

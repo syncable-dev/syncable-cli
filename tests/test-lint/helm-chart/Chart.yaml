@@ -1,0 +1,3 @@
+# Missing apiVersion and description, bad version format
+name: bad-chart
+version: 1.0

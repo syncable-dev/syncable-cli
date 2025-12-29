@@ -6,7 +6,18 @@ authors = ["Syncable Team"]
 description = "A Rust-based CLI that analyzes code repositories and generates Infrastructure as Code configurations"
 license = "GPL-3.0"
 repository = "https://github.com/syncable-dev/syncable-cli"
-keywords = ["iac", "infrastructure", "docker", "terraform", "cli"]
+keywords = [
+  "cli",
+  "devops",
+  "ai",
+  "ai-agent",
+  "infrastructure",
+  "iac",
+  "terraform",
+  "kubernetes",
+  "docker",
+  "security"
+]
 categories = ["command-line-utilities", "development-tools"]
 readme = "README.md"
 
