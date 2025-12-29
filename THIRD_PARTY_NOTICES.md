@@ -83,6 +83,88 @@ original project.
 
 ---
 
+## KubeLint (kube-linter)
+
+The Kubernetes manifest linting functionality in `src/analyzer/kubelint/` is a Rust
+translation of the original kube-linter project by StackRox (Red Hat).
+
+**Original Project:** [kube-linter](https://github.com/stackrox/kube-linter)
+
+**Original Authors:**
+- StackRox, Inc. (now part of Red Hat)
+- And all contributors to the kube-linter project
+
+**Original License:** Apache License 2.0
+
+**Original Copyright:**
+```
+Copyright (c) 2020-2024 StackRox, Inc.
+```
+
+**What was translated:**
+- Kubernetes manifest parsing and validation logic (originally in Go)
+- 63 built-in security and best practice checks
+- Pragma/ignore directive handling via annotations
+- Helm chart rendering integration
+- Kustomize directory support
+- Check severity and priority system
+- SARIF and JSON output formats
+
+**Modifications made:**
+- Complete rewrite from Go to Rust
+- Integration with Syncable-CLI's agent and tool system
+- Native async support for streaming output
+- Adaptation to Rust error handling patterns
+- Graceful fallback for broken Helm charts
+- Additional rules and improvements specific to Syncable's use cases
+
+**License Notice:**
+This derivative work maintains compatibility with the Apache-2.0 license.
+The full text of the Apache-2.0 license can be found at:
+https://www.apache.org/licenses/LICENSE-2.0
+
+---
+
+## Helmlint (helmtest)
+
+The Helm chart linting functionality in `src/analyzer/helmlint/` is a Rust
+implementation inspired by and partially derived from the helmtest project
+by StackRox (Red Hat).
+
+**Original Project:** [helmtest](https://github.com/stackrox/helmtest)
+
+**Original Authors:**
+- StackRox, Inc. (now part of Red Hat)
+- And all contributors to the helmtest project
+
+**Original License:** Apache License 2.0
+
+**Original Copyright:**
+```
+Copyright (c) 2020-2024 StackRox, Inc.
+```
+
+**What was implemented:**
+- Helm chart structure validation (Chart.yaml, values.yaml)
+- Go template syntax analysis
+- Values validation and unused value detection
+- Security checks for rendered templates
+- Best practice validation patterns
+
+**Modifications made:**
+- Complete implementation in Rust (original was Go)
+- Integration with Syncable-CLI's agent and tool system
+- Native async support for streaming output
+- Adaptation to Rust error handling patterns
+- Additional rules (HL1xxx-HL5xxx series) specific to Syncable's use cases
+
+**License Notice:**
+This derivative work maintains compatibility with the Apache-2.0 license.
+The full text of the Apache-2.0 license can be found at:
+https://www.apache.org/licenses/LICENSE-2.0
+
+---
+
 ## ShellCheck (Rule Concepts)
 
 Some shell-related lint rules are inspired by ShellCheck.
@@ -101,11 +183,17 @@ concepts and documentation.
 
 ## Acknowledgments
 
-We are grateful to the open source community and the authors of Hadolint and
-docker-compose-linter for creating and maintaining excellent container configuration
-linting tools. These Rust implementations allow native integration with Syncable-CLI
-while preserving the valuable rule definitions and linting logic developed by the
-original authors.
+We are grateful to the open source community and the authors of:
+
+- **Hadolint** - For the comprehensive Dockerfile linting rules
+- **docker-compose-linter** - For Docker Compose best practices
+- **kube-linter (StackRox/Red Hat)** - For the extensive Kubernetes security checks
+- **helmtest (StackRox/Red Hat)** - For Helm chart validation patterns
+
+These Rust implementations allow native integration with Syncable-CLI while
+preserving the valuable rule definitions and linting logic developed by the
+original authors. Special thanks to StackRox (now part of Red Hat) for their
+excellent Kubernetes and Helm security tooling.
 
 If you are the author of any software mentioned here and believe the attribution
 is incorrect or incomplete, please open an issue at:
