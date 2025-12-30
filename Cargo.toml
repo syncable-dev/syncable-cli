@@ -9,7 +9,7 @@ repository = "https://github.com/syncable-dev/syncable-cli"
 keywords = [
   "cli",
   "ai",
-  "devops"
+  "devops",
   "iac",
   "docker",
 ]
