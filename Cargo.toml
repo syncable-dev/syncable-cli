@@ -8,15 +8,10 @@ license = "GPL-3.0"
 repository = "https://github.com/syncable-dev/syncable-cli"
 keywords = [
   "cli",
-  "devops",
   "ai",
-  "ai-agent",
-  "infrastructure",
+  "devops",
   "iac",
-  "terraform",
-  "kubernetes",
   "docker",
-  "security"
 ]
 categories = ["command-line-utilities", "development-tools"]
 readme = "README.md"
