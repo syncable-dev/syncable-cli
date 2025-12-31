@@ -113,6 +113,7 @@ async fn run() -> syncable_cli::Result<()> {
         Commands::Security { .. } => "security",
         Commands::Tools { .. } => "tools",
         Commands::Chat { .. } => "chat",
+        Commands::Auth { .. } => "auth",
     };
 
     log::debug!("Command name: {}", command_name);
@@ -590,6 +591,10 @@ async fn run() -> syncable_cli::Result<()> {
                 list_sessions,
             })
             .await
+        }
+        Commands::Auth { command } => {
+            // Auth commands are handled by lib.rs
+            syncable_cli::run_command(Commands::Auth { command }).await
         }
     };
 

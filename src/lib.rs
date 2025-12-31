@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod analyzer;
+pub mod auth; // Authentication module for Syncable platform
 pub mod bedrock; // Inlined rig-bedrock with extended thinking fixes
 pub mod cli;
 pub mod common;
@@ -211,6 +212,73 @@ pub async fn run_command(command: Commands) -> Result<()> {
             } else {
                 agent::run_interactive(&project_path, provider_type, effective_model).await?;
                 Ok(())
+            }
+        }
+        Commands::Auth { command } => {
+            use cli::AuthCommand;
+            use auth::credentials;
+            use auth::device_flow;
+            
+            match command {
+                AuthCommand::Login { no_browser } => {
+                    device_flow::login(no_browser).await.map_err(|e| {
+                        error::IaCGeneratorError::Config(error::ConfigError::ParsingFailed(e.to_string()))
+                    })
+                }
+                AuthCommand::Logout => {
+                    credentials::clear_credentials().map_err(|e| {
+                        error::IaCGeneratorError::Config(error::ConfigError::ParsingFailed(e.to_string()))
+                    })?;
+                    println!("✅ Logged out successfully. Credentials cleared.");
+                    Ok(())
+                }
+                AuthCommand::Status => {
+                    match credentials::get_auth_status() {
+                        credentials::AuthStatus::NotAuthenticated => {
+                            println!("❌ Not logged in.");
+                            println!("   Run: sync-ctl auth login");
+                        }
+                        credentials::AuthStatus::Expired => {
+                            println!("⚠️  Session expired.");
+                            println!("   Run: sync-ctl auth login");
+                        }
+                        credentials::AuthStatus::Authenticated { email, expires_at } => {
+                            println!("✅ Logged in");
+                            if let Some(e) = email {
+                                println!("   Email: {}", e);
+                            }
+                            if let Some(exp) = expires_at {
+                                let now = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .map(|d| d.as_secs())
+                                    .unwrap_or(0);
+                                if exp > now {
+                                    let remaining = exp - now;
+                                    let days = remaining / 86400;
+                                    let hours = (remaining % 86400) / 3600;
+                                    println!("   Expires in: {}d {}h", days, hours);
+                                }
+                            }
+                        }
+                    }
+                    Ok(())
+                }
+                AuthCommand::Token { raw } => {
+                    match credentials::get_access_token() {
+                        Some(token) => {
+                            if raw {
+                                print!("{}", token);
+                            } else {
+                                println!("Access Token: {}", token);
+                            }
+                            Ok(())
+                        }
+                        None => {
+                            eprintln!("Not authenticated. Run: sync-ctl auth login");
+                            std::process::exit(1);
+                        }
+                    }
+                }
             }
         }
     }

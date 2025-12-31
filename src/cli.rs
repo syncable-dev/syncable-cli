@@ -256,6 +256,12 @@ pub enum Commands {
         #[arg(long)]
         list_sessions: bool,
     },
+
+    /// Authenticate with the Syncable platform
+    Auth {
+        #[command(subcommand)]
+        command: AuthCommand,
+    },
 }
 
 #[derive(Subcommand)]
@@ -310,6 +316,30 @@ pub enum ToolsCommand {
         /// Show platform-specific instructions
         #[arg(long)]
         platform: Option<String>,
+    },
+}
+
+/// Authentication subcommands for the Syncable platform
+#[derive(Subcommand)]
+pub enum AuthCommand {
+    /// Log in to Syncable (opens browser for authentication)
+    Login {
+        /// Don't open browser automatically
+        #[arg(long)]
+        no_browser: bool,
+    },
+
+    /// Log out and clear stored credentials
+    Logout,
+
+    /// Show current authentication status
+    Status,
+
+    /// Print current access token (for scripting)
+    Token {
+        /// Print raw token without formatting
+        #[arg(long)]
+        raw: bool,
     },
 }
 
