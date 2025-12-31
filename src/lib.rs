@@ -118,6 +118,16 @@ pub async fn run_command(command: Commands) -> Result<()> {
             use cli::ChatProvider;
             use config::load_agent_config;
 
+            // Check if user is authenticated with Syncable
+            if !auth::credentials::is_authenticated() {
+                println!("\n\x1b[1;33m📢 Sign in to use Syncable Agent\x1b[0m");
+                println!("   It's free and costs you nothing!\n");
+                println!("   Run: \x1b[1;36msync-ctl auth login\x1b[0m\n");
+                return Err(error::IaCGeneratorError::Config(
+                    error::ConfigError::MissingConfig("Syncable authentication required".to_string())
+                ));
+            }
+
             let project_path = path.canonicalize().unwrap_or(path);
 
             // Handle --resume flag
