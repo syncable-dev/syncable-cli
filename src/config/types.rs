@@ -10,6 +10,9 @@ pub struct Config {
     pub telemetry: TelemetryConfig,
     #[serde(default)]
     pub agent: AgentConfig,
+    /// Syncable platform authentication
+    #[serde(default)]
+    pub syncable_auth: SyncableAuth,
 }
 
 /// Analysis configuration
@@ -192,6 +195,23 @@ pub struct BedrockConfig {
     pub default_model: Option<String>,
 }
 
+/// Syncable platform authentication credentials
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SyncableAuth {
+    /// Access token from device authorization flow
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub access_token: Option<String>,
+    /// Refresh token for renewing access
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub refresh_token: Option<String>,
+    /// Token expiration timestamp (Unix seconds)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<u64>,
+    /// Authenticated user's email
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_email: Option<String>,
+}
+
 fn default_provider() -> String {
     "openai".to_string()
 }
@@ -235,6 +255,7 @@ impl Default for Config {
             },
             telemetry: TelemetryConfig { enabled: true },
             agent: AgentConfig::default(),
+            syncable_auth: SyncableAuth::default(),
         }
     }
 }
