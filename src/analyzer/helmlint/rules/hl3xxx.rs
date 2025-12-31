@@ -304,10 +304,10 @@ impl Rule for HL3008 {
 
     fn check(&self, ctx: &LintContext) -> Vec<CheckFailure> {
         // Skip for library charts
-        if let Some(chart) = ctx.chart_metadata {
-            if chart.is_library() {
-                return vec![];
-            }
+        if let Some(chart) = ctx.chart_metadata
+            && chart.is_library()
+        {
+            return vec![];
         }
 
         let has_notes = ctx.files.iter().any(|f| f.ends_with("NOTES.txt"));

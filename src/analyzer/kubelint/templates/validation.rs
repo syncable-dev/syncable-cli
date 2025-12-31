@@ -99,16 +99,17 @@ impl CheckFunc for RestartPolicyCheck {
     fn check(&self, object: &Object) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
 
-        if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object) {
-            if let Some(policy) = &pod_spec.restart_policy {
-                // For Deployments, StatefulSets, DaemonSets - must be Always
-                match &object.k8s_object {
-                    K8sObject::Deployment(_)
-                    | K8sObject::StatefulSet(_)
-                    | K8sObject::DaemonSet(_)
-                    | K8sObject::ReplicaSet(_) => {
-                        if policy != "Always" {
-                            diagnostics.push(Diagnostic {
+        if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object)
+            && let Some(policy) = &pod_spec.restart_policy
+        {
+            // For Deployments, StatefulSets, DaemonSets - must be Always
+            match &object.k8s_object {
+                K8sObject::Deployment(_)
+                | K8sObject::StatefulSet(_)
+                | K8sObject::DaemonSet(_)
+                | K8sObject::ReplicaSet(_) => {
+                    if policy != "Always" {
+                        diagnostics.push(Diagnostic {
                                 message: format!(
                                     "Restart policy is '{}' but should be 'Always' for this workload type",
                                     policy
@@ -119,10 +120,9 @@ impl CheckFunc for RestartPolicyCheck {
                                         .to_string(),
                                 ),
                             });
-                        }
                     }
-                    _ => {}
                 }
+                _ => {}
             }
         }
 
@@ -566,16 +566,16 @@ impl CheckFunc for JobTtlSecondsAfterFinishedCheck {
     fn check(&self, object: &Object) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
 
-        if let K8sObject::Job(job) = &object.k8s_object {
-            if job.ttl_seconds_after_finished.is_none() {
-                diagnostics.push(Diagnostic {
-                    message: "Job does not have ttlSecondsAfterFinished set".to_string(),
-                    remediation: Some(
-                        "Set ttlSecondsAfterFinished to automatically clean up finished Jobs."
-                            .to_string(),
-                    ),
-                });
-            }
+        if let K8sObject::Job(job) = &object.k8s_object
+            && job.ttl_seconds_after_finished.is_none()
+        {
+            diagnostics.push(Diagnostic {
+                message: "Job does not have ttlSecondsAfterFinished set".to_string(),
+                remediation: Some(
+                    "Set ttlSecondsAfterFinished to automatically clean up finished Jobs."
+                        .to_string(),
+                ),
+            });
         }
 
         diagnostics
@@ -620,15 +620,15 @@ impl CheckFunc for PriorityClassNameCheck {
     fn check(&self, object: &Object) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
 
-        if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object) {
-            if pod_spec.priority_class_name.is_none() {
-                diagnostics.push(Diagnostic {
-                    message: "Pod does not have priorityClassName set".to_string(),
-                    remediation: Some(
-                        "Set priorityClassName to control pod scheduling priority.".to_string(),
-                    ),
-                });
-            }
+        if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object)
+            && pod_spec.priority_class_name.is_none()
+        {
+            diagnostics.push(Diagnostic {
+                message: "Pod does not have priorityClassName set".to_string(),
+                remediation: Some(
+                    "Set priorityClassName to control pod scheduling priority.".to_string(),
+                ),
+            });
         }
 
         diagnostics
@@ -690,18 +690,14 @@ impl CheckFunc for ServiceTypeCheck {
     fn check(&self, object: &Object) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
 
-        if let K8sObject::Service(svc) = &object.k8s_object {
-            if let Some(svc_type) = &svc.type_ {
-                if self.disallowed.contains(svc_type) {
-                    diagnostics.push(Diagnostic {
-                        message: format!("Service uses disallowed type '{}'", svc_type),
-                        remediation: Some(format!(
-                            "Consider using ClusterIP instead of {}.",
-                            svc_type
-                        )),
-                    });
-                }
-            }
+        if let K8sObject::Service(svc) = &object.k8s_object
+            && let Some(svc_type) = &svc.type_
+            && self.disallowed.contains(svc_type)
+        {
+            diagnostics.push(Diagnostic {
+                message: format!("Service uses disallowed type '{}'", svc_type),
+                remediation: Some(format!("Consider using ClusterIP instead of {}.", svc_type)),
+            });
         }
 
         diagnostics
@@ -755,21 +751,20 @@ impl CheckFunc for HpaMinReplicasCheck {
     fn check(&self, object: &Object) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
 
-        if let K8sObject::HorizontalPodAutoscaler(hpa) = &object.k8s_object {
-            if let Some(min) = hpa.min_replicas {
-                if min < self.min_replicas {
-                    diagnostics.push(Diagnostic {
-                        message: format!(
-                            "HPA minReplicas is {} but should be at least {}",
-                            min, self.min_replicas
-                        ),
-                        remediation: Some(format!(
-                            "Set minReplicas to at least {} for better availability.",
-                            self.min_replicas
-                        )),
-                    });
-                }
-            }
+        if let K8sObject::HorizontalPodAutoscaler(hpa) = &object.k8s_object
+            && let Some(min) = hpa.min_replicas
+            && min < self.min_replicas
+        {
+            diagnostics.push(Diagnostic {
+                message: format!(
+                    "HPA minReplicas is {} but should be at least {}",
+                    min, self.min_replicas
+                ),
+                remediation: Some(format!(
+                    "Set minReplicas to at least {} for better availability.",
+                    self.min_replicas
+                )),
+            });
         }
 
         diagnostics

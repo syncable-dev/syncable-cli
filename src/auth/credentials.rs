@@ -40,10 +40,7 @@ pub fn get_access_token() -> Option<String> {
 
     // Check expiry
     if let Some(expires_at) = config.syncable_auth.expires_at {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .ok()?
-            .as_secs();
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs();
         if now > expires_at {
             return None; // Token expired
         }

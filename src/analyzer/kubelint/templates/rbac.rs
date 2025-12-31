@@ -49,17 +49,18 @@ impl CheckFunc for ClusterAdminRoleBindingCheck {
             _ => None,
         };
 
-        if let Some(role_ref) = role_ref {
-            if role_ref.kind == "ClusterRole" && role_ref.name == "cluster-admin" {
-                diagnostics.push(Diagnostic {
-                    message: "Binding grants cluster-admin privileges".to_string(),
-                    remediation: Some(
-                        "Avoid binding to cluster-admin. Create a more restrictive ClusterRole \
+        if let Some(role_ref) = role_ref
+            && role_ref.kind == "ClusterRole"
+            && role_ref.name == "cluster-admin"
+        {
+            diagnostics.push(Diagnostic {
+                message: "Binding grants cluster-admin privileges".to_string(),
+                remediation: Some(
+                    "Avoid binding to cluster-admin. Create a more restrictive ClusterRole \
                          with only the required permissions."
-                            .to_string(),
-                    ),
-                });
-            }
+                        .to_string(),
+                ),
+            });
         }
 
         diagnostics
