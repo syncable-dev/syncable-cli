@@ -86,8 +86,8 @@ impl Rule for HL1002 {
     }
 
     fn check(&self, ctx: &LintContext) -> Vec<CheckFailure> {
-        if let Some(chart) = ctx.chart_metadata {
-            if !chart.has_valid_api_version() {
+        if let Some(chart) = ctx.chart_metadata
+            && !chart.has_valid_api_version() {
                 let version = match &chart.api_version {
                     ApiVersion::Unknown(v) => v.clone(),
                     _ => "unknown".to_string(),
@@ -101,7 +101,6 @@ impl Rule for HL1002 {
                     RuleCategory::Structure,
                 )];
             }
-        }
         vec![]
     }
 }
@@ -127,8 +126,8 @@ impl Rule for HL1003 {
     }
 
     fn check(&self, ctx: &LintContext) -> Vec<CheckFailure> {
-        if let Some(chart) = ctx.chart_metadata {
-            if chart.name.is_empty() {
+        if let Some(chart) = ctx.chart_metadata
+            && chart.name.is_empty() {
                 return vec![CheckFailure::new(
                     "HL1003",
                     Severity::Error,
@@ -138,7 +137,6 @@ impl Rule for HL1003 {
                     RuleCategory::Structure,
                 )];
             }
-        }
         vec![]
     }
 }
@@ -164,8 +162,8 @@ impl Rule for HL1004 {
     }
 
     fn check(&self, ctx: &LintContext) -> Vec<CheckFailure> {
-        if let Some(chart) = ctx.chart_metadata {
-            if chart.version.is_empty() {
+        if let Some(chart) = ctx.chart_metadata
+            && chart.version.is_empty() {
                 return vec![CheckFailure::new(
                     "HL1004",
                     Severity::Error,
@@ -175,7 +173,6 @@ impl Rule for HL1004 {
                     RuleCategory::Structure,
                 )];
             }
-        }
         vec![]
     }
 }
@@ -201,8 +198,8 @@ impl Rule for HL1005 {
     }
 
     fn check(&self, ctx: &LintContext) -> Vec<CheckFailure> {
-        if let Some(chart) = ctx.chart_metadata {
-            if !chart.version.is_empty() && !is_valid_semver(&chart.version) {
+        if let Some(chart) = ctx.chart_metadata
+            && !chart.version.is_empty() && !is_valid_semver(&chart.version) {
                 return vec![CheckFailure::new(
                     "HL1005",
                     Severity::Warning,
@@ -215,7 +212,6 @@ impl Rule for HL1005 {
                     RuleCategory::Structure,
                 )];
             }
-        }
         vec![]
     }
 }
@@ -241,13 +237,13 @@ impl Rule for HL1006 {
     }
 
     fn check(&self, ctx: &LintContext) -> Vec<CheckFailure> {
-        if let Some(chart) = ctx.chart_metadata {
-            if chart.description.is_none()
+        if let Some(chart) = ctx.chart_metadata
+            && (chart.description.is_none()
                 || chart
                     .description
                     .as_ref()
                     .map(|d| d.is_empty())
-                    .unwrap_or(true)
+                    .unwrap_or(true))
             {
                 return vec![CheckFailure::new(
                     "HL1006",
@@ -258,7 +254,6 @@ impl Rule for HL1006 {
                     RuleCategory::Structure,
                 )];
             }
-        }
         vec![]
     }
 }
@@ -284,8 +279,8 @@ impl Rule for HL1007 {
     }
 
     fn check(&self, ctx: &LintContext) -> Vec<CheckFailure> {
-        if let Some(chart) = ctx.chart_metadata {
-            if chart.maintainers.is_empty() {
+        if let Some(chart) = ctx.chart_metadata
+            && chart.maintainers.is_empty() {
                 return vec![CheckFailure::new(
                     "HL1007",
                     Severity::Info,
@@ -295,7 +290,6 @@ impl Rule for HL1007 {
                     RuleCategory::Structure,
                 )];
             }
-        }
         vec![]
     }
 }
@@ -321,8 +315,8 @@ impl Rule for HL1008 {
     }
 
     fn check(&self, ctx: &LintContext) -> Vec<CheckFailure> {
-        if let Some(chart) = ctx.chart_metadata {
-            if chart.is_deprecated() {
+        if let Some(chart) = ctx.chart_metadata
+            && chart.is_deprecated() {
                 return vec![CheckFailure::new(
                     "HL1008",
                     Severity::Warning,
@@ -332,7 +326,6 @@ impl Rule for HL1008 {
                     RuleCategory::Structure,
                 )];
             }
-        }
         vec![]
     }
 }
@@ -359,11 +352,10 @@ impl Rule for HL1009 {
 
     fn check(&self, ctx: &LintContext) -> Vec<CheckFailure> {
         // Skip for library charts
-        if let Some(chart) = ctx.chart_metadata {
-            if chart.is_library() {
+        if let Some(chart) = ctx.chart_metadata
+            && chart.is_library() {
                 return vec![];
             }
-        }
 
         let has_templates = ctx
             .files
@@ -466,8 +458,8 @@ impl Rule for HL1012 {
     }
 
     fn check(&self, ctx: &LintContext) -> Vec<CheckFailure> {
-        if let Some(chart) = ctx.chart_metadata {
-            if !is_valid_chart_name(&chart.name) {
+        if let Some(chart) = ctx.chart_metadata
+            && !is_valid_chart_name(&chart.name) {
                 return vec![CheckFailure::new(
                     "HL1012",
                     Severity::Error,
@@ -480,7 +472,6 @@ impl Rule for HL1012 {
                     RuleCategory::Structure,
                 )];
             }
-        }
         vec![]
     }
 }
@@ -506,9 +497,9 @@ impl Rule for HL1013 {
     }
 
     fn check(&self, ctx: &LintContext) -> Vec<CheckFailure> {
-        if let Some(chart) = ctx.chart_metadata {
-            if let Some(icon) = &chart.icon {
-                if icon.starts_with("http://") {
+        if let Some(chart) = ctx.chart_metadata
+            && let Some(icon) = &chart.icon
+                && icon.starts_with("http://") {
                     return vec![CheckFailure::new(
                         "HL1013",
                         Severity::Warning,
@@ -518,8 +509,6 @@ impl Rule for HL1013 {
                         RuleCategory::Structure,
                     )];
                 }
-            }
-        }
         vec![]
     }
 }
@@ -545,9 +534,9 @@ impl Rule for HL1014 {
     }
 
     fn check(&self, ctx: &LintContext) -> Vec<CheckFailure> {
-        if let Some(chart) = ctx.chart_metadata {
-            if let Some(home) = &chart.home {
-                if home.starts_with("http://") {
+        if let Some(chart) = ctx.chart_metadata
+            && let Some(home) = &chart.home
+                && home.starts_with("http://") {
                     return vec![CheckFailure::new(
                         "HL1014",
                         Severity::Warning,
@@ -557,8 +546,6 @@ impl Rule for HL1014 {
                         RuleCategory::Structure,
                     )];
                 }
-            }
-        }
         vec![]
     }
 }

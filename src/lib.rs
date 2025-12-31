@@ -215,19 +215,23 @@ pub async fn run_command(command: Commands) -> Result<()> {
             }
         }
         Commands::Auth { command } => {
-            use cli::AuthCommand;
             use auth::credentials;
             use auth::device_flow;
-            
+            use cli::AuthCommand;
+
             match command {
                 AuthCommand::Login { no_browser } => {
                     device_flow::login(no_browser).await.map_err(|e| {
-                        error::IaCGeneratorError::Config(error::ConfigError::ParsingFailed(e.to_string()))
+                        error::IaCGeneratorError::Config(error::ConfigError::ParsingFailed(
+                            e.to_string(),
+                        ))
                     })
                 }
                 AuthCommand::Logout => {
                     credentials::clear_credentials().map_err(|e| {
-                        error::IaCGeneratorError::Config(error::ConfigError::ParsingFailed(e.to_string()))
+                        error::IaCGeneratorError::Config(error::ConfigError::ParsingFailed(
+                            e.to_string(),
+                        ))
                     })?;
                     println!("✅ Logged out successfully. Credentials cleared.");
                     Ok(())
@@ -263,22 +267,20 @@ pub async fn run_command(command: Commands) -> Result<()> {
                     }
                     Ok(())
                 }
-                AuthCommand::Token { raw } => {
-                    match credentials::get_access_token() {
-                        Some(token) => {
-                            if raw {
-                                print!("{}", token);
-                            } else {
-                                println!("Access Token: {}", token);
-                            }
-                            Ok(())
+                AuthCommand::Token { raw } => match credentials::get_access_token() {
+                    Some(token) => {
+                        if raw {
+                            print!("{}", token);
+                        } else {
+                            println!("Access Token: {}", token);
                         }
-                        None => {
-                            eprintln!("Not authenticated. Run: sync-ctl auth login");
-                            std::process::exit(1);
-                        }
+                        Ok(())
                     }
-                }
+                    None => {
+                        eprintln!("Not authenticated. Run: sync-ctl auth login");
+                        std::process::exit(1);
+                    }
+                },
             }
         }
     }

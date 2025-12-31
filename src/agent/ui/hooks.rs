@@ -1193,8 +1193,8 @@ fn format_kubelint_result(
         let mut lines = Vec::new();
 
         // Check for parse errors first
-        if let Some(errors) = parse_errors {
-            if !errors.is_empty() {
+        if let Some(errors) = parse_errors
+            && !errors.is_empty() {
                 lines.push(format!(
                     "{}☸ {} parse error{} (files could not be fully analyzed){}",
                     ansi::HIGH,
@@ -1235,7 +1235,6 @@ fn format_kubelint_result(
                     return (false, lines);
                 }
             }
-        }
 
         if total == 0 && parse_errors.map(|e| e.is_empty()).unwrap_or(true) {
             lines.push(format!(
@@ -1326,8 +1325,8 @@ fn format_kubelint_result(
         }
 
         // Then high priority
-        if shown < MAX_PREVIEW {
-            if let Some(high_issues) = action_plan
+        if shown < MAX_PREVIEW
+            && let Some(high_issues) = action_plan
                 .and_then(|a| a.get("high"))
                 .and_then(|h| h.as_array())
             {
@@ -1336,11 +1335,10 @@ fn format_kubelint_result(
                     shown += 1;
                 }
             }
-        }
 
         // Show quick fix hint
-        if let Some(quick_fixes) = v.get("quick_fixes").and_then(|q| q.as_array()) {
-            if let Some(first_fix) = quick_fixes.first().and_then(|f| f.as_str()) {
+        if let Some(quick_fixes) = v.get("quick_fixes").and_then(|q| q.as_array())
+            && let Some(first_fix) = quick_fixes.first().and_then(|f| f.as_str()) {
                 let truncated = if first_fix.len() > 70 {
                     format!("{}...", &first_fix[..67])
                 } else {
@@ -1353,7 +1351,6 @@ fn format_kubelint_result(
                     ansi::RESET
                 ));
             }
-        }
 
         // Note about remaining issues
         let remaining = total as usize - shown;
@@ -1429,8 +1426,8 @@ fn format_helmlint_result(
         let mut lines = Vec::new();
 
         // Check for parse errors first
-        if let Some(errors) = parse_errors {
-            if !errors.is_empty() {
+        if let Some(errors) = parse_errors
+            && !errors.is_empty() {
                 lines.push(format!(
                     "{}⎈ {} parse error{} (chart could not be fully analyzed){}",
                     ansi::HIGH,
@@ -1471,7 +1468,6 @@ fn format_helmlint_result(
                     return (false, lines);
                 }
             }
-        }
 
         if total == 0 && parse_errors.map(|e| e.is_empty()).unwrap_or(true) {
             lines.push(format!(
@@ -1562,8 +1558,8 @@ fn format_helmlint_result(
         }
 
         // Then high priority
-        if shown < MAX_PREVIEW {
-            if let Some(high_issues) = action_plan
+        if shown < MAX_PREVIEW
+            && let Some(high_issues) = action_plan
                 .and_then(|a| a.get("high"))
                 .and_then(|h| h.as_array())
             {
@@ -1572,11 +1568,10 @@ fn format_helmlint_result(
                     shown += 1;
                 }
             }
-        }
 
         // Show quick fix hint
-        if let Some(quick_fixes) = v.get("quick_fixes").and_then(|q| q.as_array()) {
-            if let Some(first_fix) = quick_fixes.first().and_then(|f| f.as_str()) {
+        if let Some(quick_fixes) = v.get("quick_fixes").and_then(|q| q.as_array())
+            && let Some(first_fix) = quick_fixes.first().and_then(|f| f.as_str()) {
                 let truncated = if first_fix.len() > 70 {
                     format!("{}...", &first_fix[..67])
                 } else {
@@ -1589,7 +1584,6 @@ fn format_helmlint_result(
                     ansi::RESET
                 ));
             }
-        }
 
         // Note about remaining issues
         let remaining = total as usize - shown;
