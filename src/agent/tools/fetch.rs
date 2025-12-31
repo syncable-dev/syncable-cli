@@ -69,9 +69,9 @@ impl WebFetchTool {
         let robots_url = format!("{}://{}/robots.txt", url.scheme(), url.authority());
 
         // Try to fetch robots.txt (ignore errors - many sites don't have one)
-        if let Ok(response) = self.client().get(&robots_url).send().await {
-            if response.status().is_success() {
-                if let Ok(robots_content) = response.text().await {
+        if let Ok(response) = self.client().get(&robots_url).send().await
+            && response.status().is_success()
+                && let Ok(robots_content) = response.text().await {
                     let path = url.path();
                     for line in robots_content.lines() {
                         if let Some(disallowed) = line.strip_prefix("Disallow: ") {
@@ -97,8 +97,6 @@ impl WebFetchTool {
                         }
                     }
                 }
-            }
-        }
         Ok(())
     }
 

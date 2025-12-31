@@ -123,9 +123,9 @@ impl Rule for HL4002 {
         // Check values.yaml
         if let Some(values) = ctx.values {
             for path in &values.defined_paths {
-                if path.to_lowercase().contains("privileged") {
-                    if let Some(value) = values.get(path) {
-                        if is_truthy(value) {
+                if path.to_lowercase().contains("privileged")
+                    && let Some(value) = values.get(path)
+                        && is_truthy(value) {
                             let line = values.line_for_path(path).unwrap_or(1);
                             failures.push(CheckFailure::new(
                                 "HL4002",
@@ -136,16 +136,14 @@ impl Rule for HL4002 {
                                 RuleCategory::Security,
                             ));
                         }
-                    }
-                }
             }
         }
 
         // Check templates for hardcoded privileged: true
         for template in ctx.templates {
             for token in &template.tokens {
-                if let TemplateToken::Text { content, line } = token {
-                    if content.contains("privileged: true") {
+                if let TemplateToken::Text { content, line } = token
+                    && content.contains("privileged: true") {
                         failures.push(CheckFailure::new(
                             "HL4002",
                             Severity::Error,
@@ -155,7 +153,6 @@ impl Rule for HL4002 {
                             RuleCategory::Security,
                         ));
                     }
-                }
             }
         }
 
@@ -188,8 +185,8 @@ impl Rule for HL4003 {
 
         for template in ctx.templates {
             for token in &template.tokens {
-                if let TemplateToken::Text { content, line } = token {
-                    if content.contains("hostPath:") {
+                if let TemplateToken::Text { content, line } = token
+                    && content.contains("hostPath:") {
                         failures.push(CheckFailure::new(
                             "HL4003",
                             Severity::Warning,
@@ -199,7 +196,6 @@ impl Rule for HL4003 {
                             RuleCategory::Security,
                         ));
                     }
-                }
             }
         }
 
@@ -233,9 +229,9 @@ impl Rule for HL4004 {
         // Check values.yaml
         if let Some(values) = ctx.values {
             for path in &values.defined_paths {
-                if path.to_lowercase().contains("hostnetwork") {
-                    if let Some(value) = values.get(path) {
-                        if is_truthy(value) {
+                if path.to_lowercase().contains("hostnetwork")
+                    && let Some(value) = values.get(path)
+                        && is_truthy(value) {
                             let line = values.line_for_path(path).unwrap_or(1);
                             failures.push(CheckFailure::new(
                                 "HL4004",
@@ -246,16 +242,14 @@ impl Rule for HL4004 {
                                 RuleCategory::Security,
                             ));
                         }
-                    }
-                }
             }
         }
 
         // Check templates
         for template in ctx.templates {
             for token in &template.tokens {
-                if let TemplateToken::Text { content, line } = token {
-                    if content.contains("hostNetwork: true") {
+                if let TemplateToken::Text { content, line } = token
+                    && content.contains("hostNetwork: true") {
                         failures.push(CheckFailure::new(
                             "HL4004",
                             Severity::Warning,
@@ -265,7 +259,6 @@ impl Rule for HL4004 {
                             RuleCategory::Security,
                         ));
                     }
-                }
             }
         }
 
@@ -298,8 +291,8 @@ impl Rule for HL4005 {
 
         for template in ctx.templates {
             for token in &template.tokens {
-                if let TemplateToken::Text { content, line } = token {
-                    if content.contains("hostPID: true") {
+                if let TemplateToken::Text { content, line } = token
+                    && content.contains("hostPID: true") {
                         failures.push(CheckFailure::new(
                             "HL4005",
                             Severity::Warning,
@@ -309,7 +302,6 @@ impl Rule for HL4005 {
                             RuleCategory::Security,
                         ));
                     }
-                }
             }
         }
 

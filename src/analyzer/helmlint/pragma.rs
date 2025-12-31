@@ -38,20 +38,17 @@ impl PragmaState {
         }
 
         // Check if the rule is ignored for this specific line
-        if let Some(ignores) = self.line_ignores.get(&line) {
-            if ignores.contains(code.as_str()) {
+        if let Some(ignores) = self.line_ignores.get(&line)
+            && ignores.contains(code.as_str()) {
                 return true;
             }
-        }
 
         // Check if previous line has an ignore pragma for this line
-        if line > 1 {
-            if let Some(ignores) = self.line_ignores.get(&(line - 1)) {
-                if ignores.contains(code.as_str()) {
+        if line > 1
+            && let Some(ignores) = self.line_ignores.get(&(line - 1))
+                && ignores.contains(code.as_str()) {
                     return true;
                 }
-            }
-        }
 
         false
     }

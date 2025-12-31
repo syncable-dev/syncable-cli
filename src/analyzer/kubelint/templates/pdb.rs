@@ -43,8 +43,8 @@ impl CheckFunc for PdbMaxUnavailableCheck {
     fn check(&self, object: &Object) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
 
-        if let K8sObject::PodDisruptionBudget(pdb) = &object.k8s_object {
-            if let Some(max_unavailable) = &pdb.max_unavailable {
+        if let K8sObject::PodDisruptionBudget(pdb) = &object.k8s_object
+            && let Some(max_unavailable) = &pdb.max_unavailable {
                 // Check if it's set to 0 or 0%
                 if max_unavailable == "0" || max_unavailable == "0%" {
                     diagnostics.push(Diagnostic {
@@ -59,7 +59,6 @@ impl CheckFunc for PdbMaxUnavailableCheck {
                     });
                 }
             }
-        }
 
         diagnostics
     }
@@ -103,8 +102,8 @@ impl CheckFunc for PdbMinAvailableCheck {
     fn check(&self, object: &Object) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
 
-        if let K8sObject::PodDisruptionBudget(pdb) = &object.k8s_object {
-            if let Some(min_available) = &pdb.min_available {
+        if let K8sObject::PodDisruptionBudget(pdb) = &object.k8s_object
+            && let Some(min_available) = &pdb.min_available {
                 // Check if it's set to 100%
                 if min_available == "100%" {
                     diagnostics.push(Diagnostic {
@@ -117,7 +116,6 @@ impl CheckFunc for PdbMinAvailableCheck {
                     });
                 }
             }
-        }
 
         diagnostics
     }

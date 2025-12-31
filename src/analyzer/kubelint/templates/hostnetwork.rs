@@ -43,8 +43,8 @@ impl CheckFunc for HostNetworkCheck {
     fn check(&self, object: &Object) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
 
-        if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object) {
-            if pod_spec.host_network == Some(true) {
+        if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object)
+            && pod_spec.host_network == Some(true) {
                 diagnostics.push(Diagnostic {
                     message: "Pod is configured to use the host's network namespace".to_string(),
                     remediation: Some(
@@ -54,7 +54,6 @@ impl CheckFunc for HostNetworkCheck {
                     ),
                 });
             }
-        }
 
         diagnostics
     }
@@ -98,8 +97,8 @@ impl CheckFunc for HostPIDCheck {
     fn check(&self, object: &Object) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
 
-        if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object) {
-            if pod_spec.host_pid == Some(true) {
+        if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object)
+            && pod_spec.host_pid == Some(true) {
                 diagnostics.push(Diagnostic {
                     message: "Pod is configured to use the host's PID namespace".to_string(),
                     remediation: Some(
@@ -110,7 +109,6 @@ impl CheckFunc for HostPIDCheck {
                     ),
                 });
             }
-        }
 
         diagnostics
     }
@@ -154,8 +152,8 @@ impl CheckFunc for HostIPCCheck {
     fn check(&self, object: &Object) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
 
-        if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object) {
-            if pod_spec.host_ipc == Some(true) {
+        if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object)
+            && pod_spec.host_ipc == Some(true) {
                 diagnostics.push(Diagnostic {
                     message: "Pod is configured to use the host's IPC namespace".to_string(),
                     remediation: Some(
@@ -165,7 +163,6 @@ impl CheckFunc for HostIPCCheck {
                     ),
                 });
             }
-        }
 
         diagnostics
     }

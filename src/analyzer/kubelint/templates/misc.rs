@@ -52,8 +52,8 @@ impl CheckFunc for SysctlsCheck {
             "net.",
         ];
 
-        if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object) {
-            if let Some(sc) = &pod_spec.security_context {
+        if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object)
+            && let Some(sc) = &pod_spec.security_context {
                 for sysctl in &sc.sysctls {
                     let is_unsafe = unsafe_sysctls
                         .iter()
@@ -73,7 +73,6 @@ impl CheckFunc for SysctlsCheck {
                     }
                 }
             }
-        }
 
         diagnostics
     }
@@ -117,15 +116,15 @@ impl CheckFunc for DnsConfigOptionsCheck {
     fn check(&self, object: &Object) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
 
-        if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object) {
-            if let Some(dns_config) = &pod_spec.dns_config {
+        if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object)
+            && let Some(dns_config) = &pod_spec.dns_config {
                 // Check for ndots setting that could cause performance issues
                 for option in &dns_config.options {
-                    if let Some(name) = &option.name {
-                        if name == "ndots" {
-                            if let Some(value) = &option.value {
-                                if let Ok(ndots) = value.parse::<i32>() {
-                                    if ndots > 5 {
+                    if let Some(name) = &option.name
+                        && name == "ndots"
+                            && let Some(value) = &option.value
+                                && let Ok(ndots) = value.parse::<i32>()
+                                    && ndots > 5 {
                                         diagnostics.push(Diagnostic {
                                             message: format!(
                                                 "DNS ndots is set to {}, which may cause DNS lookup performance issues",
@@ -137,13 +136,8 @@ impl CheckFunc for DnsConfigOptionsCheck {
                                             ),
                                         });
                                     }
-                                }
-                            }
-                        }
-                    }
                 }
             }
-        }
 
         diagnostics
     }
