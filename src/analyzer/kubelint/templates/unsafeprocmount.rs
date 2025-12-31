@@ -47,8 +47,9 @@ impl CheckFunc for UnsafeProcMountCheck {
             for container in extract::container::all_containers(pod_spec) {
                 if let Some(sc) = &container.security_context
                     && let Some(proc_mount) = &sc.proc_mount
-                        && proc_mount == "Unmasked" {
-                            diagnostics.push(Diagnostic {
+                    && proc_mount == "Unmasked"
+                {
+                    diagnostics.push(Diagnostic {
                                 message: format!(
                                     "Container '{}' has unsafe /proc mount (procMount: Unmasked)",
                                     container.name
@@ -59,7 +60,7 @@ impl CheckFunc for UnsafeProcMountCheck {
                                         .to_string(),
                                 ),
                             });
-                        }
+                }
             }
         }
 

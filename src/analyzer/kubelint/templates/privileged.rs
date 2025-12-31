@@ -46,8 +46,9 @@ impl CheckFunc for PrivilegedCheck {
         if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object) {
             for container in extract::container::all_containers(pod_spec) {
                 if let Some(sc) = &container.security_context
-                    && sc.privileged == Some(true) {
-                        diagnostics.push(Diagnostic {
+                    && sc.privileged == Some(true)
+                {
+                    diagnostics.push(Diagnostic {
                             message: format!(
                                 "Container '{}' is running in privileged mode",
                                 container.name
@@ -57,7 +58,7 @@ impl CheckFunc for PrivilegedCheck {
                                  Set securityContext.privileged to false.".to_string()
                             ),
                         });
-                    }
+                }
             }
         }
 
