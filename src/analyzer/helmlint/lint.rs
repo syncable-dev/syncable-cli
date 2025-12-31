@@ -316,9 +316,10 @@ fn collect_chart_files(path: &Path) -> HashSet<String> {
         .filter_map(|e| e.ok())
     {
         if entry.path().is_file()
-            && let Ok(relative) = entry.path().strip_prefix(path) {
-                files.insert(relative.display().to_string());
-            }
+            && let Ok(relative) = entry.path().strip_prefix(path)
+        {
+            files.insert(relative.display().to_string());
+        }
     }
 
     files

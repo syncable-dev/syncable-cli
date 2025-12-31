@@ -125,17 +125,18 @@ impl Rule for HL4002 {
             for path in &values.defined_paths {
                 if path.to_lowercase().contains("privileged")
                     && let Some(value) = values.get(path)
-                        && is_truthy(value) {
-                            let line = values.line_for_path(path).unwrap_or(1);
-                            failures.push(CheckFailure::new(
-                                "HL4002",
-                                Severity::Error,
-                                format!("Privileged mode enabled at '{}'", path),
-                                "values.yaml",
-                                line,
-                                RuleCategory::Security,
-                            ));
-                        }
+                    && is_truthy(value)
+                {
+                    let line = values.line_for_path(path).unwrap_or(1);
+                    failures.push(CheckFailure::new(
+                        "HL4002",
+                        Severity::Error,
+                        format!("Privileged mode enabled at '{}'", path),
+                        "values.yaml",
+                        line,
+                        RuleCategory::Security,
+                    ));
+                }
             }
         }
 
@@ -143,16 +144,17 @@ impl Rule for HL4002 {
         for template in ctx.templates {
             for token in &template.tokens {
                 if let TemplateToken::Text { content, line } = token
-                    && content.contains("privileged: true") {
-                        failures.push(CheckFailure::new(
-                            "HL4002",
-                            Severity::Error,
-                            "Container is configured with privileged: true",
-                            &template.path,
-                            *line,
-                            RuleCategory::Security,
-                        ));
-                    }
+                    && content.contains("privileged: true")
+                {
+                    failures.push(CheckFailure::new(
+                        "HL4002",
+                        Severity::Error,
+                        "Container is configured with privileged: true",
+                        &template.path,
+                        *line,
+                        RuleCategory::Security,
+                    ));
+                }
             }
         }
 
@@ -186,8 +188,9 @@ impl Rule for HL4003 {
         for template in ctx.templates {
             for token in &template.tokens {
                 if let TemplateToken::Text { content, line } = token
-                    && content.contains("hostPath:") {
-                        failures.push(CheckFailure::new(
+                    && content.contains("hostPath:")
+                {
+                    failures.push(CheckFailure::new(
                             "HL4003",
                             Severity::Warning,
                             "Using hostPath volume mount. This can expose the host filesystem to the container",
@@ -195,7 +198,7 @@ impl Rule for HL4003 {
                             *line,
                             RuleCategory::Security,
                         ));
-                    }
+                }
             }
         }
 
@@ -231,17 +234,18 @@ impl Rule for HL4004 {
             for path in &values.defined_paths {
                 if path.to_lowercase().contains("hostnetwork")
                     && let Some(value) = values.get(path)
-                        && is_truthy(value) {
-                            let line = values.line_for_path(path).unwrap_or(1);
-                            failures.push(CheckFailure::new(
-                                "HL4004",
-                                Severity::Warning,
-                                format!("Host network enabled at '{}'", path),
-                                "values.yaml",
-                                line,
-                                RuleCategory::Security,
-                            ));
-                        }
+                    && is_truthy(value)
+                {
+                    let line = values.line_for_path(path).unwrap_or(1);
+                    failures.push(CheckFailure::new(
+                        "HL4004",
+                        Severity::Warning,
+                        format!("Host network enabled at '{}'", path),
+                        "values.yaml",
+                        line,
+                        RuleCategory::Security,
+                    ));
+                }
             }
         }
 
@@ -249,16 +253,17 @@ impl Rule for HL4004 {
         for template in ctx.templates {
             for token in &template.tokens {
                 if let TemplateToken::Text { content, line } = token
-                    && content.contains("hostNetwork: true") {
-                        failures.push(CheckFailure::new(
-                            "HL4004",
-                            Severity::Warning,
-                            "Pod uses host network. This bypasses network policies",
-                            &template.path,
-                            *line,
-                            RuleCategory::Security,
-                        ));
-                    }
+                    && content.contains("hostNetwork: true")
+                {
+                    failures.push(CheckFailure::new(
+                        "HL4004",
+                        Severity::Warning,
+                        "Pod uses host network. This bypasses network policies",
+                        &template.path,
+                        *line,
+                        RuleCategory::Security,
+                    ));
+                }
             }
         }
 
@@ -292,16 +297,17 @@ impl Rule for HL4005 {
         for template in ctx.templates {
             for token in &template.tokens {
                 if let TemplateToken::Text { content, line } = token
-                    && content.contains("hostPID: true") {
-                        failures.push(CheckFailure::new(
-                            "HL4005",
-                            Severity::Warning,
-                            "Pod uses host PID namespace. This can expose host processes",
-                            &template.path,
-                            *line,
-                            RuleCategory::Security,
-                        ));
-                    }
+                    && content.contains("hostPID: true")
+                {
+                    failures.push(CheckFailure::new(
+                        "HL4005",
+                        Severity::Warning,
+                        "Pod uses host PID namespace. This can expose host processes",
+                        &template.path,
+                        *line,
+                        RuleCategory::Security,
+                    ));
+                }
             }
         }
 

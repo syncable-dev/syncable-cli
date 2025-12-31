@@ -44,21 +44,22 @@ impl CheckFunc for PdbMaxUnavailableCheck {
         let mut diagnostics = Vec::new();
 
         if let K8sObject::PodDisruptionBudget(pdb) = &object.k8s_object
-            && let Some(max_unavailable) = &pdb.max_unavailable {
-                // Check if it's set to 0 or 0%
-                if max_unavailable == "0" || max_unavailable == "0%" {
-                    diagnostics.push(Diagnostic {
-                        message:
-                            "PDB maxUnavailable is set to 0, which blocks all voluntary disruptions"
-                                .to_string(),
-                        remediation: Some(
-                            "Set maxUnavailable to at least 1 or a non-zero percentage to allow \
+            && let Some(max_unavailable) = &pdb.max_unavailable
+        {
+            // Check if it's set to 0 or 0%
+            if max_unavailable == "0" || max_unavailable == "0%" {
+                diagnostics.push(Diagnostic {
+                    message:
+                        "PDB maxUnavailable is set to 0, which blocks all voluntary disruptions"
+                            .to_string(),
+                    remediation: Some(
+                        "Set maxUnavailable to at least 1 or a non-zero percentage to allow \
                              voluntary disruptions during cluster maintenance."
-                                .to_string(),
-                        ),
-                    });
-                }
+                            .to_string(),
+                    ),
+                });
             }
+        }
 
         diagnostics
     }
@@ -103,19 +104,22 @@ impl CheckFunc for PdbMinAvailableCheck {
         let mut diagnostics = Vec::new();
 
         if let K8sObject::PodDisruptionBudget(pdb) = &object.k8s_object
-            && let Some(min_available) = &pdb.min_available {
-                // Check if it's set to 100%
-                if min_available == "100%" {
-                    diagnostics.push(Diagnostic {
-                        message: "PDB minAvailable is set to 100%, which blocks all voluntary disruptions".to_string(),
-                        remediation: Some(
-                            "Set minAvailable to less than 100% to allow voluntary disruptions \
+            && let Some(min_available) = &pdb.min_available
+        {
+            // Check if it's set to 100%
+            if min_available == "100%" {
+                diagnostics.push(Diagnostic {
+                    message:
+                        "PDB minAvailable is set to 100%, which blocks all voluntary disruptions"
+                            .to_string(),
+                    remediation: Some(
+                        "Set minAvailable to less than 100% to allow voluntary disruptions \
                              during cluster maintenance."
-                                .to_string(),
-                        ),
-                    });
-                }
+                            .to_string(),
+                    ),
+                });
             }
+        }
 
         diagnostics
     }

@@ -124,7 +124,9 @@ pub async fn run_command(command: Commands) -> Result<()> {
                 println!("   It's free and costs you nothing!\n");
                 println!("   Run: \x1b[1;36msync-ctl auth login\x1b[0m\n");
                 return Err(error::IaCGeneratorError::Config(
-                    error::ConfigError::MissingConfig("Syncable authentication required".to_string())
+                    error::ConfigError::MissingConfig(
+                        "Syncable authentication required".to_string(),
+                    ),
                 ));
             }
 

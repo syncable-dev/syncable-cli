@@ -53,26 +53,24 @@ impl CheckFunc for SysctlsCheck {
         ];
 
         if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object)
-            && let Some(sc) = &pod_spec.security_context {
-                for sysctl in &sc.sysctls {
-                    let is_unsafe = unsafe_sysctls
-                        .iter()
-                        .any(|prefix| sysctl.name.starts_with(prefix));
-                    if is_unsafe {
-                        diagnostics.push(Diagnostic {
-                            message: format!(
-                                "Pod uses potentially unsafe sysctl '{}'",
-                                sysctl.name
-                            ),
-                            remediation: Some(
-                                "Ensure this sysctl is allowed by the cluster's PodSecurityPolicy \
+            && let Some(sc) = &pod_spec.security_context
+        {
+            for sysctl in &sc.sysctls {
+                let is_unsafe = unsafe_sysctls
+                    .iter()
+                    .any(|prefix| sysctl.name.starts_with(prefix));
+                if is_unsafe {
+                    diagnostics.push(Diagnostic {
+                        message: format!("Pod uses potentially unsafe sysctl '{}'", sysctl.name),
+                        remediation: Some(
+                            "Ensure this sysctl is allowed by the cluster's PodSecurityPolicy \
                                  or PodSecurityStandard and is necessary for your workload."
-                                    .to_string(),
-                            ),
-                        });
-                    }
+                                .to_string(),
+                        ),
+                    });
                 }
             }
+        }
 
         diagnostics
     }
@@ -117,27 +115,29 @@ impl CheckFunc for DnsConfigOptionsCheck {
         let mut diagnostics = Vec::new();
 
         if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object)
-            && let Some(dns_config) = &pod_spec.dns_config {
-                // Check for ndots setting that could cause performance issues
-                for option in &dns_config.options {
-                    if let Some(name) = &option.name
-                        && name == "ndots"
-                            && let Some(value) = &option.value
-                                && let Ok(ndots) = value.parse::<i32>()
-                                    && ndots > 5 {
-                                        diagnostics.push(Diagnostic {
-                                            message: format!(
-                                                "DNS ndots is set to {}, which may cause DNS lookup performance issues",
-                                                ndots
-                                            ),
-                                            remediation: Some(
-                                                "Consider lowering ndots to 2 or less for better DNS performance."
-                                                    .to_string(),
-                                            ),
-                                        });
-                                    }
+            && let Some(dns_config) = &pod_spec.dns_config
+        {
+            // Check for ndots setting that could cause performance issues
+            for option in &dns_config.options {
+                if let Some(name) = &option.name
+                    && name == "ndots"
+                    && let Some(value) = &option.value
+                    && let Ok(ndots) = value.parse::<i32>()
+                    && ndots > 5
+                {
+                    diagnostics.push(Diagnostic {
+                        message: format!(
+                            "DNS ndots is set to {}, which may cause DNS lookup performance issues",
+                            ndots
+                        ),
+                        remediation: Some(
+                            "Consider lowering ndots to 2 or less for better DNS performance."
+                                .to_string(),
+                        ),
+                    });
                 }
             }
+        }
 
         diagnostics
     }

@@ -241,21 +241,22 @@ impl Rule for HL2005 {
 
             if is_port_field
                 && let Some(value) = values.get(path)
-                    && let Some(port) = extract_port_number(value)
-                        && !(1..=65535).contains(&port) {
-                            let line = values.line_for_path(path).unwrap_or(1);
-                            failures.push(CheckFailure::new(
-                                "HL2005",
-                                Severity::Error,
-                                format!(
-                                    "Invalid port number {} at '{}'. Must be between 1 and 65535",
-                                    port, path
-                                ),
-                                "values.yaml",
-                                line,
-                                RuleCategory::Values,
-                            ));
-                        }
+                && let Some(port) = extract_port_number(value)
+                && !(1..=65535).contains(&port)
+            {
+                let line = values.line_for_path(path).unwrap_or(1);
+                failures.push(CheckFailure::new(
+                    "HL2005",
+                    Severity::Error,
+                    format!(
+                        "Invalid port number {} at '{}'. Must be between 1 and 65535",
+                        port, path
+                    ),
+                    "values.yaml",
+                    line,
+                    RuleCategory::Values,
+                ));
+            }
         }
 
         failures
@@ -295,9 +296,10 @@ impl Rule for HL2007 {
             let lower_path = path.to_lowercase();
             if (lower_path.ends_with(".tag") || lower_path.ends_with("imagetag"))
                 && let Some(serde_yaml::Value::String(tag)) = values.get(path)
-                    && tag == "latest" {
-                        let line = values.line_for_path(path).unwrap_or(1);
-                        failures.push(CheckFailure::new(
+                && tag == "latest"
+            {
+                let line = values.line_for_path(path).unwrap_or(1);
+                failures.push(CheckFailure::new(
                             "HL2007",
                             Severity::Warning,
                             format!(
@@ -308,7 +310,7 @@ impl Rule for HL2007 {
                             line,
                             RuleCategory::Values,
                         ));
-                    }
+            }
         }
 
         failures
@@ -347,21 +349,22 @@ impl Rule for HL2008 {
             let lower_path = path.to_lowercase();
             if (lower_path.ends_with("replicacount") || lower_path.ends_with("replicas"))
                 && let Some(value) = values.get(path)
-                    && let Some(count) = extract_number(value)
-                        && count == 0 {
-                            let line = values.line_for_path(path).unwrap_or(1);
-                            failures.push(CheckFailure::new(
-                                "HL2008",
-                                Severity::Warning,
-                                format!(
-                                    "Replica count at '{}' is 0. No pods will be created by default",
-                                    path
-                                ),
-                                "values.yaml",
-                                line,
-                                RuleCategory::Values,
-                            ));
-                        }
+                && let Some(count) = extract_number(value)
+                && count == 0
+            {
+                let line = values.line_for_path(path).unwrap_or(1);
+                failures.push(CheckFailure::new(
+                    "HL2008",
+                    Severity::Warning,
+                    format!(
+                        "Replica count at '{}' is 0. No pods will be created by default",
+                        path
+                    ),
+                    "values.yaml",
+                    line,
+                    RuleCategory::Values,
+                ));
+            }
         }
 
         failures

@@ -252,9 +252,11 @@ impl SessionSelector {
 
         // Try to parse as numeric index first
         if let Ok(index) = identifier.parse::<usize>()
-            && index > 0 && index <= sessions.len() {
-                return sessions.into_iter().nth(index - 1);
-            }
+            && index > 0
+            && index <= sessions.len()
+        {
+            return sessions.into_iter().nth(index - 1);
+        }
 
         // Try to find by UUID or partial UUID
         sessions

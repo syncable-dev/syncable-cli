@@ -157,9 +157,10 @@ impl KubelintConfig {
 
         for pattern in &self.ignore_paths {
             if let Ok(glob) = glob::Pattern::new(pattern)
-                && glob.matches(&path_str) {
-                    return true;
-                }
+                && glob.matches(&path_str)
+            {
+                return true;
+            }
             // Also check simple prefix/suffix matches
             if path_str.contains(pattern) {
                 return true;
@@ -186,9 +187,10 @@ impl KubelintConfig {
         for filename in &[".kube-linter.yaml", ".kube-linter.yml"] {
             let path = Path::new(filename);
             if path.exists()
-                && let Ok(config) = Self::load_from_file(path) {
-                    return Some(config);
-                }
+                && let Ok(config) = Self::load_from_file(path)
+            {
+                return Some(config);
+            }
         }
         None
     }
