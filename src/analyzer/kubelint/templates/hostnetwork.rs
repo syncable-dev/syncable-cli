@@ -43,17 +43,17 @@ impl CheckFunc for HostNetworkCheck {
     fn check(&self, object: &Object) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
 
-        if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object) {
-            if pod_spec.host_network == Some(true) {
-                diagnostics.push(Diagnostic {
-                    message: "Pod is configured to use the host's network namespace".to_string(),
-                    remediation: Some(
-                        "Remove hostNetwork: true unless absolutely necessary. \
+        if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object)
+            && pod_spec.host_network == Some(true)
+        {
+            diagnostics.push(Diagnostic {
+                message: "Pod is configured to use the host's network namespace".to_string(),
+                remediation: Some(
+                    "Remove hostNetwork: true unless absolutely necessary. \
                          Using host network grants access to all network interfaces on the host."
-                            .to_string(),
-                    ),
-                });
-            }
+                        .to_string(),
+                ),
+            });
         }
 
         diagnostics
@@ -98,18 +98,18 @@ impl CheckFunc for HostPIDCheck {
     fn check(&self, object: &Object) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
 
-        if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object) {
-            if pod_spec.host_pid == Some(true) {
-                diagnostics.push(Diagnostic {
-                    message: "Pod is configured to use the host's PID namespace".to_string(),
-                    remediation: Some(
-                        "Remove hostPID: true unless absolutely necessary. \
+        if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object)
+            && pod_spec.host_pid == Some(true)
+        {
+            diagnostics.push(Diagnostic {
+                message: "Pod is configured to use the host's PID namespace".to_string(),
+                remediation: Some(
+                    "Remove hostPID: true unless absolutely necessary. \
                          Using host PID allows processes in the container to see and signal all \
                          processes on the host."
-                            .to_string(),
-                    ),
-                });
-            }
+                        .to_string(),
+                ),
+            });
         }
 
         diagnostics
@@ -154,9 +154,10 @@ impl CheckFunc for HostIPCCheck {
     fn check(&self, object: &Object) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
 
-        if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object) {
-            if pod_spec.host_ipc == Some(true) {
-                diagnostics.push(Diagnostic {
+        if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object)
+            && pod_spec.host_ipc == Some(true)
+        {
+            diagnostics.push(Diagnostic {
                     message: "Pod is configured to use the host's IPC namespace".to_string(),
                     remediation: Some(
                         "Remove hostIPC: true unless absolutely necessary. \
@@ -164,7 +165,6 @@ impl CheckFunc for HostIPCCheck {
                             .to_string(),
                     ),
                 });
-            }
         }
 
         diagnostics

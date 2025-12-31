@@ -69,31 +69,30 @@ impl WebFetchTool {
         let robots_url = format!("{}://{}/robots.txt", url.scheme(), url.authority());
 
         // Try to fetch robots.txt (ignore errors - many sites don't have one)
-        if let Ok(response) = self.client().get(&robots_url).send().await {
-            if response.status().is_success() {
-                if let Ok(robots_content) = response.text().await {
-                    let path = url.path();
-                    for line in robots_content.lines() {
-                        if let Some(disallowed) = line.strip_prefix("Disallow: ") {
-                            let disallowed = disallowed.trim();
-                            if !disallowed.is_empty() {
-                                let disallowed = if !disallowed.starts_with('/') {
-                                    format!("/{}", disallowed)
-                                } else {
-                                    disallowed.to_string()
-                                };
-                                let check_path = if !path.starts_with('/') {
-                                    format!("/{}", path)
-                                } else {
-                                    path.to_string()
-                                };
-                                if check_path.starts_with(&disallowed) {
-                                    return Err(WebFetchError(format!(
-                                        "URL {} cannot be fetched due to robots.txt restrictions",
-                                        url
-                                    )));
-                                }
-                            }
+        if let Ok(response) = self.client().get(&robots_url).send().await
+            && response.status().is_success()
+            && let Ok(robots_content) = response.text().await
+        {
+            let path = url.path();
+            for line in robots_content.lines() {
+                if let Some(disallowed) = line.strip_prefix("Disallow: ") {
+                    let disallowed = disallowed.trim();
+                    if !disallowed.is_empty() {
+                        let disallowed = if !disallowed.starts_with('/') {
+                            format!("/{}", disallowed)
+                        } else {
+                            disallowed.to_string()
+                        };
+                        let check_path = if !path.starts_with('/') {
+                            format!("/{}", path)
+                        } else {
+                            path.to_string()
+                        };
+                        if check_path.starts_with(&disallowed) {
+                            return Err(WebFetchError(format!(
+                                "URL {} cannot be fetched due to robots.txt restrictions",
+                                url
+                            )));
                         }
                     }
                 }

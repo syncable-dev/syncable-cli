@@ -45,10 +45,11 @@ impl CheckFunc for UnsafeProcMountCheck {
 
         if let Some(pod_spec) = extract::pod_spec::extract_pod_spec(&object.k8s_object) {
             for container in extract::container::all_containers(pod_spec) {
-                if let Some(sc) = &container.security_context {
-                    if let Some(proc_mount) = &sc.proc_mount {
-                        if proc_mount == "Unmasked" {
-                            diagnostics.push(Diagnostic {
+                if let Some(sc) = &container.security_context
+                    && let Some(proc_mount) = &sc.proc_mount
+                    && proc_mount == "Unmasked"
+                {
+                    diagnostics.push(Diagnostic {
                                 message: format!(
                                     "Container '{}' has unsafe /proc mount (procMount: Unmasked)",
                                     container.name
@@ -59,8 +60,6 @@ impl CheckFunc for UnsafeProcMountCheck {
                                         .to_string(),
                                 ),
                             });
-                        }
-                    }
                 }
             }
         }

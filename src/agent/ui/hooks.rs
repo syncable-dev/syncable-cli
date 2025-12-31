@@ -1193,47 +1193,47 @@ fn format_kubelint_result(
         let mut lines = Vec::new();
 
         // Check for parse errors first
-        if let Some(errors) = parse_errors {
-            if !errors.is_empty() {
-                lines.push(format!(
-                    "{}☸ {} parse error{} (files could not be fully analyzed){}",
-                    ansi::HIGH,
-                    errors.len(),
-                    if errors.len() == 1 { "" } else { "s" },
-                    ansi::RESET
-                ));
-                for (i, err) in errors.iter().take(3).enumerate() {
-                    if let Some(err_str) = err.as_str() {
-                        let truncated = if err_str.len() > 70 {
-                            format!("{}...", &err_str[..67])
-                        } else {
-                            err_str.to_string()
-                        };
-                        lines.push(format!(
-                            "{}  {} {}{}",
-                            ansi::HIGH,
-                            if i == errors.len().min(3) - 1 {
-                                "└"
-                            } else {
-                                "│"
-                            },
-                            truncated,
-                            ansi::RESET
-                        ));
-                    }
-                }
-                if errors.len() > 3 {
+        if let Some(errors) = parse_errors
+            && !errors.is_empty()
+        {
+            lines.push(format!(
+                "{}☸ {} parse error{} (files could not be fully analyzed){}",
+                ansi::HIGH,
+                errors.len(),
+                if errors.len() == 1 { "" } else { "s" },
+                ansi::RESET
+            ));
+            for (i, err) in errors.iter().take(3).enumerate() {
+                if let Some(err_str) = err.as_str() {
+                    let truncated = if err_str.len() > 70 {
+                        format!("{}...", &err_str[..67])
+                    } else {
+                        err_str.to_string()
+                    };
                     lines.push(format!(
-                        "{}  +{} more errors{}",
-                        ansi::GRAY,
-                        errors.len() - 3,
+                        "{}  {} {}{}",
+                        ansi::HIGH,
+                        if i == errors.len().min(3) - 1 {
+                            "└"
+                        } else {
+                            "│"
+                        },
+                        truncated,
                         ansi::RESET
                     ));
                 }
-                // If we only have parse errors and no lint issues, return early
-                if total == 0 {
-                    return (false, lines);
-                }
+            }
+            if errors.len() > 3 {
+                lines.push(format!(
+                    "{}  +{} more errors{}",
+                    ansi::GRAY,
+                    errors.len() - 3,
+                    ansi::RESET
+                ));
+            }
+            // If we only have parse errors and no lint issues, return early
+            if total == 0 {
+                return (false, lines);
             }
         }
 
@@ -1326,33 +1326,32 @@ fn format_kubelint_result(
         }
 
         // Then high priority
-        if shown < MAX_PREVIEW {
-            if let Some(high_issues) = action_plan
+        if shown < MAX_PREVIEW
+            && let Some(high_issues) = action_plan
                 .and_then(|a| a.get("high"))
                 .and_then(|h| h.as_array())
-            {
-                for issue in high_issues.iter().take(MAX_PREVIEW - shown) {
-                    lines.push(format_kubelint_issue(issue, "🟠", ansi::HIGH));
-                    shown += 1;
-                }
+        {
+            for issue in high_issues.iter().take(MAX_PREVIEW - shown) {
+                lines.push(format_kubelint_issue(issue, "🟠", ansi::HIGH));
+                shown += 1;
             }
         }
 
         // Show quick fix hint
-        if let Some(quick_fixes) = v.get("quick_fixes").and_then(|q| q.as_array()) {
-            if let Some(first_fix) = quick_fixes.first().and_then(|f| f.as_str()) {
-                let truncated = if first_fix.len() > 70 {
-                    format!("{}...", &first_fix[..67])
-                } else {
-                    first_fix.to_string()
-                };
-                lines.push(format!(
-                    "{}  → Fix: {}{}",
-                    ansi::INFO_BLUE,
-                    truncated,
-                    ansi::RESET
-                ));
-            }
+        if let Some(quick_fixes) = v.get("quick_fixes").and_then(|q| q.as_array())
+            && let Some(first_fix) = quick_fixes.first().and_then(|f| f.as_str())
+        {
+            let truncated = if first_fix.len() > 70 {
+                format!("{}...", &first_fix[..67])
+            } else {
+                first_fix.to_string()
+            };
+            lines.push(format!(
+                "{}  → Fix: {}{}",
+                ansi::INFO_BLUE,
+                truncated,
+                ansi::RESET
+            ));
         }
 
         // Note about remaining issues
@@ -1429,47 +1428,47 @@ fn format_helmlint_result(
         let mut lines = Vec::new();
 
         // Check for parse errors first
-        if let Some(errors) = parse_errors {
-            if !errors.is_empty() {
-                lines.push(format!(
-                    "{}⎈ {} parse error{} (chart could not be fully analyzed){}",
-                    ansi::HIGH,
-                    errors.len(),
-                    if errors.len() == 1 { "" } else { "s" },
-                    ansi::RESET
-                ));
-                for (i, err) in errors.iter().take(3).enumerate() {
-                    if let Some(err_str) = err.as_str() {
-                        let truncated = if err_str.len() > 70 {
-                            format!("{}...", &err_str[..67])
-                        } else {
-                            err_str.to_string()
-                        };
-                        lines.push(format!(
-                            "{}  {} {}{}",
-                            ansi::HIGH,
-                            if i == errors.len().min(3) - 1 {
-                                "└"
-                            } else {
-                                "│"
-                            },
-                            truncated,
-                            ansi::RESET
-                        ));
-                    }
-                }
-                if errors.len() > 3 {
+        if let Some(errors) = parse_errors
+            && !errors.is_empty()
+        {
+            lines.push(format!(
+                "{}⎈ {} parse error{} (chart could not be fully analyzed){}",
+                ansi::HIGH,
+                errors.len(),
+                if errors.len() == 1 { "" } else { "s" },
+                ansi::RESET
+            ));
+            for (i, err) in errors.iter().take(3).enumerate() {
+                if let Some(err_str) = err.as_str() {
+                    let truncated = if err_str.len() > 70 {
+                        format!("{}...", &err_str[..67])
+                    } else {
+                        err_str.to_string()
+                    };
                     lines.push(format!(
-                        "{}  +{} more errors{}",
-                        ansi::GRAY,
-                        errors.len() - 3,
+                        "{}  {} {}{}",
+                        ansi::HIGH,
+                        if i == errors.len().min(3) - 1 {
+                            "└"
+                        } else {
+                            "│"
+                        },
+                        truncated,
                         ansi::RESET
                     ));
                 }
-                // If we only have parse errors and no lint issues, return early
-                if total == 0 {
-                    return (false, lines);
-                }
+            }
+            if errors.len() > 3 {
+                lines.push(format!(
+                    "{}  +{} more errors{}",
+                    ansi::GRAY,
+                    errors.len() - 3,
+                    ansi::RESET
+                ));
+            }
+            // If we only have parse errors and no lint issues, return early
+            if total == 0 {
+                return (false, lines);
             }
         }
 
@@ -1562,33 +1561,32 @@ fn format_helmlint_result(
         }
 
         // Then high priority
-        if shown < MAX_PREVIEW {
-            if let Some(high_issues) = action_plan
+        if shown < MAX_PREVIEW
+            && let Some(high_issues) = action_plan
                 .and_then(|a| a.get("high"))
                 .and_then(|h| h.as_array())
-            {
-                for issue in high_issues.iter().take(MAX_PREVIEW - shown) {
-                    lines.push(format_helmlint_issue(issue, "🟠", ansi::HIGH));
-                    shown += 1;
-                }
+        {
+            for issue in high_issues.iter().take(MAX_PREVIEW - shown) {
+                lines.push(format_helmlint_issue(issue, "🟠", ansi::HIGH));
+                shown += 1;
             }
         }
 
         // Show quick fix hint
-        if let Some(quick_fixes) = v.get("quick_fixes").and_then(|q| q.as_array()) {
-            if let Some(first_fix) = quick_fixes.first().and_then(|f| f.as_str()) {
-                let truncated = if first_fix.len() > 70 {
-                    format!("{}...", &first_fix[..67])
-                } else {
-                    first_fix.to_string()
-                };
-                lines.push(format!(
-                    "{}  → Fix: {}{}",
-                    ansi::INFO_BLUE,
-                    truncated,
-                    ansi::RESET
-                ));
-            }
+        if let Some(quick_fixes) = v.get("quick_fixes").and_then(|q| q.as_array())
+            && let Some(first_fix) = quick_fixes.first().and_then(|f| f.as_str())
+        {
+            let truncated = if first_fix.len() > 70 {
+                format!("{}...", &first_fix[..67])
+            } else {
+                first_fix.to_string()
+            };
+            lines.push(format!(
+                "{}  → Fix: {}{}",
+                ansi::INFO_BLUE,
+                truncated,
+                ansi::RESET
+            ));
         }
 
         // Note about remaining issues

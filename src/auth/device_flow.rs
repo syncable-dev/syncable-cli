@@ -3,7 +3,7 @@
 //! Implements the OAuth 2.0 device flow to authenticate CLI users via the Syncable web interface.
 
 use super::credentials;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use reqwest::Client;
 use serde::Deserialize;
 use std::time::{Duration, Instant};
@@ -100,7 +100,7 @@ pub async fn login(no_browser: bool) -> Result<()> {
             .verification_uri_complete
             .as_ref()
             .unwrap_or(&device_code.verification_uri);
-        
+
         if let Err(e) = open::that(url) {
             println!("⚠️  Could not open browser automatically: {}", e);
             println!("   Please open the URL above manually.");
