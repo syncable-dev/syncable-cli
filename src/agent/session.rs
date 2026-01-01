@@ -177,6 +177,8 @@ pub struct ChatSession {
     pub token_usage: TokenUsage,
     /// Current planning mode state
     pub plan_mode: PlanMode,
+    /// Session loaded via /resume command, to be processed by main loop
+    pub pending_resume: Option<crate::agent::persistence::ConversationRecord>,
 }
 
 impl ChatSession {
@@ -194,6 +196,7 @@ impl ChatSession {
             history: Vec::new(),
             token_usage: TokenUsage::new(),
             plan_mode: PlanMode::default(),
+            pending_resume: None,
         }
     }
 
@@ -1422,7 +1425,8 @@ impl ChatSession {
     }
 
     /// Handle /resume command - browse and select a session to resume
-    pub fn handle_resume_command(&self) -> AgentResult<()> {
+    /// Returns true if a session was loaded and should be displayed
+    pub fn handle_resume_command(&mut self) -> AgentResult<bool> {
         use crate::agent::persistence::{SessionSelector, browse_sessions, format_relative_time};
 
         let selector = SessionSelector::new(&self.project_path);
@@ -1437,28 +1441,35 @@ impl ChatSession {
                 "{}",
                 "Sessions are automatically saved during conversations.".dimmed()
             );
-            return Ok(());
+            return Ok(false);
         }
 
         // Show the interactive browser
         if let Some(selected) = browse_sessions(&self.project_path) {
-            // User selected a session
+            // User selected a session - load it
             let time = format_relative_time(selected.last_updated);
-            println!(
-                "\n{} Selected: {} ({}, {} messages)",
-                "✓".green(),
-                selected.display_name.white().bold(),
-                time.dimmed(),
-                selected.message_count
-            );
-            println!(
-                "{}",
-                "Note: To load the session, restart with: sync-ctl chat --resume <ID>".dimmed()
-            );
-            println!("  Session ID: {}", selected.id.cyan());
+
+            match selector.load_conversation(&selected) {
+                Ok(record) => {
+                    println!(
+                        "\n{} Resuming: {} ({}, {} messages)",
+                        "✓".green(),
+                        selected.display_name.white().bold(),
+                        time.dimmed(),
+                        record.messages.len()
+                    );
+
+                    // Store for main loop to process
+                    self.pending_resume = Some(record);
+                    return Ok(true);
+                }
+                Err(e) => {
+                    eprintln!("{} Failed to load session: {}", "✗".red(), e);
+                }
+            }
         }
 
-        Ok(())
+        Ok(false)
     }
 
     /// Handle /sessions command - list available sessions
@@ -1834,9 +1845,9 @@ impl ChatSession {
                 self.handle_plans_command()?;
             }
             "/resume" | "/s" => {
-                // Resume is handled specially - needs to return session data
-                // The command just shows the browser, actual loading happens in mod.rs
-                self.handle_resume_command()?;
+                // Resume loads session into self.pending_resume
+                // Main loop in mod.rs will detect and process it
+                let _ = self.handle_resume_command()?;
             }
             "/sessions" | "/ls" => {
                 self.handle_list_sessions_command();
