@@ -259,7 +259,119 @@ pub async fn run_interactive(
                 raw_chat_history.clear();
             }
             match session.process_command(&input) {
-                Ok(true) => continue,
+                Ok(true) => {
+                    // Check if /resume loaded a session
+                    if let Some(record) = session.pending_resume.take() {
+                        // Display previous messages
+                        println!();
+                        println!("{}", "─── Previous Conversation ───".dimmed());
+                        for msg in &record.messages {
+                            match msg.role {
+                                persistence::MessageRole::User => {
+                                    println!();
+                                    println!(
+                                        "{} {}",
+                                        "You:".cyan().bold(),
+                                        truncate_string(&msg.content, 500)
+                                    );
+                                }
+                                persistence::MessageRole::Assistant => {
+                                    println!();
+                                    // Show tool calls if any (same format as live display)
+                                    if let Some(ref tools) = msg.tool_calls {
+                                        for tc in tools {
+                                            // Match live tool display: green dot for completed, cyan bold name
+                                            if tc.args_summary.is_empty() {
+                                                println!(
+                                                    "{} {}",
+                                                    "●".green(),
+                                                    tc.name.cyan().bold()
+                                                );
+                                            } else {
+                                                println!(
+                                                    "{} {}({})",
+                                                    "●".green(),
+                                                    tc.name.cyan().bold(),
+                                                    truncate_string(&tc.args_summary, 50).dimmed()
+                                                );
+                                            }
+                                        }
+                                    }
+                                    // Show response (same ResponseFormatter as live)
+                                    if !msg.content.is_empty() {
+                                        ResponseFormatter::print_response(&truncate_string(
+                                            &msg.content,
+                                            1000,
+                                        ));
+                                    }
+                                }
+                                persistence::MessageRole::System => {
+                                    // Skip system messages in display
+                                }
+                            }
+                        }
+                        println!("{}", "─── End of History ───".dimmed());
+                        println!();
+
+                        // Load messages into raw_chat_history for AI context
+                        for msg in &record.messages {
+                            match msg.role {
+                                persistence::MessageRole::User => {
+                                    raw_chat_history.push(rig::completion::Message::User {
+                                        content: rig::one_or_many::OneOrMany::one(
+                                            rig::completion::message::UserContent::text(
+                                                &msg.content,
+                                            ),
+                                        ),
+                                    });
+                                }
+                                persistence::MessageRole::Assistant => {
+                                    raw_chat_history.push(rig::completion::Message::Assistant {
+                                        id: Some(msg.id.clone()),
+                                        content: rig::one_or_many::OneOrMany::one(
+                                            rig::completion::message::AssistantContent::text(
+                                                &msg.content,
+                                            ),
+                                        ),
+                                    });
+                                }
+                                persistence::MessageRole::System => {}
+                            }
+                        }
+
+                        // Load into conversation_history for context tracking
+                        for msg in &record.messages {
+                            if msg.role == persistence::MessageRole::User {
+                                // Find the next assistant message
+                                let response = record
+                                    .messages
+                                    .iter()
+                                    .skip_while(|m| m.id != msg.id)
+                                    .skip(1)
+                                    .find(|m| m.role == persistence::MessageRole::Assistant)
+                                    .map(|m| m.content.clone())
+                                    .unwrap_or_default();
+
+                                conversation_history.add_turn(
+                                    msg.content.clone(),
+                                    response,
+                                    vec![], // Tool calls not loaded for simplicity
+                                );
+                            }
+                        }
+
+                        println!(
+                            "{}",
+                            format!(
+                                "  ✓ Loaded {} messages. You can now continue the conversation.",
+                                record.messages.len()
+                            )
+                            .green()
+                        );
+                        println!();
+                    }
+                    continue;
+                }
                 Ok(false) => break, // /exit
                 Err(e) => {
                     eprintln!("{}", format!("Error: {}", e).red());
