@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
 
+use super::compression::{CompressionConfig, compress_tool_output};
 use crate::analyzer::security::turbo::{ScanMode, TurboConfig, TurboSecurityAnalyzer};
 
 // ============================================================================
@@ -87,28 +88,30 @@ impl Tool for SecurityScanTool {
             .analyze_project(&path)
             .map_err(|e| SecurityScanError(format!("Scan failed: {}", e)))?;
 
+        // Build full result with all findings (compression will handle size)
         let result = json!({
             "total_findings": report.total_findings,
             "overall_score": report.overall_score,
             "risk_level": format!("{:?}", report.risk_level),
             "files_scanned": report.files_scanned,
-            "findings": report.findings.iter().take(50).map(|f| {
+            "findings": report.findings.iter().map(|f| {
                 json!({
                     "title": f.title,
                     "description": f.description,
                     "severity": format!("{:?}", f.severity),
                     "category": format!("{:?}", f.category),
-                    "file_path": f.file_path.as_ref().map(|p| p.display().to_string()),
-                    "line_number": f.line_number,
+                    "file": f.file_path.as_ref().map(|p| p.display().to_string()),
+                    "line": f.line_number,
                     "evidence": f.evidence.as_ref().map(|e| e.chars().take(100).collect::<String>()),
                 })
             }).collect::<Vec<_>>(),
-            "recommendations": report.recommendations.iter().take(10).collect::<Vec<_>>(),
+            "recommendations": report.recommendations.clone(),
             "scan_mode": args.mode.as_deref().unwrap_or("balanced"),
         });
 
-        serde_json::to_string_pretty(&result)
-            .map_err(|e| SecurityScanError(format!("Failed to serialize: {}", e)))
+        // Use compression - stores full data for RAG retrieval if output is large
+        let config = CompressionConfig::default();
+        Ok(compress_tool_output(&result, "security_scan", &config))
     }
 }
 
@@ -186,31 +189,39 @@ impl Tool for VulnerabilitiesTool {
             .await
             .map_err(|e| VulnerabilitiesError(format!("Vulnerability check failed: {}", e)))?;
 
+        // Build findings array for compression (each vuln as a separate issue)
+        let mut findings = Vec::new();
+        for dep in &report.vulnerable_dependencies {
+            for v in &dep.vulnerabilities {
+                findings.push(json!({
+                    "code": v.id.clone(),
+                    "severity": format!("{:?}", v.severity),
+                    "title": v.title.clone(),
+                    "message": format!("{} {} has vulnerability: {}", dep.name, dep.version, v.title),
+                    "dependency": dep.name.clone(),
+                    "version": dep.version.clone(),
+                    "language": dep.language.as_str(),
+                    "cve": v.cve.clone(),
+                    "patched_versions": v.patched_versions.clone(),
+                }));
+            }
+        }
+
         let result = json!({
             "total_vulnerabilities": report.total_vulnerabilities,
             "critical_count": report.critical_count,
             "high_count": report.high_count,
             "medium_count": report.medium_count,
             "low_count": report.low_count,
-            "vulnerable_dependencies": report.vulnerable_dependencies.iter().take(20).map(|dep| {
-                json!({
-                    "name": dep.name,
-                    "version": dep.version,
-                    "language": dep.language.as_str(),
-                    "vulnerabilities": dep.vulnerabilities.iter().map(|v| {
-                        json!({
-                            "id": v.id,
-                            "title": v.title,
-                            "severity": format!("{:?}", v.severity),
-                            "cve": v.cve,
-                            "patched_versions": v.patched_versions,
-                        })
-                    }).collect::<Vec<_>>()
-                })
-            }).collect::<Vec<_>>()
+            "issues": findings,  // Use "issues" so compression can find it
         });
 
-        serde_json::to_string_pretty(&result)
-            .map_err(|e| VulnerabilitiesError(format!("Failed to serialize: {}", e)))
+        // Use compression - stores full data for RAG retrieval if output is large
+        let config = CompressionConfig::default();
+        Ok(compress_tool_output(
+            &result,
+            "check_vulnerabilities",
+            &config,
+        ))
     }
 }

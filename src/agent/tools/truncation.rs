@@ -15,6 +15,8 @@ pub struct TruncationLimits {
     pub max_line_length: usize,
     /// Maximum directory entries to return (default: 500)
     pub max_dir_entries: usize,
+    /// Maximum JSON output size in bytes (default: 30KB)
+    pub max_json_bytes: usize,
 }
 
 impl Default for TruncationLimits {
@@ -25,7 +27,167 @@ impl Default for TruncationLimits {
             shell_suffix_lines: 200,
             max_line_length: 2000,
             max_dir_entries: 500,
+            max_json_bytes: 30_000, // 30KB - safe for most LLM context windows
         }
+    }
+}
+
+/// Result of truncating JSON output
+pub struct TruncatedJsonOutput {
+    /// The (possibly truncated) JSON string
+    pub content: String,
+    /// Original size in bytes
+    pub original_bytes: usize,
+    /// Final size in bytes
+    pub final_bytes: usize,
+    /// Whether output was truncated
+    pub was_truncated: bool,
+}
+
+/// Truncate JSON output to fit within context limits.
+/// Intelligently summarizes large arrays and nested objects.
+pub fn truncate_json_output(json_str: &str, max_bytes: usize) -> TruncatedJsonOutput {
+    let original_bytes = json_str.len();
+
+    if original_bytes <= max_bytes {
+        return TruncatedJsonOutput {
+            content: json_str.to_string(),
+            original_bytes,
+            final_bytes: original_bytes,
+            was_truncated: false,
+        };
+    }
+
+    // Parse as JSON to intelligently truncate
+    let json: serde_json::Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(_) => {
+            // Not valid JSON, fall back to simple truncation
+            let truncated = &json_str[..max_bytes.saturating_sub(100)];
+            let content = format!(
+                "{}...\n\n[OUTPUT TRUNCATED: {} bytes → {} bytes. Original too large for context.]",
+                truncated, original_bytes, max_bytes
+            );
+            return TruncatedJsonOutput {
+                content: content.clone(),
+                original_bytes,
+                final_bytes: content.len(),
+                was_truncated: true,
+            };
+        }
+    };
+
+    // Truncate the JSON value
+    let truncated = truncate_json_value(&json, max_bytes);
+    let content = serde_json::to_string_pretty(&truncated).unwrap_or_else(|_| "{}".to_string());
+    let final_bytes = content.len();
+
+    TruncatedJsonOutput {
+        content,
+        original_bytes,
+        final_bytes,
+        was_truncated: true,
+    }
+}
+
+/// Recursively truncate a JSON value to reduce size
+fn truncate_json_value(value: &serde_json::Value, budget: usize) -> serde_json::Value {
+    use serde_json::{Value, json};
+
+    match value {
+        Value::Array(arr) => {
+            if arr.is_empty() {
+                return Value::Array(vec![]);
+            }
+
+            // Show first few items + summary
+            let max_items = 10.min(arr.len());
+            let mut result: Vec<Value> = arr
+                .iter()
+                .take(max_items)
+                .map(|v| truncate_json_value(v, budget / max_items.max(1)))
+                .collect();
+
+            if arr.len() > max_items {
+                result.push(json!({
+                    "_truncated": format!("... and {} more items (showing {}/{})",
+                        arr.len() - max_items, max_items, arr.len())
+                }));
+            }
+
+            Value::Array(result)
+        }
+        Value::Object(obj) => {
+            if obj.is_empty() {
+                return Value::Object(serde_json::Map::new());
+            }
+
+            let mut result = serde_json::Map::new();
+            let mut remaining_budget = budget;
+
+            // Priority keys to always include (truncated if needed)
+            let priority_keys = [
+                "summary", "name", "type", "error", "message", "status", "total", "count", "path",
+                "severity", "issues", "findings",
+            ];
+
+            // Add priority keys first
+            for key in &priority_keys {
+                if let Some(v) = obj.get(*key) {
+                    let truncated = truncate_json_value(v, remaining_budget / 4);
+                    let size = serde_json::to_string(&truncated)
+                        .map(|s| s.len())
+                        .unwrap_or(0);
+                    remaining_budget = remaining_budget.saturating_sub(size);
+                    result.insert(key.to_string(), truncated);
+                }
+            }
+
+            // Add other keys up to budget
+            let non_priority: Vec<_> = obj
+                .iter()
+                .filter(|(k, _)| !priority_keys.contains(&k.as_str()))
+                .collect();
+
+            let keys_to_add = 20.min(non_priority.len());
+            for (key, val) in non_priority.iter().take(keys_to_add) {
+                let truncated = truncate_json_value(val, remaining_budget / (keys_to_add.max(1)));
+                let size = serde_json::to_string(&truncated)
+                    .map(|s| s.len())
+                    .unwrap_or(0);
+                if size < remaining_budget {
+                    remaining_budget = remaining_budget.saturating_sub(size);
+                    result.insert(key.to_string(), truncated);
+                }
+            }
+
+            // Add truncation notice if keys were omitted
+            if non_priority.len() > keys_to_add {
+                result.insert(
+                    "_truncated_keys".to_string(),
+                    json!(format!(
+                        "{} keys omitted (showing {}/{})",
+                        non_priority.len() - keys_to_add,
+                        result.len(),
+                        obj.len()
+                    )),
+                );
+            }
+
+            Value::Object(result)
+        }
+        Value::String(s) => {
+            if s.len() > 1000 {
+                Value::String(format!(
+                    "{}... [truncated {} chars]",
+                    &s[..500],
+                    s.len() - 500
+                ))
+            } else {
+                value.clone()
+            }
+        }
+        _ => value.clone(),
     }
 }
 

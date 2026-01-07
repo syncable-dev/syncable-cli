@@ -112,6 +112,7 @@ async fn run() -> syncable_cli::Result<()> {
         Commands::Vulnerabilities { .. } => "vulnerabilities",
         Commands::Security { .. } => "security",
         Commands::Tools { .. } => "tools",
+        Commands::Optimize { .. } => "optimize",
         Commands::Chat { .. } => "chat",
         Commands::Auth { .. } => "auth",
     };
@@ -517,6 +518,96 @@ async fn run() -> syncable_cli::Result<()> {
             handle_tools(command).await
         }
 
+        Commands::Optimize {
+            path,
+            cluster,
+            prometheus,
+            namespace,
+            period,
+            severity,
+            threshold,
+            safety_margin,
+            include_info,
+            include_system,
+            format,
+            output,
+            fix,
+            full,
+            apply,
+            dry_run,
+            backup_dir,
+            min_confidence,
+            cloud_provider,
+            region,
+        } => {
+            // Create telemetry properties
+            let mut properties = HashMap::new();
+
+            if cluster.is_some() {
+                properties.insert("live_cluster".to_string(), json!(true));
+            }
+
+            if prometheus.is_some() {
+                properties.insert("prometheus".to_string(), json!(true));
+            }
+
+            if let Some(sev) = &severity {
+                properties.insert("severity".to_string(), json!(sev));
+            }
+
+            if let Some(thresh) = threshold {
+                properties.insert("threshold".to_string(), json!(thresh));
+            }
+
+            if include_info {
+                properties.insert("include_info".to_string(), json!(true));
+            }
+
+            if include_system {
+                properties.insert("include_system".to_string(), json!(true));
+            }
+
+            let format_str = match format {
+                OutputFormat::Table => "table",
+                OutputFormat::Json => "json",
+            };
+            properties.insert("output_format".to_string(), json!(format_str));
+
+            if fix {
+                properties.insert("fix".to_string(), json!(true));
+            }
+
+            // Track Optimize command with properties
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_event("optimize", properties);
+            }
+
+            use syncable_cli::handlers::OptimizeOptions;
+            let options = OptimizeOptions {
+                cluster,
+                prometheus,
+                namespace,
+                period,
+                severity,
+                threshold,
+                safety_margin,
+                include_info,
+                include_system,
+                format: format_str.to_string(),
+                output: output.map(|p| p.to_string_lossy().to_string()),
+                fix,
+                full,
+                apply,
+                dry_run,
+                backup_dir: backup_dir.map(|p| p.to_string_lossy().to_string()),
+                min_confidence,
+                cloud_provider,
+                region,
+            };
+
+            syncable_cli::handlers::handle_optimize(&path, options).await
+        }
+
         Commands::Chat {
             path,
             provider,
@@ -853,7 +944,8 @@ fn show_update_notification(current: &str, latest: &str) {
             .to_string(),
     );
 
-    println!("\n{}", box_drawer.draw());
+    // Print to stderr so it doesn't interfere with JSON output
+    eprintln!("\n{}", box_drawer.draw());
 }
 
 // Helper function to compare semantic versions
