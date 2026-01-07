@@ -43,9 +43,17 @@ const ALLOWED_COMMANDS: &[&str] = &[
     "helm lint",
     "helm template",
     "helm dependency",
-    // Kubernetes commands (dry-run only)
+    // Kubernetes commands
     "kubectl apply --dry-run",
     "kubectl diff",
+    "kubectl get svc",
+    "kubectl get services",
+    "kubectl get pods",
+    "kubectl get namespaces",
+    "kubectl port-forward",
+    "kubectl config current-context",
+    "kubectl config get-contexts",
+    "kubectl describe",
     // Generic validation
     "make",
     "npm run",
@@ -98,6 +106,10 @@ const READ_ONLY_COMMANDS: &[&str] = &[
     "tflint",
     "yamllint",
     "shellcheck",
+    // Kubernetes read-only
+    "kubectl get",
+    "kubectl describe",
+    "kubectl config",
 ];
 
 #[derive(Debug, Deserialize)]

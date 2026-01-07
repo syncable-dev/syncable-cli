@@ -16,6 +16,7 @@ This document provides a comprehensive reference for all Syncable CLI commands, 
   - [tools](#8-sync-ctl-tools) - Tool management
   - [chat](#9-sync-ctl-chat) - AI assistant
   - [auth](#10-sync-ctl-auth) - Authentication
+  - [optimize](#11-sync-ctl-optimize) - K8s resource optimization
 - [Configuration](#-configuration)
 - [Common Workflows](#-common-workflows)
 - [VS Code Integration](#-vs-code-integration)
@@ -705,7 +706,7 @@ Print current access token (for scripting).
 **Options:**
 
 | Flag | Description |
-|------|-------------|
+|------|--------------|
 | `--raw` | Print raw token without formatting |
 
 **Examples:**
@@ -720,6 +721,114 @@ sync-ctl auth token --raw
 # Use in API calls
 curl -H "Authorization: Bearer $(sync-ctl auth token --raw)" https://api.syncable.dev/
 ```
+
+---
+
+### 11. `sync-ctl optimize [PATH]`
+
+Analyze Kubernetes manifests and/or live clusters for resource optimization opportunities, cost estimation, and automated fixes.
+
+**Arguments:**
+- `[PATH]` — Path to K8s manifests, Helm chart, or Kustomize directory (default: `.`)
+
+**Core Options:**
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--cluster <CONTEXT>` | `-k` | Connect to live cluster (uses current kubeconfig context if no value) |
+| `--prometheus <URL>` | | Prometheus URL for historical metrics |
+| `--namespace <NS>` | `-n` | Target namespace(s) (comma-separated, or `*` for all) |
+| `--period <DURATION>` | `-p` | Analysis period for metrics (default: `7d`) |
+| `--full` | `-f` | Comprehensive analysis (includes kubelint security + helmlint) |
+
+**Filtering Options:**
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--severity <LEVEL>` | `-s` | Minimum severity (`critical`, `warning`, `info`) |
+| `--threshold <PCT>` | `-t` | Minimum waste percentage (0-100) |
+| `--safety-margin <PCT>` | | Safety margin for recommendations (default: 20%) |
+| `--include-info` | | Include info-level suggestions |
+| `--include-system` | | Include system namespaces |
+
+**Output Options:**
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--format <FORMAT>` | | Output: `table` (default), `json`, `yaml` |
+| `--output <FILE>` | `-o` | Write report to file |
+
+**Fix Application Options:**
+
+| Flag | Description |
+|------|--------------|
+| `--fix` | Generate fix suggestions |
+| `--apply` | Apply fixes (requires `--fix`) |
+| `--dry-run` | Preview changes without applying |
+| `--backup-dir <DIR>` | Backup directory before modification |
+| `--min-confidence <PCT>` | Minimum confidence for auto-apply (default: 70) |
+
+**Cost Estimation Options:**
+
+| Flag | Description |
+|------|--------------|
+| `--cloud-provider <PROVIDER>` | Provider: `aws`, `gcp`, `azure`, `onprem` |
+| `--region <REGION>` | Cloud region (default: `us-east-1`) |
+
+**Examples:**
+
+```bash
+# Static analysis (no cluster access)
+sync-ctl optimize .
+sync-ctl optimize ./k8s/
+sync-ctl optimize ./charts/my-app/
+
+# Live cluster analysis
+sync-ctl optimize -k
+sync-ctl optimize -k production -n api-gateway
+sync-ctl optimize -k --period 30d
+
+# Comprehensive analysis (static + live + security)
+sync-ctl optimize -k -f
+sync-ctl optimize -k -f --format json
+
+# With Prometheus for historical data
+sync-ctl optimize -k --prometheus http://localhost:9090
+
+# Cost estimation
+sync-ctl optimize -k --cloud-provider aws --region us-east-1
+sync-ctl optimize -k --cloud-provider gcp --region us-central1
+
+# Generate and apply fixes
+sync-ctl optimize . --fix --dry-run
+sync-ctl optimize . --fix --apply --backup-dir ./backup/
+sync-ctl optimize . --fix --apply --min-confidence 80
+
+# CI/CD integration
+sync-ctl optimize -k -f --format json | jq '.cost_estimation'
+sync-ctl optimize . --threshold 30 --format json
+```
+
+**Analysis Modes:**
+
+| Mode | Description |
+|------|-------------|
+| Static | Analyzes YAML manifests without cluster access |
+| Live (`-k`) | Connects to cluster for actual usage metrics |
+| Full (`-f`) | Combines static + live + kubelint security checks |
+
+**Output Includes:**
+- Resource recommendations with severity levels
+- CPU/memory waste percentages
+- Cost estimation (monthly/annual waste and potential savings)
+- Trend analysis comparing current vs historical
+- Precise fix locations with file paths and line numbers
+
+**What It Analyzes:**
+- Kubernetes Deployments, StatefulSets, DaemonSets, Jobs, CronJobs
+- Helm charts (auto-renders with `helm template`)
+- Kustomize overlays (auto-renders with `kustomize build`)
+- Terraform kubernetes_* provider resources
 
 ---
 
@@ -851,6 +960,31 @@ sync-ctl generate . --dockerfile
 sync-ctl chat --query "How do I optimize this Dockerfile?"
 ```
 
+### Kubernetes Optimization Workflow
+
+```bash
+# 1. Static analysis of manifests
+sync-ctl optimize ./k8s/
+
+# 2. Connect to live cluster for actual usage
+sync-ctl optimize -k -n production
+
+# 3. Full analysis with security checks
+sync-ctl optimize -k -f
+
+# 4. Get cost estimation
+sync-ctl optimize -k --cloud-provider aws --region us-east-1
+
+# 5. Generate fixes with dry-run preview
+sync-ctl optimize . --fix --dry-run
+
+# 6. Apply fixes with backup
+sync-ctl optimize . --fix --apply --backup-dir ./backup/
+
+# 7. JSON report for CI/CD
+sync-ctl optimize -k -f --format json > k8s-report.json
+```
+
 ### Pre-commit Hook
 
 ```bash
@@ -930,6 +1064,8 @@ export SYNC_CTL_DEBUG=1
 8. **For Updates**: Use `--clear-update-cache` to force update checks
 9. **For Monorepos**: Use matrix view to see all projects at once
 10. **For AI Help**: Use `sync-ctl chat` for interactive assistance
+11. **For K8s Costs**: Use `sync-ctl optimize -k --cloud-provider aws` to see waste in dollars
+12. **For Safe Fixes**: Always use `--dry-run` before `--apply` to preview changes
 
 ---
 
@@ -944,6 +1080,13 @@ export SYNC_CTL_DEBUG=1
 - **tools** — Vulnerability tool management
 - **chat** — AI assistant with multiple providers
 - **auth** — Platform authentication
+- **optimize** — K8s resource optimization with cost estimation ([detailed docs](./k8s-resource-optimization.md))
+  - Static manifest analysis (YAML, Helm, Kustomize, Terraform)
+  - Live cluster metrics (metrics-server, Prometheus)
+  - Cost estimation (AWS, GCP, Azure, OnPrem pricing)
+  - Trend analysis and waste tracking
+  - Precise fix generation with file/line locations
+  - Safe fix application with backup and dry-run
 
 ### 🚧 In Development
 - **generate** — IaC file generation (basic implementation done)
@@ -952,9 +1095,10 @@ export SYNC_CTL_DEBUG=1
 
 ### 🔮 Coming Soon
 - **validate** — IaC validation and best practices checking
+- **drift** — Infrastructure drift detection and remediation
+- **costs** — Standalone cloud cost attribution command
 - **Cloud Integration** — Deploy directly to cloud platforms
 - **Monitoring Setup** — Automated monitoring configuration
-- **Performance Analysis** — Resource optimization recommendations
 - **Interactive Mode** — Guided setup and configuration wizard
 
 ---
@@ -972,6 +1116,7 @@ sync-ctl dependencies --help       # Show dependency analysis options
 sync-ctl tools --help              # Show tool management options
 sync-ctl chat --help               # Show AI chat options
 sync-ctl auth --help               # Show authentication options
+sync-ctl optimize --help           # Show K8s optimization options
 ```
 
 ---

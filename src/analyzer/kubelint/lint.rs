@@ -218,15 +218,8 @@ fn load_context(
             Err(err) => return Err(format!("Failed to render Kustomize: {}", err)),
         }
     } else if path.is_dir() {
-        // Load all YAML files in directory
-        match yaml::parse_yaml_dir(path) {
-            Ok(objects) => {
-                for obj in objects {
-                    ctx.add_object(obj);
-                }
-            }
-            Err(err) => return Err(format!("Failed to parse YAML directory: {}", err)),
-        }
+        // Load directory - but first discover and render any Helm charts or Kustomize dirs
+        load_directory_with_rendering(&mut ctx, path)?;
     } else {
         // Load single file
         match yaml::parse_yaml_file(path) {
@@ -240,6 +233,77 @@ fn load_context(
     }
 
     Ok((ctx, warning))
+}
+
+/// Load a directory, discovering and rendering Helm charts and Kustomize dirs within.
+fn load_directory_with_rendering(ctx: &mut LintContextImpl, path: &Path) -> Result<(), String> {
+    use std::collections::HashSet;
+
+    let mut processed_dirs: HashSet<std::path::PathBuf> = HashSet::new();
+
+    // First pass: discover Helm charts and Kustomize dirs, render them
+    for entry in walkdir::WalkDir::new(path)
+        .follow_links(true)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let entry_path = entry.path();
+        if entry_path.is_dir() {
+            // Check for Helm chart
+            if helm::is_helm_chart(entry_path) {
+                if let Ok(objects) = helm::render_helm_chart(entry_path, None) {
+                    for obj in objects {
+                        ctx.add_object(obj);
+                    }
+                }
+                // Mark this directory and all subdirs as processed
+                processed_dirs.insert(entry_path.to_path_buf());
+                continue;
+            }
+
+            // Check for Kustomize dir
+            if kustomize::is_kustomize_dir(entry_path) {
+                if let Ok(objects) = kustomize::render_kustomize(entry_path) {
+                    for obj in objects {
+                        ctx.add_object(obj);
+                    }
+                }
+                // Mark this directory and all subdirs as processed
+                processed_dirs.insert(entry_path.to_path_buf());
+                continue;
+            }
+        }
+    }
+
+    // Second pass: parse regular YAML files not inside Helm/Kustomize dirs
+    for entry in walkdir::WalkDir::new(path)
+        .follow_links(true)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let entry_path = entry.path();
+        if entry_path.is_file() {
+            // Skip files inside already-processed directories
+            let should_skip = processed_dirs
+                .iter()
+                .any(|processed| entry_path.starts_with(processed));
+            if should_skip {
+                continue;
+            }
+
+            // Check for YAML file
+            let ext = entry_path.extension().and_then(|e| e.to_str());
+            if matches!(ext, Some("yaml") | Some("yml")) {
+                if let Ok(objects) = yaml::parse_yaml_file(entry_path) {
+                    for obj in objects {
+                        ctx.add_object(obj);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Run all enabled checks on a lint context.

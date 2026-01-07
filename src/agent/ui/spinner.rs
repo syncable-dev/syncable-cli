@@ -162,7 +162,7 @@ async fn run_spinner(
     let mut tools_completed: usize = 0;
     let mut has_printed_tool_line = false;
     let mut interval = tokio::time::interval(Duration::from_millis(ANIMATION_INTERVAL_MS));
-    let mut rng = StdRng::from_entropy();
+    let mut rng = StdRng::from_os_rng();
 
     // Hide cursor during spinner
     print!("{}", ansi::HIDE_CURSOR);
@@ -181,8 +181,8 @@ async fn run_spinner(
 
                 // Cycle phrases if idle
                 if current_tool.is_none() && last_phrase_change.elapsed().as_secs() >= PHRASE_CHANGE_INTERVAL_SECS {
-                    if rng.gen_bool(0.25) {
-                        let tip_idx = rng.gen_range(0..TIPS.len());
+                    if rng.random_bool(0.25) {
+                        let tip_idx = rng.random_range(0..TIPS.len());
                         current_text = TIPS[tip_idx].to_string();
                     } else {
                         phrase_index = (phrase_index + 1) % WITTY_PHRASES.len();

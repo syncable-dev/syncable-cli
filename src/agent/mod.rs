@@ -135,6 +135,9 @@ pub async fn run_interactive(
 
     let mut session = ChatSession::new(project_path, provider, model);
 
+    // Shared background process manager for Prometheus port-forwards
+    let bg_manager = Arc::new(BackgroundProcessManager::new());
+
     // Terminal layout for split screen is disabled for now - see notes below
     // let terminal_layout = ui::TerminalLayout::new();
     // let layout_state = terminal_layout.state();
@@ -418,6 +421,8 @@ pub async fn run_interactive(
             if raw_chat_history.len() > 20 {
                 let drain_count = raw_chat_history.len() - 20;
                 raw_chat_history.drain(0..drain_count);
+                // Ensure history starts with User message for OpenAI Responses API compatibility
+                ensure_history_starts_with_user(&mut raw_chat_history);
                 conversation_history.clear(); // Stay in sync
                 println!(
                     "{}",
@@ -494,20 +499,9 @@ pub async fn run_interactive(
                 result = async {
                     match session.provider {
                 ProviderType::OpenAI => {
+                    // Use Responses API (default) for reasoning model support.
+                    // rig-core 0.28+ handles Reasoning items properly in multi-turn.
                     let client = openai::Client::from_env();
-                    // For GPT-5.x reasoning models, enable reasoning with summary output
-                    // so we can see the model's thinking process
-                    let reasoning_params =
-                        if session.model.starts_with("gpt-5") || session.model.starts_with("o1") {
-                            Some(serde_json::json!({
-                                "reasoning": {
-                                    "effort": "medium",
-                                    "summary": "detailed"
-                                }
-                            }))
-                        } else {
-                            None
-                        };
 
                     let mut builder = client
                         .agent(&session.model)
@@ -519,13 +513,22 @@ pub async fn run_interactive(
                         .tool(HadolintTool::new(project_path_buf.clone()))
                         .tool(DclintTool::new(project_path_buf.clone()))
                         .tool(KubelintTool::new(project_path_buf.clone()))
+                        .tool(K8sOptimizeTool::new(project_path_buf.clone()))
+                        .tool(K8sCostsTool::new(project_path_buf.clone()))
+                        .tool(K8sDriftTool::new(project_path_buf.clone()))
                         .tool(HelmlintTool::new(project_path_buf.clone()))
                         .tool(TerraformFmtTool::new(project_path_buf.clone()))
                         .tool(TerraformValidateTool::new(project_path_buf.clone()))
                         .tool(TerraformInstallTool::new())
                         .tool(ReadFileTool::new(project_path_buf.clone()))
                         .tool(ListDirectoryTool::new(project_path_buf.clone()))
-                        .tool(WebFetchTool::new());
+                        .tool(WebFetchTool::new())
+                        // Prometheus discovery and connection tools for live K8s analysis
+                        .tool(PrometheusDiscoverTool::new())
+                        .tool(PrometheusConnectTool::new(bg_manager.clone()))
+                        // RAG retrieval tools for compressed tool outputs
+                        .tool(RetrieveOutputTool::new())
+                        .tool(ListOutputsTool::new());
 
                     // Add tools based on mode
                     if is_planning {
@@ -564,14 +567,27 @@ pub async fn run_interactive(
                             .tool(PlanUpdateTool::new(project_path_buf.clone()));
                     }
 
-                    if let Some(params) = reasoning_params {
-                        builder = builder.additional_params(params);
-                    }
+                    // Enable reasoning for OpenAI reasoning models (GPT-5.x, O1, O3, O4)
+                    let model_lower = session.model.to_lowercase();
+                    let is_reasoning_model = model_lower.starts_with("gpt-5")
+                        || model_lower.starts_with("gpt5")
+                        || model_lower.starts_with("o1")
+                        || model_lower.starts_with("o3")
+                        || model_lower.starts_with("o4");
 
-                    let agent = builder.build();
-                    // Allow up to 50 tool call turns for complex generation tasks
-                    // Use hook to display tool calls as they happen
-                    // Pass conversation history for context continuity
+                    let agent = if is_reasoning_model {
+                        let reasoning_params = serde_json::json!({
+                            "reasoning": {
+                                "effort": "medium",
+                                "summary": "detailed"
+                            }
+                        });
+                        builder.additional_params(reasoning_params).build()
+                    } else {
+                        builder.build()
+                    };
+
+                    // Use multi_turn with Responses API
                     agent
                         .prompt(&current_input)
                         .with_history(&mut raw_chat_history)
@@ -598,13 +614,22 @@ pub async fn run_interactive(
                         .tool(HadolintTool::new(project_path_buf.clone()))
                         .tool(DclintTool::new(project_path_buf.clone()))
                         .tool(KubelintTool::new(project_path_buf.clone()))
+                        .tool(K8sOptimizeTool::new(project_path_buf.clone()))
+                        .tool(K8sCostsTool::new(project_path_buf.clone()))
+                        .tool(K8sDriftTool::new(project_path_buf.clone()))
                         .tool(HelmlintTool::new(project_path_buf.clone()))
                         .tool(TerraformFmtTool::new(project_path_buf.clone()))
                         .tool(TerraformValidateTool::new(project_path_buf.clone()))
                         .tool(TerraformInstallTool::new())
                         .tool(ReadFileTool::new(project_path_buf.clone()))
                         .tool(ListDirectoryTool::new(project_path_buf.clone()))
-                        .tool(WebFetchTool::new());
+                        .tool(WebFetchTool::new())
+                        // Prometheus discovery and connection tools for live K8s analysis
+                        .tool(PrometheusDiscoverTool::new())
+                        .tool(PrometheusConnectTool::new(bg_manager.clone()))
+                        // RAG retrieval tools for compressed tool outputs
+                        .tool(RetrieveOutputTool::new())
+                        .tool(ListOutputsTool::new());
 
                     // Add tools based on mode
                     if is_planning {
@@ -681,13 +706,22 @@ pub async fn run_interactive(
                         .tool(HadolintTool::new(project_path_buf.clone()))
                         .tool(DclintTool::new(project_path_buf.clone()))
                         .tool(KubelintTool::new(project_path_buf.clone()))
+                        .tool(K8sOptimizeTool::new(project_path_buf.clone()))
+                        .tool(K8sCostsTool::new(project_path_buf.clone()))
+                        .tool(K8sDriftTool::new(project_path_buf.clone()))
                         .tool(HelmlintTool::new(project_path_buf.clone()))
                         .tool(TerraformFmtTool::new(project_path_buf.clone()))
                         .tool(TerraformValidateTool::new(project_path_buf.clone()))
                         .tool(TerraformInstallTool::new())
                         .tool(ReadFileTool::new(project_path_buf.clone()))
                         .tool(ListDirectoryTool::new(project_path_buf.clone()))
-                        .tool(WebFetchTool::new());
+                        .tool(WebFetchTool::new())
+                        // Prometheus discovery and connection tools for live K8s analysis
+                        .tool(PrometheusDiscoverTool::new())
+                        .tool(PrometheusConnectTool::new(bg_manager.clone()))
+                        // RAG retrieval tools for compressed tool outputs
+                        .tool(RetrieveOutputTool::new())
+                        .tool(ListOutputsTool::new());
 
                     // Add tools based on mode
                     if is_planning {
@@ -822,6 +856,14 @@ pub async fn run_interactive(
                                     .dimmed()
                             );
                         }
+                    }
+
+                    // Simplify history for OpenAI Responses API reasoning models
+                    // Keep only User text and Assistant text - strip reasoning, tool calls, tool results
+                    // This prevents pairing errors like "rs_... without its required following item"
+                    // and "fc_... without its required reasoning item"
+                    if session.provider == ProviderType::OpenAI {
+                        simplify_history_for_openai_reasoning(&mut raw_chat_history);
                     }
 
                     // Also update legacy session history for compatibility
@@ -1066,7 +1108,7 @@ pub async fn run_interactive(
                         let old_token_count = estimate_raw_history_tokens(&raw_chat_history);
                         let old_msg_count = raw_chat_history.len();
 
-                        // Strategy: Keep only the last N messages (user/assistant pairs)
+                        // Strategy 1: Keep only the last N messages (user/assistant pairs)
                         // More aggressive truncation on each retry: 10 → 6 → 4 messages
                         let keep_count = match retry_attempt {
                             0 => 10,
@@ -1078,7 +1120,18 @@ pub async fn run_interactive(
                             // Drain older messages, keep the most recent ones
                             let drain_count = raw_chat_history.len() - keep_count;
                             raw_chat_history.drain(0..drain_count);
+                            // Ensure history starts with User message for OpenAI Responses API compatibility
+                            ensure_history_starts_with_user(&mut raw_chat_history);
                         }
+
+                        // Strategy 2: Compact large tool outputs to temp files + summaries
+                        // This preserves data (agent can read file if needed) while reducing context
+                        let max_output_chars = match retry_attempt {
+                            0 => 50_000, // 50KB on first try
+                            1 => 20_000, // 20KB on second
+                            _ => 5_000,  // 5KB on third (aggressive)
+                        };
+                        compact_large_tool_outputs(&mut raw_chat_history, max_output_chars);
 
                         let new_token_count = estimate_raw_history_tokens(&raw_chat_history);
                         eprintln!("{}", format!(
@@ -1336,11 +1389,471 @@ fn truncate_string(s: &str, max_len: usize) -> String {
     }
 }
 
+/// Compact large tool outputs by saving them to temp files and replacing with summaries.
+/// This preserves all data (agent can read the file) while reducing context size.
+fn compact_large_tool_outputs(messages: &mut [rig::completion::Message], max_chars: usize) {
+    use rig::completion::message::{Text, ToolResultContent, UserContent};
+    use std::fs;
+
+    // Create temp directory for compacted outputs
+    let temp_dir = std::env::temp_dir().join("syncable-agent-outputs");
+    let _ = fs::create_dir_all(&temp_dir);
+
+    for msg in messages.iter_mut() {
+        if let rig::completion::Message::User { content } = msg {
+            for item in content.iter_mut() {
+                if let UserContent::ToolResult(tr) = item {
+                    for trc in tr.content.iter_mut() {
+                        if let ToolResultContent::Text(text) = trc {
+                            if text.text.len() > max_chars {
+                                // Save full output to temp file
+                                let file_id = format!(
+                                    "{}_{}.txt",
+                                    tr.id,
+                                    std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .unwrap()
+                                        .as_millis()
+                                );
+                                let file_path = temp_dir.join(&file_id);
+
+                                if let Ok(()) = fs::write(&file_path, &text.text) {
+                                    // Create a smart summary
+                                    let summary = create_output_summary(
+                                        &text.text,
+                                        &file_path.display().to_string(),
+                                        max_chars / 2, // Use half max for summary
+                                    );
+
+                                    // Replace with summary
+                                    *trc = ToolResultContent::Text(Text { text: summary });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Create a smart summary of a large output using incremental chunk processing.
+/// Processes output in logical sections, summarizes each, then combines into actionable summary.
+fn create_output_summary(full_output: &str, file_path: &str, max_summary_len: usize) -> String {
+    let total_lines = full_output.lines().count();
+    let total_chars = full_output.len();
+
+    let summary_content =
+        if full_output.trim_start().starts_with('{') || full_output.trim_start().starts_with('[') {
+            // JSON output - extract structured summary
+            summarize_json_incrementally(full_output, max_summary_len)
+        } else {
+            // Text output - chunk and summarize
+            summarize_text_incrementally(full_output, max_summary_len)
+        };
+
+    format!(
+        "[COMPACTED OUTPUT]\n\
+        Full data: {}\n\
+        Size: {} chars, {} lines\n\
+        \n\
+        {}\n\
+        \n\
+        [Read file with offset/limit for specific sections if needed]",
+        file_path, total_chars, total_lines, summary_content
+    )
+}
+
+/// Incrementally summarize JSON output, extracting key fields and prioritizing important items.
+fn summarize_json_incrementally(json_str: &str, max_len: usize) -> String {
+    let Ok(json) = serde_json::from_str::<serde_json::Value>(json_str) else {
+        return "Failed to parse JSON".to_string();
+    };
+
+    let mut parts: Vec<String> = Vec::new();
+    let mut current_len = 0;
+
+    match &json {
+        serde_json::Value::Object(obj) => {
+            // Priority 1: Summary/stats fields
+            for key in ["summary", "stats", "metadata", "status"] {
+                if let Some(v) = obj.get(key) {
+                    let s = format!("{}:\n{}", key, indent_json(v, 2, 500));
+                    if current_len + s.len() < max_len {
+                        parts.push(s.clone());
+                        current_len += s.len();
+                    }
+                }
+            }
+
+            // Priority 2: Error/critical items (summarize each)
+            for key in [
+                "errors",
+                "critical",
+                "failures",
+                "issues",
+                "findings",
+                "recommendations",
+            ] {
+                if let Some(serde_json::Value::Array(arr)) = obj.get(key) {
+                    if arr.is_empty() {
+                        continue;
+                    }
+                    parts.push(format!("\n{} ({} items):", key, arr.len()));
+
+                    // Group by severity/type if present
+                    let mut by_severity: std::collections::HashMap<
+                        String,
+                        Vec<&serde_json::Value>,
+                    > = std::collections::HashMap::new();
+
+                    for item in arr {
+                        let severity = item
+                            .get("severity")
+                            .or_else(|| item.get("level"))
+                            .or_else(|| item.get("type"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("other")
+                            .to_string();
+                        by_severity.entry(severity).or_default().push(item);
+                    }
+
+                    // Show critical/high first, summarize others
+                    for sev in [
+                        "critical", "high", "error", "warning", "medium", "low", "info", "other",
+                    ] {
+                        if let Some(items) = by_severity.get(sev) {
+                            let show_count = match sev {
+                                "critical" | "high" | "error" => 5.min(items.len()),
+                                "warning" | "medium" => 3.min(items.len()),
+                                _ => 2.min(items.len()),
+                            };
+
+                            if !items.is_empty() {
+                                let s =
+                                    format!("  [{}] {} items:", sev.to_uppercase(), items.len());
+                                if current_len + s.len() < max_len {
+                                    parts.push(s.clone());
+                                    current_len += s.len();
+
+                                    for item in items.iter().take(show_count) {
+                                        let item_summary = summarize_single_item(item);
+                                        if current_len + item_summary.len() < max_len {
+                                            parts.push(format!("    • {}", item_summary));
+                                            current_len += item_summary.len();
+                                        }
+                                    }
+
+                                    if items.len() > show_count {
+                                        parts.push(format!(
+                                            "    ... and {} more",
+                                            items.len() - show_count
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Priority 3: Show remaining top-level keys
+            let shown_keys: std::collections::HashSet<&str> = [
+                "summary",
+                "stats",
+                "metadata",
+                "status",
+                "errors",
+                "critical",
+                "failures",
+                "issues",
+                "findings",
+                "recommendations",
+            ]
+            .iter()
+            .cloned()
+            .collect();
+
+            let other_keys: Vec<_> = obj
+                .keys()
+                .filter(|k| !shown_keys.contains(k.as_str()))
+                .collect();
+            if !other_keys.is_empty() && current_len < max_len - 200 {
+                parts.push(format!("\nOther fields: {:?}", other_keys));
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            parts.push(format!("Array with {} items", arr.len()));
+
+            // Try to group by type/severity
+            for (i, item) in arr.iter().take(10).enumerate() {
+                let s = format!("[{}] {}", i, summarize_single_item(item));
+                if current_len + s.len() < max_len {
+                    parts.push(s.clone());
+                    current_len += s.len();
+                }
+            }
+            if arr.len() > 10 {
+                parts.push(format!("... and {} more items", arr.len() - 10));
+            }
+        }
+        _ => {
+            parts.push(truncate_json_value(&json, max_len));
+        }
+    }
+
+    parts.join("\n")
+}
+
+/// Summarize a single JSON item (issue, error, etc.) into a one-liner.
+fn summarize_single_item(item: &serde_json::Value) -> String {
+    let mut parts: Vec<String> = Vec::new();
+
+    // Extract common fields
+    for key in [
+        "message",
+        "description",
+        "title",
+        "name",
+        "file",
+        "path",
+        "code",
+        "rule",
+    ] {
+        if let Some(v) = item.get(key) {
+            if let Some(s) = v.as_str() {
+                parts.push(truncate_string(s, 80));
+                break; // Only take first descriptive field
+            }
+        }
+    }
+
+    // Add location if present
+    if let Some(file) = item
+        .get("file")
+        .or_else(|| item.get("path"))
+        .and_then(|v| v.as_str())
+    {
+        if let Some(line) = item.get("line").and_then(|v| v.as_u64()) {
+            parts.push(format!("at {}:{}", file, line));
+        } else {
+            parts.push(format!("in {}", truncate_string(file, 40)));
+        }
+    }
+
+    if parts.is_empty() {
+        truncate_json_value(item, 100)
+    } else {
+        parts.join(" ")
+    }
+}
+
+/// Indent JSON for display.
+fn indent_json(v: &serde_json::Value, indent: usize, max_len: usize) -> String {
+    let s = serde_json::to_string_pretty(v).unwrap_or_else(|_| v.to_string());
+    let prefix = " ".repeat(indent);
+    let indented: String = s
+        .lines()
+        .map(|l| format!("{}{}", prefix, l))
+        .collect::<Vec<_>>()
+        .join("\n");
+    if indented.len() > max_len {
+        format!("{}...", &indented[..max_len.saturating_sub(3)])
+    } else {
+        indented
+    }
+}
+
+/// Incrementally summarize text output by processing in chunks.
+fn summarize_text_incrementally(text: &str, max_len: usize) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut parts: Vec<String> = Vec::new();
+    let mut current_len = 0;
+
+    // Look for section headers or key patterns
+    let mut sections: Vec<(usize, &str)> = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        // Detect headers (lines that look like titles)
+        if line.starts_with('#')
+            || line.starts_with("==")
+            || line.starts_with("--")
+            || (line.ends_with(':') && line.len() < 50)
+            || line.chars().all(|c| c.is_uppercase() || c.is_whitespace())
+        {
+            sections.push((i, line));
+        }
+    }
+
+    if !sections.is_empty() {
+        // Summarize by sections
+        parts.push(format!("Found {} sections:", sections.len()));
+        for (i, (line_num, header)) in sections.iter().enumerate() {
+            let next_section = sections.get(i + 1).map(|(n, _)| *n).unwrap_or(lines.len());
+            let section_lines = next_section - line_num;
+
+            let s = format!(
+                "  [L{}] {} ({} lines)",
+                line_num + 1,
+                header.trim(),
+                section_lines
+            );
+            if current_len + s.len() < max_len / 2 {
+                parts.push(s.clone());
+                current_len += s.len();
+            }
+        }
+        parts.push("".to_string());
+    }
+
+    // Show first chunk
+    let preview_lines = 15.min(lines.len());
+    parts.push("Content preview:".to_string());
+    for line in lines.iter().take(preview_lines) {
+        let s = format!("  {}", truncate_string(line, 120));
+        if current_len + s.len() < max_len * 3 / 4 {
+            parts.push(s.clone());
+            current_len += s.len();
+        }
+    }
+
+    if lines.len() > preview_lines {
+        parts.push(format!(
+            "  ... ({} more lines)",
+            lines.len() - preview_lines
+        ));
+    }
+
+    // Show last few lines if space permits
+    if lines.len() > preview_lines * 2 && current_len < max_len - 500 {
+        parts.push("\nEnd of output:".to_string());
+        for line in lines.iter().skip(lines.len() - 5) {
+            let s = format!("  {}", truncate_string(line, 120));
+            if current_len + s.len() < max_len {
+                parts.push(s.clone());
+                current_len += s.len();
+            }
+        }
+    }
+
+    parts.join("\n")
+}
+
+/// Truncate a JSON value for display
+fn truncate_json_value(v: &serde_json::Value, max_len: usize) -> String {
+    let s = v.to_string();
+    if s.len() <= max_len {
+        s
+    } else {
+        format!("{}...", &s[..max_len.saturating_sub(3)])
+    }
+}
+
+/// Simplify history for OpenAI Responses API compatibility with reasoning models.
+///
+/// OpenAI's Responses API has strict pairing requirements:
+/// - Reasoning items must be followed by their output (text or function_call)
+/// - Function_call items must be preceded by their reasoning item
+///
+/// When passing history across user turns, these pairings get broken, causing errors like:
+/// - "Item 'rs_...' of type 'reasoning' was provided without its required following item"
+/// - "Item 'fc_...' of type 'function_call' was provided without its required 'reasoning' item"
+///
+/// Solution: Keep only User messages and final Assistant Text responses.
+/// This preserves conversation context without the complex internal tool/reasoning structure.
+fn simplify_history_for_openai_reasoning(history: &mut Vec<rig::completion::Message>) {
+    use rig::completion::message::{AssistantContent, UserContent};
+    use rig::one_or_many::OneOrMany;
+
+    // Filter to keep only User text messages and Assistant text messages
+    let simplified: Vec<rig::completion::Message> = history
+        .iter()
+        .filter_map(|msg| match msg {
+            // Keep User messages, but only text content (not tool results)
+            rig::completion::Message::User { content } => {
+                let text_only: Vec<UserContent> = content
+                    .iter()
+                    .filter(|c| matches!(c, UserContent::Text(_)))
+                    .cloned()
+                    .collect();
+                if text_only.is_empty() {
+                    None
+                } else {
+                    let mut iter = text_only.into_iter();
+                    let first = iter.next().unwrap();
+                    let rest: Vec<_> = iter.collect();
+                    let new_content = if rest.is_empty() {
+                        OneOrMany::one(first)
+                    } else {
+                        OneOrMany::many(std::iter::once(first).chain(rest)).unwrap()
+                    };
+                    Some(rig::completion::Message::User {
+                        content: new_content,
+                    })
+                }
+            }
+            // Keep Assistant messages, but only text content (not reasoning, tool calls)
+            rig::completion::Message::Assistant { content, id } => {
+                let text_only: Vec<AssistantContent> = content
+                    .iter()
+                    .filter(|c| matches!(c, AssistantContent::Text(_)))
+                    .cloned()
+                    .collect();
+                if text_only.is_empty() {
+                    None
+                } else {
+                    let mut iter = text_only.into_iter();
+                    let first = iter.next().unwrap();
+                    let rest: Vec<_> = iter.collect();
+                    let new_content = if rest.is_empty() {
+                        OneOrMany::one(first)
+                    } else {
+                        OneOrMany::many(std::iter::once(first).chain(rest)).unwrap()
+                    };
+                    Some(rig::completion::Message::Assistant {
+                        content: new_content,
+                        id: id.clone(),
+                    })
+                }
+            }
+        })
+        .collect();
+
+    *history = simplified;
+}
+
+/// Ensure history starts with a User message for OpenAI Responses API compatibility.
+///
+/// OpenAI's Responses API requires that reasoning items are properly structured within
+/// a conversation. When history truncation leaves an Assistant message (containing
+/// Reasoning blocks) at the start, OpenAI rejects it with:
+/// "Item 'rs_...' of type 'reasoning' was provided without its required following item."
+///
+/// This function inserts a synthetic User message at the beginning if history starts
+/// with an Assistant message, preserving the context while maintaining valid structure.
+fn ensure_history_starts_with_user(history: &mut Vec<rig::completion::Message>) {
+    if !history.is_empty() {
+        if matches!(
+            history.first(),
+            Some(rig::completion::Message::Assistant { .. })
+        ) {
+            // Insert synthetic User message at the beginning to maintain valid conversation structure
+            history.insert(
+                0,
+                rig::completion::Message::User {
+                    content: rig::one_or_many::OneOrMany::one(
+                        rig::completion::message::UserContent::text("(Conversation continued)"),
+                    ),
+                },
+            );
+        }
+    }
+}
+
 /// Estimate token count from raw rig Messages
 /// This is used for context length management to prevent "input too long" errors.
 /// Estimates ~4 characters per token.
 fn estimate_raw_history_tokens(messages: &[rig::completion::Message]) -> usize {
-    use rig::completion::message::{AssistantContent, UserContent};
+    use rig::completion::message::{AssistantContent, ToolResultContent, UserContent};
 
     messages
         .iter()
@@ -1352,6 +1865,16 @@ fn estimate_raw_history_tokens(messages: &[rig::completion::Message]) -> usize {
                         .map(|c| -> usize {
                             match c {
                                 UserContent::Text(t) => t.text.len() / 4,
+                                UserContent::ToolResult(tr) => {
+                                    // Tool results can be HUGE - properly estimate them
+                                    tr.content
+                                        .iter()
+                                        .map(|trc| match trc {
+                                            ToolResultContent::Text(t) => t.text.len() / 4,
+                                            _ => 100,
+                                        })
+                                        .sum::<usize>()
+                                }
                                 _ => 100, // Estimate for images/documents
                             }
                         })
@@ -1599,6 +2122,9 @@ pub async fn run_query(
     use tools::*;
 
     let project_path_buf = project_path.to_path_buf();
+
+    // Background process manager for Prometheus port-forwards (single query context)
+    let bg_manager = Arc::new(BackgroundProcessManager::new());
     // Select prompt based on query type (analysis vs generation)
     // For single queries (non-interactive), always use standard mode
     let preamble = get_system_prompt(project_path, Some(query), PlanMode::default());
@@ -1606,21 +2132,9 @@ pub async fn run_query(
 
     match provider {
         ProviderType::OpenAI => {
+            // Use Responses API (default) for reasoning model support
             let client = openai::Client::from_env();
             let model_name = model.as_deref().unwrap_or("gpt-5.2");
-
-            // For GPT-5.x reasoning models, enable reasoning with summary output
-            let reasoning_params =
-                if model_name.starts_with("gpt-5") || model_name.starts_with("o1") {
-                    Some(serde_json::json!({
-                        "reasoning": {
-                            "effort": "medium",
-                            "summary": "detailed"
-                        }
-                    }))
-                } else {
-                    None
-                };
 
             let mut builder = client
                 .agent(model_name)
@@ -1632,13 +2146,22 @@ pub async fn run_query(
                 .tool(HadolintTool::new(project_path_buf.clone()))
                 .tool(DclintTool::new(project_path_buf.clone()))
                 .tool(KubelintTool::new(project_path_buf.clone()))
+                .tool(K8sOptimizeTool::new(project_path_buf.clone()))
+                .tool(K8sCostsTool::new(project_path_buf.clone()))
+                .tool(K8sDriftTool::new(project_path_buf.clone()))
                 .tool(HelmlintTool::new(project_path_buf.clone()))
                 .tool(TerraformFmtTool::new(project_path_buf.clone()))
                 .tool(TerraformValidateTool::new(project_path_buf.clone()))
                 .tool(TerraformInstallTool::new())
                 .tool(ReadFileTool::new(project_path_buf.clone()))
                 .tool(ListDirectoryTool::new(project_path_buf.clone()))
-                .tool(WebFetchTool::new());
+                .tool(WebFetchTool::new())
+                // Prometheus discovery and connection tools for live K8s analysis
+                .tool(PrometheusDiscoverTool::new())
+                .tool(PrometheusConnectTool::new(bg_manager.clone()))
+                // RAG retrieval tools for compressed tool outputs
+                .tool(RetrieveOutputTool::new())
+                .tool(ListOutputsTool::new());
 
             // Add generation tools if this is a generation query
             if is_generation {
@@ -1648,11 +2171,25 @@ pub async fn run_query(
                     .tool(ShellTool::new(project_path_buf.clone()));
             }
 
-            if let Some(params) = reasoning_params {
-                builder = builder.additional_params(params);
-            }
+            // Enable reasoning for OpenAI reasoning models
+            let model_lower = model_name.to_lowercase();
+            let is_reasoning_model = model_lower.starts_with("gpt-5")
+                || model_lower.starts_with("gpt5")
+                || model_lower.starts_with("o1")
+                || model_lower.starts_with("o3")
+                || model_lower.starts_with("o4");
 
-            let agent = builder.build();
+            let agent = if is_reasoning_model {
+                let reasoning_params = serde_json::json!({
+                    "reasoning": {
+                        "effort": "medium",
+                        "summary": "detailed"
+                    }
+                });
+                builder.additional_params(reasoning_params).build()
+            } else {
+                builder.build()
+            };
 
             agent
                 .prompt(query)
@@ -1678,13 +2215,22 @@ pub async fn run_query(
                 .tool(HadolintTool::new(project_path_buf.clone()))
                 .tool(DclintTool::new(project_path_buf.clone()))
                 .tool(KubelintTool::new(project_path_buf.clone()))
+                .tool(K8sOptimizeTool::new(project_path_buf.clone()))
+                .tool(K8sCostsTool::new(project_path_buf.clone()))
+                .tool(K8sDriftTool::new(project_path_buf.clone()))
                 .tool(HelmlintTool::new(project_path_buf.clone()))
                 .tool(TerraformFmtTool::new(project_path_buf.clone()))
                 .tool(TerraformValidateTool::new(project_path_buf.clone()))
                 .tool(TerraformInstallTool::new())
                 .tool(ReadFileTool::new(project_path_buf.clone()))
                 .tool(ListDirectoryTool::new(project_path_buf.clone()))
-                .tool(WebFetchTool::new());
+                .tool(WebFetchTool::new())
+                // Prometheus discovery and connection tools for live K8s analysis
+                .tool(PrometheusDiscoverTool::new())
+                .tool(PrometheusConnectTool::new(bg_manager.clone()))
+                // RAG retrieval tools for compressed tool outputs
+                .tool(RetrieveOutputTool::new())
+                .tool(ListOutputsTool::new());
 
             // Add generation tools if this is a generation query
             if is_generation {
@@ -1727,13 +2273,22 @@ pub async fn run_query(
                 .tool(HadolintTool::new(project_path_buf.clone()))
                 .tool(DclintTool::new(project_path_buf.clone()))
                 .tool(KubelintTool::new(project_path_buf.clone()))
+                .tool(K8sOptimizeTool::new(project_path_buf.clone()))
+                .tool(K8sCostsTool::new(project_path_buf.clone()))
+                .tool(K8sDriftTool::new(project_path_buf.clone()))
                 .tool(HelmlintTool::new(project_path_buf.clone()))
                 .tool(TerraformFmtTool::new(project_path_buf.clone()))
                 .tool(TerraformValidateTool::new(project_path_buf.clone()))
                 .tool(TerraformInstallTool::new())
                 .tool(ReadFileTool::new(project_path_buf.clone()))
                 .tool(ListDirectoryTool::new(project_path_buf.clone()))
-                .tool(WebFetchTool::new());
+                .tool(WebFetchTool::new())
+                // Prometheus discovery and connection tools for live K8s analysis
+                .tool(PrometheusDiscoverTool::new())
+                .tool(PrometheusConnectTool::new(bg_manager.clone()))
+                // RAG retrieval tools for compressed tool outputs
+                .tool(RetrieveOutputTool::new())
+                .tool(ListOutputsTool::new());
 
             // Add generation tools if this is a generation query
             if is_generation {

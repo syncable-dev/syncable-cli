@@ -1,5 +1,6 @@
 //! Analyze tool - wraps the analyze command using Rig's Tool trait
 
+use super::compression::{CompressionConfig, compress_analysis_output};
 use rig::completion::ToolDefinition;
 use rig::tool::Tool;
 use serde::{Deserialize, Serialize};
@@ -61,8 +62,15 @@ impl Tool for AnalyzeTool {
         };
 
         match crate::analyzer::analyze_project(&path) {
-            Ok(analysis) => serde_json::to_string_pretty(&analysis)
-                .map_err(|e| AnalyzeError(format!("Failed to serialize: {}", e))),
+            Ok(analysis) => {
+                let json_value = serde_json::to_value(&analysis)
+                    .map_err(|e| AnalyzeError(format!("Failed to serialize: {}", e)))?;
+
+                // Use smart compression with RAG retrieval pattern
+                // This preserves all data while keeping context size manageable
+                let config = CompressionConfig::default();
+                Ok(compress_analysis_output(&json_value, &config))
+            }
             Err(e) => Err(AnalyzeError(format!("Analysis failed: {}", e))),
         }
     }

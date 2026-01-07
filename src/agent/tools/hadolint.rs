@@ -399,9 +399,13 @@ impl Tool for HadolintTool {
         }
 
         // Determine source, filename, and lint
-        let (result, filename) = if let Some(content) = &args.content {
-            // Lint inline content
-            (lint(content, &config), "<inline>".to_string())
+        // IMPORTANT: Treat empty content as None - fixes AI agents passing empty strings
+        let (result, filename) = if args.content.as_ref().is_some_and(|c| !c.trim().is_empty()) {
+            // Lint non-empty inline content
+            (
+                lint(args.content.as_ref().unwrap(), &config),
+                "<inline>".to_string(),
+            )
         } else if let Some(dockerfile) = &args.dockerfile {
             // Lint file
             let path = self.project_path.join(dockerfile);

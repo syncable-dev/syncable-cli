@@ -21,6 +21,7 @@ pub mod framework_detector;
 pub mod frameworks;
 pub mod hadolint;
 pub mod helmlint;
+pub mod k8s_optimize;
 pub mod kubelint;
 pub mod language_detector;
 pub mod monorepo;
