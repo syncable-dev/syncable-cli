@@ -642,12 +642,18 @@ fn extract_workloads(
 }
 
 /// Round CPU to nice values.
+/// Small values use ceiling (to prevent under-provisioning), larger values use rounding.
 fn round_cpu(millicores: u64) -> u64 {
-    if millicores <= 100 {
-        ((millicores + 12) / 25) * 25
+    if millicores == 0 {
+        0
+    } else if millicores <= 100 {
+        // Ceiling to nearest 25m
+        ((millicores + 24) / 25) * 25
     } else if millicores <= 1000 {
+        // Round to nearest 50m
         ((millicores + 25) / 50) * 50
     } else {
+        // Round to nearest 100m
         ((millicores + 50) / 100) * 100
     }
 }

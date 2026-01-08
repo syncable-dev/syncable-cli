@@ -492,7 +492,7 @@ fn assess_impact(rec: &ResourceRecommendation) -> FixImpact {
 
 /// Format millicores to K8s CPU string.
 fn format_millicores(millicores: u64) -> String {
-    if millicores >= 1000 && millicores % 1000 == 0 {
+    if millicores >= 1000 && millicores.is_multiple_of(1000) {
         format!("{}", millicores / 1000)
     } else {
         format!("{}m", millicores)
@@ -512,7 +512,7 @@ fn double_millicores(value: &str) -> String {
 
 /// Format bytes to K8s memory string.
 fn format_bytes(bytes: u64) -> String {
-    if bytes >= 1024 * 1024 * 1024 && bytes % (1024 * 1024 * 1024) == 0 {
+    if bytes >= 1024 * 1024 * 1024 && bytes.is_multiple_of(1024 * 1024 * 1024) {
         format!("{}Gi", bytes / (1024 * 1024 * 1024))
     } else if bytes >= 1024 * 1024 {
         format!("{}Mi", bytes / (1024 * 1024))

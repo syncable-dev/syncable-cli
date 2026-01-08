@@ -488,27 +488,42 @@ struct PrometheusResult {
 fn parse_duration(duration: &str) -> Result<String, PrometheusError> {
     let duration = duration.trim().to_lowercase();
 
-    // Prometheus already understands these formats
-    if duration.ends_with('d')
-        || duration.ends_with('h')
-        || duration.ends_with('m')
-        || duration.ends_with('s')
-    {
-        Ok(duration)
-    } else if duration.ends_with("day") || duration.ends_with("days") {
+    // Check for human-readable formats first (before single-char suffixes)
+    if duration.ends_with("days") {
         let num: u32 = duration
-            .trim_end_matches(|c: char| c.is_alphabetic())
+            .trim_end_matches("days")
             .trim()
             .parse()
             .map_err(|_| PrometheusError::ParseError("Invalid duration number".to_string()))?;
         Ok(format!("{}d", num))
-    } else if duration.ends_with("week") || duration.ends_with("weeks") {
+    } else if duration.ends_with("day") {
         let num: u32 = duration
-            .trim_end_matches(|c: char| c.is_alphabetic())
+            .trim_end_matches("day")
+            .trim()
+            .parse()
+            .map_err(|_| PrometheusError::ParseError("Invalid duration number".to_string()))?;
+        Ok(format!("{}d", num))
+    } else if duration.ends_with("weeks") {
+        let num: u32 = duration
+            .trim_end_matches("weeks")
             .trim()
             .parse()
             .map_err(|_| PrometheusError::ParseError("Invalid duration number".to_string()))?;
         Ok(format!("{}d", num * 7))
+    } else if duration.ends_with("week") {
+        let num: u32 = duration
+            .trim_end_matches("week")
+            .trim()
+            .parse()
+            .map_err(|_| PrometheusError::ParseError("Invalid duration number".to_string()))?;
+        Ok(format!("{}d", num * 7))
+    } else if duration.ends_with('d')
+        || duration.ends_with('h')
+        || duration.ends_with('m')
+        || duration.ends_with('s')
+    {
+        // Prometheus already understands these formats
+        Ok(duration)
     } else {
         // Default to treating as days
         let num: u32 = duration
@@ -589,10 +604,13 @@ fn average(values: &[f64]) -> f64 {
 }
 
 /// Round CPU millicores to nice values.
+/// Small values use ceiling (to prevent under-provisioning), larger values use rounding.
 fn round_cpu(millicores: u64) -> u64 {
-    if millicores <= 100 {
-        // Round to nearest 25m
-        ((millicores + 12) / 25) * 25
+    if millicores == 0 {
+        0
+    } else if millicores <= 100 {
+        // Ceiling to nearest 25m (prevent under-provisioning for small requests)
+        ((millicores + 24) / 25) * 25
     } else if millicores <= 1000 {
         // Round to nearest 50m
         ((millicores + 25) / 50) * 50
