@@ -249,6 +249,7 @@ fn extract_issues(output: &Value) -> Vec<Value> {
         "recommendations",
         "results",
         "diagnostics",
+        "failures", // LintResult from kubelint, hadolint, dclint, helmlint
     ];
 
     for field in &issue_fields {
@@ -465,127 +466,170 @@ fn deduplicate_to_patterns(
 }
 
 /// Compress analyze_project output specifically
+///
+/// Handles both:
+/// - MonorepoAnalysis: has "projects" array, "is_monorepo", "root_path"
+/// - ProjectAnalysis: flat structure with "languages", "technologies" at top level
+///
+/// For large analysis, returns a minimal summary and stores full data for retrieval.
 pub fn compress_analysis_output(output: &Value, config: &CompressionConfig) -> String {
     let raw_str = serde_json::to_string(output).unwrap_or_default();
     if raw_str.len() <= config.target_size_bytes {
         return raw_str;
     }
 
-    // Store full output
-    let ref_id = output_store::store_output(output, "analyze");
+    // Store full output for later retrieval
+    let ref_id = output_store::store_output(output, "analyze_project");
 
-    // Extract key summary fields
-    let mut compressed = json!({
+    // Build a MINIMAL summary - just enough to understand the project
+    let mut summary = json!({
         "tool": "analyze_project",
-        "full_data_ref": ref_id,
-        "retrieval_hint": format!("Use retrieve_output('{}') for full analysis", ref_id)
+        "status": "ANALYSIS_COMPLETE",
+        "full_data_ref": ref_id.clone()
     });
 
-    if let Some(obj) = output.as_object() {
-        let compressed_obj = compressed.as_object_mut().unwrap();
+    let summary_obj = summary.as_object_mut().unwrap();
 
-        // Always include these summary fields
-        let summary_fields = [
-            "name",
-            "languages",
-            "frameworks",
-            "build_tools",
-            "package_managers",
-            "ci_cd",
-            "containerization",
-            "cloud_providers",
-            "databases",
-        ];
+    // Detect output type and extract accordingly
+    let is_monorepo = output.get("projects").is_some() || output.get("is_monorepo").is_some();
+    let is_project_analysis = output.get("languages").is_some() && output.get("analysis_metadata").is_some();
 
-        for field in &summary_fields {
-            if let Some(v) = obj.get(*field) {
-                // For arrays, include count + first few items
-                if let Some(arr) = v.as_array() {
-                    if arr.len() > 5 {
-                        let truncated: Vec<Value> = arr.iter().take(5).cloned().collect();
-                        compressed_obj.insert(
-                            field.to_string(),
-                            json!({
-                                "items": truncated,
-                                "total": arr.len(),
-                                "note": format!("+{} more (use retrieve_output)", arr.len() - 5)
-                            }),
-                        );
-                    } else {
-                        compressed_obj.insert(field.to_string(), v.clone());
-                    }
-                } else {
-                    compressed_obj.insert(field.to_string(), v.clone());
-                }
-            }
+    if is_monorepo {
+        // MonorepoAnalysis structure
+        if let Some(mono) = output.get("is_monorepo").and_then(|v| v.as_bool()) {
+            summary_obj.insert("is_monorepo".to_string(), json!(mono));
+        }
+        if let Some(root) = output.get("root_path").and_then(|v| v.as_str()) {
+            summary_obj.insert("root_path".to_string(), json!(root));
         }
 
-        // Handle dependencies specially - just counts
-        if let Some(deps) = obj.get("dependencies") {
-            if let Some(deps_obj) = deps.as_object() {
-                let mut dep_summary = json!({});
-                for (lang, dep_list) in deps_obj {
-                    if let Some(arr) = dep_list.as_array() {
-                        dep_summary[lang] = json!({ "count": arr.len() });
+        if let Some(projects) = output.get("projects").and_then(|v| v.as_array()) {
+            summary_obj.insert("project_count".to_string(), json!(projects.len()));
+
+            let mut all_languages: Vec<String> = Vec::new();
+            let mut all_frameworks: Vec<String> = Vec::new();
+            let mut project_names: Vec<String> = Vec::new();
+
+            for project in projects.iter().take(20) {
+                if let Some(name) = project.get("name").and_then(|v| v.as_str()) {
+                    project_names.push(name.to_string());
+                }
+                if let Some(analysis) = project.get("analysis") {
+                    if let Some(langs) = analysis.get("languages").and_then(|v| v.as_array()) {
+                        for lang in langs {
+                            if let Some(name) = lang.get("name").and_then(|v| v.as_str()) {
+                                if !all_languages.contains(&name.to_string()) {
+                                    all_languages.push(name.to_string());
+                                }
+                            }
+                        }
+                    }
+                    if let Some(fws) = analysis.get("frameworks").and_then(|v| v.as_array()) {
+                        for fw in fws {
+                            if let Some(name) = fw.get("name").and_then(|v| v.as_str()) {
+                                if !all_frameworks.contains(&name.to_string()) {
+                                    all_frameworks.push(name.to_string());
+                                }
+                            }
+                        }
                     }
                 }
-                compressed_obj.insert("dependencies_summary".to_string(), dep_summary);
             }
+
+            summary_obj.insert("project_names".to_string(), json!(project_names));
+            summary_obj.insert("languages_detected".to_string(), json!(all_languages));
+            summary_obj.insert("frameworks_detected".to_string(), json!(all_frameworks));
+        }
+    } else if is_project_analysis {
+        // ProjectAnalysis flat structure - languages/technologies at top level
+        if let Some(root) = output.get("project_root").and_then(|v| v.as_str()) {
+            summary_obj.insert("project_root".to_string(), json!(root));
+        }
+        if let Some(arch) = output.get("architecture_type").and_then(|v| v.as_str()) {
+            summary_obj.insert("architecture_type".to_string(), json!(arch));
+        }
+        if let Some(proj_type) = output.get("project_type").and_then(|v| v.as_str()) {
+            summary_obj.insert("project_type".to_string(), json!(proj_type));
         }
 
-        // Handle file structure - depth-limited
-        if let Some(structure) = obj.get("structure") {
-            compressed_obj.insert(
-                "structure_note".to_string(),
-                json!("Full structure available via retrieve_output"),
-            );
-            // Include just top-level directories
-            if let Some(dirs) = structure.get("directories").and_then(|v| v.as_array()) {
-                let top_dirs: Vec<&str> = dirs
-                    .iter()
-                    .filter_map(|v| v.as_str())
-                    .filter(|s| !s.contains('/') || s.matches('/').count() == 1)
-                    .take(10)
-                    .collect();
-                compressed_obj.insert("top_directories".to_string(), json!(top_dirs));
+        // Extract languages (at top level)
+        if let Some(langs) = output.get("languages").and_then(|v| v.as_array()) {
+            let names: Vec<&str> = langs
+                .iter()
+                .filter_map(|l| l.get("name").and_then(|n| n.as_str()))
+                .collect();
+            summary_obj.insert("languages_detected".to_string(), json!(names));
+        }
+
+        // Extract technologies (at top level)
+        if let Some(techs) = output.get("technologies").and_then(|v| v.as_array()) {
+            let names: Vec<&str> = techs
+                .iter()
+                .filter_map(|t| t.get("name").and_then(|n| n.as_str()))
+                .collect();
+            summary_obj.insert("technologies_detected".to_string(), json!(names));
+        }
+
+        // Extract services (include names, not just count)
+        if let Some(services) = output.get("services").and_then(|v| v.as_array()) {
+            summary_obj.insert("services_count".to_string(), json!(services.len()));
+            // Include service names so agent knows what microservices exist
+            let service_names: Vec<&str> = services
+                .iter()
+                .filter_map(|s| s.get("name").and_then(|n| n.as_str()))
+                .collect();
+            if !service_names.is_empty() {
+                summary_obj.insert("services_detected".to_string(), json!(service_names));
             }
         }
     }
 
-    // Build summary for session registry
-    let summary_parts: Vec<String> = output
-        .as_object()
-        .map(|obj| {
-            let mut parts = Vec::new();
-            if let Some(langs) = obj.get("languages").and_then(|v| v.as_array()) {
-                parts.push(format!("{} languages", langs.len()));
-            }
-            if let Some(fws) = obj.get("frameworks").and_then(|v| v.as_array()) {
-                parts.push(format!("{} frameworks", fws.len()));
-            }
-            parts
-        })
-        .unwrap_or_default();
-    let summary_str = if summary_parts.is_empty() {
-        "Project structure and dependencies".to_string()
-    } else {
-        summary_parts.join(", ")
-    };
+    // CRITICAL: Include retrieval instructions prominently
+    summary_obj.insert(
+        "retrieval_instructions".to_string(),
+        json!({
+            "message": "Full analysis stored. Use retrieve_output with queries to get specific sections.",
+            "ref_id": ref_id,
+            "available_queries": [
+                "section:summary - Project overview",
+                "section:languages - All detected languages",
+                "section:frameworks - All detected frameworks/technologies",
+                "section:services - All detected services",
+                "language:<name> - Details for specific language (e.g., language:Rust)",
+                "framework:<name> - Details for specific framework"
+            ],
+            "example": format!("retrieve_output('{}', 'section:summary')", ref_id)
+        }),
+    );
+
+    // Build session summary
+    let project_count = output
+        .get("projects")
+        .and_then(|v| v.as_array())
+        .map(|a| a.len())
+        .unwrap_or(1);
+    let summary_str = format!(
+        "{} project(s), {} bytes stored",
+        project_count,
+        raw_str.len()
+    );
 
     // Register in session registry
     output_store::register_session_ref(
         &ref_id,
-        "analyze",
-        "Project analysis (languages, frameworks, dependencies, structure)",
+        "analyze_project",
+        "Full project analysis (use section queries to retrieve specific data)",
         &summary_str,
         raw_str.len(),
     );
 
-    let mut result = serde_json::to_string_pretty(&compressed).unwrap_or(raw_str);
-
-    // Append ALL session refs so agent always knows what's available
-    result.push_str(&output_store::format_session_refs_for_agent());
-    result
+    // Return minimal JSON
+    serde_json::to_string_pretty(&summary).unwrap_or_else(|_| {
+        format!(
+            r#"{{"tool":"analyze_project","status":"STORED","full_data_ref":"{}","message":"Analysis complete. Use retrieve_output('{}', 'section:summary') to view."}}"#,
+            ref_id, ref_id
+        )
+    })
 }
 
 #[cfg(test)]

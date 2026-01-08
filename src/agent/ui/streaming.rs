@@ -96,8 +96,13 @@ impl StreamingDisplay {
 
     /// Record a tool call failed
     pub fn tool_call_failed(&mut self, name: &str, error: String) {
+        // Clean up nested error messages (e.g., "ToolCallError: ToolCallError: actual error")
+        let clean_error = error
+            .replace("Toolset error: ", "")
+            .replace("ToolCallError: ", "");
+
         if let Some(info) = self.tool_calls.iter_mut().find(|t| t.name == name) {
-            *info = info.clone().error(error);
+            *info = info.clone().error(clean_error);
             ToolCallDisplay::print_status(info);
         }
     }
