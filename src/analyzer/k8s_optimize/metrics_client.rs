@@ -445,21 +445,15 @@ fn container_to_resources(container: &Container) -> ContainerResources {
 fn parse_cpu_quantity(quantity: &str) -> u64 {
     let quantity = quantity.trim();
 
-    if quantity.ends_with('n') {
+    if let Some(val) = quantity.strip_suffix('n') {
         // Nanocores to millicores
-        quantity[..quantity.len() - 1]
-            .parse::<u64>()
-            .map(|n| n / 1_000_000)
-            .unwrap_or(0)
-    } else if quantity.ends_with('u') {
+        val.parse::<u64>().map(|n| n / 1_000_000).unwrap_or(0)
+    } else if let Some(val) = quantity.strip_suffix('u') {
         // Microcores to millicores
-        quantity[..quantity.len() - 1]
-            .parse::<u64>()
-            .map(|u| u / 1_000)
-            .unwrap_or(0)
-    } else if quantity.ends_with('m') {
+        val.parse::<u64>().map(|u| u / 1_000).unwrap_or(0)
+    } else if let Some(val) = quantity.strip_suffix('m') {
         // Already in millicores
-        quantity[..quantity.len() - 1].parse::<u64>().unwrap_or(0)
+        val.parse::<u64>().unwrap_or(0)
     } else {
         // Whole cores to millicores
         quantity
@@ -473,41 +467,24 @@ fn parse_cpu_quantity(quantity: &str) -> u64 {
 fn parse_memory_quantity(quantity: &str) -> u64 {
     let quantity = quantity.trim();
 
-    if quantity.ends_with("Ki") {
-        quantity[..quantity.len() - 2]
-            .parse::<u64>()
-            .map(|k| k * 1024)
-            .unwrap_or(0)
-    } else if quantity.ends_with("Mi") {
-        quantity[..quantity.len() - 2]
-            .parse::<u64>()
-            .map(|m| m * 1024 * 1024)
-            .unwrap_or(0)
-    } else if quantity.ends_with("Gi") {
-        quantity[..quantity.len() - 2]
-            .parse::<u64>()
+    if let Some(val) = quantity.strip_suffix("Ki") {
+        val.parse::<u64>().map(|k| k * 1024).unwrap_or(0)
+    } else if let Some(val) = quantity.strip_suffix("Mi") {
+        val.parse::<u64>().map(|m| m * 1024 * 1024).unwrap_or(0)
+    } else if let Some(val) = quantity.strip_suffix("Gi") {
+        val.parse::<u64>()
             .map(|g| g * 1024 * 1024 * 1024)
             .unwrap_or(0)
-    } else if quantity.ends_with("Ti") {
-        quantity[..quantity.len() - 2]
-            .parse::<u64>()
+    } else if let Some(val) = quantity.strip_suffix("Ti") {
+        val.parse::<u64>()
             .map(|t| t * 1024 * 1024 * 1024 * 1024)
             .unwrap_or(0)
-    } else if quantity.ends_with('K') || quantity.ends_with('k') {
-        quantity[..quantity.len() - 1]
-            .parse::<u64>()
-            .map(|k| k * 1000)
-            .unwrap_or(0)
-    } else if quantity.ends_with('M') {
-        quantity[..quantity.len() - 1]
-            .parse::<u64>()
-            .map(|m| m * 1_000_000)
-            .unwrap_or(0)
-    } else if quantity.ends_with('G') {
-        quantity[..quantity.len() - 1]
-            .parse::<u64>()
-            .map(|g| g * 1_000_000_000)
-            .unwrap_or(0)
+    } else if let Some(val) = quantity.strip_suffix('K').or_else(|| quantity.strip_suffix('k')) {
+        val.parse::<u64>().map(|k| k * 1000).unwrap_or(0)
+    } else if let Some(val) = quantity.strip_suffix('M') {
+        val.parse::<u64>().map(|m| m * 1_000_000).unwrap_or(0)
+    } else if let Some(val) = quantity.strip_suffix('G') {
+        val.parse::<u64>().map(|g| g * 1_000_000_000).unwrap_or(0)
     } else {
         // Plain bytes
         quantity.parse::<u64>().unwrap_or(0)
