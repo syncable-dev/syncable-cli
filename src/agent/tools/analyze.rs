@@ -61,7 +61,9 @@ impl Tool for AnalyzeTool {
             self.project_path.clone()
         };
 
-        match crate::analyzer::analyze_project(&path) {
+        // Use monorepo analyzer to detect ALL projects in monorepos
+        // This returns MonorepoAnalysis with full project list instead of flat ProjectAnalysis
+        match crate::analyzer::analyze_monorepo(&path) {
             Ok(analysis) => {
                 let json_value = serde_json::to_value(&analysis)
                     .map_err(|e| AnalyzeError(format!("Failed to serialize: {}", e)))?;

@@ -54,23 +54,37 @@ Use this tool when:
 
 The ref_id comes from the 'full_data_ref' field in compressed outputs from tools like kubelint, k8s_optimize, or analyze_project.
 
-Query examples:
+## Query examples for lint tools (kubelint, hadolint, etc.):
 - "severity:critical" - Get all critical issues
 - "severity:high" - Get all high severity issues
 - "file:deployment.yaml" - Get issues in a specific file
 - "code:DL3008" - Get all issues with a specific code
 - "container:nginx" - Get issues for a specific container
-- No query - Get all stored data"#.to_string(),
+
+## Query examples for analyze_project outputs:
+IMPORTANT: For analyze_project outputs, ALWAYS use a query to avoid context overflow!
+- "section:summary" - Get project summary (recommended first query)
+- "section:projects" - List all projects with basic info
+- "section:frameworks" - List all detected frameworks
+- "section:languages" - List all detected languages
+- "section:services" - List all detected services
+- "project:name" - Get details for a specific project (e.g., "project:api-gateway")
+- "service:name" - Get details for a specific service
+- "language:Go" - Get language detection details for Go
+- "framework:React" - Get framework details
+- "compact:true" - Get compacted output (file arrays → counts)
+
+Without a query, analyze_project returns compacted output (file arrays replaced with counts)."#.to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "ref_id": {
                         "type": "string",
-                        "description": "Reference ID from the compressed output's 'full_data_ref' field (e.g., 'kubelint_abc123')"
+                        "description": "Reference ID from the compressed output's 'full_data_ref' field (e.g., 'kubelint_abc123', 'analyze_project_xyz')"
                     },
                     "query": {
                         "type": "string",
-                        "description": "Optional filter query. Format: 'field:value'. Fields: severity, file, code, container. Examples: 'severity:critical', 'file:Dockerfile', 'code:DL3008'"
+                        "description": "Filter query. For lint tools: 'severity:critical', 'file:path', 'code:DL3008'. For analyze_project: 'section:summary', 'section:projects', 'project:name', 'language:Go', 'framework:*'. IMPORTANT: For analyze_project, always use a query to prevent context overflow."
                     }
                 },
                 "required": ["ref_id"]
