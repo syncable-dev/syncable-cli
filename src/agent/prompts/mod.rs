@@ -88,6 +88,29 @@ const TOOL_USAGE_INSTRUCTIONS: &str = r#"
   - Instead of "I need to call analyze_project", say "Let me analyze the project"
 - If you need to read a file, prefer larger sections over multiple smaller calls
 - Once you read a file, DO NOT read it again in the same conversation - the content is in your context
+
+## Handling Large Tool Outputs (Compressed Results)
+
+When tools like `kubelint`, `k8s_optimize`, `analyze_project`, `security_scan`, or `check_vulnerabilities` return large results, they are **automatically compressed** to fit context limits. The compressed output includes:
+- A summary with counts by severity/category
+- Full details for CRITICAL and HIGH priority issues
+- Deduplicated patterns for medium/low issues
+- A `full_data_ref` field (e.g., `"kubelint_abc123"`)
+
+**To get full details**, use the `retrieve_output` tool:
+```
+retrieve_output(ref_id: "kubelint_abc123")                    // Get all data
+retrieve_output(ref_id: "kubelint_abc123", query: "severity:critical")  // Filter by severity
+retrieve_output(ref_id: "kubelint_abc123", query: "file:deployment.yaml")  // Filter by file
+retrieve_output(ref_id: "kubelint_abc123", query: "code:DL3008")  // Filter by rule code
+```
+
+**When to use retrieve_output:**
+- You see `full_data_ref` in a tool response
+- You need details about specific issues beyond what's in the summary
+- User asks about a specific file, container, or rule code
+
+**You can also use `list_stored_outputs`** to see all available stored outputs from the session.
 </tool_usage_instructions>
 "#;
 
@@ -243,6 +266,31 @@ You have access to tools to help analyze and understand the project:
   • Use for: Chart.yaml validation, values.yaml, Go template syntax
   • Checks: chart metadata, template errors, undefined values, unclosed blocks
 
+**K8s Optimization Tools (ONLY when user explicitly asks):**
+- k8s_optimize - ONLY for: "optimize resources", "right-size", "over-provisioned?"
+  • Analyzes CPU/memory requests/limits for waste
+  • **full=true**: "full analysis" / "check everything" → runs optimize + kubelint + helmlint
+  • Returns recommendations, does NOT apply changes
+- k8s_costs - ONLY for: "how much does this cost?", "cost breakdown", "spending"
+  • Estimates cloud costs based on resource requests
+  • Returns cost analysis, does NOT apply changes
+- k8s_drift - ONLY for: "is my cluster in sync?", "drift detection", "GitOps compliance"
+  • Compares manifests vs live cluster state
+  • Returns differences, does NOT apply changes
+
+**Prometheus Tools (for data-driven K8s optimization):**
+When user asks for K8s optimization with "live data", "historical metrics", or "actual usage":
+1. Use `prometheus_discover` to find Prometheus in the cluster
+2. Use `prometheus_connect` to establish connection (port-forward preferred, no auth needed)
+3. Use `k8s_optimize` with the prometheus URL from step 2
+
+- prometheus_discover - Find Prometheus services in Kubernetes cluster
+  • Searches for services with "prometheus" in name or labels
+  • Returns service name, namespace, port
+- prometheus_connect - Establish connection to Prometheus
+  • **Port-forward** (preferred): `{{service: "prometheus-server", namespace: "monitoring"}}` → no auth needed
+  • **External URL**: `{{url: "http://prometheus.example.com"}}` → may need auth_type, username/password
+
 **Terraform Tools:**
 - terraform_fmt - Format Terraform configuration files
 - terraform_validate - Validate Terraform configurations
@@ -255,6 +303,11 @@ You have access to tools to help analyze and understand the project:
 - plan_list - List available plans in plans/ directory
 - plan_next - Get next pending task from a plan, mark it in-progress
 - plan_update - Mark a task as done or failed
+
+**Output Retrieval Tools (for compressed results):**
+- retrieve_output - Get full details from compressed tool outputs (use when you see `full_data_ref`)
+  • Query filters: `severity:critical`, `file:path`, `code:DL3008`, `container:nginx`
+- list_stored_outputs - List all stored outputs available for retrieval
 </capabilities>
 
 <plan_execution_protocol>
@@ -333,6 +386,11 @@ pub fn get_code_development_prompt(project_path: &std::path::Path) -> String {
 - plan_list - List available plans in plans/ directory
 - plan_next - Get next pending task from a plan, mark it in-progress
 - plan_update - Mark a task as done or failed
+
+**Output Retrieval Tools (for compressed results):**
+- retrieve_output - Get full details from compressed tool outputs (use when you see `full_data_ref`)
+  • Query filters: `severity:critical`, `file:path`, `code:DL3008`, `container:nginx`
+- list_stored_outputs - List all stored outputs available for retrieval
 </capabilities>
 
 <plan_execution_protocol>
@@ -417,6 +475,31 @@ pub fn get_devops_prompt(project_path: &std::path::Path, query: Option<&str>) ->
   • Use for: Chart.yaml, values.yaml, Go template syntax validation
   • Checks: missing apiVersion, unused values, undefined template variables
 
+**K8s Optimization Tools (ONLY when user explicitly asks):**
+- k8s_optimize - ONLY for: "optimize resources", "right-size", "over-provisioned?"
+  • Analyzes CPU/memory requests/limits for waste
+  • **full=true**: "full analysis" / "check everything" → runs optimize + kubelint + helmlint
+  • Returns recommendations, does NOT apply changes automatically
+- k8s_costs - ONLY for: "how much does this cost?", "cost breakdown", "spending"
+  • Estimates cloud costs based on resource requests
+  • Returns cost analysis, does NOT apply changes automatically
+- k8s_drift - ONLY for: "is my cluster in sync?", "drift detection", "GitOps compliance"
+  • Compares manifests vs live cluster state
+  • Returns differences, does NOT apply changes automatically
+
+**Prometheus Tools (for data-driven K8s optimization):**
+When user asks for K8s optimization with "live data", "historical metrics", or "actual usage":
+1. Use `prometheus_discover` to find Prometheus in the cluster
+2. Use `prometheus_connect` to establish connection (port-forward preferred, no auth needed)
+3. Use `k8s_optimize` with the prometheus URL from step 2
+
+- prometheus_discover - Find Prometheus services in Kubernetes cluster
+  • Searches for services with "prometheus" in name or labels
+  • Returns service name, namespace, port
+- prometheus_connect - Establish connection to Prometheus
+  • **Port-forward** (preferred): `{{service: "prometheus-server", namespace: "monitoring"}}` → no auth needed
+  • **External URL**: `{{url: "http://prometheus.example.com"}}` → may need auth_type, username/password
+
 **Terraform Tools:**
 - terraform_fmt - Format Terraform configuration files
 - terraform_validate - Validate Terraform configurations
@@ -432,6 +515,11 @@ pub fn get_devops_prompt(project_path: &std::path::Path, query: Option<&str>) ->
 - plan_list - List available plans in plans/ directory
 - plan_next - Get next pending task from a plan, mark it in-progress
 - plan_update - Mark a task as done or failed
+
+**Output Retrieval Tools (for compressed results):**
+- retrieve_output - Get full details from compressed tool outputs (use when you see `full_data_ref`)
+  • Query filters: `severity:critical`, `file:path`, `code:DL3008`, `container:nginx`
+- list_stored_outputs - List all stored outputs available for retrieval
 </capabilities>
 
 <plan_execution_protocol>

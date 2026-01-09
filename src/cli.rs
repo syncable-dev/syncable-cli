@@ -230,6 +230,90 @@ pub enum Commands {
         command: ToolsCommand,
     },
 
+    /// Analyze Kubernetes manifests for resource optimization opportunities
+    Optimize {
+        /// Path to Kubernetes manifests (file or directory)
+        #[arg(value_name = "PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Connect to a live Kubernetes cluster for metrics-based recommendations
+        /// Uses current kubeconfig context, or specify a context name
+        #[arg(long, short = 'k', value_name = "CONTEXT", default_missing_value = "current", num_args = 0..=1)]
+        cluster: Option<String>,
+
+        /// Prometheus URL for historical metrics (e.g., http://localhost:9090)
+        #[arg(long, value_name = "URL")]
+        prometheus: Option<String>,
+
+        /// Target namespace(s) for cluster analysis (comma-separated, or * for all)
+        #[arg(long, short = 'n', value_name = "NAMESPACE")]
+        namespace: Option<String>,
+
+        /// Analysis period for historical metrics (e.g., 7d, 30d)
+        #[arg(long, short = 'p', default_value = "7d")]
+        period: String,
+
+        /// Minimum severity to report (critical, warning, info)
+        #[arg(long, short = 's')]
+        severity: Option<String>,
+
+        /// Minimum waste percentage threshold (0-100)
+        #[arg(long, short = 't')]
+        threshold: Option<u8>,
+
+        /// Safety margin percentage for recommendations (default: 20)
+        #[arg(long)]
+        safety_margin: Option<u8>,
+
+        /// Include info-level suggestions
+        #[arg(long)]
+        include_info: bool,
+
+        /// Include system namespaces (kube-system, etc.)
+        #[arg(long)]
+        include_system: bool,
+
+        /// Output format (table, json, yaml)
+        #[arg(long, value_enum, default_value = "table")]
+        format: OutputFormat,
+
+        /// Write report to file
+        #[arg(long, short = 'o')]
+        output: Option<PathBuf>,
+
+        /// Generate fix suggestions
+        #[arg(long)]
+        fix: bool,
+
+        /// Apply fixes to manifest files (requires --fix or --full with live cluster)
+        #[arg(long, requires = "fix")]
+        apply: bool,
+
+        /// Preview changes without applying (dry-run mode)
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Backup directory for original files before applying fixes
+        #[arg(long, value_name = "DIR")]
+        backup_dir: Option<PathBuf>,
+
+        /// Minimum confidence threshold for auto-apply (0-100, default: 70)
+        #[arg(long, default_value = "70")]
+        min_confidence: u8,
+
+        /// Cloud provider for cost estimation (aws, gcp, azure, onprem)
+        #[arg(long, value_name = "PROVIDER")]
+        cloud_provider: Option<String>,
+
+        /// Region for cloud pricing (e.g., us-east-1, us-central1)
+        #[arg(long, value_name = "REGION", default_value = "us-east-1")]
+        region: String,
+
+        /// Run comprehensive analysis (includes kubelint security checks and helmlint validation)
+        #[arg(long, short = 'f')]
+        full: bool,
+    },
+
     /// Start an interactive AI chat session to analyze and understand your project
     Chat {
         /// Path to the project directory (default: current directory)

@@ -631,6 +631,7 @@ fn print_tool_result(name: &str, args: &str, result: &str) -> (bool, Vec<String>
         "hadolint" => format_hadolint_result(&parsed),
         "kubelint" => format_kubelint_result(&parsed),
         "helmlint" => format_helmlint_result(&parsed),
+        "retrieve_output" => format_retrieve_result(&parsed),
         _ => (true, vec!["done".to_string()]),
     };
 
@@ -759,6 +760,23 @@ fn format_args_display(
                 }
                 // No path - will use auto-discovery
                 "<auto>".to_string()
+            } else {
+                String::new()
+            }
+        }
+        "retrieve_output" => {
+            if let Ok(v) = parsed {
+                let ref_id = v
+                    .get("ref_id")
+                    .and_then(|r| r.as_str())
+                    .unwrap_or("?");
+                let query = v.get("query").and_then(|q| q.as_str());
+
+                if let Some(q) = query {
+                    format!("{}, \"{}\"", ref_id, q)
+                } else {
+                    ref_id.to_string()
+                }
             } else {
                 String::new()
             }
@@ -921,14 +939,75 @@ fn format_list_result(
     }
 }
 
-/// Format analyze result
+/// Format analyze result - handles both raw and compressed outputs
 fn format_analyze_result(
     parsed: &Result<serde_json::Value, serde_json::Error>,
 ) -> (bool, Vec<String>) {
     if let Ok(v) = parsed {
         let mut lines = Vec::new();
 
-        // Languages
+        // Check if this is compressed output (has full_data_ref)
+        let is_compressed = v.get("full_data_ref").is_some();
+
+        if is_compressed {
+            // Compressed output format
+            let ref_id = v.get("full_data_ref").and_then(|r| r.as_str()).unwrap_or("?");
+
+            // Project count (monorepo)
+            if let Some(count) = v.get("project_count").and_then(|c| c.as_u64()) {
+                lines.push(format!(
+                    "{}📁 {} projects detected{}",
+                    ansi::SUCCESS, count, ansi::RESET
+                ));
+            }
+
+            // Languages (compressed uses languages_detected as array of strings)
+            if let Some(langs) = v.get("languages_detected").and_then(|l| l.as_array()) {
+                let names: Vec<&str> = langs.iter().filter_map(|l| l.as_str()).take(5).collect();
+                if !names.is_empty() {
+                    lines.push(format!("  │ Languages: {}", names.join(", ")));
+                }
+            }
+
+            // Frameworks/Technologies (compressed uses frameworks_detected)
+            if let Some(fws) = v.get("frameworks_detected").and_then(|f| f.as_array()) {
+                let names: Vec<&str> = fws.iter().filter_map(|f| f.as_str()).take(5).collect();
+                if !names.is_empty() {
+                    lines.push(format!("  │ Frameworks: {}", names.join(", ")));
+                }
+            }
+
+            // Technologies (ProjectAnalysis format)
+            if let Some(techs) = v.get("technologies_detected").and_then(|t| t.as_array()) {
+                let names: Vec<&str> = techs.iter().filter_map(|t| t.as_str()).take(5).collect();
+                if !names.is_empty() {
+                    lines.push(format!("  │ Technologies: {}", names.join(", ")));
+                }
+            }
+
+            // Services
+            if let Some(services) = v.get("services_detected").and_then(|s| s.as_array()) {
+                let names: Vec<&str> = services.iter().filter_map(|s| s.as_str()).take(4).collect();
+                if !names.is_empty() {
+                    lines.push(format!("  │ Services: {}", names.join(", ")));
+                }
+            } else if let Some(count) = v.get("services_count").and_then(|c| c.as_u64()) {
+                if count > 0 {
+                    lines.push(format!("  │ Services: {} detected", count));
+                }
+            }
+
+            // Retrieval hint
+            lines.push(format!(
+                "{}  └ Full data: retrieve_output('{}'){}",
+                ansi::GRAY, ref_id, ansi::RESET
+            ));
+
+            return (true, lines);
+        }
+
+        // Raw (non-compressed) output format
+        // Languages (raw format has objects with name field)
         if let Some(langs) = v.get("languages").and_then(|l| l.as_array()) {
             let lang_names: Vec<&str> = langs
                 .iter()
@@ -940,7 +1019,7 @@ fn format_analyze_result(
             }
         }
 
-        // Frameworks
+        // Frameworks (raw format has objects with name field)
         if let Some(frameworks) = v.get("frameworks").and_then(|f| f.as_array()) {
             let fw_names: Vec<&str> = frameworks
                 .iter()
@@ -1654,6 +1733,209 @@ fn format_helmlint_issue(issue: &serde_json::Value, icon: &str, color: &str) -> 
     )
 }
 
+/// Format retrieve_output result - shows what data was retrieved
+fn format_retrieve_result(
+    parsed: &Result<serde_json::Value, serde_json::Error>,
+) -> (bool, Vec<String>) {
+    if let Ok(v) = parsed {
+        let mut lines = Vec::new();
+
+        // Check for error field first
+        if let Some(error) = v.get("error").and_then(|e| e.as_str()) {
+            lines.push(format!("{}❌ {}{}", ansi::CRITICAL, error, ansi::RESET));
+            return (false, lines);
+        }
+
+        // Check if this is a query result with total_matches
+        if let Some(total) = v.get("total_matches").and_then(|t| t.as_u64()) {
+            let query = v
+                .get("query")
+                .and_then(|q| q.as_str())
+                .unwrap_or("unfiltered");
+
+            lines.push(format!(
+                "{}📦 Retrieved {} match{} for '{}'{}",
+                ansi::SUCCESS,
+                total,
+                if total == 1 { "" } else { "es" },
+                query,
+                ansi::RESET
+            ));
+
+            // Show preview of results
+            if let Some(results) = v.get("results").and_then(|r| r.as_array()) {
+                for (i, result) in results.iter().take(3).enumerate() {
+                    let preview = format_result_preview(result);
+                    let prefix = if i == results.len().min(3) - 1 && results.len() <= 3 {
+                        "└"
+                    } else {
+                        "│"
+                    };
+                    lines.push(format!("  {} {}", prefix, preview));
+                }
+                if results.len() > 3 {
+                    lines.push(format!(
+                        "{}  └ +{} more results{}",
+                        ansi::GRAY,
+                        results.len() - 3,
+                        ansi::RESET
+                    ));
+                }
+            }
+
+            return (true, lines);
+        }
+
+        // Check for analyze_project section results
+        if v.get("project_count").is_some() || v.get("total_projects").is_some() {
+            let count = v
+                .get("project_count")
+                .or_else(|| v.get("total_projects"))
+                .and_then(|c| c.as_u64())
+                .unwrap_or(0);
+
+            lines.push(format!(
+                "{}📦 Retrieved project summary ({} projects){}",
+                ansi::SUCCESS,
+                count,
+                ansi::RESET
+            ));
+
+            // Show project names if available
+            if let Some(names) = v.get("project_names").and_then(|n| n.as_array()) {
+                let name_list: Vec<&str> = names
+                    .iter()
+                    .filter_map(|n| n.as_str())
+                    .take(5)
+                    .collect();
+                if !name_list.is_empty() {
+                    lines.push(format!("  │ Projects: {}", name_list.join(", ")));
+                }
+                if names.len() > 5 {
+                    lines.push(format!("{}  └ +{} more{}", ansi::GRAY, names.len() - 5, ansi::RESET));
+                }
+            }
+
+            return (true, lines);
+        }
+
+        // Check for services list
+        if let Some(total) = v.get("total_services").and_then(|t| t.as_u64()) {
+            lines.push(format!(
+                "{}📦 Retrieved {} service{}{}",
+                ansi::SUCCESS,
+                total,
+                if total == 1 { "" } else { "s" },
+                ansi::RESET
+            ));
+
+            if let Some(services) = v.get("services").and_then(|s| s.as_array()) {
+                for (i, svc) in services.iter().take(4).enumerate() {
+                    let name = svc.get("name").and_then(|n| n.as_str()).unwrap_or("?");
+                    let svc_type = svc.get("service_type").and_then(|t| t.as_str()).unwrap_or("");
+                    let prefix = if i == services.len().min(4) - 1 && services.len() <= 4 {
+                        "└"
+                    } else {
+                        "│"
+                    };
+                    lines.push(format!("  {} 🔧 {} {}", prefix, name, svc_type));
+                }
+                if services.len() > 4 {
+                    lines.push(format!("{}  └ +{} more{}", ansi::GRAY, services.len() - 4, ansi::RESET));
+                }
+            }
+
+            return (true, lines);
+        }
+
+        // Check for languages/frameworks result
+        if v.get("languages").is_some() || v.get("technologies").is_some() {
+            lines.push(format!(
+                "{}📦 Retrieved analysis data{}",
+                ansi::SUCCESS,
+                ansi::RESET
+            ));
+
+            if let Some(langs) = v.get("languages").and_then(|l| l.as_array()) {
+                let names: Vec<&str> = langs
+                    .iter()
+                    .filter_map(|l| l.get("name").and_then(|n| n.as_str()))
+                    .take(5)
+                    .collect();
+                if !names.is_empty() {
+                    lines.push(format!("  │ Languages: {}", names.join(", ")));
+                }
+            }
+
+            if let Some(techs) = v.get("technologies").and_then(|t| t.as_array()) {
+                let names: Vec<&str> = techs
+                    .iter()
+                    .filter_map(|t| t.get("name").and_then(|n| n.as_str()))
+                    .take(5)
+                    .collect();
+                if !names.is_empty() {
+                    lines.push(format!("  └ Technologies: {}", names.join(", ")));
+                }
+            }
+
+            return (true, lines);
+        }
+
+        // Generic fallback - estimate data size
+        let json_str = serde_json::to_string(v).unwrap_or_default();
+        let size_kb = json_str.len() as f64 / 1024.0;
+
+        lines.push(format!(
+            "{}📦 Retrieved {:.1} KB of data{}",
+            ansi::SUCCESS,
+            size_kb,
+            ansi::RESET
+        ));
+
+        // Try to show some structure info
+        if let Some(obj) = v.as_object() {
+            let keys: Vec<&str> = obj.keys().map(|k| k.as_str()).take(5).collect();
+            if !keys.is_empty() {
+                lines.push(format!("  └ Fields: {}", keys.join(", ")));
+            }
+        }
+
+        (true, lines)
+    } else {
+        (false, vec!["retrieve failed".to_string()])
+    }
+}
+
+/// Format a single result item for preview
+fn format_result_preview(result: &serde_json::Value) -> String {
+    // Try to get meaningful identifiers
+    let name = result
+        .get("name")
+        .or_else(|| result.get("code"))
+        .or_else(|| result.get("check"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("item");
+
+    let detail = result
+        .get("message")
+        .or_else(|| result.get("description"))
+        .or_else(|| result.get("path"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    let detail_short = if detail.len() > 40 {
+        format!("{}...", &detail[..37])
+    } else {
+        detail.to_string()
+    };
+
+    if detail_short.is_empty() {
+        name.to_string()
+    } else {
+        format!("{}: {}", name, detail_short)
+    }
+}
+
 /// Convert tool name to a friendly action description for progress indicator
 fn tool_to_action(tool_name: &str) -> String {
     match tool_name {
@@ -1672,6 +1954,8 @@ fn tool_to_action(tool_name: &str) -> String {
         "plan_create" => "Creating plan".to_string(),
         "plan_list" => "Listing plans".to_string(),
         "plan_next" | "plan_update" => "Updating plan".to_string(),
+        "retrieve_output" => "Retrieving data".to_string(),
+        "list_stored_outputs" => "Listing outputs".to_string(),
         _ => "Processing".to_string(),
     }
 }
@@ -1719,6 +2003,15 @@ fn tool_to_focus(tool_name: &str, args: &str) -> Option<String> {
             .get("name")
             .and_then(|n| n.as_str())
             .map(|n| n.to_string()),
+        "retrieve_output" => {
+            let ref_id = parsed.get("ref_id").and_then(|r| r.as_str())?;
+            let query = parsed.get("query").and_then(|q| q.as_str());
+            Some(if let Some(q) = query {
+                format!("{} ({})", ref_id, q)
+            } else {
+                ref_id.to_string()
+            })
+        }
         _ => None,
     }
 }

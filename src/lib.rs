@@ -106,6 +106,57 @@ pub async fn run_command(command: Commands) -> Result<()> {
             .map(|_| ()) // Map Result<String> to Result<()>
         }
         Commands::Tools { command } => handlers::handle_tools(command).await,
+        Commands::Optimize {
+            path,
+            cluster,
+            prometheus,
+            namespace,
+            period,
+            severity,
+            threshold,
+            safety_margin,
+            include_info,
+            include_system,
+            format,
+            output,
+            fix,
+            full,
+            apply,
+            dry_run,
+            backup_dir,
+            min_confidence,
+            cloud_provider,
+            region,
+        } => {
+            let format_str = match format {
+                cli::OutputFormat::Table => "table",
+                cli::OutputFormat::Json => "json",
+            };
+
+            let options = handlers::OptimizeOptions {
+                cluster,
+                prometheus,
+                namespace,
+                period,
+                severity,
+                threshold,
+                safety_margin,
+                include_info,
+                include_system,
+                format: format_str.to_string(),
+                output: output.map(|p| p.to_string_lossy().to_string()),
+                fix,
+                full,
+                apply,
+                dry_run,
+                backup_dir: backup_dir.map(|p| p.to_string_lossy().to_string()),
+                min_confidence,
+                cloud_provider,
+                region,
+            };
+
+            handlers::handle_optimize(&path, options).await
+        }
         Commands::Chat {
             path,
             provider,
