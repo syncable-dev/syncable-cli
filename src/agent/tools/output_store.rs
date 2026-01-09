@@ -735,99 +735,11 @@ fn extract_all_languages(data: &Value) -> Value {
 }
 
 /// Extract all services across all projects
+/// In a monorepo, projects ARE services - so we return projects data
 fn extract_all_services(data: &Value) -> Value {
-    let mut services = Vec::new();
-
-    // Helper to extract compact service info from a ServiceAnalysis
-    let compact_service = |svc: &Value, project_name: Option<&str>| -> Value {
-        let mut svc_info = serde_json::Map::new();
-
-        // Add project name if from monorepo
-        if let Some(proj) = project_name {
-            svc_info.insert("project".to_string(), Value::String(proj.to_string()));
-        }
-
-        // Core fields
-        if let Some(v) = svc.get("name") {
-            svc_info.insert("name".to_string(), v.clone());
-        }
-        if let Some(v) = svc.get("path") {
-            svc_info.insert("path".to_string(), v.clone());
-        }
-        if let Some(v) = svc.get("service_type") {
-            svc_info.insert("service_type".to_string(), v.clone());
-        }
-
-        // Extract language names (compact)
-        if let Some(langs) = svc.get("languages").and_then(|l| l.as_array()) {
-            let lang_names: Vec<Value> = langs
-                .iter()
-                .filter_map(|l| l.get("name").and_then(|n| n.as_str()))
-                .map(|n| Value::String(n.to_string()))
-                .collect();
-            if !lang_names.is_empty() {
-                svc_info.insert("languages".to_string(), Value::Array(lang_names));
-            }
-        }
-
-        // Extract technology names (compact)
-        if let Some(techs) = svc.get("technologies").and_then(|t| t.as_array()) {
-            let tech_names: Vec<Value> = techs
-                .iter()
-                .filter_map(|t| t.get("name").and_then(|n| n.as_str()))
-                .map(|n| Value::String(n.to_string()))
-                .collect();
-            if !tech_names.is_empty() {
-                svc_info.insert("technologies".to_string(), Value::Array(tech_names));
-            }
-        }
-
-        // Extract ports
-        if let Some(ports) = svc.get("ports").and_then(|p| p.as_array()) {
-            let port_list: Vec<Value> = ports
-                .iter()
-                .filter_map(|p| p.get("port").and_then(|n| n.as_u64()))
-                .map(|n| Value::Number(n.into()))
-                .collect();
-            if !port_list.is_empty() {
-                svc_info.insert("ports".to_string(), Value::Array(port_list));
-            }
-        }
-
-        Value::Object(svc_info)
-    };
-
-    // Handle ProjectAnalysis flat structure (services at top level)
-    if let Some(svcs) = data.get("services").and_then(|s| s.as_array()) {
-        for svc in svcs {
-            services.push(compact_service(svc, None));
-        }
-    }
-
-    // Handle MonorepoAnalysis structure (services nested in projects)
-    if let Some(projects) = data.get("projects").and_then(|v| v.as_array()) {
-        for project in projects {
-            let proj_name = project
-                .get("name")
-                .and_then(|n| n.as_str())
-                .unwrap_or("unknown");
-
-            if let Some(svcs) = project
-                .get("analysis")
-                .and_then(|a| a.get("services"))
-                .and_then(|s| s.as_array())
-            {
-                for svc in svcs {
-                    services.push(compact_service(svc, Some(proj_name)));
-                }
-            }
-        }
-    }
-
-    serde_json::json!({
-        "total_services": services.len(),
-        "services": services
-    })
+    // In monorepos, projects = services. Return projects list as services.
+    // This is because the `services` field in ProjectAnalysis was never implemented.
+    extract_projects_list(data)
 }
 
 /// Compact entire analyze_project output (strip file arrays)
