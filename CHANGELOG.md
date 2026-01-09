@@ -106,6 +106,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.32.0](https://github.com/syncable-dev/syncable-cli/compare/v0.31.1...v0.32.0) - 2026-01-09
+
+### Added
+
+- updated agent store logic to better fetch and manage outputs
+- upgrade rig-core to 0.28 and fix OpenAI Responses API multi-turn
+
+### Fixed
+
+- *(agent)* [**breaking**] use monorepo analyzer to detect ALL projects instead of flat analysis
+- resolve clippy errors and failing tests for CI
+
+### Other
+
+- Merge pull request #270 from syncable-dev/develop
+- Merge branch 'develop' of github.com:syncable-dev/syncable-cli into develop
+
 ## [0.31.1](https://github.com/syncable-dev/syncable-cli/compare/v0.31.0...v0.31.1) - 2026-01-06
 
 ### Other
