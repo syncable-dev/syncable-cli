@@ -23,6 +23,16 @@
 //! - `HelmlintTool` - Native Helm chart structure/template linting
 //! - `KubelintTool` - Native Kubernetes manifest security/best practice linting
 //!
+//! ### Resource Optimization
+//! - `K8sOptimizeTool` - Kubernetes resource right-sizing and cost optimization
+//! - `K8sCostsTool` - Kubernetes workload cost attribution and analysis
+//! - `K8sDriftTool` - Detect configuration drift between manifests and cluster
+//!
+//! ### Prometheus Integration (for live K8s analysis)
+//! - `PrometheusDiscoverTool` - Discover Prometheus services in Kubernetes cluster
+//! - `PrometheusConnectTool` - Establish connection to Prometheus (port-forward or URL)
+//! - `BackgroundProcessManager` - Manage long-running background processes
+//!
 //! ### Helm vs Kubernetes Linting
 //! - **HelmlintTool**: Use for Helm chart development - validates Chart.yaml, values.yaml,
 //!   Go template syntax, and Helm-specific best practices. Works on chart directories.
@@ -51,30 +61,49 @@
 //! - `WebFetchTool` - Fetch content from URLs (converts HTML to markdown)
 //!
 mod analyze;
+pub mod background;
+pub mod compression;
 mod dclint;
 mod diagnostics;
 mod fetch;
 mod file_ops;
 mod hadolint;
 mod helmlint;
+mod k8s_costs;
+mod k8s_drift;
+mod k8s_optimize;
 mod kubelint;
+pub mod output_store;
 mod plan;
+mod prometheus_connect;
+mod prometheus_discover;
+mod retrieve;
 mod security;
 mod shell;
 mod terraform;
 mod truncation;
 
-pub use truncation::TruncationLimits;
+pub use truncation::{TruncationLimits, truncate_json_output};
+
+// Smart compression exports
+pub use compression::{CompressionConfig, compress_analysis_output, compress_tool_output};
+pub use retrieve::{ListOutputsTool, RetrieveOutputTool};
 
 pub use analyze::AnalyzeTool;
+pub use background::BackgroundProcessManager;
 pub use dclint::DclintTool;
 pub use diagnostics::DiagnosticsTool;
 pub use fetch::WebFetchTool;
 pub use file_ops::{ListDirectoryTool, ReadFileTool, WriteFileTool, WriteFilesTool};
 pub use hadolint::HadolintTool;
 pub use helmlint::HelmlintTool;
+pub use k8s_costs::K8sCostsTool;
+pub use k8s_drift::K8sDriftTool;
+pub use k8s_optimize::K8sOptimizeTool;
 pub use kubelint::KubelintTool;
 pub use plan::{PlanCreateTool, PlanListTool, PlanNextTool, PlanUpdateTool};
+pub use prometheus_connect::PrometheusConnectTool;
+pub use prometheus_discover::PrometheusDiscoverTool;
 pub use security::{SecurityScanTool, VulnerabilitiesTool};
 pub use shell::ShellTool;
 pub use terraform::{TerraformFmtTool, TerraformInstallTool, TerraformValidateTool};

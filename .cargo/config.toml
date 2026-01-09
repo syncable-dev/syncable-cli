@@ -1,6 +1,9 @@
 [build]
 rustflags = ["-C", "target-cpu=native"]
 
+# On macOS, the default linker (ld64) is already quite fast
+# For Linux, you could use mold: rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
 [alias]
 b = "build"
 br = "build --release"

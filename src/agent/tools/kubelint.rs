@@ -11,6 +11,7 @@
 //! - Priority rankings (critical, high, medium, low)
 //! - Actionable remediation recommendations
 
+use super::compression::{CompressionConfig, compress_tool_output};
 use rig::completion::ToolDefinition;
 use rig::tool::Tool;
 use serde::{Deserialize, Serialize};
@@ -306,7 +307,10 @@ impl KubelintTool {
             output["parse_errors"] = json!(result.parse_errors);
         }
 
-        serde_json::to_string_pretty(&output).unwrap_or_else(|_| "{}".to_string())
+        // Use smart compression with RAG retrieval pattern
+        // This preserves all data while keeping context size manageable
+        let config = CompressionConfig::default();
+        compress_tool_output(&output, "kubelint", &config)
     }
 }
 
@@ -381,9 +385,14 @@ impl Tool for KubelintTool {
         }
 
         // Determine source and lint
-        let (result, source) = if let Some(content) = &args.content {
-            // Lint inline content
-            (lint_content(content, &config), "<inline>".to_string())
+        // IMPORTANT: Treat empty content as None - this fixes the issue where
+        // AI agents pass empty strings and the tool lints nothing instead of the path
+        let (result, source) = if args.content.as_ref().is_some_and(|c| !c.trim().is_empty()) {
+            // Lint non-empty inline content
+            (
+                lint_content(args.content.as_ref().unwrap(), &config),
+                "<inline>".to_string(),
+            )
         } else if let Some(path) = &args.path {
             // Lint file or directory
             let full_path = self.project_path.join(path);

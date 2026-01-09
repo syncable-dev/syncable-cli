@@ -31,7 +31,8 @@ clap = { version = "4", features = ["derive", "env", "cargo"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
-yaml-rust2 = "0.9"  # YAML parsing with position tracking for dclint
+yaml-rust2 = "0.11"  # YAML parsing with position tracking for dclint
+hcl-rs = "0.19.4"  # HCL parsing for Terraform kubernetes resources
 toml = "0.9"
 log = "0.4"
 env_logger = "0.11"
@@ -47,14 +48,14 @@ termcolor = "1"
 chrono = { version = "0.4", features = ["serde"] }
 colored = "3"
 crossterm = "0.29"  # Terminal raw mode for interactive input
-inquire = "0.7"     # Interactive terminal prompts with autocomplete
+inquire = "0.9"     # Interactive terminal prompts with autocomplete
 rustyline = "17"    # Readline-style input with completions
 prettytable = "0.10"
 term_size = "0.3"
 
 # Vulnerability checking dependencies
-rustsec = "0.30"
-reqwest = { version = "0.12", features = ["json", "blocking"] }
+rustsec = "0.31"
+reqwest = { version = "0.13", features = ["json", "blocking"] }
 tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "sync", "process", "io-util", "signal"] }
 textwrap = "0.16"
 tempfile = "3"
@@ -75,11 +76,11 @@ simdutf8 = "0.1"                  # SIMD UTF-8 validation
 
 # Telemetry dependencies
 uuid = { version = "1.0", features = ["v4"] }
-rand = "0.8"
+rand = "0.9"
 futures-util = "0.3"
 
 # Agent dependencies (using Rig - LLM application framework)
-rig-core = { version = "0.27", features = ["derive", "image"] }
+rig-core = { version = "0.28", features = ["derive", "image"] }
 
 # AWS Bedrock dependencies (inlined bedrock module with extended thinking fixes)
 async-stream = "0.3"
@@ -87,14 +88,21 @@ aws-config = { version = "1", features = ["behavior-version-latest"] }
 aws-sdk-bedrockruntime = "1"
 aws-smithy-types = "1"
 base64 = "0.22"
-schemars = "0.8"
+schemars = "1"
 tracing = "0.1"
 
 # Diff rendering for file confirmation UI
 similar = "2.6"
 
+# Kubernetes API client for live cluster metrics (Phase 2)
+kube = { version = "2.0", features = ["client", "runtime", "derive"] }
+k8s-openapi = { version = "0.26", features = ["latest"] }
+http = "1"  # Required for raw API requests with kube
+urlencoding = "2"  # URL encoding for Prometheus queries
+rustls = { version = "0.23", features = ["ring"] }  # TLS for K8s API
+
 # Markdown rendering and syntax highlighting
-termimad = "0.30"              # Terminal markdown rendering
+termimad = "0.34"              # Terminal markdown rendering
 syntect = "5"                   # Syntax highlighting
 strip-ansi-escapes = "0.2"      # Strip ANSI codes for testing
 
@@ -109,6 +117,32 @@ predicates = "3"
 tempfile = "3"
 proptest = "1"
 
+# Fast debug builds - prioritize compile speed over runtime
+[profile.dev]
+opt-level = 0
+debug = true
+incremental = true
+codegen-units = 256          # More parallel compilation
+
+# Optimize heavy deps even in dev mode (huge speedup for iterative builds)
+[profile.dev.package."*"]
+opt-level = 2                # Dependencies compile once, worth optimizing
+
+# Specifically optimize the slowest deps
+[profile.dev.package.syntect]
+opt-level = 3
+[profile.dev.package.aws-sdk-bedrockruntime]
+opt-level = 2
+[profile.dev.package.kube]
+opt-level = 2
+[profile.dev.package.k8s-openapi]
+opt-level = 2
+[profile.dev.package.regex]
+opt-level = 2
+[profile.dev.package.regex-automata]
+opt-level = 2
+
+# Release profile - optimized for runtime performance
 [profile.release]
 opt-level = 3
 lto = true

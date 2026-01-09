@@ -94,7 +94,7 @@ impl CompletionModel {
                                     // Emit the delta so UI can show progress
                                     yield Ok(RawStreamingChoice::ToolCallDelta {
                                         id: tool_call.id.clone(),
-                                        delta,
+                                        content: rig::streaming::ToolCallDeltaContent::Delta(delta),
                                     });
                                 }
                             },
