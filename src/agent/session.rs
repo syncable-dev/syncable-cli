@@ -186,7 +186,7 @@ impl ChatSession {
         let default_model = match provider {
             ProviderType::OpenAI => "gpt-5.2".to_string(),
             ProviderType::Anthropic => "claude-sonnet-4-5-20250929".to_string(),
-            ProviderType::Bedrock => "global.anthropic.claude-sonnet-4-5-20250929-v1:0".to_string(),
+            ProviderType::Bedrock => "global.anthropic.claude-sonnet-4-20250514-v1:0".to_string(),
         };
 
         Self {
