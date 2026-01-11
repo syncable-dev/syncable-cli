@@ -19,6 +19,19 @@ use tokio::sync::Mutex;
 /// Maximum lines to show in preview before collapsing
 const PREVIEW_LINES: usize = 4;
 
+/// Safely truncate a string to a maximum character count, handling UTF-8 properly.
+/// Adds "..." suffix when truncation occurs.
+fn truncate_safe(s: &str, max_chars: usize) -> String {
+    let char_count = s.chars().count();
+    if char_count <= max_chars {
+        s.to_string()
+    } else {
+        let truncate_to = max_chars.saturating_sub(3);
+        let truncated: String = s.chars().take(truncate_to).collect();
+        format!("{}...", truncated)
+    }
+}
+
 /// Tool call state with full output for expansion
 #[derive(Debug, Clone)]
 pub struct ToolCallState {
@@ -620,6 +633,34 @@ fn print_tool_result(name: &str, args: &str, result: &str) -> (bool, Vec<String>
             }
         });
 
+    // If parsing failed, check if it's a tool error message
+    // Tool errors come through as plain strings like "Shell error: ..."
+    let parsed = if parsed.is_err() && !result.is_empty() {
+        // Check for common error patterns
+        let is_tool_error = result.contains("error:") 
+            || result.contains("Error:") 
+            || result.starts_with("Shell error")
+            || result.starts_with("Toolset error")
+            || result.starts_with("ToolCallError");
+        
+        if is_tool_error {
+            // Wrap the error message in a JSON structure so formatters can handle it
+            let clean_msg = result
+                .replace("Toolset error: ", "")
+                .replace("ToolCallError: ", "")
+                .replace("Shell error: ", "");
+            Ok(serde_json::json!({
+                "error": true,
+                "message": clean_msg,
+                "success": false
+            }))
+        } else {
+            parsed
+        }
+    } else {
+        parsed
+    };
+
     // Format output based on tool type
     let (status_ok, output_lines) = match name {
         "shell" => format_shell_result(&parsed),
@@ -790,6 +831,19 @@ fn format_shell_result(
     parsed: &Result<serde_json::Value, serde_json::Error>,
 ) -> (bool, Vec<String>) {
     if let Ok(v) = parsed {
+        // Check if this is an error message (from tool error or blocked command)
+        if let Some(error_msg) = v.get("message").and_then(|m| m.as_str()) {
+            if v.get("error").and_then(|e| e.as_bool()).unwrap_or(false) {
+                return (false, vec![error_msg.to_string()]);
+            }
+        }
+        
+        // Check for cancelled or blocked operations (plan mode, user cancel)
+        if v.get("cancelled").and_then(|c| c.as_bool()).unwrap_or(false) {
+            let reason = v.get("reason").and_then(|r| r.as_str()).unwrap_or("cancelled");
+            return (false, vec![reason.to_string()]);
+        }
+        
         let success = v.get("success").and_then(|s| s.as_bool()).unwrap_or(false);
         let stdout = v.get("stdout").and_then(|s| s.as_str()).unwrap_or("");
         let stderr = v.get("stderr").and_then(|s| s.as_str()).unwrap_or("");
@@ -1185,11 +1239,7 @@ fn format_hadolint_result(
         if let Some(quick_fixes) = v.get("quick_fixes").and_then(|q| q.as_array())
             && let Some(first_fix) = quick_fixes.first().and_then(|f| f.as_str())
         {
-            let truncated = if first_fix.len() > 70 {
-                format!("{}...", &first_fix[..67])
-            } else {
-                first_fix.to_string()
-            };
+            let truncated = truncate_safe(first_fix, 70);
             lines.push(format!(
                 "{}  → Fix: {}{}",
                 ansi::INFO_BLUE,
@@ -1233,11 +1283,7 @@ fn format_hadolint_issue(issue: &serde_json::Value, icon: &str, color: &str) -> 
     };
 
     // Truncate message
-    let msg_display = if message.len() > 50 {
-        format!("{}...", &message[..47])
-    } else {
-        message.to_string()
-    };
+    let msg_display = truncate_safe(message, 50);
 
     format!(
         "{}{} L{}:{} {}{}[{}]{} {} {}",
@@ -1284,11 +1330,7 @@ fn format_kubelint_result(
             ));
             for (i, err) in errors.iter().take(3).enumerate() {
                 if let Some(err_str) = err.as_str() {
-                    let truncated = if err_str.len() > 70 {
-                        format!("{}...", &err_str[..67])
-                    } else {
-                        err_str.to_string()
-                    };
+                    let truncated = truncate_safe(err_str, 70);
                     lines.push(format!(
                         "{}  {} {}{}",
                         ansi::HIGH,
@@ -1420,11 +1462,7 @@ fn format_kubelint_result(
         if let Some(quick_fixes) = v.get("quick_fixes").and_then(|q| q.as_array())
             && let Some(first_fix) = quick_fixes.first().and_then(|f| f.as_str())
         {
-            let truncated = if first_fix.len() > 70 {
-                format!("{}...", &first_fix[..67])
-            } else {
-                first_fix.to_string()
-            };
+            let truncated = truncate_safe(first_fix, 70);
             lines.push(format!(
                 "{}  → Fix: {}{}",
                 ansi::INFO_BLUE,
@@ -1450,8 +1488,6 @@ fn format_kubelint_result(
         (false, vec!["kubelint analysis complete".to_string()])
     }
 }
-
-/// Format a single kubelint issue for display
 fn format_kubelint_issue(issue: &serde_json::Value, icon: &str, color: &str) -> String {
     let check = issue.get("check").and_then(|c| c.as_str()).unwrap_or("?");
     let message = issue.get("message").and_then(|m| m.as_str()).unwrap_or("?");
@@ -1468,11 +1504,7 @@ fn format_kubelint_issue(issue: &serde_json::Value, icon: &str, color: &str) -> 
     };
 
     // Truncate message
-    let msg_display = if message.len() > 50 {
-        format!("{}...", &message[..47])
-    } else {
-        message.to_string()
-    };
+    let msg_display = truncate_safe(message, 50);
 
     format!(
         "{}{} L{}:{} {}{}[{}]{} {} {}",
@@ -1519,11 +1551,7 @@ fn format_helmlint_result(
             ));
             for (i, err) in errors.iter().take(3).enumerate() {
                 if let Some(err_str) = err.as_str() {
-                    let truncated = if err_str.len() > 70 {
-                        format!("{}...", &err_str[..67])
-                    } else {
-                        err_str.to_string()
-                    };
+                    let truncated = truncate_safe(err_str, 70);
                     lines.push(format!(
                         "{}  {} {}{}",
                         ansi::HIGH,
@@ -1655,11 +1683,7 @@ fn format_helmlint_result(
         if let Some(quick_fixes) = v.get("quick_fixes").and_then(|q| q.as_array())
             && let Some(first_fix) = quick_fixes.first().and_then(|f| f.as_str())
         {
-            let truncated = if first_fix.len() > 70 {
-                format!("{}...", &first_fix[..67])
-            } else {
-                first_fix.to_string()
-            };
+            let truncated = truncate_safe(first_fix, 70);
             lines.push(format!(
                 "{}  → Fix: {}{}",
                 ansi::INFO_BLUE,
@@ -1704,18 +1728,15 @@ fn format_helmlint_issue(issue: &serde_json::Value, icon: &str, color: &str) -> 
     };
 
     // Short file name
-    let file_short = if file.len() > 20 {
-        format!("...{}", &file[file.len().saturating_sub(17)..])
+    let file_short = if file.chars().count() > 20 {
+        let skip = file.chars().count().saturating_sub(17);
+        format!("...{}", file.chars().skip(skip).collect::<String>())
     } else {
         file.to_string()
     };
 
     // Truncate message
-    let msg_display = if message.len() > 40 {
-        format!("{}...", &message[..37])
-    } else {
-        message.to_string()
-    };
+    let msg_display = truncate_safe(message, 40);
 
     format!(
         "{}{} {}:{}:{} {}{}[{}]{} {} {}",
@@ -1923,11 +1944,7 @@ fn format_result_preview(result: &serde_json::Value) -> String {
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
-    let detail_short = if detail.len() > 40 {
-        format!("{}...", &detail[..37])
-    } else {
-        detail.to_string()
-    };
+    let detail_short = truncate_safe(detail, 40);
 
     if detail_short.is_empty() {
         name.to_string()
@@ -1969,8 +1986,10 @@ fn tool_to_focus(tool_name: &str, args: &str) -> Option<String> {
         "read_file" | "write_file" => {
             parsed.get("path").and_then(|p| p.as_str()).map(|p| {
                 // Shorten long paths
-                if p.len() > 50 {
-                    format!("...{}", &p[p.len().saturating_sub(47)..])
+                let char_count = p.chars().count();
+                if char_count > 50 {
+                    let skip = char_count.saturating_sub(47);
+                    format!("...{}", p.chars().skip(skip).collect::<String>())
                 } else {
                     p.to_string()
                 }
@@ -1982,11 +2001,7 @@ fn tool_to_focus(tool_name: &str, args: &str) -> Option<String> {
             .map(|p| p.to_string()),
         "shell" => parsed.get("command").and_then(|c| c.as_str()).map(|cmd| {
             // Truncate long commands
-            if cmd.len() > 60 {
-                format!("{}...", &cmd[..57])
-            } else {
-                cmd.to_string()
-            }
+            truncate_safe(cmd, 60)
         }),
         "hadolint" | "dclint" | "kubelint" | "helmlint" => parsed
             .get("path")
