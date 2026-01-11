@@ -135,8 +135,9 @@ impl ToolCallDisplay {
 
     /// Print a tool call result (for verbose output)
     pub fn print_result(name: &str, result: &str, truncate: bool) {
-        let display_result = if truncate && result.len() > 200 {
-            format!("{}... (truncated)", &result[..200])
+        let display_result = if truncate && result.chars().count() > 200 {
+            let truncated: String = result.chars().take(200).collect();
+            format!("{}... (truncated)", truncated)
         } else {
             result.to_string()
         };
@@ -252,8 +253,9 @@ impl ForgeToolDisplay {
                 let line_count = s.lines().count();
                 if line_count > 1 {
                     format!("<{} lines>", line_count)
-                } else if s.len() > 50 {
-                    format!("{}...", &s[..47])
+                } else if s.chars().count() > 50 {
+                    let truncated: String = s.chars().take(47).collect();
+                    format!("{}...", truncated)
                 } else {
                     s.clone()
                 }
@@ -376,12 +378,15 @@ impl ForgeToolDisplay {
     }
 }
 
-/// Truncate a string to max length
+/// Truncate a string to max length, handling UTF-8 safely
 fn truncate_str(s: &str, max: usize) -> String {
-    if s.len() <= max {
+    let char_count = s.chars().count();
+    if char_count <= max {
         s.to_string()
     } else {
-        format!("{}...", &s[..max.saturating_sub(3)])
+        let truncate_to = max.saturating_sub(3);
+        let truncated: String = s.chars().take(truncate_to).collect();
+        format!("{}...", truncated)
     }
 }
 
