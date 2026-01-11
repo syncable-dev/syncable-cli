@@ -76,15 +76,11 @@ impl StreamingShellOutput {
         let elapsed = self.format_elapsed();
         let timeout = self.format_timeout();
 
-        // Truncate command if needed
+        // Truncate command if needed (using safe UTF-8 truncation)
         let term_width = term_size::dimensions().map(|(w, _)| w).unwrap_or(80);
         let prefix_len = 2 + timeout.len() + elapsed.len() + 10; // "● Bash(" + ") " + times
         let max_cmd_len = term_width.saturating_sub(prefix_len);
-        let cmd_display = if self.command.len() > max_cmd_len {
-            format!("{}...", &self.command[..max_cmd_len.saturating_sub(3)])
-        } else {
-            self.command.clone()
-        };
+        let cmd_display = truncate_safe(&self.command, max_cmd_len);
 
         print!(
             "{} {}({}) {} ({})",
@@ -105,12 +101,8 @@ impl StreamingShellOutput {
             let is_last = i == self.lines.len() - 1;
             let prefix = if is_last { "└" } else { "│" };
 
-            // Truncate line if needed
-            let display = if line.len() > content_width {
-                format!("{}...", &line[..content_width.saturating_sub(3)])
-            } else {
-                line.clone()
-            };
+            // Truncate line if needed (using safe UTF-8 truncation)
+            let display = truncate_safe(line, content_width);
 
             println!("  {} {}", prefix.dimmed(), display);
         }
@@ -188,14 +180,10 @@ impl StreamingShellOutput {
         let elapsed = self.format_elapsed();
         let status_icon = if success { "✓" } else { "✗" };
 
-        // Final header
+        // Final header (using safe UTF-8 truncation)
         let term_width = term_size::dimensions().map(|(w, _)| w).unwrap_or(80);
         let max_cmd_len = term_width.saturating_sub(30);
-        let cmd_display = if self.command.len() > max_cmd_len {
-            format!("{}...", &self.command[..max_cmd_len.saturating_sub(3)])
-        } else {
-            self.command.clone()
-        };
+        let cmd_display = truncate_safe(&self.command, max_cmd_len);
 
         let exit_info = match exit_code {
             Some(code) if code != 0 => format!(" (exit {})", code),
@@ -267,6 +255,39 @@ fn strip_ansi_codes(s: &str) -> String {
     result
 }
 
+/// Safely truncate a string to a maximum visual width, handling UTF-8 properly.
+/// Adds "..." suffix when truncation occurs.
+/// This prevents panics from slicing multi-byte UTF-8 characters.
+fn truncate_safe(s: &str, max_width: usize) -> String {
+    // Strip ANSI codes first to get accurate visual width
+    let stripped = strip_ansi_codes(s);
+    
+    // Calculate visual width (count characters, not bytes)
+    let visual_len: usize = stripped.chars().count();
+    
+    if visual_len <= max_width {
+        return s.to_string();
+    }
+    
+    // Need to truncate - work with stripped version
+    // Reserve space for "..."
+    let truncate_to = max_width.saturating_sub(3);
+    
+    let mut result = String::new();
+    let mut char_count = 0;
+    
+    for ch in stripped.chars() {
+        if char_count >= truncate_to {
+            result.push_str("...");
+            break;
+        }
+        result.push(ch);
+        char_count += 1;
+    }
+    
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -275,6 +296,51 @@ mod tests {
     fn test_strip_ansi_codes() {
         let input = "\x1b[32mgreen\x1b[0m text";
         assert_eq!(strip_ansi_codes(input), "green text");
+    }
+
+    #[test]
+    fn test_truncate_safe_ascii() {
+        // Basic ASCII truncation
+        assert_eq!(truncate_safe("hello world", 8), "hello...");
+        assert_eq!(truncate_safe("short", 10), "short");
+        assert_eq!(truncate_safe("exactly10!", 10), "exactly10!");
+    }
+
+    #[test]
+    fn test_truncate_safe_utf8_box_drawing() {
+        // Box drawing characters (multi-byte UTF-8) - the exact case that caused the panic
+        let box_line = "╭ Warning ──────────────────────────────────╮";
+        // Should NOT panic and should truncate properly
+        let result = truncate_safe(box_line, 20);
+        assert!(result.ends_with("..."));
+        assert!(result.chars().count() <= 20);
+    }
+
+    #[test]
+    fn test_truncate_safe_utf8_emoji() {
+        // Emoji (multi-byte UTF-8)
+        let emoji_str = "🚀 Building project 📦 with dependencies 🔧";
+        let result = truncate_safe(emoji_str, 15);
+        assert!(result.ends_with("..."));
+        // Should not panic
+    }
+
+    #[test]
+    fn test_truncate_safe_mixed_content() {
+        // Mixed ASCII and multi-byte characters
+        let mixed = "#9 3.304 ╭ Warning ───";
+        let result = truncate_safe(mixed, 15);
+        assert!(result.ends_with("..."));
+        assert!(result.chars().count() <= 15);
+    }
+
+    #[test]
+    fn test_truncate_safe_no_truncation_needed() {
+        let short = "hello";
+        assert_eq!(truncate_safe(short, 100), "hello");
+        
+        let exact = "12345";
+        assert_eq!(truncate_safe(exact, 5), "12345");
     }
 
     #[test]
@@ -289,5 +355,15 @@ mod tests {
             stream.push_line(&format!("line {}", i));
         }
         assert_eq!(stream.lines.len(), DEFAULT_MAX_LINES);
+    }
+
+    #[test]
+    fn test_streaming_output_with_utf8_content() {
+        // Ensure the buffer doesn't panic with UTF-8 content
+        let mut stream = StreamingShellOutput::new("docker build", 60);
+        stream.push_line("╭ Warning ────────────────╮");
+        stream.push_line("│ This is a warning message │");
+        stream.push_line("╰────────────────────────────╯");
+        assert_eq!(stream.lines.len(), 3);
     }
 }
