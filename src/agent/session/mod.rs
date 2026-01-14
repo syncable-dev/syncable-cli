@@ -12,19 +12,17 @@
 mod commands;
 mod plan_mode;
 mod providers;
+mod ui;
 
 // Re-exports for backward compatibility
 pub use plan_mode::{find_incomplete_plans, IncompletePlan, PlanMode};
 pub use providers::{get_available_models, get_configured_providers, prompt_api_key};
 
-use crate::agent::commands::{SLASH_COMMANDS, TokenUsage};
-use crate::agent::ui::ansi;
+use crate::agent::commands::TokenUsage;
 use crate::agent::{AgentResult, ProviderType};
 use colored::Colorize;
 use std::io;
 use std::path::Path;
-
-const ROBOT: &str = "🤖";
 
 /// Chat session state
 pub struct ChatSession {
@@ -120,236 +118,19 @@ impl ChatSession {
         commands::handle_list_sessions_command(self)
     }
 
-    /// Handle /help command
+    /// Handle /help command - delegates to ui module
     pub fn print_help() {
-        println!();
-        println!(
-            "  {}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{}",
-            ansi::PURPLE,
-            ansi::RESET
-        );
-        println!("  {}📖 Available Commands{}", ansi::PURPLE, ansi::RESET);
-        println!(
-            "  {}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{}",
-            ansi::PURPLE,
-            ansi::RESET
-        );
-        println!();
-
-        for cmd in SLASH_COMMANDS.iter() {
-            let alias = cmd.alias.map(|a| format!(" ({})", a)).unwrap_or_default();
-            println!(
-                "  {}/{:<12}{}{} - {}{}{}",
-                ansi::CYAN,
-                cmd.name,
-                alias,
-                ansi::RESET,
-                ansi::DIM,
-                cmd.description,
-                ansi::RESET
-            );
-        }
-
-        println!();
-        println!(
-            "  {}Tip: Type / to see interactive command picker!{}",
-            ansi::DIM,
-            ansi::RESET
-        );
-        println!();
+        ui::print_help()
     }
 
-    /// Print session banner with colorful SYNCABLE ASCII art
+    /// Print session banner with colorful SYNCABLE ASCII art - delegates to ui module
     pub fn print_logo() {
-        // Colors matching the logo gradient: purple → orange → pink
-        // Using ANSI 256 colors for better gradient
-
-        // Purple shades for S, y
-        let purple = "\x1b[38;5;141m"; // Light purple
-        // Orange shades for n, c
-        let orange = "\x1b[38;5;216m"; // Peach/orange
-        // Pink shades for a, b, l, e
-        let pink = "\x1b[38;5;212m"; // Hot pink
-        let magenta = "\x1b[38;5;207m"; // Magenta
-        let reset = "\x1b[0m";
-
-        println!();
-        println!(
-            "{}  ███████╗{}{} ██╗   ██╗{}{}███╗   ██╗{}{} ██████╗{}{}  █████╗ {}{}██████╗ {}{}██╗     {}{}███████╗{}",
-            purple,
-            reset,
-            purple,
-            reset,
-            orange,
-            reset,
-            orange,
-            reset,
-            pink,
-            reset,
-            pink,
-            reset,
-            magenta,
-            reset,
-            magenta,
-            reset
-        );
-        println!(
-            "{}  ██╔════╝{}{} ╚██╗ ██╔╝{}{}████╗  ██║{}{} ██╔════╝{}{} ██╔══██╗{}{}██╔══██╗{}{}██║     {}{}██╔════╝{}",
-            purple,
-            reset,
-            purple,
-            reset,
-            orange,
-            reset,
-            orange,
-            reset,
-            pink,
-            reset,
-            pink,
-            reset,
-            magenta,
-            reset,
-            magenta,
-            reset
-        );
-        println!(
-            "{}  ███████╗{}{}  ╚████╔╝ {}{}██╔██╗ ██║{}{} ██║     {}{} ███████║{}{}██████╔╝{}{}██║     {}{}█████╗  {}",
-            purple,
-            reset,
-            purple,
-            reset,
-            orange,
-            reset,
-            orange,
-            reset,
-            pink,
-            reset,
-            pink,
-            reset,
-            magenta,
-            reset,
-            magenta,
-            reset
-        );
-        println!(
-            "{}  ╚════██║{}{}   ╚██╔╝  {}{}██║╚██╗██║{}{} ██║     {}{} ██╔══██║{}{}██╔══██╗{}{}██║     {}{}██╔══╝  {}",
-            purple,
-            reset,
-            purple,
-            reset,
-            orange,
-            reset,
-            orange,
-            reset,
-            pink,
-            reset,
-            pink,
-            reset,
-            magenta,
-            reset,
-            magenta,
-            reset
-        );
-        println!(
-            "{}  ███████║{}{}    ██║   {}{}██║ ╚████║{}{} ╚██████╗{}{} ██║  ██║{}{}██████╔╝{}{}███████╗{}{}███████╗{}",
-            purple,
-            reset,
-            purple,
-            reset,
-            orange,
-            reset,
-            orange,
-            reset,
-            pink,
-            reset,
-            pink,
-            reset,
-            magenta,
-            reset,
-            magenta,
-            reset
-        );
-        println!(
-            "{}  ╚══════╝{}{}    ╚═╝   {}{}╚═╝  ╚═══╝{}{}  ╚═════╝{}{} ╚═╝  ╚═╝{}{}╚═════╝ {}{}╚══════╝{}{}╚══════╝{}",
-            purple,
-            reset,
-            purple,
-            reset,
-            orange,
-            reset,
-            orange,
-            reset,
-            pink,
-            reset,
-            pink,
-            reset,
-            magenta,
-            reset,
-            magenta,
-            reset
-        );
-        println!();
+        ui::print_logo()
     }
 
-    /// Print the welcome banner
+    /// Print the welcome banner - delegates to ui module
     pub fn print_banner(&self) {
-        // Print the gradient ASCII logo
-        Self::print_logo();
-
-        // Platform promo
-        println!(
-            "  {} {}",
-            "🚀".dimmed(),
-            "Want to deploy? Deploy instantly from Syncable Platform → https://syncable.dev"
-                .dimmed()
-        );
-        println!();
-
-        // Print agent info
-        println!(
-            "  {} {} powered by {}: {}",
-            ROBOT,
-            "Syncable Agent".white().bold(),
-            self.provider.to_string().cyan(),
-            self.model.cyan()
-        );
-        println!("  {}", "Your AI-powered code analysis assistant".dimmed());
-
-        // Check for incomplete plans and show a hint
-        let incomplete_plans = find_incomplete_plans(&self.project_path);
-        if !incomplete_plans.is_empty() {
-            println!();
-            if incomplete_plans.len() == 1 {
-                let plan = &incomplete_plans[0];
-                println!(
-                    "  {} {} ({}/{} done)",
-                    "📋 Incomplete plan:".yellow(),
-                    plan.filename.white(),
-                    plan.done,
-                    plan.total
-                );
-                println!(
-                    "     {} \"{}\" {}",
-                    "→".cyan(),
-                    "continue".cyan().bold(),
-                    "to resume".dimmed()
-                );
-            } else {
-                println!(
-                    "  {} {} incomplete plans found. Use {} to see them.",
-                    "📋".yellow(),
-                    incomplete_plans.len(),
-                    "/plans".cyan()
-                );
-            }
-        }
-
-        println!();
-        println!(
-            "  {} Type your questions. Use {} to exit.\n",
-            "→".cyan(),
-            "exit".yellow().bold()
-        );
+        ui::print_banner(self)
     }
 
     /// Process a command (returns true if should continue, false if should exit)
