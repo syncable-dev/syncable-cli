@@ -55,6 +55,77 @@ impl ReadFileTool {
         Self { project_path }
     }
 
+    /// Check if file content appears to be binary (contains null bytes in first 1KB)
+    fn is_likely_binary(content: &[u8]) -> bool {
+        let check_len = content.len().min(1024);
+        content[..check_len].contains(&0)
+    }
+
+    /// Check if a symlink target is within the project boundary
+    fn validate_symlink_target(&self, path: &PathBuf) -> Result<PathBuf, String> {
+        let canonical_project = self
+            .project_path
+            .canonicalize()
+            .map_err(|e| format_error_for_llm(
+                "read_file",
+                ErrorCategory::InternalError,
+                &format!("Invalid project path: {}", e),
+                Some(vec!["This is an internal configuration error"]),
+            ))?;
+
+        // Read the symlink target and resolve it
+        let target = fs::read_link(path).map_err(|e| {
+            format_error_for_llm(
+                "read_file",
+                ErrorCategory::FileNotFound,
+                &format!("Cannot read symlink '{}': {}", path.display(), e),
+                Some(vec!["The symlink may be broken or inaccessible"]),
+            )
+        })?;
+
+        // Resolve the target path (make it absolute if relative)
+        let resolved = if target.is_absolute() {
+            target.clone()
+        } else {
+            path.parent().unwrap_or(path).join(&target)
+        };
+
+        // Canonicalize the resolved target
+        let canonical_target = match resolved.canonicalize() {
+            Ok(p) => p,
+            Err(e) => {
+                let hint1 = format!("Symlink '{}' points to '{}'", path.display(), target.display());
+                let hint2 = format!("Error: {}", e);
+                return Err(format_error_for_llm(
+                    "read_file",
+                    ErrorCategory::FileNotFound,
+                    &format!("Symlink target does not exist: {}", resolved.display()),
+                    Some(vec![&hint1, &hint2]),
+                ));
+            }
+        };
+
+        // Verify the target is within project boundary
+        if !canonical_target.starts_with(&canonical_project) {
+            let hint_symlink = format!("Symlink: {}", path.display());
+            let hint_target = format!("Target: {}", target.display());
+            let hint_project = format!("Project root: {}", self.project_path.display());
+            return Err(format_error_for_llm(
+                "read_file",
+                ErrorCategory::PathOutsideBoundary,
+                &format!("Symlink target '{}' is outside project boundary", target.display()),
+                Some(vec![
+                    "The symlink points to a location outside the project directory",
+                    &hint_symlink,
+                    &hint_target,
+                    &hint_project,
+                ]),
+            ));
+        }
+
+        Ok(canonical_target)
+    }
+
     /// Validates a path is within the project boundary.
     /// Returns Ok(Some(path)) if valid, Ok(None) with formatted error string if invalid.
     fn validate_path(&self, requested: &PathBuf) -> Result<PathBuf, String> {
@@ -178,8 +249,30 @@ impl Tool for ReadFileTool {
             Err(error_msg) => return Ok(error_msg), // Return formatted error as success for LLM
         };
 
+        // Check if file is a symlink and validate target is within project
+        let symlink_metadata = fs::symlink_metadata(&file_path)
+            .map_err(|e| ReadFileError(format!("Cannot access file: {}", e)))?;
+
+        if symlink_metadata.file_type().is_symlink() {
+            // Validate symlink target is within project boundary
+            if let Err(error_msg) = self.validate_symlink_target(&file_path) {
+                return Ok(error_msg);
+            }
+        }
+
         let metadata = fs::metadata(&file_path)
             .map_err(|e| ReadFileError(format!("Cannot read file: {}", e)))?;
+
+        // Handle empty files gracefully
+        if metadata.len() == 0 {
+            return Ok(format_file_content(
+                &args.path,
+                "(empty file)",
+                0,
+                0,
+                false,
+            ));
+        }
 
         const MAX_SIZE: u64 = 1024 * 1024;
         if metadata.len() > MAX_SIZE {
@@ -198,8 +291,26 @@ impl Tool for ReadFileTool {
             ));
         }
 
-        let content = fs::read_to_string(&file_path)
+        // Read as bytes first to check for binary content
+        let raw_content = fs::read(&file_path)
             .map_err(|e| ReadFileError(format!("Failed to read file: {}", e)))?;
+
+        // Check for binary content
+        if Self::is_likely_binary(&raw_content) {
+            return Ok(format_error_for_llm(
+                "read_file",
+                ErrorCategory::ValidationFailed,
+                &format!("File '{}' appears to be binary (contains null bytes)", args.path),
+                Some(vec![
+                    "This tool is designed for text files only",
+                    "Binary files cannot be displayed as text",
+                    "Consider using a hex viewer or specialized tool for binary files",
+                ]),
+            ));
+        }
+
+        // Convert to string (now safe since we checked for binary)
+        let content = String::from_utf8_lossy(&raw_content).into_owned();
 
         // Use response utilities for consistent formatting
         if let Some(start) = args.start_line {
@@ -1061,13 +1172,36 @@ Parent directories are created automatically."#.to_string(),
         let mut total_bytes = 0usize;
         let mut total_lines = 0usize;
 
+        // Pre-validate ALL paths before writing ANY files (atomicity)
+        let mut validated_paths: Vec<(PathBuf, &FileToWrite)> = Vec::new();
+        let mut invalid_paths: Vec<String> = Vec::new();
+
         for file in &args.files {
             let requested_path = PathBuf::from(&file.path);
-            let file_path = match self.validate_path(&requested_path) {
-                Ok(path) => path,
-                Err(error_msg) => return Ok(error_msg), // Return formatted error as success for LLM
-            };
+            match self.validate_path(&requested_path) {
+                Ok(path) => validated_paths.push((path, file)),
+                Err(_) => invalid_paths.push(file.path.clone()),
+            }
+        }
 
+        // If any paths are invalid, return error listing all invalid paths
+        if !invalid_paths.is_empty() {
+            let invalid_list = invalid_paths.join(", ");
+            return Ok(format_error_for_llm(
+                "write_files",
+                ErrorCategory::PathOutsideBoundary,
+                &format!("Invalid paths detected: {}", invalid_list),
+                Some(vec![
+                    "SECURITY: All paths must be within the project directory",
+                    "None of the files were written due to invalid paths",
+                    "For temporary files, create a 'tmp/' directory in project root",
+                    &format!("Project root: {}", self.project_path.display()),
+                ]),
+            ));
+        }
+
+        // Now process all validated files
+        for (file_path, file) in validated_paths {
             // Read existing content for diff
             let old_content = if file_path.exists() {
                 fs::read_to_string(&file_path).ok()
