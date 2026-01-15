@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
 
+use super::error::{ErrorCategory, format_error_for_llm};
 use crate::analyzer::hadolint::{HadolintConfig, LintResult, Severity, lint, lint_file};
 
 /// Arguments for the hadolint tool
@@ -351,33 +352,45 @@ impl Tool for HadolintTool {
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
             name: Self::NAME.to_string(),
-            description: "Lint Dockerfiles for best practices, security issues, and common mistakes. \
-                Returns AI-optimized JSON with issues categorized by priority (critical/high/medium/low) \
-                and type (security/best-practice/maintainability/performance/deprecated). \
-                Each issue includes an actionable fix recommendation. Use this to analyze Dockerfiles \
-                before deployment or to improve existing ones. The 'decision_context' field provides \
-                a summary for quick assessment, and 'quick_fixes' lists the most important changes."
+            description: "Native Dockerfile linting with AI-optimized output. No external binary required.
+
+Analyzes Dockerfiles for:
+- Security issues (privileged operations, user permissions, sudo usage)
+- Best practices (pinned versions, package cleanup, layer optimization)
+- Maintainability (instruction ordering, LABEL usage, multi-stage patterns)
+- Performance (build caching, combined RUN commands, cache cleanup)
+- Deprecated instructions (MAINTAINER, ADD for URLs)
+
+Returns prioritized issues with fix recommendations. Prefer this over shell hadolint for structured output the agent can act on.
+
+Output format:
+- 'decision_context': Quick summary for assessment
+- 'action_plan': Issues grouped by priority (critical/high/medium/low)
+- 'quick_fixes': Top 5 high-priority fixes with line numbers
+- 'summary': Counts by priority, severity, and category
+
+Supports inline pragmas for rule ignoring: '# hadolint ignore=DL3008,DL3013'"
                 .to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "dockerfile": {
                         "type": "string",
-                        "description": "Path to Dockerfile relative to project root (e.g., 'Dockerfile', 'docker/Dockerfile.prod')"
+                        "description": "Path to Dockerfile relative to project root (e.g., 'Dockerfile', 'docker/Dockerfile.prod'). If not specified and no content provided, looks for 'Dockerfile' in project root."
                     },
                     "content": {
                         "type": "string",
-                        "description": "Inline Dockerfile content to lint. Use this when you want to validate generated Dockerfile content before writing."
+                        "description": "Inline Dockerfile content to lint directly. Use this to validate generated Dockerfile content before writing to disk, or to lint content without a file."
                     },
                     "ignore": {
                         "type": "array",
                         "items": { "type": "string" },
-                        "description": "List of rule codes to ignore (e.g., ['DL3008', 'DL3013'])"
+                        "description": "Rule codes to ignore globally (e.g., ['DL3008', 'DL3013']). For file-specific ignores, use inline pragmas instead."
                     },
                     "threshold": {
                         "type": "string",
                         "enum": ["error", "warning", "info", "style"],
-                        "description": "Minimum severity to report. Default is 'warning'."
+                        "description": "Minimum severity to report. 'error' shows only errors, 'style' shows everything. Default: 'warning'."
                     }
                 }
             }),
@@ -407,8 +420,69 @@ impl Tool for HadolintTool {
                 "<inline>".to_string(),
             )
         } else if let Some(dockerfile) = &args.dockerfile {
-            // Lint file
+            // Lint file - validate path first
             let path = self.project_path.join(dockerfile);
+
+            // Check if path is within project boundary
+            if let Ok(canonical) = path.canonicalize() {
+                if let Ok(project_canonical) = self.project_path.canonicalize() {
+                    if !canonical.starts_with(&project_canonical) {
+                        return Ok(format_error_for_llm(
+                            "hadolint",
+                            ErrorCategory::PathOutsideBoundary,
+                            &format!("Path '{}' is outside project boundary", dockerfile),
+                            Some(vec![
+                                "Provide a path relative to the project root",
+                                "Use list_directory to explore valid paths",
+                            ]),
+                        ));
+                    }
+                }
+            }
+
+            // Check if file exists
+            if !path.exists() {
+                return Ok(format_error_for_llm(
+                    "hadolint",
+                    ErrorCategory::FileNotFound,
+                    &format!("Dockerfile not found: {}", dockerfile),
+                    Some(vec![
+                        "Check if the path is correct",
+                        "Use list_directory to find Dockerfiles",
+                        "Provide content parameter for inline linting",
+                    ]),
+                ));
+            }
+
+            // Check if readable (permission check)
+            match std::fs::metadata(&path) {
+                Ok(meta) => {
+                    if !meta.is_file() {
+                        return Ok(format_error_for_llm(
+                            "hadolint",
+                            ErrorCategory::ValidationFailed,
+                            &format!("Path '{}' is not a file", dockerfile),
+                            Some(vec![
+                                "Provide the path to a Dockerfile, not a directory",
+                                "Use list_directory to find Dockerfiles in the directory",
+                            ]),
+                        ));
+                    }
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                    return Ok(format_error_for_llm(
+                        "hadolint",
+                        ErrorCategory::PermissionDenied,
+                        &format!("Permission denied reading: {}", dockerfile),
+                        Some(vec![
+                            "Check file permissions",
+                            "Ensure the file is readable",
+                        ]),
+                    ));
+                }
+                Err(_) => {} // Other errors handled by lint_file
+            }
+
             (lint_file(&path, &config), dockerfile.clone())
         } else {
             // Default: look for Dockerfile in project root
@@ -416,13 +490,20 @@ impl Tool for HadolintTool {
             if path.exists() {
                 (lint_file(&path, &config), "Dockerfile".to_string())
             } else {
-                return Err(HadolintError(
-                    "No Dockerfile specified and no Dockerfile found in project root".to_string(),
+                return Ok(format_error_for_llm(
+                    "hadolint",
+                    ErrorCategory::FileNotFound,
+                    "No Dockerfile specified and no Dockerfile found in project root",
+                    Some(vec![
+                        "Specify a dockerfile path relative to project root",
+                        "Use content parameter for inline linting",
+                        "Use list_directory to find Dockerfiles in the project",
+                    ]),
                 ));
             }
         };
 
-        // Check for parse errors
+        // Check for parse errors and provide structured feedback
         if !result.parse_errors.is_empty() {
             log::warn!("Dockerfile parse errors: {:?}", result.parse_errors);
         }
@@ -646,5 +727,187 @@ CMD ["node", "dist/index.js"]
         {
             assert!(parsed["quick_fixes"].is_array());
         }
+    }
+
+    // ========== Phase 05-01 Tests: Helper Function Coverage ==========
+
+    #[test]
+    fn test_parse_threshold() {
+        assert_eq!(HadolintTool::parse_threshold("error"), Severity::Error);
+        assert_eq!(HadolintTool::parse_threshold("warning"), Severity::Warning);
+        assert_eq!(HadolintTool::parse_threshold("info"), Severity::Info);
+        assert_eq!(HadolintTool::parse_threshold("style"), Severity::Style);
+        // Case insensitivity
+        assert_eq!(HadolintTool::parse_threshold("ERROR"), Severity::Error);
+        assert_eq!(HadolintTool::parse_threshold("Warning"), Severity::Warning);
+        // Invalid defaults to Warning
+        assert_eq!(HadolintTool::parse_threshold("invalid"), Severity::Warning);
+        assert_eq!(HadolintTool::parse_threshold(""), Severity::Warning);
+    }
+
+    #[test]
+    fn test_get_rule_category() {
+        // Security rules
+        assert_eq!(HadolintTool::get_rule_category("DL3000"), "security");
+        assert_eq!(HadolintTool::get_rule_category("DL3002"), "security");
+        assert_eq!(HadolintTool::get_rule_category("DL3004"), "security");
+        assert_eq!(HadolintTool::get_rule_category("DL3047"), "security");
+
+        // Best practice rules
+        assert_eq!(HadolintTool::get_rule_category("DL3008"), "best-practice");
+        assert_eq!(HadolintTool::get_rule_category("DL3013"), "best-practice");
+        assert_eq!(HadolintTool::get_rule_category("DL3015"), "best-practice");
+
+        // Maintainability rules
+        assert_eq!(HadolintTool::get_rule_category("DL3005"), "maintainability");
+        assert_eq!(HadolintTool::get_rule_category("DL3010"), "maintainability");
+
+        // Performance rules
+        assert_eq!(HadolintTool::get_rule_category("DL3001"), "performance");
+        assert_eq!(HadolintTool::get_rule_category("DL3011"), "performance");
+
+        // Deprecated rules
+        assert_eq!(HadolintTool::get_rule_category("DL4000"), "deprecated");
+        assert_eq!(HadolintTool::get_rule_category("DL4001"), "deprecated");
+
+        // ShellCheck rules
+        assert_eq!(HadolintTool::get_rule_category("SC1000"), "shell");
+        assert_eq!(HadolintTool::get_rule_category("SC2086"), "shell");
+
+        // Unknown rules
+        assert_eq!(HadolintTool::get_rule_category("XX9999"), "other");
+    }
+
+    #[test]
+    fn test_get_priority() {
+        // Critical: Error + security
+        assert_eq!(
+            HadolintTool::get_priority(Severity::Error, "security"),
+            "critical"
+        );
+
+        // High: Error + any, or Warning + security
+        assert_eq!(
+            HadolintTool::get_priority(Severity::Error, "best-practice"),
+            "high"
+        );
+        assert_eq!(
+            HadolintTool::get_priority(Severity::Error, "maintainability"),
+            "high"
+        );
+        assert_eq!(
+            HadolintTool::get_priority(Severity::Warning, "security"),
+            "high"
+        );
+
+        // Medium: Warning + non-security
+        assert_eq!(
+            HadolintTool::get_priority(Severity::Warning, "best-practice"),
+            "medium"
+        );
+        assert_eq!(
+            HadolintTool::get_priority(Severity::Warning, "maintainability"),
+            "medium"
+        );
+        assert_eq!(
+            HadolintTool::get_priority(Severity::Warning, "performance"),
+            "medium"
+        );
+
+        // Low: Info and Style
+        assert_eq!(
+            HadolintTool::get_priority(Severity::Info, "security"),
+            "low"
+        );
+        assert_eq!(
+            HadolintTool::get_priority(Severity::Info, "best-practice"),
+            "low"
+        );
+        assert_eq!(
+            HadolintTool::get_priority(Severity::Style, "any"),
+            "low"
+        );
+
+        // Info priority for Ignore severity
+        assert_eq!(
+            HadolintTool::get_priority(Severity::Ignore, "security"),
+            "info"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_hadolint_file_not_found_error() {
+        let tool = HadolintTool::new(temp_dir());
+        let args = HadolintArgs {
+            dockerfile: Some("nonexistent/Dockerfile".to_string()),
+            content: None,
+            ignore: vec![],
+            threshold: None,
+        };
+
+        let result = tool.call(args).await.unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        // Should return structured error
+        assert_eq!(parsed["error"], true);
+        assert_eq!(parsed["tool"], "hadolint");
+        assert_eq!(parsed["code"], "FILE_NOT_FOUND");
+        assert!(parsed["suggestions"].is_array());
+    }
+
+    #[tokio::test]
+    async fn test_hadolint_no_dockerfile_error() {
+        // Create temp dir without Dockerfile
+        let temp = temp_dir().join("hadolint_no_dockerfile_test");
+        fs::create_dir_all(&temp).ok();
+
+        let tool = HadolintTool::new(temp.clone());
+        let args = HadolintArgs {
+            dockerfile: None,
+            content: None,
+            ignore: vec![],
+            threshold: None,
+        };
+
+        let result = tool.call(args).await.unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        // Should return structured error for missing default Dockerfile
+        assert_eq!(parsed["error"], true);
+        assert_eq!(parsed["code"], "FILE_NOT_FOUND");
+        assert!(parsed["message"]
+            .as_str()
+            .unwrap()
+            .contains("No Dockerfile specified"));
+
+        // Cleanup
+        fs::remove_dir_all(&temp).ok();
+    }
+
+    #[tokio::test]
+    async fn test_hadolint_directory_not_file_error() {
+        // Create temp directory structure
+        let temp = temp_dir().join("hadolint_dir_test");
+        let subdir = temp.join("docker");
+        fs::create_dir_all(&subdir).ok();
+
+        let tool = HadolintTool::new(temp.clone());
+        let args = HadolintArgs {
+            dockerfile: Some("docker".to_string()), // Points to directory, not file
+            content: None,
+            ignore: vec![],
+            threshold: None,
+        };
+
+        let result = tool.call(args).await.unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        // Should return validation error
+        assert_eq!(parsed["error"], true);
+        assert_eq!(parsed["code"], "VALIDATION_FAILED");
+        assert!(parsed["message"].as_str().unwrap().contains("not a file"));
+
+        // Cleanup
+        fs::remove_dir_all(&temp).ok();
     }
 }
