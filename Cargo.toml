@@ -2,7 +2,7 @@
 name = "syncable-cli"
 version = "0.26.1"
 edition = "2024"
-rust-version = "1.87"  # MSRV - Uses features stabilized in 1.87
+rust-version = "1.88"  # MSRV - AWS SDK requires 1.88
 authors = ["Syncable Team"]
 description = "A Rust-based CLI that analyzes code repositories and generates Infrastructure as Code configurations"
 license = "GPL-3.0"
