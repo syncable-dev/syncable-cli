@@ -316,61 +316,104 @@ pub async fn run_interactive(
                         println!("{}", "─── End of History ───".dimmed());
                         println!();
 
-                        // Load messages into raw_chat_history for AI context
-                        for msg in &record.messages {
-                            match msg.role {
-                                persistence::MessageRole::User => {
-                                    raw_chat_history.push(rig::completion::Message::User {
-                                        content: rig::one_or_many::OneOrMany::one(
-                                            rig::completion::message::UserContent::text(
-                                                &msg.content,
-                                            ),
-                                        ),
-                                    });
+                        // Try to restore from history_snapshot (new format with full context)
+                        let restored_from_snapshot =
+                            if let Some(history_json) = &record.history_snapshot {
+                                match ConversationHistory::from_json(history_json) {
+                                    Ok(restored) => {
+                                        conversation_history = restored;
+                                        // Rebuild raw_chat_history from restored conversation_history
+                                        raw_chat_history = conversation_history.to_messages();
+                                        println!(
+                                            "{}",
+                                            "  ✓ Restored full conversation context (including compacted history)".green()
+                                        );
+                                        true
+                                    }
+                                    Err(e) => {
+                                        eprintln!(
+                                            "{}",
+                                            format!("  Warning: Failed to restore history snapshot: {}", e).yellow()
+                                        );
+                                        false
+                                    }
                                 }
-                                persistence::MessageRole::Assistant => {
-                                    raw_chat_history.push(rig::completion::Message::Assistant {
-                                        id: Some(msg.id.clone()),
-                                        content: rig::one_or_many::OneOrMany::one(
-                                            rig::completion::message::AssistantContent::text(
-                                                &msg.content,
+                            } else {
+                                false
+                            };
+
+                        // Fallback: Load from messages (old format or if snapshot failed)
+                        if !restored_from_snapshot {
+                            // Load messages into raw_chat_history for AI context
+                            for msg in &record.messages {
+                                match msg.role {
+                                    persistence::MessageRole::User => {
+                                        raw_chat_history.push(rig::completion::Message::User {
+                                            content: rig::one_or_many::OneOrMany::one(
+                                                rig::completion::message::UserContent::text(
+                                                    &msg.content,
+                                                ),
                                             ),
-                                        ),
-                                    });
+                                        });
+                                    }
+                                    persistence::MessageRole::Assistant => {
+                                        raw_chat_history
+                                            .push(rig::completion::Message::Assistant {
+                                                id: Some(msg.id.clone()),
+                                                content: rig::one_or_many::OneOrMany::one(
+                                                    rig::completion::message::AssistantContent::text(
+                                                        &msg.content,
+                                                    ),
+                                                ),
+                                            });
+                                    }
+                                    persistence::MessageRole::System => {}
                                 }
-                                persistence::MessageRole::System => {}
                             }
-                        }
 
-                        // Load into conversation_history for context tracking
-                        for msg in &record.messages {
-                            if msg.role == persistence::MessageRole::User {
-                                // Find the next assistant message
-                                let response = record
-                                    .messages
-                                    .iter()
-                                    .skip_while(|m| m.id != msg.id)
-                                    .skip(1)
-                                    .find(|m| m.role == persistence::MessageRole::Assistant)
-                                    .map(|m| m.content.clone())
-                                    .unwrap_or_default();
+                            // Load into conversation_history with tool calls from message records
+                            for msg in &record.messages {
+                                if msg.role == persistence::MessageRole::User {
+                                    // Find the next assistant message
+                                    let (response, tool_calls) = record
+                                        .messages
+                                        .iter()
+                                        .skip_while(|m| m.id != msg.id)
+                                        .skip(1)
+                                        .find(|m| m.role == persistence::MessageRole::Assistant)
+                                        .map(|m| {
+                                            let tcs = m.tool_calls.as_ref().map(|calls| {
+                                                calls
+                                                    .iter()
+                                                    .map(|tc| history::ToolCallRecord {
+                                                        tool_name: tc.name.clone(),
+                                                        args_summary: tc.args_summary.clone(),
+                                                        result_summary: tc.result_summary.clone(),
+                                                        tool_id: None,
+                                                        droppable: false,
+                                                    })
+                                                    .collect::<Vec<_>>()
+                                            });
+                                            (m.content.clone(), tcs.unwrap_or_default())
+                                        })
+                                        .unwrap_or_default();
 
-                                conversation_history.add_turn(
-                                    msg.content.clone(),
-                                    response,
-                                    vec![], // Tool calls not loaded for simplicity
-                                );
+                                    conversation_history.add_turn(
+                                        msg.content.clone(),
+                                        response,
+                                        tool_calls,
+                                    );
+                                }
                             }
+                            println!(
+                                "{}",
+                                format!(
+                                    "  ✓ Loaded {} messages (legacy format).",
+                                    record.messages.len()
+                                )
+                                .green()
+                            );
                         }
-
-                        println!(
-                            "{}",
-                            format!(
-                                "  ✓ Loaded {} messages. You can now continue the conversation.",
-                                record.messages.len()
-                            )
-                            .green()
-                        );
                         println!();
                     }
                     continue;
@@ -873,10 +916,10 @@ pub async fn run_interactive(
                         .history
                         .push(("assistant".to_string(), text.clone()));
 
-                    // Record to persistent session storage
+                    // Record to persistent session storage (includes full history snapshot)
                     session_recorder.record_user_message(&input);
                     session_recorder.record_assistant_message(&text, Some(&tool_calls));
-                    if let Err(e) = session_recorder.save() {
+                    if let Err(e) = session_recorder.save_with_history(&conversation_history) {
                         eprintln!(
                             "{}",
                             format!("  Warning: Failed to save session: {}", e).dimmed()
