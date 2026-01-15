@@ -42,13 +42,31 @@ impl Tool for AnalyzeTool {
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
             name: Self::NAME.to_string(),
-            description: "Analyze the project to detect programming languages, frameworks, dependencies, build tools, and architecture patterns. Returns a comprehensive overview of the project's technology stack.".to_string(),
+            description: r#"Analyze the project to detect programming languages, frameworks, dependencies, build tools, and architecture patterns.
+
+**What gets analyzed:**
+- Languages: Java, Go, JavaScript/TypeScript, Rust, Python
+- Frameworks: Spring Boot, Express, React, Vue, Django, FastAPI, Actix, etc.
+- Dependencies: package.json, go.mod, Cargo.toml, pom.xml, requirements.txt
+- Build tools: Maven, Gradle, npm/yarn/pnpm, Cargo, Make
+- Architecture: microservices, monolith, monorepo structure
+
+**Monorepo detection:**
+Automatically detects and analyzes all sub-projects in monorepos (Nx, Turborepo, Lerna, Yarn workspaces, etc.). Returns analysis for each discovered project.
+
+**Output format:**
+Returns a compressed summary with key findings. Full analysis is stored and can be retrieved using the `retrieve_output` tool with the returned `retrieval_id`.
+
+**When to use:**
+- Start of analysis to understand project structure
+- After major changes to verify project configuration
+- To identify all languages/frameworks before linting or optimization"#.to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "Optional subdirectory path to analyze (relative to project root). If not provided, analyzes the entire project."
+                        "description": "Subdirectory path to analyze (relative to project root). Use to target a specific sub-project in a monorepo. Leave empty/omit to analyze the entire project from root."
                     }
                 }
             }),
