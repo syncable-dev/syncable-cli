@@ -70,6 +70,34 @@
 //! 4. Error categories help the agent understand and recover from errors
 //!
 //! See `error.rs` for the complete error handling infrastructure.
+//!
+//! ## Response Format Pattern
+//!
+//! Tools use the shared response utilities in `response.rs` for consistent output:
+//!
+//! 1. Use `format_file_content` for file read operations (with truncation metadata)
+//! 2. Use `format_list` for directory listings and search results
+//! 3. Use `format_write_success` for successful write operations
+//! 4. Use `format_cancelled` for user-cancelled operations
+//! 5. Use `ResponseMetadata` to track truncation, compression, and item counts
+//!
+//! For large outputs (analysis, lint results), use `compress_tool_output` or
+//! `compress_analysis_output` from `compression.rs` which store full data
+//! and return a compressed summary with retrieval reference.
+//!
+//! ### Example
+//!
+//! ```ignore
+//! use crate::agent::tools::response::{format_file_content, format_list};
+//!
+//! // File read response
+//! Ok(format_file_content(&path, &content, total_lines, returned_lines, truncated))
+//!
+//! // Directory listing response
+//! Ok(format_list(&path, &entries, total_count, was_truncated))
+//! ```
+//!
+//! See `response.rs` for the complete response formatting infrastructure.
 
 mod analyze;
 pub mod background;
@@ -106,6 +134,13 @@ pub use retrieve::{ListOutputsTool, RetrieveOutputTool};
 pub use error::{
     ErrorCategory, ToolErrorContext, detect_error_category, format_error_for_llm,
     format_error_with_context,
+};
+
+// Response formatting utilities for tools
+pub use response::{
+    ResponseMetadata, ToolResponse, format_cancelled, format_file_content,
+    format_file_content_range, format_list, format_list_with_metadata, format_success,
+    format_success_with_metadata, format_write_success,
 };
 
 pub use analyze::AnalyzeTool;
