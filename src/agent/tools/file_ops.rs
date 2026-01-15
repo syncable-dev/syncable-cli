@@ -1320,3 +1320,99 @@ Parent directories are created automatically."#.to_string(),
             .map_err(|e| WriteFilesError(format!("Failed to serialize: {}", e)))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    // =========================================================================
+    // ReadFileTool tests
+    // =========================================================================
+
+    #[test]
+    fn test_is_likely_binary_text() {
+        // Pure ASCII text should not be detected as binary
+        let text = b"fn main() {\n    println!(\"Hello, world!\");\n}\n";
+        assert!(!ReadFileTool::is_likely_binary(text));
+    }
+
+    #[test]
+    fn test_is_likely_binary_with_null() {
+        // Content with null byte should be detected as binary
+        let binary = b"some text\x00more text";
+        assert!(ReadFileTool::is_likely_binary(binary));
+    }
+
+    #[test]
+    fn test_is_likely_binary_empty() {
+        // Empty content should not be detected as binary
+        let empty: &[u8] = b"";
+        assert!(!ReadFileTool::is_likely_binary(empty));
+    }
+
+    #[test]
+    fn test_is_likely_binary_utf8() {
+        // UTF-8 content should not be detected as binary
+        let utf8 = "日本語テキスト".as_bytes();
+        assert!(!ReadFileTool::is_likely_binary(utf8));
+    }
+
+    #[tokio::test]
+    async fn test_read_file_within_project() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("test.txt");
+        fs::write(&file_path, "Hello, world!").unwrap();
+
+        let tool = ReadFileTool::new(dir.path().to_path_buf());
+        let args = ReadFileArgs {
+            path: "test.txt".to_string(),
+            start_line: None,
+            end_line: None,
+        };
+
+        let result = tool.call(args).await.unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        assert_eq!(parsed["file"], "test.txt");
+        assert!(parsed["content"].as_str().unwrap().contains("Hello, world!"));
+    }
+
+    #[tokio::test]
+    async fn test_read_file_not_found() {
+        let dir = tempdir().unwrap();
+        let tool = ReadFileTool::new(dir.path().to_path_buf());
+        let args = ReadFileArgs {
+            path: "nonexistent.txt".to_string(),
+            start_line: None,
+            end_line: None,
+        };
+
+        let result = tool.call(args).await.unwrap();
+        // Should return error formatted for LLM
+        assert!(result.contains("error") || result.contains("not found") || result.contains("does not exist"));
+    }
+
+    // =========================================================================
+    // ListDirectoryTool tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_list_directory_basic() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("file1.txt"), "content").unwrap();
+        fs::write(dir.path().join("file2.txt"), "content").unwrap();
+        fs::create_dir(dir.path().join("subdir")).unwrap();
+
+        let tool = ListDirectoryTool::new(dir.path().to_path_buf());
+        let args = ListDirectoryArgs {
+            path: Some(".".to_string()),
+            recursive: None,
+        };
+
+        let result = tool.call(args).await.unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        assert!(parsed["entries"].as_array().unwrap().len() >= 2);
+    }
+}
