@@ -2,7 +2,7 @@
 //!
 //! Contains display functions for help, logo, and welcome banner.
 
-use super::{find_incomplete_plans, ChatSession};
+use super::{ChatSession, find_incomplete_plans};
 use crate::agent::commands::SLASH_COMMANDS;
 use crate::agent::ui::ansi;
 use colored::Colorize;

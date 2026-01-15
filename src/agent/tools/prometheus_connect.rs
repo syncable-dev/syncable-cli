@@ -327,8 +327,14 @@ External URL with basic auth:
                             ErrorCategory::NetworkError,
                             "Port-forward started but Prometheus not responding",
                             Some(vec![
-                                &format!("Verify the service is correct: kubectl get svc -n {}", namespace),
-                                &format!("Check if Prometheus pod is running: kubectl get pods -n {} | grep prometheus", namespace),
+                                &format!(
+                                    "Verify the service is correct: kubectl get svc -n {}",
+                                    namespace
+                                ),
+                                &format!(
+                                    "Check if Prometheus pod is running: kubectl get pods -n {} | grep prometheus",
+                                    namespace
+                                ),
                                 "The service might need more time to start - try again in a few seconds",
                             ]),
                         ));
@@ -351,7 +357,10 @@ External URL with basic auth:
                         &format!("Port-forward failed: {}", e),
                         Some(vec![
                             "Check if kubectl is configured correctly: kubectl config current-context",
-                            &format!("Verify the service exists: kubectl get svc -n {}", namespace),
+                            &format!(
+                                "Verify the service exists: kubectl get svc -n {}",
+                                namespace
+                            ),
                             "Try providing an external URL instead",
                         ]),
                     ));
@@ -427,7 +436,8 @@ External URL with basic auth:
                     ],
                 );
 
-                let test_url_suggestion = format!("Test URL manually: curl -s {}/api/v1/status/config", url);
+                let test_url_suggestion =
+                    format!("Test URL manually: curl -s {}/api/v1/status/config", url);
                 return Ok(format_error_for_llm(
                     "prometheus_connect",
                     ErrorCategory::NetworkError,
@@ -496,7 +506,11 @@ mod tests {
     fn test_validate_port_invalid() {
         let result = PrometheusConnectTool::validate_port(0);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Port must be between 1 and 65535"));
+        assert!(
+            result
+                .unwrap_err()
+                .contains("Port must be between 1 and 65535")
+        );
     }
 
     #[test]
@@ -512,7 +526,11 @@ mod tests {
         // Missing protocol
         let result = PrometheusConnectTool::validate_url("prometheus.example.com");
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("must start with http:// or https://"));
+        assert!(
+            result
+                .unwrap_err()
+                .contains("must start with http:// or https://")
+        );
 
         // Wrong protocol
         let result = PrometheusConnectTool::validate_url("ftp://prometheus.example.com");

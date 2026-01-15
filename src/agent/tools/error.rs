@@ -361,8 +361,10 @@ mod tests {
 
     #[test]
     fn test_tool_error_context() {
-        let result: Result<(), std::io::Error> =
-            Err(std::io::Error::new(std::io::ErrorKind::NotFound, "file missing"));
+        let result: Result<(), std::io::Error> = Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "file missing",
+        ));
 
         let with_context = result.with_tool_context("read_file", "reading config");
         assert!(with_context.is_err());

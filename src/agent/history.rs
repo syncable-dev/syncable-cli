@@ -705,7 +705,10 @@ mod tests {
         // to_messages should still work and include summary
         let messages = history.to_messages();
         if history.summary_frame.is_some() {
-            assert!(!messages.is_empty(), "Should still have summary in messages");
+            assert!(
+                !messages.is_empty(),
+                "Should still have summary in messages"
+            );
         }
     }
 
@@ -736,7 +739,10 @@ mod tests {
                 history_preserve.summary_frame.is_some(),
                 "preserve should keep summary"
             );
-            assert!(history_clear.summary_frame.is_none(), "clear removes summary");
+            assert!(
+                history_clear.summary_frame.is_none(),
+                "clear removes summary"
+            );
         }
 
         // Both should have no turns

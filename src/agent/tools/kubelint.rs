@@ -884,10 +884,7 @@ spec:
         assert_eq!(KubelintTool::get_check_category("service-type"), "service");
 
         // Unknown checks default to "other"
-        assert_eq!(
-            KubelintTool::get_check_category("unknown-check"),
-            "other"
-        );
+        assert_eq!(KubelintTool::get_check_category("unknown-check"), "other");
     }
 
     #[test]

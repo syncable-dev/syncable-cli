@@ -317,30 +317,35 @@ pub async fn run_interactive(
                         println!();
 
                         // Try to restore from history_snapshot (new format with full context)
-                        let restored_from_snapshot =
-                            if let Some(history_json) = &record.history_snapshot {
-                                match ConversationHistory::from_json(history_json) {
-                                    Ok(restored) => {
-                                        conversation_history = restored;
-                                        // Rebuild raw_chat_history from restored conversation_history
-                                        raw_chat_history = conversation_history.to_messages();
-                                        println!(
+                        let restored_from_snapshot = if let Some(history_json) =
+                            &record.history_snapshot
+                        {
+                            match ConversationHistory::from_json(history_json) {
+                                Ok(restored) => {
+                                    conversation_history = restored;
+                                    // Rebuild raw_chat_history from restored conversation_history
+                                    raw_chat_history = conversation_history.to_messages();
+                                    println!(
                                             "{}",
                                             "  ✓ Restored full conversation context (including compacted history)".green()
                                         );
-                                        true
-                                    }
-                                    Err(e) => {
-                                        eprintln!(
-                                            "{}",
-                                            format!("  Warning: Failed to restore history snapshot: {}", e).yellow()
-                                        );
-                                        false
-                                    }
+                                    true
                                 }
-                            } else {
-                                false
-                            };
+                                Err(e) => {
+                                    eprintln!(
+                                        "{}",
+                                        format!(
+                                            "  Warning: Failed to restore history snapshot: {}",
+                                            e
+                                        )
+                                        .yellow()
+                                    );
+                                    false
+                                }
+                            }
+                        } else {
+                            false
+                        };
 
                         // Fallback: Load from messages (old format or if snapshot failed)
                         if !restored_from_snapshot {
@@ -359,13 +364,13 @@ pub async fn run_interactive(
                                     persistence::MessageRole::Assistant => {
                                         raw_chat_history
                                             .push(rig::completion::Message::Assistant {
-                                                id: Some(msg.id.clone()),
-                                                content: rig::one_or_many::OneOrMany::one(
-                                                    rig::completion::message::AssistantContent::text(
-                                                        &msg.content,
-                                                    ),
+                                            id: Some(msg.id.clone()),
+                                            content: rig::one_or_many::OneOrMany::one(
+                                                rig::completion::message::AssistantContent::text(
+                                                    &msg.content,
                                                 ),
-                                            });
+                                            ),
+                                        });
                                     }
                                     persistence::MessageRole::System => {}
                                 }

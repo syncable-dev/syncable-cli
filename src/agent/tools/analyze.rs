@@ -155,10 +155,7 @@ Returns a compressed summary with key findings. Full analysis is stored and can 
                 }
 
                 let json_value = serde_json::to_value(&analysis).map_err(|e| {
-                    AnalyzeError(format!(
-                        "Failed to serialize analysis results: {}",
-                        e
-                    ))
+                    AnalyzeError(format!("Failed to serialize analysis results: {}", e))
                 })?;
 
                 // Use smart compression with RAG retrieval pattern
@@ -186,10 +183,7 @@ Returns a compressed summary with key findings. Full analysis is stored and can 
                 } else if error_str.contains("not found") || error_str.contains("No such file") {
                     (
                         ErrorCategory::FileNotFound,
-                        vec![
-                            "Verify the path exists",
-                            "Use list_directory to explore",
-                        ],
+                        vec!["Verify the path exists", "Use list_directory to explore"],
                     )
                 } else {
                     (
@@ -287,6 +281,10 @@ mod tests {
 
         let result = tool.call(args).await.unwrap();
         // Should return error formatted for LLM
-        assert!(result.contains("error") || result.contains("not found") || result.contains("Path not found"));
+        assert!(
+            result.contains("error")
+                || result.contains("not found")
+                || result.contains("Path not found")
+        );
     }
 }

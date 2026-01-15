@@ -9,9 +9,9 @@
 //! - `/resume` - Browse and select a session to resume
 //! - `/sessions` - List available sessions
 
+use super::ChatSession;
 use super::plan_mode::find_incomplete_plans;
 use super::providers::{get_available_models, prompt_api_key};
-use super::ChatSession;
 use crate::agent::{AgentResult, ProviderType};
 use crate::config::{load_agent_config, save_agent_config};
 use colored::Colorize;
@@ -700,7 +700,7 @@ pub fn handle_plans_command(session: &ChatSession) -> AgentResult<()> {
 /// Handle /resume command - browse and select a session to resume
 /// Returns true if a session was loaded and should be displayed
 pub fn handle_resume_command(session: &mut ChatSession) -> AgentResult<bool> {
-    use crate::agent::persistence::{browse_sessions, format_relative_time, SessionSelector};
+    use crate::agent::persistence::{SessionSelector, browse_sessions, format_relative_time};
 
     let selector = SessionSelector::new(&session.project_path);
     let sessions = selector.list_sessions();
@@ -747,7 +747,7 @@ pub fn handle_resume_command(session: &mut ChatSession) -> AgentResult<bool> {
 
 /// Handle /sessions command - list available sessions
 pub fn handle_list_sessions_command(session: &ChatSession) {
-    use crate::agent::persistence::{format_relative_time, SessionSelector};
+    use crate::agent::persistence::{SessionSelector, format_relative_time};
 
     let selector = SessionSelector::new(&session.project_path);
     let sessions = selector.list_sessions();
