@@ -15,6 +15,7 @@
 //! - Middle content is summarized with line count
 //! - Long lines (>2000 chars) are truncated
 
+use super::error::{ErrorCategory, format_error_with_context};
 use super::truncation::{TruncationLimits, truncate_shell_output};
 use crate::agent::ui::confirmation::{AllowedCommands, ConfirmationResult, confirm_shell_command};
 use crate::agent::ui::shell_output::StreamingShellOutput;
@@ -260,14 +261,27 @@ impl ShellTool {
             None => self.project_path.clone(),
         };
 
-        let canonical_target = target
-            .canonicalize()
-            .map_err(|e| ShellError(format!("Invalid working directory: {}", e)))?;
+        let canonical_target = target.canonicalize().map_err(|e| {
+            let kind = e.kind();
+            let dir_display = dir.as_deref().unwrap_or(".");
+            let msg = match kind {
+                std::io::ErrorKind::NotFound => {
+                    format!("Working directory not found: {}", dir_display)
+                }
+                std::io::ErrorKind::PermissionDenied => {
+                    format!("Permission denied accessing directory: {}", dir_display)
+                }
+                _ => format!("Invalid working directory '{}': {}", dir_display, e),
+            };
+            ShellError(msg)
+        })?;
 
         if !canonical_target.starts_with(&canonical_project) {
-            return Err(ShellError(
-                "Working directory must be within project".to_string(),
-            ));
+            let dir_display = dir.as_deref().unwrap_or(".");
+            return Err(ShellError(format!(
+                "Working directory '{}' must be within project boundary",
+                dir_display
+            )));
         }
 
         Ok(canonical_target)
@@ -325,23 +339,42 @@ Shell linting produces plain text that's harder to parse and act on."#.to_string
         // In read-only mode (plan mode), only allow read-only commands
         if self.read_only {
             if !self.is_read_only_command(&args.command) {
-                let result = json!({
-                    "error": true,
-                    "reason": "Plan mode is active - only read-only commands allowed",
-                    "blocked_command": args.command,
-                    "allowed_commands": READ_ONLY_COMMANDS,
-                    "hint": "Exit plan mode (Shift+Tab) to run write commands"
-                });
-                return serde_json::to_string_pretty(&result)
-                    .map_err(|e| ShellError(format!("Failed to serialize: {}", e)));
+                return Ok(format_error_with_context(
+                    "shell",
+                    ErrorCategory::CommandRejected,
+                    "Plan mode is active - only read-only commands allowed",
+                    &[
+                        ("blocked_command", json!(args.command)),
+                        ("allowed_commands", json!(READ_ONLY_COMMANDS)),
+                        (
+                            "hint",
+                            json!("Exit plan mode (Shift+Tab) to run write commands"),
+                        ),
+                    ],
+                ));
             }
         } else {
             // Validate command is allowed (standard mode)
             if !self.is_command_allowed(&args.command) {
-                return Err(ShellError(format!(
-                    "Command not allowed. Allowed commands are: {}",
-                    ALLOWED_COMMANDS.join(", ")
-                )));
+                return Ok(format_error_with_context(
+                    "shell",
+                    ErrorCategory::CommandRejected,
+                    &format!(
+                        "Command '{}' is not in the allowed list",
+                        args.command.split_whitespace().next().unwrap_or(&args.command)
+                    ),
+                    &[
+                        ("blocked_command", json!(args.command)),
+                        ("allowed_commands", json!(ALLOWED_COMMANDS)),
+                        (
+                            "suggestions",
+                            json!([
+                                "Use a command from the allowed list",
+                                "For linting, use native tools (hadolint, kubelint, etc.)"
+                            ]),
+                        ),
+                    ],
+                ));
             }
         }
 
@@ -370,24 +403,34 @@ Shell linting produces plain text that's harder to parse and act on."#.to_string
                 }
                 ConfirmationResult::Modify(feedback) => {
                     // Return feedback to the agent so it can try a different approach
-                    let result = json!({
-                        "cancelled": true,
-                        "reason": "User requested modification",
-                        "user_feedback": feedback,
-                        "original_command": args.command
-                    });
-                    return serde_json::to_string_pretty(&result)
-                        .map_err(|e| ShellError(format!("Failed to serialize: {}", e)));
+                    return Ok(format_error_with_context(
+                        "shell",
+                        ErrorCategory::UserCancelled,
+                        "User requested modification to the command",
+                        &[
+                            ("user_feedback", json!(feedback)),
+                            ("original_command", json!(args.command)),
+                            (
+                                "action_required",
+                                json!("Read the user_feedback and adjust your approach"),
+                            ),
+                        ],
+                    ));
                 }
                 ConfirmationResult::Cancel => {
                     // User cancelled the operation
-                    let result = json!({
-                        "cancelled": true,
-                        "reason": "User cancelled the operation",
-                        "original_command": args.command
-                    });
-                    return serde_json::to_string_pretty(&result)
-                        .map_err(|e| ShellError(format!("Failed to serialize: {}", e)));
+                    return Ok(format_error_with_context(
+                        "shell",
+                        ErrorCategory::UserCancelled,
+                        "User cancelled the shell command",
+                        &[
+                            ("original_command", json!(args.command)),
+                            (
+                                "action_required",
+                                json!("Ask the user what they want instead"),
+                            ),
+                        ],
+                    ));
                 }
             }
         }

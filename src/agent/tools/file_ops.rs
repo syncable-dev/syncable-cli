@@ -15,6 +15,7 @@
 //! - Directory listings: Max 500 entries
 //! - Long lines: Truncated at 2000 characters
 
+use super::error::{ErrorCategory, format_error_for_llm};
 use super::truncation::{TruncationLimits, truncate_dir_listing, truncate_file_content};
 use crate::agent::ide::IdeClient;
 use crate::agent::ui::confirmation::ConfirmationResult;
@@ -65,14 +66,25 @@ impl ReadFileTool {
             self.project_path.join(requested)
         };
 
-        let canonical_target = target
-            .canonicalize()
-            .map_err(|e| ReadFileError(format!("File not found: {}", e)))?;
+        let canonical_target = target.canonicalize().map_err(|e| {
+            let kind = e.kind();
+            let msg = match kind {
+                std::io::ErrorKind::NotFound => {
+                    format!("File not found: {}", requested.display())
+                }
+                std::io::ErrorKind::PermissionDenied => {
+                    format!("Permission denied: {}", requested.display())
+                }
+                _ => format!("Cannot access file '{}': {}", requested.display(), e),
+            };
+            ReadFileError(msg)
+        })?;
 
         if !canonical_target.starts_with(&canonical_project) {
-            return Err(ReadFileError(
-                "Access denied: path is outside project directory".to_string(),
-            ));
+            return Err(ReadFileError(format!(
+                "Access denied: path '{}' is outside project directory",
+                requested.display()
+            )));
         }
 
         Ok(canonical_target)
@@ -120,9 +132,19 @@ impl Tool for ReadFileTool {
 
         const MAX_SIZE: u64 = 1024 * 1024;
         if metadata.len() > MAX_SIZE {
-            return Ok(json!({
-                "error": format!("File too large ({} bytes). Maximum size is {} bytes.", metadata.len(), MAX_SIZE)
-            }).to_string());
+            return Ok(format_error_for_llm(
+                "read_file",
+                ErrorCategory::ValidationFailed,
+                &format!(
+                    "File too large ({} bytes). Maximum size is {} bytes.",
+                    metadata.len(),
+                    MAX_SIZE
+                ),
+                Some(vec![
+                    "Use start_line/end_line to read specific sections",
+                    "Consider if you need the entire file",
+                ]),
+            ));
         }
 
         let content = fs::read_to_string(&file_path)
@@ -138,10 +160,19 @@ impl Tool for ReadFileTool {
                 .unwrap_or(lines.len());
 
             if start_idx >= lines.len() {
-                return Ok(json!({
-                    "error": format!("Start line {} exceeds file length ({})", start, lines.len())
-                })
-                .to_string());
+                return Ok(format_error_for_llm(
+                    "read_file",
+                    ErrorCategory::ValidationFailed,
+                    &format!(
+                        "Start line {} exceeds file length ({} lines)",
+                        start,
+                        lines.len()
+                    ),
+                    Some(vec![
+                        &format!("File has {} lines total", lines.len()),
+                        "Use start_line within valid range",
+                    ]),
+                ));
             }
 
             // Ensure end_idx >= start_idx to avoid slice panic when end_line < start_line
@@ -214,14 +245,25 @@ impl ListDirectoryTool {
             self.project_path.join(requested)
         };
 
-        let canonical_target = target
-            .canonicalize()
-            .map_err(|e| ListDirectoryError(format!("Directory not found: {}", e)))?;
+        let canonical_target = target.canonicalize().map_err(|e| {
+            let kind = e.kind();
+            let msg = match kind {
+                std::io::ErrorKind::NotFound => {
+                    format!("Directory not found: {}", requested.display())
+                }
+                std::io::ErrorKind::PermissionDenied => {
+                    format!("Permission denied: {}", requested.display())
+                }
+                _ => format!("Cannot access directory '{}': {}", requested.display(), e),
+            };
+            ListDirectoryError(msg)
+        })?;
 
         if !canonical_target.starts_with(&canonical_project) {
-            return Err(ListDirectoryError(
-                "Access denied: path is outside project directory".to_string(),
-            ));
+            return Err(ListDirectoryError(format!(
+                "Access denied: path '{}' is outside project directory",
+                requested.display()
+            )));
         }
 
         Ok(canonical_target)
@@ -469,15 +511,25 @@ impl WriteFileTool {
         };
 
         // For new files, we can't canonicalize yet, so check the parent
-        let parent = target
-            .parent()
-            .ok_or_else(|| WriteFileError("Invalid path: no parent directory".to_string()))?;
+        let parent = target.parent().ok_or_else(|| {
+            WriteFileError(format!(
+                "Invalid path '{}': no parent directory",
+                requested.display()
+            ))
+        })?;
 
         // If parent exists, canonicalize it; otherwise check the path prefix
         let is_within_project = if parent.exists() {
-            let canonical_parent = parent
-                .canonicalize()
-                .map_err(|e| WriteFileError(format!("Invalid parent path: {}", e)))?;
+            let canonical_parent = parent.canonicalize().map_err(|e| {
+                let kind = e.kind();
+                let msg = match kind {
+                    std::io::ErrorKind::PermissionDenied => {
+                        format!("Permission denied accessing parent directory: {}", parent.display())
+                    }
+                    _ => format!("Invalid parent path '{}': {}", parent.display(), e),
+                };
+                WriteFileError(msg)
+            })?;
             canonical_parent.starts_with(&canonical_project)
         } else {
             // For nested new directories, check if the normalized path stays within project
@@ -488,9 +540,10 @@ impl WriteFileTool {
         };
 
         if !is_within_project {
-            return Err(WriteFileError(
-                "Access denied: path is outside project directory".to_string(),
-            ));
+            return Err(WriteFileError(format!(
+                "Access denied: path '{}' is outside project directory",
+                requested.display()
+            )));
         }
 
         Ok(target)
@@ -755,14 +808,24 @@ impl WriteFilesTool {
             self.project_path.join(requested)
         };
 
-        let parent = target
-            .parent()
-            .ok_or_else(|| WriteFilesError("Invalid path: no parent directory".to_string()))?;
+        let parent = target.parent().ok_or_else(|| {
+            WriteFilesError(format!(
+                "Invalid path '{}': no parent directory",
+                requested.display()
+            ))
+        })?;
 
         let is_within_project = if parent.exists() {
-            let canonical_parent = parent
-                .canonicalize()
-                .map_err(|e| WriteFilesError(format!("Invalid parent path: {}", e)))?;
+            let canonical_parent = parent.canonicalize().map_err(|e| {
+                let kind = e.kind();
+                let msg = match kind {
+                    std::io::ErrorKind::PermissionDenied => {
+                        format!("Permission denied accessing parent directory: {}", parent.display())
+                    }
+                    _ => format!("Invalid parent path '{}': {}", parent.display(), e),
+                };
+                WriteFilesError(msg)
+            })?;
             canonical_parent.starts_with(&canonical_project)
         } else {
             let normalized = self.project_path.join(requested);
@@ -772,9 +835,10 @@ impl WriteFilesTool {
         };
 
         if !is_within_project {
-            return Err(WriteFilesError(
-                "Access denied: path is outside project directory".to_string(),
-            ));
+            return Err(WriteFilesError(format!(
+                "Access denied: path '{}' is outside project directory",
+                requested.display()
+            )));
         }
 
         Ok(target)

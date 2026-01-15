@@ -1,6 +1,7 @@
 //! Analyze tool - wraps the analyze command using Rig's Tool trait
 
 use super::compression::{CompressionConfig, compress_analysis_output};
+use super::error::{ErrorCategory, format_error_for_llm};
 use rig::completion::ToolDefinition;
 use rig::tool::Tool;
 use serde::{Deserialize, Serialize};
@@ -55,8 +56,22 @@ impl Tool for AnalyzeTool {
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        let path = if let Some(subpath) = args.path {
-            self.project_path.join(subpath)
+        let path = if let Some(ref subpath) = args.path {
+            let joined = self.project_path.join(subpath);
+            // Validate the path exists
+            if !joined.exists() {
+                return Ok(format_error_for_llm(
+                    "analyze_project",
+                    ErrorCategory::FileNotFound,
+                    &format!("Path not found: {}", subpath),
+                    Some(vec![
+                        "Check if the path exists",
+                        "Use list_directory to explore available paths",
+                        "Omit path parameter to analyze the entire project",
+                    ]),
+                ));
+            }
+            joined
         } else {
             self.project_path.clone()
         };
@@ -65,15 +80,50 @@ impl Tool for AnalyzeTool {
         // This returns MonorepoAnalysis with full project list instead of flat ProjectAnalysis
         match crate::analyzer::analyze_monorepo(&path) {
             Ok(analysis) => {
-                let json_value = serde_json::to_value(&analysis)
-                    .map_err(|e| AnalyzeError(format!("Failed to serialize: {}", e)))?;
+                let json_value = serde_json::to_value(&analysis).map_err(|e| {
+                    AnalyzeError(format!(
+                        "Failed to serialize analysis results: {}",
+                        e
+                    ))
+                })?;
 
                 // Use smart compression with RAG retrieval pattern
                 // This preserves all data while keeping context size manageable
                 let config = CompressionConfig::default();
                 Ok(compress_analysis_output(&json_value, &config))
             }
-            Err(e) => Err(AnalyzeError(format!("Analysis failed: {}", e))),
+            Err(e) => {
+                // Provide structured error with suggestions
+                let error_str = e.to_string();
+                let (category, suggestions) = if error_str.contains("permission")
+                    || error_str.contains("Permission")
+                {
+                    (
+                        ErrorCategory::PermissionDenied,
+                        vec!["Check file permissions", "Try a different subdirectory"],
+                    )
+                } else if error_str.contains("not found") || error_str.contains("No such file") {
+                    (
+                        ErrorCategory::FileNotFound,
+                        vec![
+                            "Verify the path exists",
+                            "Use list_directory to explore",
+                        ],
+                    )
+                } else {
+                    (
+                        ErrorCategory::InternalError,
+                        vec!["Try analyzing a subdirectory", "Check project structure"],
+                    )
+                };
+
+                Ok(format_error_for_llm(
+                    "analyze_project",
+                    category,
+                    &format!("Analysis failed: {}", e),
+                    Some(suggestions),
+                ))
+            }
         }
     }
 }
