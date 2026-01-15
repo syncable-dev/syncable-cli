@@ -94,10 +94,66 @@ Returns a compressed summary with key findings. Full analysis is stored and can 
             self.project_path.clone()
         };
 
+        // Edge case: Check if directory is empty or has no analyzable content
+        let entries: Vec<_> = match std::fs::read_dir(&path) {
+            Ok(dir) => dir.filter_map(Result::ok).collect(),
+            Err(e) => {
+                return Ok(format_error_for_llm(
+                    "analyze_project",
+                    ErrorCategory::PermissionDenied,
+                    &format!("Cannot read directory: {}", e),
+                    Some(vec![
+                        "Check file permissions",
+                        "Ensure the path is a directory, not a file",
+                    ]),
+                ));
+            }
+        };
+
+        if entries.is_empty() {
+            return Ok(format_error_for_llm(
+                "analyze_project",
+                ErrorCategory::ValidationFailed,
+                "Directory appears to be empty",
+                Some(vec![
+                    "Check if the path is correct",
+                    "Hidden files (starting with .) are included in analysis",
+                    "Use list_directory to see what's in this path",
+                ]),
+            ));
+        }
+
+        // Edge case: Warn about very large projects (rough estimate)
+        // Count visible entries recursively up to a limit
+        let file_count = count_files_recursive(&path, 15000);
+        let large_project_warning = if file_count >= 10000 {
+            Some(format!(
+                "Note: Large project detected (~{}+ files). Analysis may take longer.",
+                file_count
+            ))
+        } else {
+            None
+        };
+
         // Use monorepo analyzer to detect ALL projects in monorepos
         // This returns MonorepoAnalysis with full project list instead of flat ProjectAnalysis
         match crate::analyzer::analyze_monorepo(&path) {
             Ok(analysis) => {
+                // Edge case: Check if no languages were detected (unsupported project type)
+                if analysis.technology_summary.languages.is_empty() {
+                    return Ok(format_error_for_llm(
+                        "analyze_project",
+                        ErrorCategory::ValidationFailed,
+                        "No supported programming languages detected in this directory",
+                        Some(vec![
+                            "Supported languages: Java, Go, JavaScript/TypeScript, Rust, Python",
+                            "Check if source files exist in this directory or subdirectories",
+                            "For non-code projects, use list_directory to explore contents",
+                            "Try analyzing a specific subdirectory if this is a monorepo",
+                        ]),
+                    ));
+                }
+
                 let json_value = serde_json::to_value(&analysis).map_err(|e| {
                     AnalyzeError(format!(
                         "Failed to serialize analysis results: {}",
@@ -108,7 +164,14 @@ Returns a compressed summary with key findings. Full analysis is stored and can 
                 // Use smart compression with RAG retrieval pattern
                 // This preserves all data while keeping context size manageable
                 let config = CompressionConfig::default();
-                Ok(compress_analysis_output(&json_value, &config))
+                let mut result = compress_analysis_output(&json_value, &config);
+
+                // Append large project warning if applicable
+                if let Some(warning) = large_project_warning {
+                    result = format!("{}\n\n{}", warning, result);
+                }
+
+                Ok(result)
             }
             Err(e) => {
                 // Provide structured error with suggestions
@@ -144,4 +207,51 @@ Returns a compressed summary with key findings. Full analysis is stored and can 
             }
         }
     }
+}
+
+/// Count files recursively up to a limit (to avoid long waits on huge directories)
+fn count_files_recursive(path: &std::path::Path, limit: usize) -> usize {
+    let mut count = 0;
+    let mut dirs_to_visit = vec![path.to_path_buf()];
+
+    while let Some(dir) = dirs_to_visit.pop() {
+        if count >= limit {
+            break;
+        }
+
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.filter_map(Result::ok) {
+                if count >= limit {
+                    break;
+                }
+
+                let path = entry.path();
+                // Skip common non-source directories for efficiency
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    if matches!(
+                        name,
+                        "node_modules"
+                            | "target"
+                            | ".git"
+                            | "vendor"
+                            | "dist"
+                            | "build"
+                            | "__pycache__"
+                            | ".venv"
+                            | "venv"
+                    ) {
+                        continue;
+                    }
+                }
+
+                if path.is_file() {
+                    count += 1;
+                } else if path.is_dir() {
+                    dirs_to_visit.push(path);
+                }
+            }
+        }
+    }
+
+    count
 }
