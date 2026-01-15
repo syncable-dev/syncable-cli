@@ -12,6 +12,7 @@
 //! - Actionable remediation recommendations
 
 use super::compression::{CompressionConfig, compress_tool_output};
+use super::error::{ErrorCategory, format_error_for_llm};
 use rig::completion::ToolDefinition;
 use rig::tool::Tool;
 use serde::{Deserialize, Serialize};
@@ -324,14 +325,26 @@ impl Tool for KubelintTool {
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
             name: Self::NAME.to_string(),
-            description: "Lint Kubernetes manifests for SECURITY and BEST PRACTICES. \
-                Works on raw YAML files, Helm charts (renders them first), and Kustomize directories. \
-                \n\n**IMPORTANT:** Always specify the `path` parameter to lint specific files or directories. \
-                \n\n**Use kubelint for:** Security issues (privileged containers, missing probes), \
-                resource best practices (limits, RBAC), manifest validation. \
-                \n**Use helmlint for:** Helm chart structure, template syntax, Chart.yaml/values.yaml validation. \
-                \n\nReturns AI-optimized JSON with issues categorized by priority (critical/high/medium/low) \
-                and type (security/rbac/best-practice/validation). Each issue includes remediation steps."
+            description: "Native Kubernetes manifest linting for SECURITY and BEST PRACTICES.
+
+Analyzes rendered K8s manifests (YAML files, Helm charts, Kustomize) for:
+- **Security**: privileged containers, privilege escalation, host access, capabilities
+- **Resources**: missing limits/requests, missing probes (liveness/readiness)
+- **RBAC**: overprivileged roles, cluster-admin bindings, wildcard permissions
+- **Best Practice**: latest tag, missing labels, deprecated APIs, service accounts
+
+**Use kubelint for:** Security analysis of deployed/rendered Kubernetes resources.
+**Use helmlint for:** Helm chart structure, template syntax, Chart.yaml validation.
+
+**Parameters:**
+- path: K8s manifest file, directory, Helm chart dir, or Kustomize dir
+- content: Inline YAML to lint (alternative to path)
+- include: Run only specific checks (e.g., ['privileged-container'])
+- exclude: Skip specific checks (e.g., ['minimum-replicas'])
+- threshold: Minimum severity to report ('error', 'warning', 'info')
+
+**Output:** Issues categorized by priority (critical/high/medium/low) with remediation steps.
+Large outputs are compressed with retrieval_id - use retrieve_output for full details."
                 .to_string(),
             parameters: json!({
                 "type": "object",
@@ -398,10 +411,16 @@ impl Tool for KubelintTool {
             let full_path = self.project_path.join(path);
 
             if !full_path.exists() {
-                return Err(KubelintError(format!(
-                    "Path '{}' does not exist.",
-                    full_path.display()
-                )));
+                return Ok(format_error_for_llm(
+                    "kubelint",
+                    ErrorCategory::FileNotFound,
+                    &format!("Path '{}' does not exist", full_path.display()),
+                    Some(vec![
+                        "Check if the path is correct relative to project root",
+                        "Use list_directory to explore available paths",
+                        "Provide inline YAML via 'content' parameter instead",
+                    ]),
+                ));
             }
 
             if full_path.is_file() {
@@ -455,17 +474,54 @@ impl Tool for KubelintTool {
             if let Some((path, name)) = found {
                 (lint(&path, &config), name)
             } else {
-                return Err(KubelintError(
-                    "No path specified and no K8s manifests found. \
-                    Specify a path with 'path' parameter or provide 'content' to lint."
-                        .to_string(),
+                return Ok(format_error_for_llm(
+                    "kubelint",
+                    ErrorCategory::ValidationFailed,
+                    "No valid Kubernetes manifests found",
+                    Some(vec![
+                        "Specify a path with 'path' parameter (e.g., 'k8s/', 'deployment.yaml')",
+                        "Provide inline YAML via 'content' parameter",
+                        "Ensure files have .yaml or .yml extension",
+                        "Files must have 'apiVersion' and 'kind' fields to be valid K8s manifests",
+                    ]),
                 ));
             }
         };
 
-        // Check for parse errors
+        // Check for parse errors and empty results
         if !result.parse_errors.is_empty() {
             log::warn!("K8s manifest parse errors: {:?}", result.parse_errors);
+        }
+
+        // Handle edge case: no K8s objects found (empty dir, non-K8s YAML, or all parse errors)
+        if result.summary.objects_analyzed == 0 {
+            if !result.parse_errors.is_empty() {
+                // YAML parsing failed
+                return Ok(format_error_for_llm(
+                    "kubelint",
+                    ErrorCategory::ValidationFailed,
+                    "Failed to parse Kubernetes manifests",
+                    Some(vec![
+                        &format!("Parse errors: {}", result.parse_errors.join("; ")),
+                        "Check YAML syntax (proper indentation, valid structure)",
+                        "Ensure files contain valid Kubernetes manifests with 'apiVersion' and 'kind'",
+                        "Use helmlint for Helm chart template syntax issues",
+                    ]),
+                ));
+            } else {
+                // No K8s objects found (valid YAML but not K8s manifests, or empty directory)
+                return Ok(format_error_for_llm(
+                    "kubelint",
+                    ErrorCategory::ValidationFailed,
+                    &format!("No Kubernetes objects found in '{}'", source),
+                    Some(vec![
+                        "Directory may be empty or contain no .yaml/.yml files",
+                        "Files may be valid YAML but not Kubernetes manifests",
+                        "Kubernetes manifests require 'apiVersion' and 'kind' fields",
+                        "Try specifying a different path or use 'content' for inline YAML",
+                    ]),
+                ));
+            }
         }
 
         Ok(Self::format_result(&result, &source))
@@ -724,5 +780,170 @@ spec:
                 .any(|i| i["check"] == "privileged-container")
         );
         assert!(!all_issues.iter().any(|i| i["check"] == "latest-tag"));
+    }
+
+    #[test]
+    fn test_parse_threshold() {
+        assert_eq!(KubelintTool::parse_threshold("error"), Severity::Error);
+        assert_eq!(KubelintTool::parse_threshold("warning"), Severity::Warning);
+        assert_eq!(KubelintTool::parse_threshold("info"), Severity::Info);
+        // Case insensitive
+        assert_eq!(KubelintTool::parse_threshold("ERROR"), Severity::Error);
+        assert_eq!(KubelintTool::parse_threshold("Warning"), Severity::Warning);
+        // Invalid defaults to Warning
+        assert_eq!(KubelintTool::parse_threshold("invalid"), Severity::Warning);
+        assert_eq!(KubelintTool::parse_threshold(""), Severity::Warning);
+    }
+
+    #[test]
+    fn test_get_check_category() {
+        // Security checks
+        assert_eq!(
+            KubelintTool::get_check_category("privileged-container"),
+            "security"
+        );
+        assert_eq!(
+            KubelintTool::get_check_category("run-as-non-root"),
+            "security"
+        );
+        assert_eq!(KubelintTool::get_check_category("hostnetwork"), "security");
+        assert_eq!(KubelintTool::get_check_category("hostpid"), "security");
+        assert_eq!(
+            KubelintTool::get_check_category("privilege-escalation"),
+            "security"
+        );
+        assert_eq!(
+            KubelintTool::get_check_category("read-only-root-fs"),
+            "security"
+        );
+
+        // Best practice checks
+        assert_eq!(
+            KubelintTool::get_check_category("latest-tag"),
+            "best-practice"
+        );
+        assert_eq!(
+            KubelintTool::get_check_category("no-liveness-probe"),
+            "best-practice"
+        );
+        assert_eq!(
+            KubelintTool::get_check_category("unset-cpu-requirements"),
+            "best-practice"
+        );
+
+        // RBAC checks
+        assert_eq!(
+            KubelintTool::get_check_category("access-to-secrets"),
+            "rbac"
+        );
+        assert_eq!(
+            KubelintTool::get_check_category("cluster-admin-role-binding"),
+            "rbac"
+        );
+        assert_eq!(
+            KubelintTool::get_check_category("wildcard-in-rules"),
+            "rbac"
+        );
+
+        // Validation checks
+        assert_eq!(
+            KubelintTool::get_check_category("dangling-service"),
+            "validation"
+        );
+        assert_eq!(
+            KubelintTool::get_check_category("duplicate-env-var"),
+            "validation"
+        );
+
+        // Port checks
+        assert_eq!(KubelintTool::get_check_category("ssh-port"), "ports");
+        assert_eq!(
+            KubelintTool::get_check_category("privileged-ports"),
+            "ports"
+        );
+
+        // Disruption budget checks
+        assert_eq!(
+            KubelintTool::get_check_category("pdb-max-unavailable"),
+            "disruption-budget"
+        );
+
+        // Autoscaling checks
+        assert_eq!(
+            KubelintTool::get_check_category("hpa-minimum-replicas"),
+            "autoscaling"
+        );
+
+        // Deprecated API checks
+        assert_eq!(
+            KubelintTool::get_check_category("no-extensions-v1beta"),
+            "deprecated-api"
+        );
+
+        // Service checks
+        assert_eq!(KubelintTool::get_check_category("service-type"), "service");
+
+        // Unknown checks default to "other"
+        assert_eq!(
+            KubelintTool::get_check_category("unknown-check"),
+            "other"
+        );
+    }
+
+    #[test]
+    fn test_get_priority() {
+        // Critical: Error severity + security/rbac
+        assert_eq!(
+            KubelintTool::get_priority(Severity::Error, "privileged-container"),
+            "critical"
+        );
+        assert_eq!(
+            KubelintTool::get_priority(Severity::Error, "access-to-secrets"),
+            "critical"
+        );
+
+        // High: Error severity + other categories
+        assert_eq!(
+            KubelintTool::get_priority(Severity::Error, "latest-tag"),
+            "high"
+        );
+        assert_eq!(
+            KubelintTool::get_priority(Severity::Error, "dangling-service"),
+            "high"
+        );
+
+        // High: Warning severity + security/rbac
+        assert_eq!(
+            KubelintTool::get_priority(Severity::Warning, "run-as-non-root"),
+            "high"
+        );
+        assert_eq!(
+            KubelintTool::get_priority(Severity::Warning, "wildcard-in-rules"),
+            "high"
+        );
+
+        // Medium: Warning severity + validation/best-practice
+        assert_eq!(
+            KubelintTool::get_priority(Severity::Warning, "duplicate-env-var"),
+            "medium"
+        );
+        assert_eq!(
+            KubelintTool::get_priority(Severity::Warning, "no-liveness-probe"),
+            "medium"
+        );
+        assert_eq!(
+            KubelintTool::get_priority(Severity::Warning, "ssh-port"),
+            "medium"
+        );
+
+        // Low: Info severity
+        assert_eq!(
+            KubelintTool::get_priority(Severity::Info, "privileged-container"),
+            "low"
+        );
+        assert_eq!(
+            KubelintTool::get_priority(Severity::Info, "latest-tag"),
+            "low"
+        );
     }
 }
