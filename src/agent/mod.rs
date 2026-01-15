@@ -423,7 +423,8 @@ pub async fn run_interactive(
                 raw_chat_history.drain(0..drain_count);
                 // Ensure history starts with User message for OpenAI Responses API compatibility
                 ensure_history_starts_with_user(&mut raw_chat_history);
-                conversation_history.clear(); // Stay in sync
+                // Preserve compacted summary while clearing turns to stay in sync
+                conversation_history.clear_turns_preserve_context();
                 println!(
                     "{}",
                     format!(
@@ -1139,8 +1140,8 @@ pub async fn run_interactive(
                             old_msg_count, old_token_count, raw_chat_history.len(), new_token_count
                         ).green());
 
-                        // Also clear conversation_history to stay in sync
-                        conversation_history.clear();
+                        // Preserve compacted summary while clearing turns to stay in sync
+                        conversation_history.clear_turns_preserve_context();
 
                         // Retry with truncated context
                         retry_attempt += 1;
@@ -1404,30 +1405,30 @@ fn compact_large_tool_outputs(messages: &mut [rig::completion::Message], max_cha
             for item in content.iter_mut() {
                 if let UserContent::ToolResult(tr) = item {
                     for trc in tr.content.iter_mut() {
-                        if let ToolResultContent::Text(text) = trc {
-                            if text.text.len() > max_chars {
-                                // Save full output to temp file
-                                let file_id = format!(
-                                    "{}_{}.txt",
-                                    tr.id,
-                                    std::time::SystemTime::now()
-                                        .duration_since(std::time::UNIX_EPOCH)
-                                        .unwrap()
-                                        .as_millis()
+                        if let ToolResultContent::Text(text) = trc
+                            && text.text.len() > max_chars
+                        {
+                            // Save full output to temp file
+                            let file_id = format!(
+                                "{}_{}.txt",
+                                tr.id,
+                                std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_millis()
+                            );
+                            let file_path = temp_dir.join(&file_id);
+
+                            if let Ok(()) = fs::write(&file_path, &text.text) {
+                                // Create a smart summary
+                                let summary = create_output_summary(
+                                    &text.text,
+                                    &file_path.display().to_string(),
+                                    max_chars / 2, // Use half max for summary
                                 );
-                                let file_path = temp_dir.join(&file_id);
 
-                                if let Ok(()) = fs::write(&file_path, &text.text) {
-                                    // Create a smart summary
-                                    let summary = create_output_summary(
-                                        &text.text,
-                                        &file_path.display().to_string(),
-                                        max_chars / 2, // Use half max for summary
-                                    );
-
-                                    // Replace with summary
-                                    *trc = ToolResultContent::Text(Text { text: summary });
-                                }
+                                // Replace with summary
+                                *trc = ToolResultContent::Text(Text { text: summary });
                             }
                         }
                     }
@@ -1620,11 +1621,11 @@ fn summarize_single_item(item: &serde_json::Value) -> String {
         "code",
         "rule",
     ] {
-        if let Some(v) = item.get(key) {
-            if let Some(s) = v.as_str() {
-                parts.push(truncate_string(s, 80));
-                break; // Only take first descriptive field
-            }
+        if let Some(v) = item.get(key)
+            && let Some(s) = v.as_str()
+        {
+            parts.push(truncate_string(s, 80));
+            break; // Only take first descriptive field
         }
     }
 
@@ -1831,21 +1832,21 @@ fn simplify_history_for_openai_reasoning(history: &mut Vec<rig::completion::Mess
 /// This function inserts a synthetic User message at the beginning if history starts
 /// with an Assistant message, preserving the context while maintaining valid structure.
 fn ensure_history_starts_with_user(history: &mut Vec<rig::completion::Message>) {
-    if !history.is_empty() {
-        if matches!(
+    if !history.is_empty()
+        && matches!(
             history.first(),
             Some(rig::completion::Message::Assistant { .. })
-        ) {
-            // Insert synthetic User message at the beginning to maintain valid conversation structure
-            history.insert(
-                0,
-                rig::completion::Message::User {
-                    content: rig::one_or_many::OneOrMany::one(
-                        rig::completion::message::UserContent::text("(Conversation continued)"),
-                    ),
-                },
-            );
-        }
+        )
+    {
+        // Insert synthetic User message at the beginning to maintain valid conversation structure
+        history.insert(
+            0,
+            rig::completion::Message::User {
+                content: rig::one_or_many::OneOrMany::one(
+                    rig::completion::message::UserContent::text("(Conversation continued)"),
+                ),
+            },
+        );
     }
 }
 
