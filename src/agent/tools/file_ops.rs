@@ -16,6 +16,7 @@
 //! - Long lines: Truncated at 2000 characters
 
 use super::error::{ErrorCategory, format_error_for_llm};
+use super::response::{format_cancelled, format_file_content, format_file_content_range, format_list};
 use super::truncation::{TruncationLimits, truncate_dir_listing, truncate_file_content};
 use crate::agent::ide::IdeClient;
 use crate::agent::ui::confirmation::ConfirmationResult;
@@ -150,7 +151,8 @@ impl Tool for ReadFileTool {
         let content = fs::read_to_string(&file_path)
             .map_err(|e| ReadFileError(format!("Failed to read file: {}", e)))?;
 
-        let output = if let Some(start) = args.start_line {
+        // Use response utilities for consistent formatting
+        if let Some(start) = args.start_line {
             // User requested specific line range - respect it exactly
             let lines: Vec<&str> = content.lines().collect();
             let start_idx = (start as usize).saturating_sub(1);
@@ -184,28 +186,26 @@ impl Tool for ReadFileTool {
                 .map(|(i, line)| format!("{:>4} | {}", start_idx + i + 1, line))
                 .collect();
 
-            json!({
-                "file": args.path,
-                "lines": format!("{}-{}", start, end_idx),
-                "total_lines": lines.len(),
-                "content": selected.join("\n")
-            })
+            Ok(format_file_content_range(
+                &args.path,
+                &selected.join("\n"),
+                start as usize,
+                end_idx,
+                lines.len(),
+            ))
         } else {
             // Full file read - apply truncation to prevent context overflow
             let limits = TruncationLimits::default();
             let truncated = truncate_file_content(&content, &limits);
 
-            json!({
-                "file": args.path,
-                "total_lines": truncated.total_lines,
-                "lines_returned": truncated.returned_lines,
-                "truncated": truncated.was_truncated,
-                "content": truncated.content
-            })
-        };
-
-        serde_json::to_string_pretty(&output)
-            .map_err(|e| ReadFileError(format!("Failed to serialize: {}", e)))
+            Ok(format_file_content(
+                &args.path,
+                &truncated.content,
+                truncated.total_lines,
+                truncated.returned_lines,
+                truncated.was_truncated,
+            ))
+        }
     }
 }
 
@@ -377,25 +377,13 @@ impl Tool for ListDirectoryTool {
         let limits = TruncationLimits::default();
         let truncated = truncate_dir_listing(entries, limits.max_dir_entries);
 
-        let result = if truncated.was_truncated {
-            json!({
-                "path": path_str,
-                "entries": truncated.entries,
-                "entries_returned": truncated.entries.len(),
-                "total_count": truncated.total_entries,
-                "truncated": true,
-                "note": format!("Showing first {} of {} entries. Use a more specific path to see others.", truncated.entries.len(), truncated.total_entries)
-            })
-        } else {
-            json!({
-                "path": path_str,
-                "entries": truncated.entries,
-                "total_count": truncated.total_entries
-            })
-        };
-
-        serde_json::to_string_pretty(&result)
-            .map_err(|e| ListDirectoryError(format!("Failed to serialize: {}", e)))
+        // Use response utilities for consistent formatting
+        Ok(format_list(
+            path_str,
+            &truncated.entries,
+            truncated.total_entries,
+            truncated.was_truncated,
+        ))
     }
 }
 
@@ -652,29 +640,20 @@ The tool will create parent directories automatically if they don't exist."#.to_
                     self.allowed_patterns.allow(pattern);
                 }
                 ConfirmationResult::Modify(feedback) => {
-                    // Return feedback to the agent - make it VERY clear to stop
-                    let result = json!({
-                        "cancelled": true,
-                        "STOP": "Do NOT create this file or any similar files. Wait for user instruction.",
-                        "reason": "User requested changes",
-                        "user_feedback": feedback,
-                        "original_path": args.path,
-                        "action_required": "Read the user_feedback and respond accordingly. Do NOT try to create alternative files."
-                    });
-                    return serde_json::to_string_pretty(&result)
-                        .map_err(|e| WriteFileError(format!("Failed to serialize: {}", e)));
+                    // Return feedback to the agent using response utility
+                    return Ok(format_cancelled(
+                        &args.path,
+                        "User requested changes",
+                        Some(&feedback),
+                    ));
                 }
                 ConfirmationResult::Cancel => {
-                    // User cancelled - make it absolutely clear to stop
-                    let result = json!({
-                        "cancelled": true,
-                        "STOP": "User has rejected this operation. Do NOT create this file or any alternative files.",
-                        "reason": "User cancelled the operation",
-                        "original_path": args.path,
-                        "action_required": "Stop creating files. Ask the user what they want instead."
-                    });
-                    return serde_json::to_string_pretty(&result)
-                        .map_err(|e| WriteFileError(format!("Failed to serialize: {}", e)));
+                    // User cancelled using response utility
+                    return Ok(format_cancelled(
+                        &args.path,
+                        "User cancelled the operation",
+                        None,
+                    ));
                 }
             }
         } else {
@@ -957,30 +936,19 @@ All files are written atomically. Parent directories are created automatically."
                     }
                     ConfirmationResult::Modify(feedback) => {
                         // User provided feedback - stop ALL remaining files immediately
-                        let result = json!({
-                            "cancelled": true,
-                            "STOP": "User provided feedback. Stop creating all remaining files in this batch.",
-                            "reason": "User requested changes",
-                            "user_feedback": feedback,
-                            "skipped_file": file.path,
-                            "files_written_before_cancel": results.len(),
-                            "action_required": "Read the user_feedback. Do NOT continue with remaining files."
-                        });
-                        return serde_json::to_string_pretty(&result)
-                            .map_err(|e| WriteFilesError(format!("Failed to serialize: {}", e)));
+                        return Ok(format_cancelled(
+                            &file.path,
+                            "User requested changes",
+                            Some(&feedback),
+                        ));
                     }
                     ConfirmationResult::Cancel => {
                         // User cancelled - stop ALL remaining files immediately
-                        let result = json!({
-                            "cancelled": true,
-                            "STOP": "User cancelled. Stop creating all files immediately.",
-                            "reason": "User cancelled the operation",
-                            "skipped_file": file.path,
-                            "files_written_before_cancel": results.len(),
-                            "action_required": "Stop all file creation. Ask the user what they want instead."
-                        });
-                        return serde_json::to_string_pretty(&result)
-                            .map_err(|e| WriteFilesError(format!("Failed to serialize: {}", e)));
+                        return Ok(format_cancelled(
+                            &file.path,
+                            "User cancelled the operation",
+                            None,
+                        ));
                     }
                 }
             } else {
