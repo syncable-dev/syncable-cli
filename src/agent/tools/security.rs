@@ -225,3 +225,46 @@ impl Tool for VulnerabilitiesTool {
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn test_security_scan_empty_project() {
+        let dir = tempdir().unwrap();
+        // Create minimal project structure
+        std::fs::write(dir.path().join("main.rs"), "fn main() {}").unwrap();
+
+        let tool = SecurityScanTool::new(dir.path().to_path_buf());
+        let args = SecurityScanArgs {
+            mode: None,
+            path: None,
+        };
+
+        let result = tool.call(args).await.unwrap();
+        // Should return valid JSON (could be success with counts or error)
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+        assert!(parsed.is_object());
+    }
+
+    #[tokio::test]
+    async fn test_security_scan_with_path() {
+        let dir = tempdir().unwrap();
+        let subdir = dir.path().join("src");
+        std::fs::create_dir(&subdir).unwrap();
+        std::fs::write(subdir.join("lib.rs"), "pub fn foo() {}").unwrap();
+
+        let tool = SecurityScanTool::new(dir.path().to_path_buf());
+        let args = SecurityScanArgs {
+            mode: None,
+            path: Some("src".to_string()),
+        };
+
+        let result = tool.call(args).await.unwrap();
+        // Should return valid JSON
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+        assert!(parsed.is_object());
+    }
+}

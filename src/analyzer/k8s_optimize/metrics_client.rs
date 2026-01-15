@@ -479,7 +479,10 @@ fn parse_memory_quantity(quantity: &str) -> u64 {
         val.parse::<u64>()
             .map(|t| t * 1024 * 1024 * 1024 * 1024)
             .unwrap_or(0)
-    } else if let Some(val) = quantity.strip_suffix('K').or_else(|| quantity.strip_suffix('k')) {
+    } else if let Some(val) = quantity
+        .strip_suffix('K')
+        .or_else(|| quantity.strip_suffix('k'))
+    {
         val.parse::<u64>().map(|k| k * 1000).unwrap_or(0)
     } else if let Some(val) = quantity.strip_suffix('M') {
         val.parse::<u64>().map(|m| m * 1_000_000).unwrap_or(0)

@@ -4,15 +4,82 @@ use crate::error::{AnalysisError, Result};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-/// Analyzes Docker files for ports and environment variables
+/// Code manifest files that indicate a real project (not a wrapper)
+const CODE_MANIFESTS: &[&str] = &[
+    "package.json",
+    "Cargo.toml",
+    "go.mod",
+    "pom.xml",
+    "build.gradle",
+    "build.gradle.kts",
+    "requirements.txt",
+    "pyproject.toml",
+    "Gemfile",
+    "composer.json",
+];
+
+/// Docker compose file variants
+const COMPOSE_FILES: &[&str] = &[
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    "compose.yml",
+    "compose.yaml",
+];
+
+/// Analyzes Docker files for ports and environment variables.
+/// If no Docker files are found in the root directory, checks if the parent
+/// directory is a "wrapper" (has Docker files but no code manifest) and inherits
+/// Docker configuration from it.
 pub(crate) fn analyze_docker_files(
     root: &Path,
     ports: &mut HashSet<Port>,
     env_vars: &mut HashMap<String, (Option<String>, bool, Option<String>)>,
 ) -> Result<()> {
+    // First, try to analyze Docker files in the current directory
+    let found_local_docker = analyze_docker_files_at(root, ports, env_vars)?;
+
+    // If no Docker files found locally, check parent directory for wrapper pattern
+    if !found_local_docker
+        && let Some(parent) = root.parent()
+        && is_wrapper_directory(parent)
+    {
+        log::debug!(
+            "Inheriting Docker config from wrapper parent: {}",
+            parent.display()
+        );
+        analyze_docker_files_at(parent, ports, env_vars)?;
+    }
+
+    Ok(())
+}
+
+/// Checks if a directory is a "wrapper" directory (has Docker files but no code manifest).
+/// Wrapper directories are used to hold Docker/deployment config for nested projects.
+fn is_wrapper_directory(path: &Path) -> bool {
+    // Check if it has Docker files
+    let has_dockerfile = is_readable_file(&path.join("Dockerfile"));
+    let has_compose = COMPOSE_FILES
+        .iter()
+        .any(|f| is_readable_file(&path.join(f)));
+    let has_docker = has_dockerfile || has_compose;
+
+    // Check if it has a code manifest (which would make it a real project, not a wrapper)
+    let has_code_manifest = CODE_MANIFESTS.iter().any(|m| path.join(m).exists());
+
+    has_docker && !has_code_manifest
+}
+
+/// Analyzes Docker files at a specific path. Returns true if any Docker files were found.
+fn analyze_docker_files_at(
+    root: &Path,
+    ports: &mut HashSet<Port>,
+    env_vars: &mut HashMap<String, (Option<String>, bool, Option<String>)>,
+) -> Result<bool> {
+    let mut found_docker_files = false;
     let dockerfile = root.join("Dockerfile");
 
     if is_readable_file(&dockerfile) {
+        found_docker_files = true;
         let content = std::fs::read_to_string(&dockerfile)?;
 
         // Look for EXPOSE directives
@@ -33,7 +100,7 @@ pub(crate) fn analyze_docker_files(
                 ports.insert(Port {
                     number: port,
                     protocol,
-                    description: Some("Exposed in Dockerfile".to_string()),
+                    description: Some(format!("Exposed in Dockerfile ({})", root.display())),
                 });
             }
         }
@@ -52,21 +119,16 @@ pub(crate) fn analyze_docker_files(
     }
 
     // Check docker-compose files
-    let compose_files = [
-        "docker-compose.yml",
-        "docker-compose.yaml",
-        "compose.yml",
-        "compose.yaml",
-    ];
-    for compose_file in &compose_files {
+    for compose_file in COMPOSE_FILES {
         let path = root.join(compose_file);
         if is_readable_file(&path) {
+            found_docker_files = true;
             analyze_docker_compose(&path, ports, env_vars)?;
             break;
         }
     }
 
-    Ok(())
+    Ok(found_docker_files)
 }
 
 /// Analyzes docker-compose files

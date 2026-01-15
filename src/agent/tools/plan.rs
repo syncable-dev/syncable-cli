@@ -775,3 +775,45 @@ Shows each plan with:
             .map_err(|e| PlanListError(format!("Failed to serialize: {}", e)))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn test_list_plans_empty_directory() {
+        let dir = tempdir().unwrap();
+        let tool = PlanListTool::new(dir.path().to_path_buf());
+        let args = PlanListArgs { filter: None };
+
+        let result = tool.call(args).await.unwrap();
+        // Should return valid JSON
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+        assert!(parsed.is_object());
+        // No plans should mean total is 0 or plans is empty array
+        if let Some(total) = parsed.get("total") {
+            assert!(total.as_u64().unwrap_or(0) == 0);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_list_plans_with_plans() {
+        let dir = tempdir().unwrap();
+        let plans_dir = dir.path().join(".plans");
+        std::fs::create_dir(&plans_dir).unwrap();
+        std::fs::write(
+            plans_dir.join("2026-01-15-test.md"),
+            "# Test Plan\n\nSome content",
+        )
+        .unwrap();
+
+        let tool = PlanListTool::new(dir.path().to_path_buf());
+        let args = PlanListArgs { filter: None };
+
+        let result = tool.call(args).await.unwrap();
+        // Should return valid JSON
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+        assert!(parsed.is_object());
+    }
+}

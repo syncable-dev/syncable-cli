@@ -100,10 +100,10 @@ fn handle_static_optimize(path: &Path, options: OptimizeOptions) -> Result<()> {
     // Build config
     let mut config = K8sOptimizeConfig::default();
 
-    if let Some(severity_str) = &options.severity {
-        if let Some(severity) = Severity::parse(severity_str) {
-            config = config.with_severity(severity);
-        }
+    if let Some(severity_str) = &options.severity
+        && let Some(severity) = Severity::parse(severity_str)
+    {
+        config = config.with_severity(severity);
     }
 
     if let Some(threshold) = options.threshold {

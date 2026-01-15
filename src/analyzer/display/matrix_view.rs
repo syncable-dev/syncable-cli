@@ -1,9 +1,9 @@
 //! Matrix/dashboard view display functionality
 
 use crate::analyzer::display::{
-    BoxDrawer, get_color_adapter,
+    BoxDrawer, format_list_smart, format_ports_smart, get_color_adapter, get_terminal_width,
     helpers::{add_confidence_bar_to_drawer, format_project_category, get_main_technologies},
-    visual_width,
+    smart_truncate, visual_width,
 };
 use crate::analyzer::{ArchitecturePattern, MonorepoAnalysis};
 
@@ -162,26 +162,32 @@ fn display_architecture_box_to_string(analysis: &MonorepoAnalysis) -> String {
 fn display_technology_stack_box(analysis: &MonorepoAnalysis) {
     let colors = get_color_adapter();
     let mut box_drawer = BoxDrawer::new("Technology Stack");
+    let term_width = get_terminal_width();
+    // Max value width for the Technology Stack box (leave room for label + borders)
+    let max_value_width = term_width.saturating_sub(30).min(80);
 
     let mut has_content = false;
 
-    // Languages
+    // Languages - show up to 4 with truncation
     if !analysis.technology_summary.languages.is_empty() {
-        let languages = analysis.technology_summary.languages.join(", ");
+        let languages = format_list_smart(&analysis.technology_summary.languages, 4, 20);
+        let languages = smart_truncate(&languages, max_value_width);
         box_drawer.add_line("Languages:", &colors.language(&languages), true);
         has_content = true;
     }
 
-    // Frameworks
+    // Frameworks - show up to 4 with truncation
     if !analysis.technology_summary.frameworks.is_empty() {
-        let frameworks = analysis.technology_summary.frameworks.join(", ");
+        let frameworks = format_list_smart(&analysis.technology_summary.frameworks, 4, 16);
+        let frameworks = smart_truncate(&frameworks, max_value_width);
         box_drawer.add_line("Frameworks:", &colors.framework(&frameworks), true);
         has_content = true;
     }
 
-    // Databases
+    // Databases - show up to 3 with truncation
     if !analysis.technology_summary.databases.is_empty() {
-        let databases = analysis.technology_summary.databases.join(", ");
+        let databases = format_list_smart(&analysis.technology_summary.databases, 3, 15);
+        let databases = smart_truncate(&databases, max_value_width);
         box_drawer.add_line("Databases:", &colors.database(&databases), true);
         has_content = true;
     }
@@ -197,26 +203,32 @@ fn display_technology_stack_box(analysis: &MonorepoAnalysis) {
 fn display_technology_stack_box_to_string(analysis: &MonorepoAnalysis) -> String {
     let colors = get_color_adapter();
     let mut box_drawer = BoxDrawer::new("Technology Stack");
+    let term_width = get_terminal_width();
+    // Max value width for the Technology Stack box (leave room for label + borders)
+    let max_value_width = term_width.saturating_sub(30).min(80);
 
     let mut has_content = false;
 
-    // Languages
+    // Languages - show up to 4 with truncation
     if !analysis.technology_summary.languages.is_empty() {
-        let languages = analysis.technology_summary.languages.join(", ");
+        let languages = format_list_smart(&analysis.technology_summary.languages, 4, 20);
+        let languages = smart_truncate(&languages, max_value_width);
         box_drawer.add_line("Languages:", &colors.language(&languages), true);
         has_content = true;
     }
 
-    // Frameworks
+    // Frameworks - show up to 4 with truncation
     if !analysis.technology_summary.frameworks.is_empty() {
-        let frameworks = analysis.technology_summary.frameworks.join(", ");
+        let frameworks = format_list_smart(&analysis.technology_summary.frameworks, 4, 16);
+        let frameworks = smart_truncate(&frameworks, max_value_width);
         box_drawer.add_line("Frameworks:", &colors.framework(&frameworks), true);
         has_content = true;
     }
 
-    // Databases
+    // Databases - show up to 3 with truncation
     if !analysis.technology_summary.databases.is_empty() {
-        let databases = analysis.technology_summary.databases.join(", ");
+        let databases = format_list_smart(&analysis.technology_summary.databases, 3, 15);
+        let databases = smart_truncate(&databases, max_value_width);
         box_drawer.add_line("Databases:", &colors.database(&databases), true);
         has_content = true;
     }
@@ -228,49 +240,93 @@ fn display_technology_stack_box_to_string(analysis: &MonorepoAnalysis) -> String
     format!("\n{}", box_drawer.draw())
 }
 
-/// Display projects in a matrix table format
+/// Column width constraints for responsive display
+struct ColumnConfig {
+    max_width: usize,
+    min_width: usize,
+}
+
+/// Display projects in a matrix table format with smart truncation
 fn display_projects_matrix(analysis: &MonorepoAnalysis) {
+    let term_width = get_terminal_width();
     let mut box_drawer = BoxDrawer::new("Projects Matrix");
 
-    // Collect all data first to calculate optimal column widths
+    // Column configuration: max widths to prevent explosion
+    // Adjusted based on terminal width
+    let is_wide = term_width >= 120;
+    let col_configs = [
+        ColumnConfig {
+            max_width: if is_wide { 24 } else { 18 },
+            min_width: 7,
+        }, // Project
+        ColumnConfig {
+            max_width: 10,
+            min_width: 4,
+        }, // Type
+        ColumnConfig {
+            max_width: if is_wide { 20 } else { 16 },
+            min_width: 9,
+        }, // Languages (wider for 2-3 items)
+        ColumnConfig {
+            max_width: if is_wide { 22 } else { 18 },
+            min_width: 9,
+        }, // Main Tech (wider for 2 items)
+        ColumnConfig {
+            max_width: if is_wide { 16 } else { 12 },
+            min_width: 5,
+        }, // Ports
+        ColumnConfig {
+            max_width: 6,
+            min_width: 6,
+        }, // Docker
+        ColumnConfig {
+            max_width: 4,
+            min_width: 4,
+        }, // Deps
+    ];
+
+    // Collect all data first, applying smart formatting
     let mut project_data = Vec::new();
     for project in &analysis.projects {
-        let name = project.name.clone();
-        let proj_type = format_project_category(&project.project_category);
+        let name = smart_truncate(&project.name, col_configs[0].max_width);
+        let proj_type = smart_truncate(
+            format_project_category(&project.project_category),
+            col_configs[1].max_width,
+        );
 
-        let languages = project
+        // Languages: show 2-3 with "+N" for extras (wider terminals get 3)
+        let lang_names: Vec<String> = project
             .analysis
             .languages
             .iter()
             .map(|l| l.name.clone())
-            .collect::<Vec<_>>()
-            .join(", ");
+            .collect();
+        let max_langs = if is_wide { 3 } else { 2 };
+        let languages = format_list_smart(&lang_names, max_langs, 12);
 
-        let main_tech = get_main_technologies(&project.analysis.technologies);
+        // Main tech: show 2 with "+N" for extras
+        let tech_names: Vec<String> = project
+            .analysis
+            .technologies
+            .iter()
+            .map(|t| t.name.clone())
+            .collect();
+        let main_tech = format_list_smart(&tech_names, 2, 14);
 
-        let ports = if project.analysis.ports.is_empty() {
-            "-".to_string()
-        } else {
-            project
-                .analysis
-                .ports
-                .iter()
-                .map(|p| p.number.to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-        };
+        // Smart ports: deduplicate and limit to 3
+        let port_numbers: Vec<u16> = project.analysis.ports.iter().map(|p| p.number).collect();
+        let ports = format_ports_smart(&port_numbers, 3);
 
         let docker = if project.analysis.docker_analysis.is_some() {
             "Yes"
         } else {
             "No"
         };
-
         let deps_count = project.analysis.dependencies.len().to_string();
 
         project_data.push((
             name,
-            proj_type.to_string(),
+            proj_type,
             languages,
             main_tech,
             ports,
@@ -279,7 +335,7 @@ fn display_projects_matrix(analysis: &MonorepoAnalysis) {
         ));
     }
 
-    // Calculate column widths based on content
+    // Calculate column widths based on content (capped by max_width)
     let headers = [
         "Project",
         "Type",
@@ -289,16 +345,34 @@ fn display_projects_matrix(analysis: &MonorepoAnalysis) {
         "Docker",
         "Deps",
     ];
-    let mut col_widths = headers.iter().map(|h| visual_width(h)).collect::<Vec<_>>();
+    let mut col_widths: Vec<usize> = headers
+        .iter()
+        .zip(&col_configs)
+        .map(|(h, cfg)| visual_width(h).clamp(cfg.min_width, cfg.max_width))
+        .collect();
 
     for (name, proj_type, languages, main_tech, ports, docker, deps_count) in &project_data {
-        col_widths[0] = col_widths[0].max(visual_width(name));
-        col_widths[1] = col_widths[1].max(visual_width(proj_type));
-        col_widths[2] = col_widths[2].max(visual_width(languages));
-        col_widths[3] = col_widths[3].max(visual_width(main_tech));
-        col_widths[4] = col_widths[4].max(visual_width(ports));
-        col_widths[5] = col_widths[5].max(visual_width(docker));
-        col_widths[6] = col_widths[6].max(visual_width(deps_count));
+        col_widths[0] = col_widths[0]
+            .max(visual_width(name))
+            .min(col_configs[0].max_width);
+        col_widths[1] = col_widths[1]
+            .max(visual_width(proj_type))
+            .min(col_configs[1].max_width);
+        col_widths[2] = col_widths[2]
+            .max(visual_width(languages))
+            .min(col_configs[2].max_width);
+        col_widths[3] = col_widths[3]
+            .max(visual_width(main_tech))
+            .min(col_configs[3].max_width);
+        col_widths[4] = col_widths[4]
+            .max(visual_width(ports))
+            .min(col_configs[4].max_width);
+        col_widths[5] = col_widths[5]
+            .max(visual_width(docker))
+            .min(col_configs[5].max_width);
+        col_widths[6] = col_widths[6]
+            .max(visual_width(deps_count))
+            .min(col_configs[6].max_width);
     }
 
     // Create header row
@@ -333,49 +407,86 @@ fn display_projects_matrix(analysis: &MonorepoAnalysis) {
     println!("\n{}", box_drawer.draw());
 }
 
-/// Display projects in a matrix table format - returns string
+/// Display projects in a matrix table format - returns string (with smart truncation)
 fn display_projects_matrix_to_string(analysis: &MonorepoAnalysis) -> String {
+    let term_width = get_terminal_width();
     let mut box_drawer = BoxDrawer::new("Projects Matrix");
 
-    // Collect all data first to calculate optimal column widths
+    // Column configuration: max widths to prevent explosion
+    let is_wide = term_width >= 120;
+    let col_configs = [
+        ColumnConfig {
+            max_width: if is_wide { 24 } else { 18 },
+            min_width: 7,
+        }, // Project
+        ColumnConfig {
+            max_width: 10,
+            min_width: 4,
+        }, // Type
+        ColumnConfig {
+            max_width: if is_wide { 20 } else { 16 },
+            min_width: 9,
+        }, // Languages (wider for 2-3 items)
+        ColumnConfig {
+            max_width: if is_wide { 22 } else { 18 },
+            min_width: 9,
+        }, // Main Tech (wider for 2 items)
+        ColumnConfig {
+            max_width: if is_wide { 16 } else { 12 },
+            min_width: 5,
+        }, // Ports
+        ColumnConfig {
+            max_width: 6,
+            min_width: 6,
+        }, // Docker
+        ColumnConfig {
+            max_width: 4,
+            min_width: 4,
+        }, // Deps
+    ];
+
+    // Collect all data first, applying smart formatting
     let mut project_data = Vec::new();
     for project in &analysis.projects {
-        let name = project.name.clone();
-        let proj_type = format_project_category(&project.project_category);
+        let name = smart_truncate(&project.name, col_configs[0].max_width);
+        let proj_type = smart_truncate(
+            format_project_category(&project.project_category),
+            col_configs[1].max_width,
+        );
 
-        let languages = project
+        // Languages: show 2-3 with "+N" for extras (wider terminals get 3)
+        let lang_names: Vec<String> = project
             .analysis
             .languages
             .iter()
             .map(|l| l.name.clone())
-            .collect::<Vec<_>>()
-            .join(", ");
+            .collect();
+        let max_langs = if is_wide { 3 } else { 2 };
+        let languages = format_list_smart(&lang_names, max_langs, 12);
 
-        let main_tech = get_main_technologies(&project.analysis.technologies);
+        // Main tech: show 2 with "+N" for extras
+        let tech_names: Vec<String> = project
+            .analysis
+            .technologies
+            .iter()
+            .map(|t| t.name.clone())
+            .collect();
+        let main_tech = format_list_smart(&tech_names, 2, 14);
 
-        let ports = if project.analysis.ports.is_empty() {
-            "-".to_string()
-        } else {
-            project
-                .analysis
-                .ports
-                .iter()
-                .map(|p| p.number.to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-        };
+        // Smart ports: deduplicate and limit to 3
+        let port_numbers: Vec<u16> = project.analysis.ports.iter().map(|p| p.number).collect();
+        let ports = format_ports_smart(&port_numbers, 3);
 
         let docker = if project.analysis.docker_analysis.is_some() {
             "Yes"
         } else {
             "No"
         };
-
         let deps_count = project.analysis.dependencies.len().to_string();
 
         project_data.push((
             name,
-            proj_type.to_string(),
+            proj_type,
             languages,
             main_tech,
             ports,
@@ -384,7 +495,7 @@ fn display_projects_matrix_to_string(analysis: &MonorepoAnalysis) -> String {
         ));
     }
 
-    // Calculate column widths based on content
+    // Calculate column widths based on content (capped by max_width)
     let headers = [
         "Project",
         "Type",
@@ -394,16 +505,34 @@ fn display_projects_matrix_to_string(analysis: &MonorepoAnalysis) -> String {
         "Docker",
         "Deps",
     ];
-    let mut col_widths = headers.iter().map(|h| visual_width(h)).collect::<Vec<_>>();
+    let mut col_widths: Vec<usize> = headers
+        .iter()
+        .zip(&col_configs)
+        .map(|(h, cfg)| visual_width(h).clamp(cfg.min_width, cfg.max_width))
+        .collect();
 
     for (name, proj_type, languages, main_tech, ports, docker, deps_count) in &project_data {
-        col_widths[0] = col_widths[0].max(visual_width(name));
-        col_widths[1] = col_widths[1].max(visual_width(proj_type));
-        col_widths[2] = col_widths[2].max(visual_width(languages));
-        col_widths[3] = col_widths[3].max(visual_width(main_tech));
-        col_widths[4] = col_widths[4].max(visual_width(ports));
-        col_widths[5] = col_widths[5].max(visual_width(docker));
-        col_widths[6] = col_widths[6].max(visual_width(deps_count));
+        col_widths[0] = col_widths[0]
+            .max(visual_width(name))
+            .min(col_configs[0].max_width);
+        col_widths[1] = col_widths[1]
+            .max(visual_width(proj_type))
+            .min(col_configs[1].max_width);
+        col_widths[2] = col_widths[2]
+            .max(visual_width(languages))
+            .min(col_configs[2].max_width);
+        col_widths[3] = col_widths[3]
+            .max(visual_width(main_tech))
+            .min(col_configs[3].max_width);
+        col_widths[4] = col_widths[4]
+            .max(visual_width(ports))
+            .min(col_configs[4].max_width);
+        col_widths[5] = col_widths[5]
+            .max(visual_width(docker))
+            .min(col_configs[5].max_width);
+        col_widths[6] = col_widths[6]
+            .max(visual_width(deps_count))
+            .min(col_configs[6].max_width);
     }
 
     // Create header row

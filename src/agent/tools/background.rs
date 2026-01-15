@@ -127,12 +127,11 @@ impl BackgroundProcessManager {
         // Check if already running
         {
             let processes = self.processes.lock().await;
-            if processes.contains_key(id) {
-                if let Some(proc) = processes.get(id) {
-                    if let Some(port) = proc.local_port {
-                        return Ok(port);
-                    }
-                }
+            if processes.contains_key(id)
+                && let Some(proc) = processes.get(id)
+                && let Some(port) = proc.local_port
+            {
+                return Ok(port);
             }
         }
 
@@ -178,19 +177,18 @@ impl BackgroundProcessManager {
                 {
                     Ok(Ok(Some(line))) => {
                         // Parse port from "Forwarding from 127.0.0.1:XXXXX -> 9090"
-                        if line.contains("Forwarding from") {
-                            if let Some(port_str) = line
+                        if line.contains("Forwarding from")
+                            && let Some(port_str) = line
                                 .split(':')
                                 .nth(1)
                                 .and_then(|s| s.split_whitespace().next())
-                            {
-                                port = port_str.parse().ok();
-                                // Keep draining stdout in background to prevent SIGPIPE
-                                tokio::spawn(async move {
-                                    while let Ok(Some(_)) = reader.next_line().await {}
-                                });
-                                break;
-                            }
+                        {
+                            port = port_str.parse().ok();
+                            // Keep draining stdout in background to prevent SIGPIPE
+                            tokio::spawn(async move {
+                                while let Ok(Some(_)) = reader.next_line().await {}
+                            });
+                            break;
                         }
                     }
                     Ok(Ok(None)) => break, // EOF

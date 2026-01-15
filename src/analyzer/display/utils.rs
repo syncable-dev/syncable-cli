@@ -126,6 +126,106 @@ pub fn truncate_to_width(s: &str, max_width: usize) -> String {
     result
 }
 
+/// Get terminal width, defaulting to 100 if unavailable
+pub fn get_terminal_width() -> usize {
+    term_size::dimensions().map(|(w, _)| w).unwrap_or(100)
+}
+
+/// Smart truncate with single-char ellipsis "…" for cleaner look
+pub fn smart_truncate(s: &str, max_width: usize) -> String {
+    let current_width = visual_width(s);
+    if current_width <= max_width {
+        return s.to_string();
+    }
+
+    // Use single-char ellipsis for cleaner appearance
+    let mut result = String::new();
+    let mut width = 0;
+    let target_width = max_width.saturating_sub(1); // Leave room for "…"
+
+    for ch in strip_ansi_codes(s).chars() {
+        let ch_width = char_width(ch);
+        if width + ch_width > target_width {
+            break;
+        }
+        result.push(ch);
+        width += ch_width;
+    }
+    result.push('…');
+    result
+}
+
+/// Format ports list: deduplicate, limit to max_show, add "+N" if more
+pub fn format_ports_smart(ports: &[u16], max_show: usize) -> String {
+    if ports.is_empty() {
+        return "-".to_string();
+    }
+
+    // Deduplicate and sort
+    let mut unique_ports: Vec<u16> = ports.to_vec();
+    unique_ports.sort_unstable();
+    unique_ports.dedup();
+
+    if unique_ports.len() <= max_show {
+        unique_ports
+            .iter()
+            .map(|p| p.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    } else {
+        let shown: Vec<String> = unique_ports
+            .iter()
+            .take(max_show)
+            .map(|p| p.to_string())
+            .collect();
+        let remaining = unique_ports.len() - max_show;
+        format!("{} +{}", shown.join(", "), remaining)
+    }
+}
+
+/// Format a list of strings smartly: show up to max_show items, add "+N" if more
+/// Each item is truncated to max_item_width if needed
+pub fn format_list_smart(items: &[String], max_show: usize, max_item_width: usize) -> String {
+    if items.is_empty() {
+        return "-".to_string();
+    }
+
+    // Deduplicate while preserving order
+    let mut seen = std::collections::HashSet::new();
+    let unique: Vec<&String> = items
+        .iter()
+        .filter(|item| seen.insert(item.as_str()))
+        .collect();
+
+    if unique.len() <= max_show {
+        unique
+            .iter()
+            .map(|s| {
+                if visual_width(s) > max_item_width {
+                    smart_truncate(s, max_item_width)
+                } else {
+                    s.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    } else {
+        let shown: Vec<String> = unique
+            .iter()
+            .take(max_show)
+            .map(|s| {
+                if visual_width(s) > max_item_width {
+                    smart_truncate(s, max_item_width)
+                } else {
+                    s.to_string()
+                }
+            })
+            .collect();
+        let remaining = unique.len() - max_show;
+        format!("{} +{}", shown.join(", "), remaining)
+    }
+}
+
 /// Strip ANSI escape codes from a string
 pub fn strip_ansi_codes(s: &str) -> String {
     let mut result = String::new();

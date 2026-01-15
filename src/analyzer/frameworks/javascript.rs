@@ -1155,7 +1155,10 @@ fn get_js_technology_rules() -> Vec<TechnologyRule> {
             name: "Elysia".to_string(),
             category: TechnologyCategory::BackendFramework,
             confidence: 0.95,
-            dependency_patterns: vec!["elysia".to_string()],
+            dependency_patterns: vec![
+                "elysia".to_string(),
+                "@elysiajs/*".to_string(), // Elysia plugins like @elysiajs/cookie, @elysiajs/jwt
+            ],
             requires: vec![],
             conflicts_with: vec![],
             is_primary_indicator: true,

@@ -47,7 +47,7 @@ pub struct ToolCallRecord {
 }
 
 /// Conversation history manager with forge-style compaction support
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationHistory {
     /// Full conversation turns
     turns: Vec<ConversationTurn>,
@@ -233,6 +233,29 @@ impl ConversationHistory {
         self.total_tokens = 0;
         self.user_turn_count = 0;
         self.context_summary = ContextSummary::new();
+    }
+
+    /// Clear turns but preserve the summary frame (for sync with truncated raw_chat_history)
+    ///
+    /// Use this instead of clear() when raw_chat_history is truncated but we want to
+    /// preserve the accumulated context from prior compaction.
+    pub fn clear_turns_preserve_context(&mut self) {
+        // First compact any remaining turns into the summary
+        if self.turns.len() > 1 {
+            let _ = self.compact();
+        }
+
+        // Now clear turns but keep summary_frame and context_summary
+        self.turns.clear();
+
+        // Recalculate tokens (just summary frame now)
+        self.total_tokens = self
+            .summary_frame
+            .as_ref()
+            .map(|f| f.token_count)
+            .unwrap_or(0);
+
+        // User turn count stays as-is for statistics
     }
 
     /// Perform forge-style compaction with smart eviction
@@ -482,6 +505,16 @@ impl ConversationHistory {
             .iter()
             .map(|s| s.as_str())
     }
+
+    /// Serialize to JSON for session persistence
+    pub fn to_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(self)
+    }
+
+    /// Deserialize from JSON (for session restore)
+    pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(json)
+    }
 }
 
 /// Helper to truncate text with ellipsis
@@ -621,5 +654,179 @@ mod tests {
         assert!(history.needs_compaction());
         let reason = history.compaction_reason();
         assert!(reason.is_some());
+    }
+
+    #[test]
+    fn test_clear_turns_preserve_context() {
+        // Create history with aggressive compaction to trigger summary
+        let mut history = ConversationHistory::with_config(CompactConfig {
+            retention_window: 2,
+            eviction_window: 0.6,
+            thresholds: CompactThresholds {
+                token_threshold: Some(200),
+                turn_threshold: Some(3),
+                message_threshold: Some(5),
+                on_turn_end: None,
+            },
+        });
+
+        // Add turns to trigger compaction
+        for i in 0..6 {
+            history.add_turn(
+                format!("Question {} with extra text", i),
+                format!("Answer {} with more detail", i),
+                vec![],
+            );
+        }
+
+        // Trigger compaction to build summary
+        if history.needs_compaction() {
+            let _ = history.compact();
+        }
+
+        // Verify we have a summary frame now
+        let had_summary_before = history.summary_frame.is_some();
+
+        // Now clear turns while preserving context
+        history.clear_turns_preserve_context();
+
+        // Verify turns are cleared but summary is preserved
+        assert_eq!(history.turn_count(), 0, "Turns should be cleared");
+        assert!(
+            history.summary_frame.is_some() == had_summary_before,
+            "Summary frame should be preserved"
+        );
+
+        // Token count should only include summary frame
+        if history.summary_frame.is_some() {
+            assert!(history.token_count() > 0, "Should have tokens from summary");
+        }
+
+        // to_messages should still work and include summary
+        let messages = history.to_messages();
+        if history.summary_frame.is_some() {
+            assert!(
+                !messages.is_empty(),
+                "Should still have summary in messages"
+            );
+        }
+    }
+
+    #[test]
+    fn test_clear_vs_clear_preserve_context() {
+        let mut history = ConversationHistory::new();
+
+        // Add some turns
+        for i in 0..5 {
+            history.add_turn(format!("Q{}", i), format!("A{}", i), vec![]);
+        }
+
+        // Force compaction
+        let _ = history.compact();
+        let had_summary = history.summary_frame.is_some();
+
+        // Test clear_turns_preserve_context
+        let mut history_preserve = history.clone();
+        history_preserve.clear_turns_preserve_context();
+
+        // Test regular clear
+        let mut history_clear = history.clone();
+        history_clear.clear();
+
+        // Verify difference
+        if had_summary {
+            assert!(
+                history_preserve.summary_frame.is_some(),
+                "preserve should keep summary"
+            );
+            assert!(
+                history_clear.summary_frame.is_none(),
+                "clear removes summary"
+            );
+        }
+
+        // Both should have no turns
+        assert_eq!(history_preserve.turn_count(), 0);
+        assert_eq!(history_clear.turn_count(), 0);
+    }
+
+    #[test]
+    fn test_history_serialization() {
+        let mut history = ConversationHistory::new();
+
+        // Add some turns
+        history.add_turn(
+            "What is this project?".to_string(),
+            "This is a Rust CLI tool.".to_string(),
+            vec![ToolCallRecord {
+                tool_name: "analyze".to_string(),
+                args_summary: "path: .".to_string(),
+                result_summary: "Found Rust project".to_string(),
+                tool_id: Some("tool_1".to_string()),
+                droppable: false,
+            }],
+        );
+
+        // Serialize
+        let json = history.to_json().expect("Should serialize");
+        assert!(!json.is_empty());
+
+        // Deserialize
+        let restored = ConversationHistory::from_json(&json).expect("Should deserialize");
+        assert_eq!(restored.turn_count(), 1);
+        assert_eq!(restored.user_turn_count(), 1);
+
+        // Verify tool call preserved
+        let messages = restored.to_messages();
+        assert!(!messages.is_empty());
+    }
+
+    #[test]
+    fn test_history_serialization_with_compaction() {
+        // Create history with compaction triggered
+        let mut history = ConversationHistory::with_config(CompactConfig {
+            retention_window: 2,
+            eviction_window: 0.6,
+            thresholds: CompactThresholds {
+                token_threshold: Some(200),
+                turn_threshold: Some(3),
+                message_threshold: Some(5),
+                on_turn_end: None,
+            },
+        });
+
+        // Add many turns to trigger compaction
+        for i in 0..6 {
+            history.add_turn(
+                format!("Question {} with some text", i),
+                format!("Answer {} with more detail", i),
+                vec![],
+            );
+        }
+
+        // Trigger compaction
+        if history.needs_compaction() {
+            let _ = history.compact();
+        }
+
+        let had_summary = history.summary_frame.is_some();
+
+        // Serialize with summary
+        let json = history.to_json().expect("Should serialize");
+
+        // Deserialize and verify summary preserved
+        let restored = ConversationHistory::from_json(&json).expect("Should deserialize");
+        assert_eq!(
+            restored.summary_frame.is_some(),
+            had_summary,
+            "Summary frame should be preserved"
+        );
+
+        // to_messages should include summary
+        let messages = restored.to_messages();
+        if had_summary {
+            // Summary adds 2 messages (user + assistant acknowledgment)
+            assert!(messages.len() >= 2, "Should have summary messages");
+        }
     }
 }

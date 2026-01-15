@@ -14,6 +14,7 @@
 //!    - Supports Basic auth and Bearer token
 
 use super::background::BackgroundProcessManager;
+use super::error::{ErrorCategory, format_error_for_llm};
 use crate::agent::ui::prometheus_display::{ConnectionMode, PrometheusConnectionDisplay};
 use crate::analyzer::k8s_optimize::{PrometheusAuth, PrometheusClient};
 use rig::completion::ToolDefinition;
@@ -73,6 +74,26 @@ impl PrometheusConnectTool {
     /// Create a new PrometheusConnectTool with shared background process manager
     pub fn new(bg_manager: Arc<BackgroundProcessManager>) -> Self {
         Self { bg_manager }
+    }
+
+    /// Validate port range (1-65535)
+    fn validate_port(port: u16) -> Result<(), String> {
+        if port == 0 {
+            return Err("Port must be between 1 and 65535 (got 0)".to_string());
+        }
+        Ok(())
+    }
+
+    /// Validate URL format (must start with http:// or https://)
+    fn validate_url(url: &str) -> Result<(), String> {
+        let url_lower = url.to_lowercase();
+        if !url_lower.starts_with("http://") && !url_lower.starts_with("https://") {
+            return Err(format!(
+                "URL must start with http:// or https:// (got '{}')",
+                url
+            ));
+        }
+        Ok(())
     }
 
     /// Build auth from args
@@ -197,6 +218,36 @@ External URL with basic auth:
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+        // Validate port if provided
+        if let Some(port) = args.port {
+            if let Err(e) = Self::validate_port(port) {
+                return Ok(format_error_for_llm(
+                    "prometheus_connect",
+                    ErrorCategory::ValidationFailed,
+                    &e,
+                    Some(vec![
+                        "Port must be a valid TCP port between 1 and 65535",
+                        "Common Prometheus port is 9090 (default if not specified)",
+                    ]),
+                ));
+            }
+        }
+
+        // Validate URL format if provided
+        if let Some(ref url) = args.url {
+            if let Err(e) = Self::validate_url(url) {
+                return Ok(format_error_for_llm(
+                    "prometheus_connect",
+                    ErrorCategory::ValidationFailed,
+                    &e,
+                    Some(vec![
+                        "URL must start with http:// or https://",
+                        "Example: http://prometheus.example.com or https://prometheus.example.com",
+                    ]),
+                ));
+            }
+        }
+
         let target_port = args.port.unwrap_or(9090);
 
         // PREFERRED: Port-forward (no auth needed)
@@ -271,20 +322,22 @@ External URL with basic auth:
                             ],
                         );
 
-                        let response = json!({
-                            "connected": false,
-                            "url": url,
-                            "mode": "port-forward",
-                            "local_port": local_port,
-                            "error": "Port-forward started but Prometheus not responding",
-                            "suggestions": [
-                                format!("Verify the service is correct with: kubectl get svc -n {}", namespace),
-                                format!("Check if Prometheus pod is running: kubectl get pods -n {} | grep prometheus", namespace),
-                                "The service might need more time to start".to_string()
-                            ]
-                        });
-                        return Ok(serde_json::to_string_pretty(&response)
-                            .unwrap_or_else(|_| "{}".to_string()));
+                        return Ok(format_error_for_llm(
+                            "prometheus_connect",
+                            ErrorCategory::NetworkError,
+                            "Port-forward started but Prometheus not responding",
+                            Some(vec![
+                                &format!(
+                                    "Verify the service is correct: kubectl get svc -n {}",
+                                    namespace
+                                ),
+                                &format!(
+                                    "Check if Prometheus pod is running: kubectl get pods -n {} | grep prometheus",
+                                    namespace
+                                ),
+                                "The service might need more time to start - try again in a few seconds",
+                            ]),
+                        ));
                     }
                 }
                 Err(e) => {
@@ -298,18 +351,19 @@ External URL with basic auth:
                         ],
                     );
 
-                    let response = json!({
-                        "connected": false,
-                        "mode": "port-forward",
-                        "error": format!("Port-forward failed: {}", e),
-                        "suggestions": [
-                            "Check if kubectl is configured correctly",
-                            format!("Verify the service exists: kubectl get svc -n {}", namespace),
-                            "Try providing an external URL instead"
-                        ]
-                    });
-                    return Ok(serde_json::to_string_pretty(&response)
-                        .unwrap_or_else(|_| "{}".to_string()));
+                    return Ok(format_error_for_llm(
+                        "prometheus_connect",
+                        ErrorCategory::ExternalCommandFailed,
+                        &format!("Port-forward failed: {}", e),
+                        Some(vec![
+                            "Check if kubectl is configured correctly: kubectl config current-context",
+                            &format!(
+                                "Verify the service exists: kubectl get svc -n {}",
+                                namespace
+                            ),
+                            "Try providing an external URL instead",
+                        ]),
+                    ));
                 }
             }
         }
@@ -344,98 +398,91 @@ External URL with basic auth:
 
             // If that fails and auth was provided, try with auth
             let auth = Self::build_auth(&args);
-            if !matches!(auth, PrometheusAuth::None) {
-                if Self::test_connection(url, auth).await {
-                    display.connected(url, true);
-                    display.ready_for_use(url);
+            if !matches!(auth, PrometheusAuth::None) && Self::test_connection(url, auth).await {
+                display.connected(url, true);
+                display.ready_for_use(url);
 
-                    let response = json!({
-                        "connected": true,
-                        "url": url,
-                        "mode": "direct",
-                        "authenticated": true,
-                        "auth_type": args.auth_type,
-                        "note": "Connected with authentication",
-                        "usage": {
-                            "k8s_optimize": {
-                                "prometheus": url,
-                                "auth_type": args.auth_type,
-                                "username": args.username,
-                                // Don't include password/token in response for security
-                            }
+                let response = json!({
+                    "connected": true,
+                    "url": url,
+                    "mode": "direct",
+                    "authenticated": true,
+                    "auth_type": args.auth_type,
+                    "note": "Connected with authentication",
+                    "usage": {
+                        "k8s_optimize": {
+                            "prometheus": url,
+                            "auth_type": args.auth_type,
+                            "username": args.username,
+                            // Don't include password/token in response for security
                         }
-                    });
-                    return Ok(serde_json::to_string_pretty(&response)
-                        .unwrap_or_else(|_| "{}".to_string()));
-                }
+                    }
+                });
+                return Ok(
+                    serde_json::to_string_pretty(&response).unwrap_or_else(|_| "{}".to_string())
+                );
             }
 
             // Connection failed - show auth hint if no auth was tried
             if args.auth_type.is_none() {
                 display.auth_required();
-            }
 
-            display.connection_failed(
-                "Connection failed",
-                if args.auth_type.is_none() {
+                display.connection_failed(
+                    "Connection failed - URL may require authentication",
                     &[
-                        "The URL might require authentication",
-                        "Try with auth_type='basic' or 'bearer'",
-                        "Verify the URL is correct and accessible",
-                    ]
-                } else {
-                    &[
-                        "Authentication credentials might be incorrect",
-                        "Verify the username/password or token",
-                        "Check if the auth_type matches what the server expects",
-                    ]
-                },
-            );
-
-            let response = json!({
-                "connected": false,
-                "url": url,
-                "mode": "direct",
-                "error": "Connection failed",
-                "suggestions": if args.auth_type.is_none() {
-                    vec![
-                        "The URL might require authentication",
                         "Try with auth_type='basic' and username/password",
                         "Or try auth_type='bearer' with a token",
-                        "Verify the URL is correct and accessible"
-                    ]
-                } else {
-                    vec![
-                        "Authentication credentials might be incorrect",
+                        "Verify the URL is correct and accessible",
+                    ],
+                );
+
+                let test_url_suggestion =
+                    format!("Test URL manually: curl -s {}/api/v1/status/config", url);
+                return Ok(format_error_for_llm(
+                    "prometheus_connect",
+                    ErrorCategory::NetworkError,
+                    "Connection failed - URL may require authentication",
+                    Some(vec![
+                        "Try with auth_type='basic' and username/password",
+                        "Or try auth_type='bearer' with a token",
+                        "Verify the URL is correct and accessible",
+                        &test_url_suggestion,
+                    ]),
+                ));
+            } else {
+                display.connection_failed(
+                    "Connection failed - authentication credentials may be incorrect",
+                    &[
                         "Verify the username/password or token",
-                        "Check if the auth_type matches what the server expects"
-                    ]
-                }
-            });
-            return Ok(serde_json::to_string_pretty(&response).unwrap_or_else(|_| "{}".to_string()));
+                        "Check if the auth_type matches what the server expects",
+                        "Ensure the user has permission to access Prometheus API",
+                    ],
+                );
+
+                return Ok(format_error_for_llm(
+                    "prometheus_connect",
+                    ErrorCategory::NetworkError,
+                    "Connection failed - authentication credentials may be incorrect",
+                    Some(vec![
+                        "Verify the username/password or token",
+                        "Check if the auth_type matches what the server expects",
+                        "Ensure the user has permission to access Prometheus API",
+                    ]),
+                ));
+            }
         }
 
         // No service or URL provided
-        let response = json!({
-            "connected": false,
-            "error": "No service or URL provided",
-            "hint": "Either provide service+namespace for port-forward, or provide a URL",
-            "examples": [
-                {
-                    "port-forward": {
-                        "service": "prometheus-server",
-                        "namespace": "monitoring",
-                        "port": 9090
-                    }
-                },
-                {
-                    "external": {
-                        "url": "http://prometheus.example.com"
-                    }
-                }
-            ]
-        });
-        Ok(serde_json::to_string_pretty(&response).unwrap_or_else(|_| "{}".to_string()))
+        Ok(format_error_for_llm(
+            "prometheus_connect",
+            ErrorCategory::ValidationFailed,
+            "No service or URL provided",
+            Some(vec![
+                "Provide service + namespace for port-forward: {\"service\": \"prometheus-server\", \"namespace\": \"monitoring\"}",
+                "Or provide url for external Prometheus: {\"url\": \"http://prometheus.example.com\"}",
+                "Use prometheus_discover to find available Prometheus instances",
+            ]),
+        ))
     }
 }
 
@@ -446,6 +493,129 @@ mod tests {
     #[test]
     fn test_tool_name() {
         assert_eq!(PrometheusConnectTool::NAME, "prometheus_connect");
+    }
+
+    #[test]
+    fn test_validate_port_valid() {
+        assert!(PrometheusConnectTool::validate_port(9090).is_ok());
+        assert!(PrometheusConnectTool::validate_port(1).is_ok());
+        assert!(PrometheusConnectTool::validate_port(65535).is_ok());
+    }
+
+    #[test]
+    fn test_validate_port_invalid() {
+        let result = PrometheusConnectTool::validate_port(0);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .contains("Port must be between 1 and 65535")
+        );
+    }
+
+    #[test]
+    fn test_validate_url_valid() {
+        assert!(PrometheusConnectTool::validate_url("http://prometheus.example.com").is_ok());
+        assert!(PrometheusConnectTool::validate_url("https://prometheus.example.com").is_ok());
+        assert!(PrometheusConnectTool::validate_url("HTTP://PROMETHEUS.EXAMPLE.COM").is_ok());
+        assert!(PrometheusConnectTool::validate_url("HTTPS://prometheus.example.com").is_ok());
+    }
+
+    #[test]
+    fn test_validate_url_invalid() {
+        // Missing protocol
+        let result = PrometheusConnectTool::validate_url("prometheus.example.com");
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .contains("must start with http:// or https://")
+        );
+
+        // Wrong protocol
+        let result = PrometheusConnectTool::validate_url("ftp://prometheus.example.com");
+        assert!(result.is_err());
+
+        // Just a path
+        let result = PrometheusConnectTool::validate_url("/api/v1/query");
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_missing_service_and_url_error() {
+        // Test that calling with no service and no URL returns structured error
+        let bg_manager = Arc::new(BackgroundProcessManager::new());
+        let tool = PrometheusConnectTool::new(bg_manager);
+
+        let args = PrometheusConnectArgs {
+            service: None,
+            namespace: None,
+            url: None,
+            port: None,
+            auth_type: None,
+            username: None,
+            password: None,
+            token: None,
+        };
+
+        let result = tool.call(args).await.unwrap();
+
+        // Verify the result is a structured error
+        assert!(result.contains("\"error\": true"));
+        assert!(result.contains("VALIDATION_FAILED"));
+        assert!(result.contains("No service or URL provided"));
+        assert!(result.contains("suggestions"));
+    }
+
+    #[tokio::test]
+    async fn test_invalid_port_validation() {
+        // Test that invalid port (0) returns validation error
+        let bg_manager = Arc::new(BackgroundProcessManager::new());
+        let tool = PrometheusConnectTool::new(bg_manager);
+
+        let args = PrometheusConnectArgs {
+            service: Some("prometheus".to_string()),
+            namespace: Some("monitoring".to_string()),
+            url: None,
+            port: Some(0), // Invalid port
+            auth_type: None,
+            username: None,
+            password: None,
+            token: None,
+        };
+
+        let result = tool.call(args).await.unwrap();
+
+        // Verify the result is a structured error
+        assert!(result.contains("\"error\": true"));
+        assert!(result.contains("VALIDATION_FAILED"));
+        assert!(result.contains("Port must be between 1 and 65535"));
+    }
+
+    #[tokio::test]
+    async fn test_malformed_url_validation() {
+        // Test that URL without http(s):// returns helpful error
+        let bg_manager = Arc::new(BackgroundProcessManager::new());
+        let tool = PrometheusConnectTool::new(bg_manager);
+
+        let args = PrometheusConnectArgs {
+            service: None,
+            namespace: None,
+            url: Some("prometheus.example.com".to_string()), // Missing protocol
+            port: None,
+            auth_type: None,
+            username: None,
+            password: None,
+            token: None,
+        };
+
+        let result = tool.call(args).await.unwrap();
+
+        // Verify the result is a structured error
+        assert!(result.contains("\"error\": true"));
+        assert!(result.contains("VALIDATION_FAILED"));
+        assert!(result.contains("must start with http:// or https://"));
+        assert!(result.contains("suggestions"));
     }
 
     #[test]

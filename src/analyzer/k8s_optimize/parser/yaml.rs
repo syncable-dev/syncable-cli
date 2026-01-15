@@ -48,7 +48,7 @@ pub fn parse_cpu_to_millicores(cpu: &str) -> Option<u64> {
 /// - 1000 -> "1"
 /// - 1500 -> "1500m"
 pub fn millicores_to_cpu_string(millicores: u64) -> String {
-    if millicores >= 1000 && millicores % 1000 == 0 {
+    if millicores >= 1000 && millicores.is_multiple_of(1000) {
         format!("{}", millicores / 1000)
     } else {
         format!("{}m", millicores)
@@ -115,13 +115,13 @@ pub fn bytes_to_memory_string(bytes: u64) -> String {
     const GI: u64 = MI * 1024;
     const TI: u64 = GI * 1024;
 
-    if bytes >= TI && bytes % TI == 0 {
+    if bytes >= TI && bytes.is_multiple_of(TI) {
         format!("{}Ti", bytes / TI)
-    } else if bytes >= GI && bytes % GI == 0 {
+    } else if bytes >= GI && bytes.is_multiple_of(GI) {
         format!("{}Gi", bytes / GI)
-    } else if bytes >= MI && bytes % MI == 0 {
+    } else if bytes >= MI && bytes.is_multiple_of(MI) {
         format!("{}Mi", bytes / MI)
-    } else if bytes >= KI && bytes % KI == 0 {
+    } else if bytes >= KI && bytes.is_multiple_of(KI) {
         format!("{}Ki", bytes / KI)
     } else if bytes >= MI {
         // Round to Mi for readability

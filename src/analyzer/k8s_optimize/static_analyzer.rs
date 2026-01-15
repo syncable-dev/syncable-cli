@@ -47,15 +47,15 @@ pub fn analyze(path: &Path, config: &K8sOptimizeConfig) -> OptimizationResult {
     let yaml_contents = if path.is_dir() {
         collect_yaml_files(path)
     } else if path.is_file() {
-        if let Some(ext) = path.extension() {
-            if ext == "tf" {
-                // Single Terraform file - process it separately
-                analyze_terraform_resources(path, config, &mut result);
-                update_summary(&mut result);
-                result.sort();
-                result.metadata.duration_ms = start.elapsed().as_millis() as u64;
-                return result;
-            }
+        if let Some(ext) = path.extension()
+            && ext == "tf"
+        {
+            // Single Terraform file - process it separately
+            analyze_terraform_resources(path, config, &mut result);
+            update_summary(&mut result);
+            result.sort();
+            result.metadata.duration_ms = start.elapsed().as_millis() as u64;
+            return result;
         }
         match std::fs::read_to_string(path) {
             Ok(content) => vec![(path.to_path_buf(), content)],
@@ -190,10 +190,10 @@ fn analyze_yaml_content(
             .map(String::from);
 
         // Check if namespace should be excluded
-        if let Some(ref ns) = namespace {
-            if config.should_exclude_namespace(ns) {
-                continue;
-            }
+        if let Some(ref ns) = namespace
+            && config.should_exclude_namespace(ns)
+        {
+            continue;
         }
 
         // Extract containers from pod spec
@@ -350,10 +350,10 @@ fn render_kustomize(kustomize_path: &Path) -> Option<String> {
         .arg(kustomize_path)
         .output();
 
-    if let Ok(o) = kubectl_output {
-        if o.status.success() {
-            return Some(String::from_utf8_lossy(&o.stdout).to_string());
-        }
+    if let Ok(o) = kubectl_output
+        && o.status.success()
+    {
+        return Some(String::from_utf8_lossy(&o.stdout).to_string());
     }
 
     // Fall back to standalone kustomize
@@ -483,10 +483,10 @@ fn collect_yaml_files_recursive(dir: &Path, files: &mut Vec<(std::path::PathBuf,
         if path.is_dir() {
             collect_yaml_files_recursive(&path, files);
         } else if let Some(ext) = path.extension() {
-            if ext == "yaml" || ext == "yml" {
-                if let Ok(content) = std::fs::read_to_string(&path) {
-                    files.push((path, content));
-                }
+            if (ext == "yaml" || ext == "yml")
+                && let Ok(content) = std::fs::read_to_string(&path)
+            {
+                files.push((path, content));
             }
         }
     }
@@ -533,11 +533,11 @@ fn format_bytes_to_k8s(bytes: u64) -> String {
     const MI: u64 = 1024 * 1024;
     const KI: u64 = 1024;
 
-    if bytes >= GI && bytes % GI == 0 {
+    if bytes >= GI && bytes.is_multiple_of(GI) {
         format!("{}Gi", bytes / GI)
-    } else if bytes >= MI && bytes % MI == 0 {
+    } else if bytes >= MI && bytes.is_multiple_of(MI) {
         format!("{}Mi", bytes / MI)
-    } else if bytes >= KI && bytes % KI == 0 {
+    } else if bytes >= KI && bytes.is_multiple_of(KI) {
         format!("{}Ki", bytes / KI)
     } else {
         format!("{}", bytes)
@@ -556,10 +556,10 @@ fn analyze_terraform_resources(
 
     for tf_res in tf_resources {
         // Skip system namespaces if not included
-        if let Some(ref ns) = tf_res.namespace {
-            if config.should_exclude_namespace(ns) {
-                continue;
-            }
+        if let Some(ref ns) = tf_res.namespace
+            && config.should_exclude_namespace(ns)
+        {
+            continue;
         }
 
         result.summary.resources_analyzed += 1;
@@ -594,7 +594,7 @@ fn analyze_terraform_resources(
                 .requests
                 .as_ref()
                 .and_then(|r| r.memory)
-                .map(|m| format_bytes_to_k8s(m));
+                .map(format_bytes_to_k8s);
             let cpu_lim = container
                 .limits
                 .as_ref()
@@ -604,7 +604,7 @@ fn analyze_terraform_resources(
                 .limits
                 .as_ref()
                 .and_then(|l| l.memory)
-                .map(|m| format_bytes_to_k8s(m));
+                .map(format_bytes_to_k8s);
 
             let current = ResourceSpec {
                 cpu_request: cpu_req,

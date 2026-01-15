@@ -353,7 +353,7 @@ fn matches_filter(issue: &Value, filter_type: &str, filter_value: &str) -> bool 
                 .to_lowercase()
                 .contains(&filter_value.to_lowercase())
         }
-        "any" | _ => {
+        _ => {
             // Search in all string values
             let issue_str = serde_json::to_string(issue).unwrap_or_default();
             issue_str
@@ -466,12 +466,18 @@ fn extract_summary(data: &Value) -> Value {
         summary.insert("project_root".to_string(), Value::String(root.to_string()));
     }
     if let Some(arch) = data.get("architecture_type").and_then(|v| v.as_str()) {
-        summary.insert("architecture_type".to_string(), Value::String(arch.to_string()));
+        summary.insert(
+            "architecture_type".to_string(),
+            Value::String(arch.to_string()),
+        );
     }
 
     // Count projects (MonorepoAnalysis)
     if let Some(projects) = data.get("projects").and_then(|v| v.as_array()) {
-        summary.insert("project_count".to_string(), Value::Number(projects.len().into()));
+        summary.insert(
+            "project_count".to_string(),
+            Value::Number(projects.len().into()),
+        );
 
         // Extract project names
         let names: Vec<Value> = projects
@@ -504,7 +510,10 @@ fn extract_summary(data: &Value) -> Value {
 
     // Extract services (ProjectAnalysis flat structure) - include names, not just count
     if let Some(services) = data.get("services").and_then(|v| v.as_array()) {
-        summary.insert("services_count".to_string(), Value::Number(services.len().into()));
+        summary.insert(
+            "services_count".to_string(),
+            Value::Number(services.len().into()),
+        );
         // Include service names so agent knows what microservices exist
         let service_names: Vec<Value> = services
             .iter()
@@ -591,15 +600,14 @@ fn extract_service_by_name(data: &Value, name: &str) -> Option<Value> {
             .get("analysis")
             .and_then(|a| a.get("services"))
             .and_then(|s| s.as_array())
-        {
-            if let Some(service) = services.iter().find(|s| {
+            && let Some(service) = services.iter().find(|s| {
                 s.get("name")
                     .and_then(|n| n.as_str())
                     .map(|n| n.to_lowercase().contains(&name.to_lowercase()))
                     .unwrap_or(false)
-            }) {
-                return Some(service.clone());
-            }
+            })
+        {
+            return Some(service.clone());
         }
     }
     None
@@ -616,15 +624,26 @@ fn extract_language_details(data: &Value, lang_name: &str) -> Option<Value> {
             if lang_name == "*" || name.to_lowercase().contains(&lang_name.to_lowercase()) {
                 let mut compact_lang = serde_json::Map::new();
                 if !proj_name.is_empty() {
-                    compact_lang.insert("project".to_string(), Value::String(proj_name.to_string()));
+                    compact_lang
+                        .insert("project".to_string(), Value::String(proj_name.to_string()));
                 }
-                compact_lang.insert("name".to_string(), lang.get("name").cloned().unwrap_or(Value::Null));
-                compact_lang.insert("version".to_string(), lang.get("version").cloned().unwrap_or(Value::Null));
-                compact_lang.insert("confidence".to_string(), lang.get("confidence").cloned().unwrap_or(Value::Null));
+                compact_lang.insert(
+                    "name".to_string(),
+                    lang.get("name").cloned().unwrap_or(Value::Null),
+                );
+                compact_lang.insert(
+                    "version".to_string(),
+                    lang.get("version").cloned().unwrap_or(Value::Null),
+                );
+                compact_lang.insert(
+                    "confidence".to_string(),
+                    lang.get("confidence").cloned().unwrap_or(Value::Null),
+                );
 
                 // Replace file array with count
                 if let Some(files) = lang.get("files").and_then(|f| f.as_array()) {
-                    compact_lang.insert("file_count".to_string(), Value::Number(files.len().into()));
+                    compact_lang
+                        .insert("file_count".to_string(), Value::Number(files.len().into()));
                 }
 
                 results.push(Value::Object(compact_lang));
@@ -756,7 +775,7 @@ fn compact_analyze_output(data: &Value) -> Value {
 
     // Compact projects (MonorepoAnalysis)
     if let Some(projects) = data.get("projects").and_then(|v| v.as_array()) {
-        let compacted: Vec<Value> = projects.iter().map(|p| compact_project(p)).collect();
+        let compacted: Vec<Value> = projects.iter().map(compact_project).collect();
         result.insert("projects".to_string(), Value::Array(compacted));
         return Value::Object(result);
     }
@@ -785,7 +804,8 @@ fn compact_analyze_output(data: &Value) -> Value {
                 }
                 // Replace files array with count
                 if let Some(files) = lang.get("files").and_then(|f| f.as_array()) {
-                    compact_lang.insert("file_count".to_string(), Value::Number(files.len().into()));
+                    compact_lang
+                        .insert("file_count".to_string(), Value::Number(files.len().into()));
                 }
                 Value::Object(compact_lang)
             })
@@ -856,7 +876,8 @@ fn compact_project(project: &Value) -> Value {
                     }
                     // Replace files array with count
                     if let Some(files) = lang.get("files").and_then(|f| f.as_array()) {
-                        compact_lang.insert("file_count".to_string(), Value::Number(files.len().into()));
+                        compact_lang
+                            .insert("file_count".to_string(), Value::Number(files.len().into()));
                     }
                     Value::Object(compact_lang)
                 })
@@ -865,7 +886,13 @@ fn compact_project(project: &Value) -> Value {
         }
 
         // Copy frameworks, databases, services as-is (usually not huge)
-        for key in &["frameworks", "databases", "services", "build_tools", "package_managers"] {
+        for key in &[
+            "frameworks",
+            "databases",
+            "services",
+            "build_tools",
+            "package_managers",
+        ] {
             if let Some(v) = analysis.get(*key) {
                 compact_analysis.insert(key.to_string(), v.clone());
             }
@@ -888,32 +915,32 @@ pub fn list_outputs() -> Vec<OutputInfo> {
 
     if let Ok(entries) = fs::read_dir(&dir) {
         for entry in entries.flatten() {
-            if let Some(filename) = entry.file_name().to_str() {
-                if filename.ends_with(".json") {
-                    let ref_id = filename.trim_end_matches(".json").to_string();
+            if let Some(filename) = entry.file_name().to_str()
+                && filename.ends_with(".json")
+            {
+                let ref_id = filename.trim_end_matches(".json").to_string();
 
-                    // Read metadata
-                    if let Ok(content) = fs::read_to_string(entry.path()) {
-                        if let Ok(stored) = serde_json::from_str::<Value>(&content) {
-                            let tool = stored
-                                .get("tool")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("unknown")
-                                .to_string();
-                            let timestamp = stored
-                                .get("timestamp")
-                                .and_then(|v| v.as_u64())
-                                .unwrap_or(0);
-                            let size = content.len();
+                // Read metadata
+                if let Ok(content) = fs::read_to_string(entry.path())
+                    && let Ok(stored) = serde_json::from_str::<Value>(&content)
+                {
+                    let tool = stored
+                        .get("tool")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown")
+                        .to_string();
+                    let timestamp = stored
+                        .get("timestamp")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
+                    let size = content.len();
 
-                            outputs.push(OutputInfo {
-                                ref_id,
-                                tool,
-                                timestamp,
-                                size_bytes: size,
-                            });
-                        }
-                    }
+                    outputs.push(OutputInfo {
+                        ref_id,
+                        tool,
+                        timestamp,
+                        size_bytes: size,
+                    });
                 }
             }
         }
@@ -947,16 +974,16 @@ pub fn cleanup_old_outputs() {
 
     if let Ok(entries) = fs::read_dir(&dir) {
         for entry in entries.flatten() {
-            if let Ok(content) = fs::read_to_string(entry.path()) {
-                if let Ok(stored) = serde_json::from_str::<Value>(&content) {
-                    let timestamp = stored
-                        .get("timestamp")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0);
+            if let Ok(content) = fs::read_to_string(entry.path())
+                && let Ok(stored) = serde_json::from_str::<Value>(&content)
+            {
+                let timestamp = stored
+                    .get("timestamp")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
 
-                    if now - timestamp > MAX_AGE_SECS {
-                        let _ = fs::remove_file(entry.path());
-                    }
+                if now - timestamp > MAX_AGE_SECS {
+                    let _ = fs::remove_file(entry.path());
                 }
             }
         }
