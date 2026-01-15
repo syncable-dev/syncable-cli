@@ -54,26 +54,23 @@ pub fn parse_terraform_k8s_resources(path: &Path) -> Vec<TerraformK8sResource> {
     let mut resources = Vec::new();
 
     if path.is_file() {
-        if let Some(ext) = path.extension() {
-            if ext == "tf" {
-                if let Ok(content) = std::fs::read_to_string(path) {
-                    resources.extend(parse_tf_content(&content, path));
-                }
-            }
+        if let Some(ext) = path.extension()
+            && ext == "tf"
+            && let Ok(content) = std::fs::read_to_string(path)
+        {
+            resources.extend(parse_tf_content(&content, path));
         }
-    } else if path.is_dir() {
-        if let Ok(entries) = std::fs::read_dir(path) {
-            for entry in entries.flatten() {
-                let entry_path = entry.path();
-                if entry_path.is_file() {
-                    if let Some(ext) = entry_path.extension() {
-                        if ext == "tf" {
-                            if let Ok(content) = std::fs::read_to_string(&entry_path) {
-                                resources.extend(parse_tf_content(&content, &entry_path));
-                            }
-                        }
-                    }
-                }
+    } else if path.is_dir()
+        && let Ok(entries) = std::fs::read_dir(path)
+    {
+        for entry in entries.flatten() {
+            let entry_path = entry.path();
+            if entry_path.is_file()
+                && let Some(ext) = entry_path.extension()
+                && ext == "tf"
+                && let Ok(content) = std::fs::read_to_string(&entry_path)
+            {
+                resources.extend(parse_tf_content(&content, &entry_path));
             }
         }
     }
@@ -97,12 +94,11 @@ fn parse_tf_content(content: &str, file_path: &Path) -> Vec<TerraformK8sResource
 
     // Look for resource blocks
     for structure in body.iter() {
-        if let hcl::Structure::Block(block) = structure {
-            if block.identifier() == "resource" {
-                if let Some(resource) = parse_resource_block(block, file_path) {
-                    resources.push(resource);
-                }
-            }
+        if let hcl::Structure::Block(block) = structure
+            && block.identifier() == "resource"
+            && let Some(resource) = parse_resource_block(block, file_path)
+        {
+            resources.push(resource);
         }
     }
 
@@ -230,12 +226,11 @@ fn parse_spec_block(block: &Block, resource_type: &str) -> Vec<TerraformContaine
                 "spec" if resource_type.contains("pod") => {
                     // Pod spec contains containers directly
                     for s in inner.body().iter() {
-                        if let hcl::Structure::Block(container_block) = s {
-                            if container_block.identifier() == "container" {
-                                if let Some(c) = parse_container_block(container_block) {
-                                    containers.push(c);
-                                }
-                            }
+                        if let hcl::Structure::Block(container_block) = s
+                            && container_block.identifier() == "container"
+                            && let Some(c) = parse_container_block(container_block)
+                        {
+                            containers.push(c);
                         }
                     }
                 }
@@ -252,16 +247,15 @@ fn parse_template_block(block: &Block) -> Vec<TerraformContainer> {
     let mut containers = Vec::new();
 
     for structure in block.body().iter() {
-        if let hcl::Structure::Block(inner) = structure {
-            if inner.identifier() == "spec" {
-                for s in inner.body().iter() {
-                    if let hcl::Structure::Block(container_block) = s {
-                        if container_block.identifier() == "container" {
-                            if let Some(c) = parse_container_block(container_block) {
-                                containers.push(c);
-                            }
-                        }
-                    }
+        if let hcl::Structure::Block(inner) = structure
+            && inner.identifier() == "spec"
+        {
+            for s in inner.body().iter() {
+                if let hcl::Structure::Block(container_block) = s
+                    && container_block.identifier() == "container"
+                    && let Some(c) = parse_container_block(container_block)
+                {
+                    containers.push(c);
                 }
             }
         }

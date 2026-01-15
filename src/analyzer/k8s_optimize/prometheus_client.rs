@@ -396,10 +396,11 @@ impl PrometheusClient {
         if let Some(result) = body.data.result {
             for series in result {
                 for (_, value) in series.values.unwrap_or_default() {
-                    if let Ok(v) = value.parse::<f64>() {
-                        if !v.is_nan() && v.is_finite() {
-                            values.push(v);
-                        }
+                    if let Ok(v) = value.parse::<f64>()
+                        && !v.is_nan()
+                        && v.is_finite()
+                    {
+                        values.push(v);
                     }
                 }
             }
@@ -610,7 +611,7 @@ fn round_cpu(millicores: u64) -> u64 {
         0
     } else if millicores <= 100 {
         // Ceiling to nearest 25m (prevent under-provisioning for small requests)
-        ((millicores + 24) / 25) * 25
+        millicores.div_ceil(25) * 25
     } else if millicores <= 1000 {
         // Round to nearest 50m
         ((millicores + 25) / 50) * 50
