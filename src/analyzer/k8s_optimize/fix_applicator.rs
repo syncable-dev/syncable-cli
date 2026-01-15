@@ -282,12 +282,10 @@ pub fn apply_fixes(
         };
 
         // Create backup if not dry run
-        if !dry_run {
-            if let Some(ref backup) = backup_path {
-                let backup_file = backup.join(file_path.file_name().unwrap_or_default());
-                if let Err(e) = fs::write(&backup_file, &content) {
-                    errors.push(format!("Failed to backup {}: {}", file_path.display(), e));
-                }
+        if !dry_run && let Some(ref backup) = backup_path {
+            let backup_file = backup.join(file_path.file_name().unwrap_or_default());
+            if let Err(e) = fs::write(&backup_file, &content) {
+                errors.push(format!("Failed to backup {}: {}", file_path.display(), e));
             }
         }
 
@@ -331,10 +329,11 @@ pub fn apply_fixes(
         }
 
         // Write modified content if not dry run
-        if !dry_run && applied > 0 {
-            if let Err(e) = fs::write(file_path, &modified_content) {
-                errors.push(format!("Failed to write {}: {}", file_path.display(), e));
-            }
+        if !dry_run
+            && applied > 0
+            && let Err(e) = fs::write(file_path, &modified_content)
+        {
+            errors.push(format!("Failed to write {}: {}", file_path.display(), e));
         }
     }
 

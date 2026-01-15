@@ -266,10 +266,11 @@ fn extract_issues(output: &Value) -> Vec<Value> {
     // Try nested structures
     if let Some(obj) = output.as_object() {
         for (_, v) in obj {
-            if let Some(arr) = v.as_array() {
-                if !arr.is_empty() && is_issue_like(&arr[0]) {
-                    return arr.clone();
-                }
+            if let Some(arr) = v.as_array()
+                && !arr.is_empty()
+                && is_issue_like(&arr[0])
+            {
+                return arr.clone();
             }
         }
     }
@@ -367,10 +368,10 @@ fn get_issue_file(issue: &Value) -> Option<String> {
             return Some(s.to_string());
         }
         // Handle nested location objects
-        if let Some(loc) = issue.get(field).and_then(|v| v.as_object()) {
-            if let Some(f) = loc.get("file").and_then(|v| v.as_str()) {
-                return Some(f.to_string());
-            }
+        if let Some(loc) = issue.get(field).and_then(|v| v.as_object())
+            && let Some(f) = loc.get("file").and_then(|v| v.as_str())
+        {
+            return Some(f.to_string());
         }
     }
 
@@ -492,7 +493,8 @@ pub fn compress_analysis_output(output: &Value, config: &CompressionConfig) -> S
 
     // Detect output type and extract accordingly
     let is_monorepo = output.get("projects").is_some() || output.get("is_monorepo").is_some();
-    let is_project_analysis = output.get("languages").is_some() && output.get("analysis_metadata").is_some();
+    let is_project_analysis =
+        output.get("languages").is_some() && output.get("analysis_metadata").is_some();
 
     if is_monorepo {
         // MonorepoAnalysis structure
@@ -517,19 +519,19 @@ pub fn compress_analysis_output(output: &Value, config: &CompressionConfig) -> S
                 if let Some(analysis) = project.get("analysis") {
                     if let Some(langs) = analysis.get("languages").and_then(|v| v.as_array()) {
                         for lang in langs {
-                            if let Some(name) = lang.get("name").and_then(|v| v.as_str()) {
-                                if !all_languages.contains(&name.to_string()) {
-                                    all_languages.push(name.to_string());
-                                }
+                            if let Some(name) = lang.get("name").and_then(|v| v.as_str())
+                                && !all_languages.contains(&name.to_string())
+                            {
+                                all_languages.push(name.to_string());
                             }
                         }
                     }
                     if let Some(fws) = analysis.get("frameworks").and_then(|v| v.as_array()) {
                         for fw in fws {
-                            if let Some(name) = fw.get("name").and_then(|v| v.as_str()) {
-                                if !all_frameworks.contains(&name.to_string()) {
-                                    all_frameworks.push(name.to_string());
-                                }
+                            if let Some(name) = fw.get("name").and_then(|v| v.as_str())
+                                && !all_frameworks.contains(&name.to_string())
+                            {
+                                all_frameworks.push(name.to_string());
                             }
                         }
                     }

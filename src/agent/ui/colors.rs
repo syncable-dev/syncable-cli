@@ -48,8 +48,29 @@ pub mod ansi {
     pub const RESET: &str = "\x1b[0m";
     /// Bold
     pub const BOLD: &str = "\x1b[1m";
-    /// Dim
+    /// Dim (use sparingly - varies across terminals)
     pub const DIM: &str = "\x1b[2m";
+    /// Italic
+    pub const ITALIC: &str = "\x1b[3m";
+
+    // Theme-safe standard ANSI colors (16-color, adapts to terminal theme)
+    // These are mapped by the terminal to theme-appropriate colors
+    /// Bright/bold default foreground - works on light AND dark terminals
+    pub const BRIGHT: &str = "\x1b[1m";
+    /// Standard dim that's still readable (uses italic instead of dim for better visibility)
+    pub const SUBDUED: &str = "\x1b[2;3m"; // Dim + italic for visual distinction without invisibility
+    /// Standard cyan (adapts to terminal theme)
+    pub const STD_CYAN: &str = "\x1b[36m";
+    /// Standard yellow (adapts to terminal theme)
+    pub const STD_YELLOW: &str = "\x1b[33m";
+    /// Standard green (adapts to terminal theme)
+    pub const STD_GREEN: &str = "\x1b[32m";
+    /// Standard red (adapts to terminal theme)
+    pub const STD_RED: &str = "\x1b[31m";
+    /// Standard blue (adapts to terminal theme)
+    pub const STD_BLUE: &str = "\x1b[34m";
+    /// Standard magenta (adapts to terminal theme)
+    pub const STD_MAGENTA: &str = "\x1b[35m";
 
     // 256-color codes for Syncable brand
     pub const PURPLE: &str = "\x1b[38;5;141m";

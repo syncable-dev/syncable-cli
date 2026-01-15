@@ -926,18 +926,14 @@ pub struct CostEstimation {
 /// Cloud provider for pricing.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum CloudProvider {
     Aws,
     Gcp,
     Azure,
     OnPrem,
+    #[default]
     Unknown,
-}
-
-impl Default for CloudProvider {
-    fn default() -> Self {
-        CloudProvider::Unknown
-    }
 }
 
 /// Cost breakdown by resource type.
@@ -1020,6 +1016,7 @@ pub struct FixResourceValues {
 /// Source of the fix recommendation.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum FixSource {
     /// Based on P95 Prometheus metrics
     PrometheusP95,
@@ -1028,13 +1025,8 @@ pub enum FixSource {
     /// Combined sources (highest confidence)
     Combined,
     /// Static analysis heuristics
+    #[default]
     StaticAnalysis,
-}
-
-impl Default for FixSource {
-    fn default() -> Self {
-        FixSource::StaticAnalysis
-    }
 }
 
 /// Impact assessment for applying a fix.
@@ -1055,21 +1047,17 @@ pub struct FixImpact {
 /// Risk level for a fix.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum FixRisk {
     /// Safe to apply automatically
     Low,
     /// Review recommended before applying
+    #[default]
     Medium,
     /// Manual review required
     High,
     /// Do not auto-apply
     Critical,
-}
-
-impl Default for FixRisk {
-    fn default() -> Self {
-        FixRisk::Medium
-    }
 }
 
 /// Status of a fix.

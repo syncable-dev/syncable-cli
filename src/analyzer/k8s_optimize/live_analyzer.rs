@@ -161,16 +161,16 @@ impl LiveAnalyzer {
     pub async fn available_sources(&self) -> Vec<DataSource> {
         let mut sources = vec![DataSource::Static]; // Always available
 
-        if let Some(ref metrics) = self.metrics_client {
-            if metrics.is_metrics_available().await {
-                sources.push(DataSource::MetricsServer);
-            }
+        if let Some(ref metrics) = self.metrics_client
+            && metrics.is_metrics_available().await
+        {
+            sources.push(DataSource::MetricsServer);
         }
 
-        if let Some(ref prometheus) = self.prometheus_client {
-            if prometheus.is_available().await {
-                sources.push(DataSource::Prometheus);
-            }
+        if let Some(ref prometheus) = self.prometheus_client
+            && prometheus.is_available().await
+        {
+            sources.push(DataSource::Prometheus);
         }
 
         if sources.contains(&DataSource::MetricsServer) && sources.contains(&DataSource::Prometheus)
@@ -629,10 +629,7 @@ fn extract_workloads(
             .map(|c| (c.name.clone(), c.cpu_request, c.memory_request))
             .collect();
 
-        workloads
-            .entry(key)
-            .or_default()
-            .extend(containers);
+        workloads.entry(key).or_default().extend(containers);
     }
 
     workloads
@@ -648,7 +645,7 @@ fn round_cpu(millicores: u64) -> u64 {
         0
     } else if millicores <= 100 {
         // Ceiling to nearest 25m
-        ((millicores + 24) / 25) * 25
+        millicores.div_ceil(25) * 25
     } else if millicores <= 1000 {
         // Round to nearest 50m
         ((millicores + 25) / 50) * 50

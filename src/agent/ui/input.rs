@@ -58,6 +58,8 @@ struct InputState {
     rendered_lines: usize,
     /// Number of wrapped lines the input text occupied in last render
     prev_wrapped_lines: usize,
+    /// The line index (0-based) where cursor was positioned after last render
+    prev_cursor_line: usize,
     /// Whether in plan mode (shows ★ indicator)
     plan_mode: bool,
 }
@@ -74,6 +76,7 @@ impl InputState {
             project_path,
             rendered_lines: 0,
             prev_wrapped_lines: 1,
+            prev_cursor_line: 0,
             plan_mode,
         }
     }
@@ -430,6 +433,52 @@ impl InputState {
         }
     }
 
+    /// Move cursor to start of previous word (Option+Left on Mac, Ctrl+Left elsewhere)
+    fn cursor_word_left(&mut self) {
+        if self.cursor == 0 {
+            return;
+        }
+
+        let chars: Vec<char> = self.text.chars().collect();
+        let mut pos = self.cursor;
+
+        // Skip whitespace going backwards
+        while pos > 0 && chars[pos - 1].is_whitespace() {
+            pos -= 1;
+        }
+
+        // Skip word characters going backwards
+        while pos > 0 && !chars[pos - 1].is_whitespace() {
+            pos -= 1;
+        }
+
+        self.cursor = pos;
+    }
+
+    /// Move cursor to start of next word (Option+Right on Mac, Ctrl+Right elsewhere)
+    fn cursor_word_right(&mut self) {
+        let chars: Vec<char> = self.text.chars().collect();
+        let text_len = chars.len();
+
+        if self.cursor >= text_len {
+            return;
+        }
+
+        let mut pos = self.cursor;
+
+        // Skip current word characters
+        while pos < text_len && !chars[pos].is_whitespace() {
+            pos += 1;
+        }
+
+        // Skip whitespace
+        while pos < text_len && chars[pos].is_whitespace() {
+            pos += 1;
+        }
+
+        self.cursor = pos;
+    }
+
     /// Move cursor to start
     fn cursor_home(&mut self) {
         self.cursor = 0;
@@ -527,11 +576,12 @@ fn render(state: &mut InputState, prompt: &str, stdout: &mut io::Stdout) -> io::
     let mode_prefix_len = if state.plan_mode { 2 } else { 0 }; // "★ " = 2 chars
     let prompt_len = prompt.len() + 1 + mode_prefix_len; // +1 for space after prompt
 
-    // Move up to clear previous rendered lines, then to column 0
-    if state.prev_wrapped_lines > 1 {
+    // Move up from the cursor's current line position to the start of input
+    // We use prev_cursor_line (where we left the cursor last render) not prev_wrapped_lines
+    if state.prev_cursor_line > 0 {
         execute!(
             stdout,
-            cursor::MoveUp((state.prev_wrapped_lines - 1) as u16)
+            cursor::MoveUp(state.prev_cursor_line as u16)
         )?;
     }
     execute!(stdout, cursor::MoveToColumn(0))?;
@@ -594,26 +644,30 @@ fn render(state: &mut InputState, prompt: &str, stdout: &mut io::Stdout) -> io::
 
             if is_selected {
                 if suggestion.is_dir {
+                    // Use standard cyan which adapts to terminal theme
                     print!(
-                        "  {}{} {}{}\r\n",
-                        ansi::CYAN,
+                        "  {}{}{} {}{}\r\n",
+                        ansi::BOLD,
+                        ansi::STD_CYAN,
                         prefix,
                         suggestion.display,
                         ansi::RESET
                     );
                 } else {
+                    // Use bold for selected items - works on light AND dark terminals
                     print!(
                         "  {}{} {}{}\r\n",
-                        ansi::WHITE,
+                        ansi::BRIGHT,
                         prefix,
                         suggestion.display,
                         ansi::RESET
                     );
                 }
             } else {
+                // Use subdued for non-selected - readable on any terminal
                 print!(
                     "  {}{} {}{}\r\n",
-                    ansi::DIM,
+                    ansi::SUBDUED,
                     prefix,
                     suggestion.display,
                     ansi::RESET
@@ -622,10 +676,10 @@ fn render(state: &mut InputState, prompt: &str, stdout: &mut io::Stdout) -> io::
             lines_rendered += 1;
         }
 
-        // Print hint
+        // Print hint - use subdued for secondary text
         print!(
             "  {}[↑↓ navigate, Enter select, Esc cancel]{}\r\n",
-            ansi::DIM,
+            ansi::SUBDUED,
             ansi::RESET
         );
         lines_rendered += 1;
@@ -658,6 +712,9 @@ fn render(state: &mut InputState, prompt: &str, stdout: &mut io::Stdout) -> io::
         execute!(stdout, cursor::MoveUp(lines_after_cursor as u16))?;
     }
     execute!(stdout, cursor::MoveToColumn(cursor_col as u16))?;
+
+    // Save the cursor line for next render's initial positioning
+    state.prev_cursor_line = cursor_line;
 
     stdout.flush()?;
     Ok(lines_rendered)
@@ -801,6 +858,15 @@ pub fn read_input_with_file_picker(
                     }
                     KeyCode::Right => {
                         state.cursor_right();
+                    }
+                    // Alt+b (Option+Left on Mac) - Move cursor to previous word
+                    KeyCode::Char('b') if key_event.modifiers.contains(KeyModifiers::ALT) => {
+                        state.cursor_word_left();
+                        state.close_suggestions();
+                    }
+                    // Alt+f (Option+Right on Mac) - Move cursor to next word
+                    KeyCode::Char('f') if key_event.modifiers.contains(KeyModifiers::ALT) => {
+                        state.cursor_word_right();
                     }
                     KeyCode::Home | KeyCode::Char('a')
                         if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
@@ -1088,5 +1154,57 @@ mod tests {
         state.text = "hello".to_string();
         state.cursor = 5;
         assert_eq!(state.get_filter(), None);
+    }
+
+    #[test]
+    fn test_cursor_word_left() {
+        let mut state = new_state();
+        state.text = "hello world test".to_string();
+        state.cursor = 16; // at end
+
+        state.cursor_word_left();
+        assert_eq!(state.cursor, 12); // start of "test"
+
+        state.cursor_word_left();
+        assert_eq!(state.cursor, 6); // start of "world"
+
+        state.cursor_word_left();
+        assert_eq!(state.cursor, 0); // start of "hello"
+
+        state.cursor_word_left();
+        assert_eq!(state.cursor, 0); // still at start
+    }
+
+    #[test]
+    fn test_cursor_word_right() {
+        let mut state = new_state();
+        state.text = "hello world test".to_string();
+        state.cursor = 0; // at start
+
+        state.cursor_word_right();
+        assert_eq!(state.cursor, 6); // start of "world"
+
+        state.cursor_word_right();
+        assert_eq!(state.cursor, 12); // start of "test"
+
+        state.cursor_word_right();
+        assert_eq!(state.cursor, 16); // end of text
+
+        state.cursor_word_right();
+        assert_eq!(state.cursor, 16); // still at end
+    }
+
+    #[test]
+    fn test_cursor_word_movement_mid_word() {
+        let mut state = new_state();
+        state.text = "hello world".to_string();
+        state.cursor = 8; // middle of "world"
+
+        state.cursor_word_left();
+        assert_eq!(state.cursor, 6); // start of "world"
+
+        state.cursor = 3; // middle of "hello"
+        state.cursor_word_right();
+        assert_eq!(state.cursor, 6); // start of "world"
     }
 }
