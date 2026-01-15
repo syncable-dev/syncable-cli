@@ -89,6 +89,7 @@ pub mod output_store;
 mod plan;
 mod prometheus_connect;
 mod prometheus_discover;
+pub mod response;
 mod retrieve;
 mod security;
 mod shell;
