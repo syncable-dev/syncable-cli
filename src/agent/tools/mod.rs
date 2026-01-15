@@ -60,11 +60,23 @@
 //! ### Web
 //! - `WebFetchTool` - Fetch content from URLs (converts HTML to markdown)
 //!
+//! ## Error Handling Pattern
+//!
+//! Tools use the shared error utilities in `error.rs`:
+//!
+//! 1. Each tool keeps its own error type (e.g., `ReadFileError`, `ShellError`)
+//! 2. Use `ToolErrorContext` trait to add context when propagating errors
+//! 3. Use `format_error_for_llm` for structured JSON error responses to the agent
+//! 4. Error categories help the agent understand and recover from errors
+//!
+//! See `error.rs` for the complete error handling infrastructure.
+
 mod analyze;
 pub mod background;
 pub mod compression;
 mod dclint;
 mod diagnostics;
+pub mod error;
 mod fetch;
 mod file_ops;
 mod hadolint;
@@ -88,6 +100,12 @@ pub use truncation::{TruncationLimits, truncate_json_output};
 // Smart compression exports
 pub use compression::{CompressionConfig, compress_analysis_output, compress_tool_output};
 pub use retrieve::{ListOutputsTool, RetrieveOutputTool};
+
+// Error handling utilities for tools
+pub use error::{
+    ErrorCategory, ToolErrorContext, detect_error_category, format_error_for_llm,
+    format_error_with_context,
+};
 
 pub use analyze::AnalyzeTool;
 pub use background::BackgroundProcessManager;
