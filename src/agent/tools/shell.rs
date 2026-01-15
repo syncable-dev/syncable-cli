@@ -30,21 +30,39 @@ use tokio::process::Command;
 use tokio::sync::mpsc;
 
 /// Allowed command prefixes for security
+///
+/// Commands are organized by category. All commands still require user confirmation
+/// unless explicitly allowed for the session via the confirmation prompt.
 const ALLOWED_COMMANDS: &[&str] = &[
-    // Docker commands
+    // ==========================================================================
+    // GENERAL DEVELOPMENT - Safe utility commands for output and testing
+    // ==========================================================================
+    "echo",    // Safe string output
+    "printf",  // Formatted output
+    "test",    // File/string condition tests
+    "expr",    // Expression evaluation
+    // ==========================================================================
+    // DOCKER - Container building and orchestration
+    // ==========================================================================
     "docker build",
     "docker compose",
     "docker-compose",
-    // Terraform commands
+    // ==========================================================================
+    // TERRAFORM - Infrastructure as Code workflows
+    // ==========================================================================
     "terraform init",
     "terraform validate",
     "terraform plan",
     "terraform fmt",
-    // Helm commands
+    // ==========================================================================
+    // HELM - Kubernetes package management
+    // ==========================================================================
     "helm lint",
     "helm template",
     "helm dependency",
-    // Kubernetes commands
+    // ==========================================================================
+    // KUBERNETES - Cluster management and dry-run operations
+    // ==========================================================================
     "kubectl apply --dry-run",
     "kubectl diff",
     "kubectl get svc",
@@ -55,13 +73,50 @@ const ALLOWED_COMMANDS: &[&str] = &[
     "kubectl config current-context",
     "kubectl config get-contexts",
     "kubectl describe",
-    // Generic validation
+    // ==========================================================================
+    // BUILD COMMANDS - Various language build tools
+    // ==========================================================================
     "make",
     "npm run",
+    "pnpm run",              // npm alternative
+    "yarn run",              // npm alternative
     "cargo build",
     "go build",
+    "gradle",                // Java/Kotlin builds
+    "mvn",                   // Maven builds
     "python -m py_compile",
-    // Linting
+    "poetry",                // Python package manager
+    "pip install",           // Python package installation
+    "bundle exec",           // Ruby bundler
+    // ==========================================================================
+    // TESTING COMMANDS - Test runners for various languages
+    // ==========================================================================
+    "npm test",
+    "yarn test",
+    "pnpm test",
+    "cargo test",
+    "go test",
+    "pytest",
+    "python -m pytest",
+    "jest",
+    "vitest",
+    // ==========================================================================
+    // GIT COMMANDS - Version control operations (read-write)
+    // ==========================================================================
+    "git add",
+    "git commit",
+    "git push",
+    "git checkout",
+    "git branch",
+    "git merge",
+    "git rebase",
+    "git stash",
+    "git fetch",
+    "git pull",
+    "git clone",
+    // ==========================================================================
+    // LINTING - Code quality tools (prefer native tools for better output)
+    // ==========================================================================
     "hadolint",
     "tflint",
     "yamllint",
