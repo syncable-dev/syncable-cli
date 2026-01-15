@@ -142,6 +142,14 @@ impl FrameworkDetectionUtils {
             dependency == pattern
                 || dependency.starts_with(&(pattern.to_string() + "@"))
                 || dependency.starts_with(&(pattern.to_string() + "/"))
+                // Java/Maven style: spring-boot matches spring-boot-starter-web
+                || dependency.starts_with(&(pattern.to_string() + "-"))
+                // Maven groupId:artifactId style: org.springframework matches org.springframework.boot:spring-boot
+                || dependency.starts_with(&(pattern.to_string() + "."))
+                || dependency.starts_with(&(pattern.to_string() + ":"))
+                // Maven artifactId contains the pattern (e.g., "spring" in "spring-boot-starter-web")
+                || dependency.contains(&format!("-{}-", pattern))
+                || dependency.contains(&format!(":{}", pattern))
         }
     }
 

@@ -293,11 +293,11 @@ fn load_directory_with_rendering(ctx: &mut LintContextImpl, path: &Path) -> Resu
 
             // Check for YAML file
             let ext = entry_path.extension().and_then(|e| e.to_str());
-            if matches!(ext, Some("yaml") | Some("yml")) {
-                if let Ok(objects) = yaml::parse_yaml_file(entry_path) {
-                    for obj in objects {
-                        ctx.add_object(obj);
-                    }
+            if matches!(ext, Some("yaml") | Some("yml"))
+                && let Ok(objects) = yaml::parse_yaml_file(entry_path)
+            {
+                for obj in objects {
+                    ctx.add_object(obj);
                 }
             }
         }

@@ -20,7 +20,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        rust: [stable]
+        # MSRV 1.88 - AWS SDK requires Rust 1.88
+        rust: ["1.88"]
 
     steps:
       - uses: actions/checkout@v4
@@ -79,5 +80,8 @@ jobs:
       - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          # Only fail on actual vulnerabilities, not unmaintained warnings
-          ignore: RUSTSEC-2020-0163,RUSTSEC-2024-0320,RUSTSEC-2025-0057,RUSTSEC-2025-0074,RUSTSEC-2025-0075,RUSTSEC-2025-0080,RUSTSEC-2025-0081,RUSTSEC-2025-0098,RUSTSEC-2025-0104,RUSTSEC-2025-0134
+          # Ignore advisories in transitive dependencies we cannot control:
+          # - gix-date (RUSTSEC-2025-0140): via rustsec crate, awaiting upstream fix
+          # - bincode (RUSTSEC-2025-0141): via syntect, marked "complete" by maintainer
+          # - Other transitive deps from rustsec, aws-sdk, kube, etc.
+          ignore: RUSTSEC-2020-0163,RUSTSEC-2024-0320,RUSTSEC-2025-0057,RUSTSEC-2025-0074,RUSTSEC-2025-0075,RUSTSEC-2025-0080,RUSTSEC-2025-0081,RUSTSEC-2025-0098,RUSTSEC-2025-0104,RUSTSEC-2025-0134,RUSTSEC-2025-0140,RUSTSEC-2025-0141

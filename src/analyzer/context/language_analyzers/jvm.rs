@@ -67,11 +67,22 @@ pub(crate) fn analyze_jvm_project(
         }
     }
 
-    // Look for application properties
+    // Look for application properties - Spring Boot, Quarkus, Micronaut, etc.
     let app_props_locations = [
+        // Spring Boot standard locations
         "src/main/resources/application.properties",
         "src/main/resources/application.yml",
         "src/main/resources/application.yaml",
+        // Quarkus standard location
+        "src/main/resources/application.properties",
+        // Micronaut standard locations
+        "src/main/resources/application.yml",
+        "src/main/resources/application.yaml",
+        // Eclipse MicroProfile
+        "src/main/resources/META-INF/microprofile-config.properties",
+        // Dropwizard
+        "config.yml",
+        "config.yaml",
     ];
 
     for props_path in &app_props_locations {
@@ -84,7 +95,7 @@ pub(crate) fn analyze_jvm_project(
     Ok(())
 }
 
-/// Analyzes application properties files
+/// Analyzes application properties files for Spring Boot, Quarkus, Micronaut, etc.
 fn analyze_application_properties(
     path: &Path,
     ports: &mut HashSet<Port>,
@@ -93,9 +104,10 @@ fn analyze_application_properties(
 ) -> Result<()> {
     let content = read_file_safe(path, config.max_file_size)?;
 
-    // Look for server.port
-    let port_regex = create_regex(r"server\.port\s*[=:]\s*(\d{1,5})")?;
-    for cap in port_regex.captures_iter(&content) {
+    // === SPRING BOOT ===
+    // server.port=8080, server.port: 8080
+    let spring_port_regex = create_regex(r"server\.port\s*[=:]\s*(\d{1,5})")?;
+    for cap in spring_port_regex.captures_iter(&content) {
         if let Some(port_str) = cap.get(1)
             && let Ok(port) = port_str.as_str().parse::<u16>()
         {
@@ -107,8 +119,85 @@ fn analyze_application_properties(
         }
     }
 
+    // Handle server.port=${VAR:default} format - extract default port
+    let port_with_default_regex = create_regex(r"server\.port\s*[=:]\s*\$\{[^:}]+:(\d{1,5})\}")?;
+    for cap in port_with_default_regex.captures_iter(&content) {
+        if let Some(port_str) = cap.get(1)
+            && let Ok(port) = port_str.as_str().parse::<u16>()
+        {
+            ports.insert(Port {
+                number: port,
+                protocol: Protocol::Http,
+                description: Some("Spring Boot server (default)".to_string()),
+            });
+        }
+    }
+
+    // === QUARKUS ===
+    // quarkus.http.port=8080
+    let quarkus_port_regex = create_regex(r"quarkus\.http\.port\s*[=:]\s*(\d{1,5})")?;
+    for cap in quarkus_port_regex.captures_iter(&content) {
+        if let Some(port_str) = cap.get(1)
+            && let Ok(port) = port_str.as_str().parse::<u16>()
+        {
+            ports.insert(Port {
+                number: port,
+                protocol: Protocol::Http,
+                description: Some("Quarkus HTTP server".to_string()),
+            });
+        }
+    }
+
+    // === MICRONAUT ===
+    // micronaut.server.port: 8080 (YAML)
+    let micronaut_port_regex = create_regex(r"micronaut\.server\.port\s*[=:]\s*(\d{1,5})")?;
+    for cap in micronaut_port_regex.captures_iter(&content) {
+        if let Some(port_str) = cap.get(1)
+            && let Ok(port) = port_str.as_str().parse::<u16>()
+        {
+            ports.insert(Port {
+                number: port,
+                protocol: Protocol::Http,
+                description: Some("Micronaut server".to_string()),
+            });
+        }
+    }
+
+    // === DROPWIZARD ===
+    // server:
+    //   applicationConnectors:
+    //     - type: http
+    //       port: 8080
+    let dropwizard_port_regex = create_regex(r"(?m)^\s*port\s*:\s*(\d{1,5})")?;
+    for cap in dropwizard_port_regex.captures_iter(&content) {
+        if let Some(port_str) = cap.get(1)
+            && let Ok(port) = port_str.as_str().parse::<u16>()
+        {
+            ports.insert(Port {
+                number: port,
+                protocol: Protocol::Http,
+                description: Some("Java HTTP server".to_string()),
+            });
+        }
+    }
+
+    // === ECLIPSE MICROPROFILE ===
+    // mp.config.profile.dev.server.port=8080 or similar
+    let mp_port_regex = create_regex(r"(?i)(?:server\.port|http\.port)\s*[=:]\s*(\d{1,5})")?;
+    for cap in mp_port_regex.captures_iter(&content) {
+        if let Some(port_str) = cap.get(1)
+            && let Ok(port) = port_str.as_str().parse::<u16>()
+        {
+            ports.insert(Port {
+                number: port,
+                protocol: Protocol::Http,
+                description: Some("MicroProfile server".to_string()),
+            });
+        }
+    }
+
     // Look for ${ENV_VAR} placeholders
-    let env_regex = create_regex(r"\$\{([A-Z_][A-Z0-9_]*)\}")?;
+    let env_regex = create_regex(r"\$\{([A-Z_][A-Z0-9_]*)")?;
     for cap in env_regex.captures_iter(&content) {
         if let Some(var_name) = cap.get(1) {
             let name = var_name.as_str().to_string();

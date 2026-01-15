@@ -269,3 +269,66 @@ impl Autocomplete for SlashCommandAutocomplete {
         Ok(Replacement::None)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_find_at_trigger_at_start() {
+        let ac = SlashCommandAutocomplete::new();
+        assert_eq!(ac.find_at_trigger("@file"), Some(0));
+    }
+
+    #[test]
+    fn test_find_at_trigger_after_space() {
+        let ac = SlashCommandAutocomplete::new();
+        assert_eq!(ac.find_at_trigger("hello @file"), Some(6));
+    }
+
+    #[test]
+    fn test_find_at_trigger_no_trigger() {
+        let ac = SlashCommandAutocomplete::new();
+        assert_eq!(ac.find_at_trigger("hello world"), None);
+    }
+
+    #[test]
+    fn test_find_at_trigger_email_not_trigger() {
+        let ac = SlashCommandAutocomplete::new();
+        // @ in middle of word (like email) should not trigger
+        assert_eq!(ac.find_at_trigger("user@example.com"), None);
+    }
+
+    #[test]
+    fn test_extract_file_filter_basic() {
+        let ac = SlashCommandAutocomplete::new();
+        assert_eq!(ac.extract_file_filter("@src"), Some("src".to_string()));
+    }
+
+    #[test]
+    fn test_extract_file_filter_with_text_before() {
+        let ac = SlashCommandAutocomplete::new();
+        assert_eq!(
+            ac.extract_file_filter("read @main.rs"),
+            Some("main.rs".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_file_filter_empty() {
+        let ac = SlashCommandAutocomplete::new();
+        assert_eq!(ac.extract_file_filter("@"), Some(String::new()));
+    }
+
+    #[test]
+    fn test_extract_file_filter_no_trigger() {
+        let ac = SlashCommandAutocomplete::new();
+        assert_eq!(ac.extract_file_filter("hello world"), None);
+    }
+
+    #[test]
+    fn test_autocomplete_mode_default() {
+        let ac = SlashCommandAutocomplete::new();
+        assert_eq!(ac.mode, AutocompleteMode::None);
+    }
+}

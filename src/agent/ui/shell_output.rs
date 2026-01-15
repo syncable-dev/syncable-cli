@@ -261,30 +261,28 @@ fn strip_ansi_codes(s: &str) -> String {
 fn truncate_safe(s: &str, max_width: usize) -> String {
     // Strip ANSI codes first to get accurate visual width
     let stripped = strip_ansi_codes(s);
-    
+
     // Calculate visual width (count characters, not bytes)
     let visual_len: usize = stripped.chars().count();
-    
+
     if visual_len <= max_width {
         return s.to_string();
     }
-    
+
     // Need to truncate - work with stripped version
     // Reserve space for "..."
     let truncate_to = max_width.saturating_sub(3);
-    
+
     let mut result = String::new();
-    let mut char_count = 0;
-    
-    for ch in stripped.chars() {
+
+    for (char_count, ch) in stripped.chars().enumerate() {
         if char_count >= truncate_to {
             result.push_str("...");
             break;
         }
         result.push(ch);
-        char_count += 1;
     }
-    
+
     result
 }
 
@@ -338,7 +336,7 @@ mod tests {
     fn test_truncate_safe_no_truncation_needed() {
         let short = "hello";
         assert_eq!(truncate_safe(short, 100), "hello");
-        
+
         let exact = "12345";
         assert_eq!(truncate_safe(exact, 5), "12345");
     }

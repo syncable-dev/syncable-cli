@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
 
+use super::error::{ErrorCategory, format_error_for_llm};
 use crate::analyzer::k8s_optimize::{
     CloudProvider, CostEstimation, K8sOptimizeConfig, analyze, calculate_from_static,
 };
@@ -142,17 +143,18 @@ impl K8sCostsTool {
         });
 
         let total_waste = estimation.monthly_waste_cost;
-        if let Some(top) = sorted_workloads.first() {
-            if total_waste > 0.0 && top.monthly_cost > total_waste * 0.3 {
-                recommendations.push(json!({
-                    "type": "high_waste_workload",
-                    "workload": top.workload_name,
-                    "namespace": top.namespace,
-                    "waste_cost_usd": top.monthly_cost,
-                    "percentage": (top.monthly_cost / total_waste * 100.0).round(),
-                    "message": format!("{} accounts for over 30% of total waste. Consider optimization.", top.workload_name),
-                }));
-            }
+        if let Some(top) = sorted_workloads.first()
+            && total_waste > 0.0
+            && top.monthly_cost > total_waste * 0.3
+        {
+            recommendations.push(json!({
+                "type": "high_waste_workload",
+                "workload": top.workload_name,
+                "namespace": top.namespace,
+                "waste_cost_usd": top.monthly_cost,
+                "percentage": (top.monthly_cost / total_waste * 100.0).round(),
+                "message": format!("{} accounts for over 30% of total waste. Consider optimization.", top.workload_name),
+            }));
         }
 
         // Check for cost imbalance (CPU vs Memory)
@@ -269,16 +271,59 @@ Estimates monthly cloud costs based on resource requests, shows cost breakdown b
             self.project_root.join(path)
         };
 
+        // Edge case: Path not found
         if !full_path.exists() {
-            return Err(K8sCostsError(format!(
-                "Path not found: {}",
-                full_path.display()
-            )));
+            return Ok(format_error_for_llm(
+                "k8s_costs",
+                ErrorCategory::FileNotFound,
+                &format!("Path not found: {}", full_path.display()),
+                Some(vec![
+                    "Check if the path is correct",
+                    "Common locations: k8s/, manifests/, deploy/, kubernetes/",
+                    "Use list_directory to explore available paths",
+                    "Use k8s_optimize for resource analysis first",
+                ]),
+            ));
+        }
+
+        // Edge case: Check if directory is empty (no files)
+        if full_path.is_dir() {
+            let has_files = std::fs::read_dir(&full_path)
+                .map(|entries| entries.filter_map(|e| e.ok()).next().is_some())
+                .unwrap_or(false);
+
+            if !has_files {
+                return Ok(format_error_for_llm(
+                    "k8s_costs",
+                    ErrorCategory::ValidationFailed,
+                    &format!("Directory is empty: {}", full_path.display()),
+                    Some(vec![
+                        "The directory contains no files to analyze",
+                        "Check if K8s manifests exist in a subdirectory",
+                        "Use list_directory to explore the project structure",
+                    ]),
+                ));
+            }
         }
 
         // Run static analysis first
         let config = K8sOptimizeConfig::default();
         let analysis_result = analyze(&full_path, &config);
+
+        // Edge case: No K8s manifests found (empty recommendations)
+        if analysis_result.recommendations.is_empty() && analysis_result.warnings.is_empty() {
+            return Ok(format_error_for_llm(
+                "k8s_costs",
+                ErrorCategory::ValidationFailed,
+                &format!("No Kubernetes manifests found in: {}", full_path.display()),
+                Some(vec![
+                    "Ensure the path contains .yaml or .yml files",
+                    "K8s manifests should define Deployment, StatefulSet, or Pod resources",
+                    "Try specifying a more specific path (e.g., 'k8s/deployments/')",
+                    "Use kubelint to validate manifest structure",
+                ]),
+            ));
+        }
 
         // Calculate costs from recommendations
         let provider = self.parse_provider(args.cloud_provider.as_deref().unwrap_or("aws"));
@@ -289,6 +334,20 @@ Estimates monthly cloud costs based on resource requests, shows cost breakdown b
 
         let cost_estimation =
             calculate_from_static(&analysis_result.recommendations, provider, &region);
+
+        // Edge case: No cost data available (no workloads with resource requests)
+        if cost_estimation.workload_costs.is_empty() {
+            return Ok(format_error_for_llm(
+                "k8s_costs",
+                ErrorCategory::ValidationFailed,
+                "No cost data available - workloads have no resource requests defined",
+                Some(vec![
+                    "Ensure Deployments/StatefulSets have resource requests specified",
+                    "Add resources.requests.cpu and resources.requests.memory to containers",
+                    "Use k8s_optimize to get resource recommendation suggestions",
+                ]),
+            ));
+        }
 
         // Format for agent
         let output = self.format_for_agent(&cost_estimation, &args);
@@ -331,5 +390,73 @@ mod tests {
 
         assert_eq!(def.name, "k8s_costs");
         assert!(def.description.contains("cost"));
+    }
+
+    #[tokio::test]
+    async fn test_path_not_found_error() {
+        let tool = K8sCostsTool::new(PathBuf::from("/tmp/test-k8s-costs-nonexistent"));
+        let args = K8sCostsArgs {
+            path: Some("nonexistent/path".to_string()),
+            namespace: None,
+            by_label: None,
+            cloud_provider: None,
+            region: None,
+            detailed: false,
+            compare_period: None,
+            cluster: None,
+            prometheus: None,
+        };
+        let result = tool.call(args).await.unwrap();
+
+        // Verify it returns structured error JSON
+        assert!(result.contains("FILE_NOT_FOUND") || result.contains("error"));
+        assert!(result.contains("suggestions"));
+        assert!(result.contains("Path not found"));
+    }
+
+    #[test]
+    fn test_provider_case_insensitivity() {
+        let tool = K8sCostsTool::new(PathBuf::from("."));
+
+        // Test uppercase
+        assert!(matches!(tool.parse_provider("AWS"), CloudProvider::Aws));
+        assert!(matches!(tool.parse_provider("GCP"), CloudProvider::Gcp));
+        assert!(matches!(tool.parse_provider("AZURE"), CloudProvider::Azure));
+        assert!(matches!(
+            tool.parse_provider("ONPREM"),
+            CloudProvider::OnPrem
+        ));
+
+        // Test mixed case
+        assert!(matches!(tool.parse_provider("Aws"), CloudProvider::Aws));
+        assert!(matches!(tool.parse_provider("Gcp"), CloudProvider::Gcp));
+        assert!(matches!(tool.parse_provider("Azure"), CloudProvider::Azure));
+        assert!(matches!(
+            tool.parse_provider("OnPrem"),
+            CloudProvider::OnPrem
+        ));
+
+        // Test lowercase
+        assert!(matches!(tool.parse_provider("aws"), CloudProvider::Aws));
+        assert!(matches!(tool.parse_provider("gcp"), CloudProvider::Gcp));
+        assert!(matches!(tool.parse_provider("azure"), CloudProvider::Azure));
+        assert!(matches!(
+            tool.parse_provider("onprem"),
+            CloudProvider::OnPrem
+        ));
+
+        // Test alternative formats
+        assert!(matches!(
+            tool.parse_provider("on-prem"),
+            CloudProvider::OnPrem
+        ));
+        assert!(matches!(
+            tool.parse_provider("on_prem"),
+            CloudProvider::OnPrem
+        ));
+        assert!(matches!(
+            tool.parse_provider("ON-PREM"),
+            CloudProvider::OnPrem
+        ));
     }
 }

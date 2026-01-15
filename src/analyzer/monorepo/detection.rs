@@ -200,12 +200,66 @@ fn directory_contains_code(path: &Path) -> Result<bool> {
     Ok(false)
 }
 
-/// Filters out nested projects, keeping only top-level ones
+/// Filters out nested projects when parent is just a wrapper (e.g., only has Dockerfile)
+/// but keeps both when parent is a real project with its own manifest
 fn filter_nested_projects(mut projects: Vec<PathBuf>) -> Result<Vec<PathBuf>> {
-    // Keep all distinct projects, including nested ones (workspace roots often co-exist with member crates/apps)
     projects.sort();
     projects.dedup();
-    Ok(projects)
+
+    // Identify projects that are "wrapper" projects (only have Dockerfile, no code manifest)
+    let wrapper_indicators = ["Dockerfile", "docker-compose.yml", "docker-compose.yaml"];
+    let code_manifests = [
+        "package.json",
+        "Cargo.toml",
+        "go.mod",
+        "pom.xml",
+        "build.gradle",
+        "build.gradle.kts",
+        "requirements.txt",
+        "pyproject.toml",
+        "Gemfile",
+        "composer.json",
+    ];
+
+    // Check which projects are "wrappers" (have Dockerfile but no code manifest)
+    let wrapper_projects: std::collections::HashSet<_> = projects
+        .iter()
+        .filter(|path| {
+            let has_wrapper = wrapper_indicators.iter().any(|ind| path.join(ind).exists());
+            let has_code_manifest = code_manifests.iter().any(|m| path.join(m).exists());
+            has_wrapper && !has_code_manifest
+        })
+        .cloned()
+        .collect();
+
+    // Filter out wrapper projects that have a child project with actual code
+    let filtered: Vec<PathBuf> = projects
+        .into_iter()
+        .filter(|project| {
+            // If this is a wrapper project, check if any other project is nested under it
+            if wrapper_projects.contains(project) {
+                // Look for child projects under common subdirectory names
+                let common_child_dirs = [
+                    "server", "app", "src", "backend", "frontend", "api", "service",
+                ];
+                for child_dir in &common_child_dirs {
+                    let child_path = project.join(child_dir);
+                    // Check if child has a code manifest
+                    if code_manifests.iter().any(|m| child_path.join(m).exists()) {
+                        log::debug!(
+                            "Filtering out wrapper project '{}' in favor of child '{}'",
+                            project.display(),
+                            child_path.display()
+                        );
+                        return false; // Filter out the wrapper
+                    }
+                }
+            }
+            true
+        })
+        .collect();
+
+    Ok(filtered)
 }
 
 #[cfg(test)]

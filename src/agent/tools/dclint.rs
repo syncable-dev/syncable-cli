@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
 
+use super::error::{ErrorCategory, format_error_for_llm};
 use crate::analyzer::dclint::{DclintConfig, LintResult, RuleCategory, Severity, lint, lint_file};
 
 /// Arguments for the dclint tool
@@ -300,39 +301,59 @@ impl Tool for DclintTool {
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
             name: Self::NAME.to_string(),
-            description: "Lint Docker Compose files for best practices, security issues, and style consistency. \
-                Returns AI-optimized JSON with issues categorized by priority (critical/high/medium/low) \
-                and type (security/best-practice/style/performance). \
-                Each issue includes an actionable fix recommendation. Use this to analyze docker-compose.yml \
-                files before deployment or to improve existing configurations. The 'decision_context' field provides \
-                a summary for quick assessment, and 'quick_fixes' lists the most important changes. \
-                Supports 15 rules including: build+image conflicts, duplicate names/ports, image tagging, \
-                port security, alphabetical ordering, and more."
-                .to_string(),
+            description: r#"Native Docker Compose linting with AI-optimized output. No external binary required.
+
+CAPABILITIES:
+- Validates docker-compose.yml files against 15 rules
+- Provides auto-fix support for 8 rules (use fix: true)
+- Returns prioritized issues with actionable fix recommendations
+- Auto-discovers compose files in project root
+
+RULE CATEGORIES:
+- Security (DCL0xx): Port exposure (DCL005), network settings
+- Best Practice (DCL1xx): Version field (DCL006), project naming (DCL007), image tags (DCL011)
+- Style (DCL2xx): Ordering rules (DCL010, DCL012-015), container naming (DCL009)
+- Performance (DCL3xx): Build caching, resource usage patterns
+
+KEY RULES:
+- DCL001: No both build and image in same service
+- DCL005: Ports should bind to specific interface (security)
+- DCL006: Version field is deprecated (remove it)
+- DCL011: Images need explicit version tags (not :latest or untagged)
+
+OUTPUT FORMAT:
+- 'decision_context': Quick assessment of severity
+- 'action_plan': Issues grouped by priority (critical/high/medium/low)
+- 'quick_fixes': Top 5 most important fixes to apply
+
+USAGE:
+1. Without args: Scans for docker-compose.yml in project root
+2. With compose_file: Lint specific file by path
+3. With content: Lint inline YAML (useful for validating before write)"#.to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "compose_file": {
                         "type": "string",
-                        "description": "Path to docker-compose.yml relative to project root (e.g., 'docker-compose.yml', 'deploy/docker-compose.prod.yml')"
+                        "description": "Path to docker-compose.yml relative to project root. Examples: 'docker-compose.yml', 'deploy/compose.prod.yml', 'docker/docker-compose.dev.yaml'"
                     },
                     "content": {
                         "type": "string",
-                        "description": "Inline Docker Compose YAML content to lint. Use this when you want to validate generated content before writing."
+                        "description": "Inline Docker Compose YAML content to lint. Use when validating generated content before writing to file. Must include 'services:' section."
                     },
                     "ignore": {
                         "type": "array",
                         "items": { "type": "string" },
-                        "description": "List of rule codes to ignore (e.g., ['DCL006', 'DCL014'])"
+                        "description": "Rule codes to skip. Common: ['DCL006'] for legacy version field, ['DCL014', 'DCL015'] to skip ordering rules."
                     },
                     "threshold": {
                         "type": "string",
                         "enum": ["error", "warning", "info", "style"],
-                        "description": "Minimum severity to report. Default is 'warning'."
+                        "description": "Minimum severity to report. 'error' for critical only, 'warning' (default) for actionable issues, 'style' for all."
                     },
                     "fix": {
                         "type": "boolean",
-                        "description": "Apply auto-fixes where available (8 of 15 rules support auto-fix)."
+                        "description": "Apply auto-fixes. Supported rules: DCL004, DCL006, DCL008, DCL010, DCL012-015. Returns fixed content in response."
                     }
                 }
             }),
@@ -357,13 +378,58 @@ impl Tool for DclintTool {
         // IMPORTANT: Treat empty content as None - fixes AI agents passing empty strings
         let (result, filename) = if args.content.as_ref().is_some_and(|c| !c.trim().is_empty()) {
             // Lint non-empty inline content
-            (
-                lint(args.content.as_ref().unwrap(), &config),
-                "<inline>".to_string(),
-            )
+            let content = args.content.as_ref().unwrap();
+
+            // Check for non-compose YAML (no services section)
+            if !content.contains("services:") && !content.contains("services :") {
+                return Ok(format_error_for_llm(
+                    "dclint",
+                    ErrorCategory::ValidationFailed,
+                    "Content does not appear to be a Docker Compose file (missing 'services' section)",
+                    Some(vec![
+                        "Docker Compose files must have a 'services' section",
+                        "Ensure the YAML defines at least one service",
+                        "Example: services:\\n  web:\\n    image: nginx:latest",
+                    ]),
+                ));
+            }
+
+            (lint(content, &config), "<inline>".to_string())
         } else if let Some(compose_file) = &args.compose_file {
             // Lint file
             let path = self.project_path.join(compose_file);
+
+            // Check if file exists
+            if !path.exists() {
+                return Ok(format_error_for_llm(
+                    "dclint",
+                    ErrorCategory::FileNotFound,
+                    &format!("Docker Compose file not found: {}", compose_file),
+                    Some(vec![
+                        "Check if the file path is correct",
+                        "Verify the file exists relative to the project root",
+                        "Use list_directory to explore available files",
+                        "Common names: docker-compose.yml, docker-compose.yaml, compose.yml",
+                    ]),
+                ));
+            }
+
+            // Check if file is empty
+            if let Ok(metadata) = std::fs::metadata(&path) {
+                if metadata.len() == 0 {
+                    return Ok(format_error_for_llm(
+                        "dclint",
+                        ErrorCategory::ValidationFailed,
+                        &format!("Docker Compose file is empty: {}", compose_file),
+                        Some(vec![
+                            "Add service definitions to the file",
+                            "Example minimal compose file:",
+                            "services:\\n  app:\\n    image: myimage:latest",
+                        ]),
+                    ));
+                }
+            }
+
             (lint_file(&path, &config), compose_file.clone())
         } else {
             // Default: look for docker-compose.yml in project root
@@ -386,16 +452,41 @@ impl Tool for DclintTool {
             match found {
                 Some((result, filename)) => (result, filename),
                 None => {
-                    return Err(DclintError(
-                        "No Docker Compose file specified and no docker-compose.yml found in project root".to_string(),
+                    return Ok(format_error_for_llm(
+                        "dclint",
+                        ErrorCategory::FileNotFound,
+                        "No Docker Compose file found in project root",
+                        Some(vec![
+                            "Check if the file exists in the project root",
+                            "Common names: docker-compose.yml, docker-compose.yaml, compose.yml, compose.yaml",
+                            "Use compose_file parameter to specify a custom path",
+                            "Use content parameter to lint inline YAML",
+                        ]),
                     ));
                 }
             }
         };
 
-        // Check for parse errors
+        // Handle parse errors - return structured error for agent
         if !result.parse_errors.is_empty() {
             log::warn!("Docker Compose parse errors: {:?}", result.parse_errors);
+            // If we have ONLY parse errors and no lint results, treat as validation failure
+            if result.failures.is_empty() && result.error_count == 0 && result.warning_count == 0 {
+                return Ok(format_error_for_llm(
+                    "dclint",
+                    ErrorCategory::ValidationFailed,
+                    &format!(
+                        "Invalid Docker Compose YAML syntax: {}",
+                        result.parse_errors.join(", ")
+                    ),
+                    Some(vec![
+                        "Check YAML indentation (use spaces, not tabs)",
+                        "Verify key-value pair syntax (key: value)",
+                        "Ensure quotes are properly matched",
+                        "Validate the 'services' section structure",
+                    ]),
+                ));
+            }
         }
 
         Ok(Self::format_result(&result, &filename))
@@ -552,5 +643,107 @@ services:
                 .unwrap_or(99),
             0
         );
+    }
+
+    // Unit tests for internal helper functions
+
+    #[test]
+    fn test_parse_threshold() {
+        assert_eq!(DclintTool::parse_threshold("error"), Severity::Error);
+        assert_eq!(DclintTool::parse_threshold("warning"), Severity::Warning);
+        assert_eq!(DclintTool::parse_threshold("info"), Severity::Info);
+        assert_eq!(DclintTool::parse_threshold("style"), Severity::Style);
+        // Case insensitive
+        assert_eq!(DclintTool::parse_threshold("ERROR"), Severity::Error);
+        assert_eq!(DclintTool::parse_threshold("Warning"), Severity::Warning);
+        // Invalid defaults to Warning
+        assert_eq!(DclintTool::parse_threshold("invalid"), Severity::Warning);
+        assert_eq!(DclintTool::parse_threshold(""), Severity::Warning);
+    }
+
+    #[test]
+    fn test_get_priority() {
+        use crate::analyzer::dclint::RuleCategory;
+
+        // Critical: Error + Security
+        assert_eq!(
+            DclintTool::get_priority(Severity::Error, RuleCategory::Security),
+            "critical"
+        );
+
+        // High: Error + other, Warning + Security
+        assert_eq!(
+            DclintTool::get_priority(Severity::Error, RuleCategory::BestPractice),
+            "high"
+        );
+        assert_eq!(
+            DclintTool::get_priority(Severity::Warning, RuleCategory::Security),
+            "high"
+        );
+
+        // Medium: Warning + BestPractice or other
+        assert_eq!(
+            DclintTool::get_priority(Severity::Warning, RuleCategory::BestPractice),
+            "medium"
+        );
+        assert_eq!(
+            DclintTool::get_priority(Severity::Warning, RuleCategory::Style),
+            "medium"
+        );
+
+        // Low: Info or Style severity
+        assert_eq!(
+            DclintTool::get_priority(Severity::Info, RuleCategory::BestPractice),
+            "low"
+        );
+        assert_eq!(
+            DclintTool::get_priority(Severity::Info, RuleCategory::Style),
+            "low"
+        );
+        assert_eq!(
+            DclintTool::get_priority(Severity::Style, RuleCategory::Style),
+            "low"
+        );
+    }
+
+    #[test]
+    fn test_fix_recommendations() {
+        // DCL001 - build+image conflict
+        let rec = DclintTool::get_fix_recommendation("DCL001");
+        assert!(rec.contains("build") || rec.contains("image"));
+
+        // DCL005 - port interface binding
+        let rec = DclintTool::get_fix_recommendation("DCL005");
+        assert!(rec.contains("interface") || rec.contains("127.0.0.1"));
+
+        // DCL006 - version field
+        let rec = DclintTool::get_fix_recommendation("DCL006");
+        assert!(rec.contains("version") || rec.contains("Remove"));
+
+        // DCL011 - explicit image tags
+        let rec = DclintTool::get_fix_recommendation("DCL011");
+        assert!(rec.contains("tag") || rec.contains("latest"));
+
+        // Unknown rule - generic guidance
+        let rec = DclintTool::get_fix_recommendation("UNKNOWN");
+        assert!(rec.contains("documentation") || rec.contains("Review"));
+    }
+
+    #[test]
+    fn test_rule_url_generation() {
+        // Valid rule codes should return URLs
+        let url = DclintTool::get_rule_url("DCL001");
+        assert!(url.contains("docker-compose-linter"));
+        assert!(url.contains("no-build-and-image"));
+
+        let url = DclintTool::get_rule_url("DCL006");
+        assert!(url.contains("no-version-field"));
+
+        // Unknown rule codes return empty string
+        let url = DclintTool::get_rule_url("UNKNOWN");
+        assert!(url.is_empty());
+
+        let url = DclintTool::get_rule_url("DCL999");
+        assert!(url.is_empty());
     }
 }

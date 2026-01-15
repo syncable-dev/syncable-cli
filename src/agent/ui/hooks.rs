@@ -637,12 +637,12 @@ fn print_tool_result(name: &str, args: &str, result: &str) -> (bool, Vec<String>
     // Tool errors come through as plain strings like "Shell error: ..."
     let parsed = if parsed.is_err() && !result.is_empty() {
         // Check for common error patterns
-        let is_tool_error = result.contains("error:") 
-            || result.contains("Error:") 
+        let is_tool_error = result.contains("error:")
+            || result.contains("Error:")
             || result.starts_with("Shell error")
             || result.starts_with("Toolset error")
             || result.starts_with("ToolCallError");
-        
+
         if is_tool_error {
             // Wrap the error message in a JSON structure so formatters can handle it
             let clean_msg = result
@@ -807,10 +807,7 @@ fn format_args_display(
         }
         "retrieve_output" => {
             if let Ok(v) = parsed {
-                let ref_id = v
-                    .get("ref_id")
-                    .and_then(|r| r.as_str())
-                    .unwrap_or("?");
+                let ref_id = v.get("ref_id").and_then(|r| r.as_str()).unwrap_or("?");
                 let query = v.get("query").and_then(|q| q.as_str());
 
                 if let Some(q) = query {
@@ -832,18 +829,24 @@ fn format_shell_result(
 ) -> (bool, Vec<String>) {
     if let Ok(v) = parsed {
         // Check if this is an error message (from tool error or blocked command)
-        if let Some(error_msg) = v.get("message").and_then(|m| m.as_str()) {
-            if v.get("error").and_then(|e| e.as_bool()).unwrap_or(false) {
-                return (false, vec![error_msg.to_string()]);
-            }
+        if let Some(error_msg) = v.get("message").and_then(|m| m.as_str())
+            && v.get("error").and_then(|e| e.as_bool()).unwrap_or(false)
+        {
+            return (false, vec![error_msg.to_string()]);
         }
-        
+
         // Check for cancelled or blocked operations (plan mode, user cancel)
-        if v.get("cancelled").and_then(|c| c.as_bool()).unwrap_or(false) {
-            let reason = v.get("reason").and_then(|r| r.as_str()).unwrap_or("cancelled");
+        if v.get("cancelled")
+            .and_then(|c| c.as_bool())
+            .unwrap_or(false)
+        {
+            let reason = v
+                .get("reason")
+                .and_then(|r| r.as_str())
+                .unwrap_or("cancelled");
             return (false, vec![reason.to_string()]);
         }
-        
+
         let success = v.get("success").and_then(|s| s.as_bool()).unwrap_or(false);
         let stdout = v.get("stdout").and_then(|s| s.as_str()).unwrap_or("");
         let stderr = v.get("stderr").and_then(|s| s.as_str()).unwrap_or("");
@@ -1005,13 +1008,18 @@ fn format_analyze_result(
 
         if is_compressed {
             // Compressed output format
-            let ref_id = v.get("full_data_ref").and_then(|r| r.as_str()).unwrap_or("?");
+            let ref_id = v
+                .get("full_data_ref")
+                .and_then(|r| r.as_str())
+                .unwrap_or("?");
 
             // Project count (monorepo)
             if let Some(count) = v.get("project_count").and_then(|c| c.as_u64()) {
                 lines.push(format!(
                     "{}📁 {} projects detected{}",
-                    ansi::SUCCESS, count, ansi::RESET
+                    ansi::SUCCESS,
+                    count,
+                    ansi::RESET
                 ));
             }
 
@@ -1045,16 +1053,18 @@ fn format_analyze_result(
                 if !names.is_empty() {
                     lines.push(format!("  │ Services: {}", names.join(", ")));
                 }
-            } else if let Some(count) = v.get("services_count").and_then(|c| c.as_u64()) {
-                if count > 0 {
-                    lines.push(format!("  │ Services: {} detected", count));
-                }
+            } else if let Some(count) = v.get("services_count").and_then(|c| c.as_u64())
+                && count > 0
+            {
+                lines.push(format!("  │ Services: {} detected", count));
             }
 
             // Retrieval hint
             lines.push(format!(
                 "{}  └ Full data: retrieve_output('{}'){}",
-                ansi::GRAY, ref_id, ansi::RESET
+                ansi::GRAY,
+                ref_id,
+                ansi::RESET
             ));
 
             return (true, lines);
@@ -1824,16 +1834,18 @@ fn format_retrieve_result(
 
             // Show project names if available
             if let Some(names) = v.get("project_names").and_then(|n| n.as_array()) {
-                let name_list: Vec<&str> = names
-                    .iter()
-                    .filter_map(|n| n.as_str())
-                    .take(5)
-                    .collect();
+                let name_list: Vec<&str> =
+                    names.iter().filter_map(|n| n.as_str()).take(5).collect();
                 if !name_list.is_empty() {
                     lines.push(format!("  │ Projects: {}", name_list.join(", ")));
                 }
                 if names.len() > 5 {
-                    lines.push(format!("{}  └ +{} more{}", ansi::GRAY, names.len() - 5, ansi::RESET));
+                    lines.push(format!(
+                        "{}  └ +{} more{}",
+                        ansi::GRAY,
+                        names.len() - 5,
+                        ansi::RESET
+                    ));
                 }
             }
 
@@ -1853,7 +1865,10 @@ fn format_retrieve_result(
             if let Some(services) = v.get("services").and_then(|s| s.as_array()) {
                 for (i, svc) in services.iter().take(4).enumerate() {
                     let name = svc.get("name").and_then(|n| n.as_str()).unwrap_or("?");
-                    let svc_type = svc.get("service_type").and_then(|t| t.as_str()).unwrap_or("");
+                    let svc_type = svc
+                        .get("service_type")
+                        .and_then(|t| t.as_str())
+                        .unwrap_or("");
                     let prefix = if i == services.len().min(4) - 1 && services.len() <= 4 {
                         "└"
                     } else {
@@ -1862,7 +1877,12 @@ fn format_retrieve_result(
                     lines.push(format!("  {} 🔧 {} {}", prefix, name, svc_type));
                 }
                 if services.len() > 4 {
-                    lines.push(format!("{}  └ +{} more{}", ansi::GRAY, services.len() - 4, ansi::RESET));
+                    lines.push(format!(
+                        "{}  └ +{} more{}",
+                        ansi::GRAY,
+                        services.len() - 4,
+                        ansi::RESET
+                    ));
                 }
             }
 
