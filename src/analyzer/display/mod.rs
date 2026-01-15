@@ -17,7 +17,10 @@ mod utils;
 pub use box_drawer::BoxDrawer;
 pub use color_adapter::{ColorAdapter, ColorScheme, get_color_adapter, init_color_adapter};
 pub use helpers::{format_project_category, get_category_emoji};
-pub use utils::{strip_ansi_codes, truncate_to_width, visual_width};
+pub use utils::{
+    format_list_smart, format_ports_smart, get_terminal_width, smart_truncate, strip_ansi_codes,
+    truncate_to_width, visual_width,
+};
 
 use crate::analyzer::MonorepoAnalysis;
 
