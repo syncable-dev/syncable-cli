@@ -255,3 +255,38 @@ fn count_files_recursive(path: &std::path::Path, limit: usize) -> usize {
 
     count
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_count_files_empty_dir() {
+        let dir = tempdir().unwrap();
+        let count = count_files_recursive(dir.path(), 10000);
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_count_files_with_files() {
+        let dir = tempdir().unwrap();
+        std::fs::write(dir.path().join("file1.rs"), "fn main() {}").unwrap();
+        std::fs::write(dir.path().join("file2.go"), "package main").unwrap();
+        let count = count_files_recursive(dir.path(), 10000);
+        assert_eq!(count, 2);
+    }
+
+    #[tokio::test]
+    async fn test_analyze_nonexistent_path() {
+        let dir = tempdir().unwrap();
+        let tool = AnalyzeTool::new(dir.path().to_path_buf());
+        let args = AnalyzeArgs {
+            path: Some("nonexistent".to_string()),
+        };
+
+        let result = tool.call(args).await.unwrap();
+        // Should return error formatted for LLM
+        assert!(result.contains("error") || result.contains("not found") || result.contains("Path not found"));
+    }
+}
