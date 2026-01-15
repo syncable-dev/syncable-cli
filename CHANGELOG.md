@@ -106,6 +106,55 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.33.0](https://github.com/syncable-dev/syncable-cli/compare/v0.32.1...v0.33.0) - 2026-01-15
+
+### Added
+
+- matrix ui upgrade for better view and visibility
+- *(07-03)* session persistence with full context restore
+- *(06-03)* improve k8s_costs tool with error patterns
+- *(06-02)* improve prometheus_connect tool with error patterns
+- *(06-01)* improve k8s_optimize tool with error patterns
+- *(05-04)* improve dclint tool with error patterns and tests
+- *(05-03)* improve kubelint tool with error patterns and tests
+- *(05-02)* improve helmlint tool with error patterns and tests
+- *(05-01)* improve hadolint tool with error patterns and tests
+- *(04-03)* add analyze tool edge case handling
+- *(04-03)* improve analyze tool definition
+- *(04-02)* add file_ops edge case handling
+- *(04-02)* improve file_ops path validation error messages
+- *(04-02)* improve file_ops tool definitions
+- *(04-01)* improve shell tool definition and rejection messages
+- *(04-01)* expand shell command allowlist with categories
+- *(03-03)* update core tools with response formatting
+- *(03-03)* create response formatting utilities
+- *(03-02)* add error module to tools with documentation
+- *(03-02)* create common error utilities module
+
+### Fixed
+
+- *(fomatting)* missing formatting
+- *(ci)* bump MSRV to 1.88 for AWS SDK compatibility
+- *(ci)* bump MSRV to 1.87 and ignore transitive security advisories
+- *(07-02)* preserve context during history truncation
+
+### Other
+
+- Merge pull request #277 from syncable-dev/develop
+- small fixes
+- *(09-02)* add tests to untested tool files
+- *(08-02)* add tests for input.rs and autocomplete.rs
+- *(04-01)* add shell tool allowlist tests
+- *(03-03)* document response patterns in mod.rs
+- *(03-02)* update high-priority tools with error utilities
+- *(02-04)* extract UI helpers to session/ui.rs
+- *(02-03)* update session/mod.rs to delegate to commands
+- *(02-03)* create commands.rs with all handle_* methods
+- *(02-02)* extract provider logic into providers.rs submodule
+- *(02-01)* create session submodule structure and extract plan_mode
+- *(01-02)* create testing protocol for all 28 tools
+- *(01)* create phase 1 audit & triage plans
+
 ## [0.32.1](https://github.com/syncable-dev/syncable-cli/compare/v0.32.0...v0.32.1) - 2026-01-11
 
 ### Added
