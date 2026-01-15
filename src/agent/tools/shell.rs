@@ -343,6 +343,102 @@ impl ShellTool {
     }
 }
 
+/// Categorize a command for better error messages and suggestions
+fn categorize_command(cmd: &str) -> Option<&'static str> {
+    let trimmed = cmd.trim();
+    let first_word = trimmed.split_whitespace().next().unwrap_or("");
+
+    match first_word {
+        // General development
+        "echo" | "printf" | "test" | "expr" => Some("general"),
+
+        // Docker
+        "docker" | "docker-compose" => Some("docker"),
+
+        // Terraform
+        "terraform" => Some("terraform"),
+
+        // Helm
+        "helm" => Some("helm"),
+
+        // Kubernetes
+        "kubectl" | "kubeval" | "kustomize" => Some("kubernetes"),
+
+        // Build tools
+        "make" | "gradle" | "mvn" | "poetry" | "pip" | "bundle" => Some("build"),
+
+        // Package managers
+        "npm" | "yarn" | "pnpm" => {
+            // Check if it's a test or build command
+            if trimmed.contains("test") {
+                Some("testing")
+            } else {
+                Some("build")
+            }
+        }
+
+        // Language builds
+        "cargo" => {
+            if trimmed.contains("test") {
+                Some("testing")
+            } else {
+                Some("build")
+            }
+        }
+        "go" => {
+            if trimmed.contains("test") {
+                Some("testing")
+            } else {
+                Some("build")
+            }
+        }
+        "python" | "pytest" => Some("testing"),
+
+        // Testing
+        "jest" | "vitest" => Some("testing"),
+
+        // Git
+        "git" => Some("git"),
+
+        // Linting
+        "hadolint" | "tflint" | "yamllint" | "shellcheck" | "eslint" | "prettier" => {
+            Some("linting")
+        }
+
+        _ => None,
+    }
+}
+
+/// Get suggestions for a command category
+fn get_category_suggestions(category: Option<&str>) -> Vec<&'static str> {
+    match category {
+        Some("linting") => vec![
+            "For linting, prefer native tools (hadolint, kubelint, helmlint) for AI-optimized output",
+            "If you need this specific linter, ask the user to approve via confirmation prompt",
+        ],
+        Some("build") => vec![
+            "Check if the command matches an allowed build prefix (npm run, cargo build, etc.)",
+            "The user can approve custom build commands via the confirmation prompt",
+        ],
+        Some("testing") => vec![
+            "Check if the command matches an allowed test prefix (npm test, cargo test, etc.)",
+            "The user can approve custom test commands via the confirmation prompt",
+        ],
+        Some("git") => vec![
+            "Git read commands (status, log, diff) are allowed in read-only mode",
+            "Git write commands (add, commit, push) require standard mode",
+        ],
+        Some(_) => vec![
+            "Check if a similar command is in the allowed list",
+            "The user can approve this command via the confirmation prompt",
+        ],
+        None => vec![
+            "This command is not recognized - check if it's a DevOps tool",
+            "Ask the user if they want to approve this command for the session",
+        ],
+    }
+}
+
 impl Tool for ShellTool {
     const NAME: &'static str = "shell";
 
@@ -353,22 +449,27 @@ impl Tool for ShellTool {
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
             name: Self::NAME.to_string(),
-            description: r#"Execute shell commands for building and validation. RESTRICTED to commands that CANNOT be done with native tools.
+            description: r#"Execute shell commands for building, testing, and development workflows.
 
-**DO NOT use shell for linting - use NATIVE tools instead:**
-- Dockerfile linting → use `hadolint` tool (NOT shell hadolint)
-- docker-compose linting → use `dclint` tool (NOT shell docker-compose config)
-- Helm chart linting → use `helmlint` tool (NOT shell helm lint)
-- Kubernetes YAML linting → use `kubelint` tool (NOT shell kubectl/kubeval)
+**Supported command categories:**
+- General: echo, printf, test, expr
+- Docker: docker build, docker compose
+- Terraform: init, validate, plan, fmt
+- Kubernetes: kubectl get/describe/diff, helm lint/template
+- Build tools: make, npm/yarn/pnpm run, cargo build, go build, gradle, mvn
+- Testing: npm/yarn/pnpm test, cargo test, go test, pytest, jest, vitest
+- Git: add, commit, push, checkout, branch, merge, rebase, fetch, pull
 
-**Use shell ONLY for:**
-- `docker build` - Actually building Docker images
-- `terraform init/validate/plan` - Terraform workflows
-- `make`, `npm run`, `cargo build` - Build commands
-- `git` commands - Version control operations
+**Confirmation system:**
+- Commands require user confirmation before execution
+- Users can approve commands for the entire session
+- This ensures safety while maintaining flexibility
 
-The native linting tools return AI-optimized JSON with priorities and fix recommendations.
-Shell linting produces plain text that's harder to parse and act on."#.to_string(),
+**For linting, prefer native tools:**
+- Dockerfile → hadolint tool (AI-optimized JSON output)
+- Helm charts → helmlint tool
+- K8s YAML → kubelint tool
+Native linting tools return structured output with priorities and fix recommendations."#.to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -411,22 +512,26 @@ Shell linting produces plain text that's harder to parse and act on."#.to_string
         } else {
             // Validate command is allowed (standard mode)
             if !self.is_command_allowed(&args.command) {
+                let category = categorize_command(&args.command);
+                let suggestions = get_category_suggestions(category);
+
                 return Ok(format_error_with_context(
                     "shell",
                     ErrorCategory::CommandRejected,
                     &format!(
-                        "Command '{}' is not in the allowed list",
+                        "Command '{}' is not in the default allowlist",
                         args.command.split_whitespace().next().unwrap_or(&args.command)
                     ),
                     &[
                         ("blocked_command", json!(args.command)),
-                        ("allowed_commands", json!(ALLOWED_COMMANDS)),
                         (
-                            "suggestions",
-                            json!([
-                                "Use a command from the allowed list",
-                                "For linting, use native tools (hadolint, kubelint, etc.)"
-                            ]),
+                            "category_hint",
+                            json!(category.unwrap_or("unrecognized")),
+                        ),
+                        ("suggestions", json!(suggestions)),
+                        (
+                            "note",
+                            json!("The user can approve this command via the confirmation prompt"),
                         ),
                     ],
                 ));
