@@ -18,6 +18,7 @@
 //! 3. Use `k8s_optimize` with the prometheus URL from step 2
 
 use super::compression::{CompressionConfig, compress_tool_output};
+use super::error::{ErrorCategory, format_error_for_llm};
 use rig::completion::ToolDefinition;
 use rig::tool::Tool;
 use serde::{Deserialize, Serialize};
@@ -307,10 +308,10 @@ impl K8sOptimizeTool {
     fn build_config(&self, args: &K8sOptimizeArgs) -> K8sOptimizeConfig {
         let mut config = K8sOptimizeConfig::default();
 
-        if let Some(severity_str) = &args.severity {
-            if let Some(severity) = Severity::parse(severity_str) {
-                config = config.with_severity(severity);
-            }
+        if let Some(severity_str) = &args.severity
+            && let Some(severity) = Severity::parse(severity_str)
+        {
+            config = config.with_severity(severity);
         }
 
         if let Some(threshold) = args.threshold {
@@ -621,34 +622,74 @@ Port-forward is preferred (no auth needed). Auth is only needed for external Pro
             };
 
             if !full_path.exists() {
-                return Err(K8sOptimizeError(format!(
-                    "Path not found: {}",
-                    full_path.display()
-                )));
+                return Ok(format_error_for_llm(
+                    "k8s_optimize",
+                    ErrorCategory::FileNotFound,
+                    &format!("Path not found: {}", full_path.display()),
+                    Some(vec![
+                        "Check if the path is correct",
+                        "Common locations: k8s/, manifests/, deploy/, charts/",
+                        "Use content parameter for inline YAML analysis",
+                        "Use list_directory tool to explore the project structure",
+                    ]),
+                ));
             }
 
             analyze(&full_path, &config)
         };
 
+        // Handle empty directory (no K8s manifests found)
+        if result.summary.resources_analyzed == 0 && result.summary.containers_analyzed == 0 {
+            return Ok(format_error_for_llm(
+                "k8s_optimize",
+                ErrorCategory::ValidationFailed,
+                "No Kubernetes resources found to analyze",
+                Some(vec![
+                    "Ensure the path contains valid K8s YAML manifests",
+                    "Check for Deployment, StatefulSet, DaemonSet, Job, or CronJob resources",
+                    "Common K8s manifest locations: k8s/, manifests/, deploy/, charts/",
+                    "Use content parameter to analyze inline YAML",
+                ]),
+            ));
+        }
+
         // If prometheus URL provided, enhance recommendations with live data
-        let prometheus_enhancement = if let Some(prometheus_url) = &args.prometheus {
+        let (prometheus_enhancement, prometheus_error) = if let Some(prometheus_url) =
+            &args.prometheus
+        {
             let auth = Self::build_prometheus_auth(&args);
             match PrometheusClient::with_auth(prometheus_url, auth) {
                 Ok(client) => {
                     if client.is_available().await {
                         let period = args.period.as_deref().unwrap_or("7d");
-                        Some(
-                            self.enhance_with_prometheus(&mut result, &client, period)
-                                .await,
+                        (
+                            Some(
+                                self.enhance_with_prometheus(&mut result, &client, period)
+                                    .await,
+                            ),
+                            None,
                         )
                     } else {
-                        None
+                        // Prometheus URL provided but not reachable
+                        (
+                            None,
+                            Some(format!(
+                                "Prometheus at {} is not reachable. Continuing with static analysis.",
+                                prometheus_url
+                            )),
+                        )
                     }
                 }
-                Err(_) => None,
+                Err(e) => (
+                    None,
+                    Some(format!(
+                        "Failed to connect to Prometheus at {}: {}. Continuing with static analysis.",
+                        prometheus_url, e
+                    )),
+                ),
             }
         } else {
-            None
+            (None, None)
         };
 
         // If full mode, also run kubelint and helmlint
@@ -742,6 +783,20 @@ Port-forward is preferred (no auth needed). Auth is only needed for external Pro
             if enhancement.enhanced_count > 0 {
                 output["summary"]["mode"] = json!("prometheus");
             }
+        } else if let Some(prom_error) = prometheus_error {
+            // Add prometheus connection error info (graceful degradation)
+            output["prometheus_analysis"] = json!({
+                "enabled": false,
+                "url": args.prometheus,
+                "error": prom_error,
+                "mode": "static",
+                "suggestions": [
+                    "Verify Prometheus is running and accessible",
+                    "For cluster Prometheus, use prometheus_connect tool first to set up port-forward",
+                    "Check firewall rules if using external Prometheus URL",
+                    "Analysis continues with static/heuristic recommendations"
+                ]
+            });
         }
 
         // Use smart compression with RAG retrieval pattern
@@ -947,5 +1002,123 @@ spec:
             }
             _ => panic!("Expected Basic auth"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_path_not_found_error() {
+        let tool = K8sOptimizeTool::new(PathBuf::from("/tmp/test-k8s-optimize-nonexistent"));
+
+        let args = K8sOptimizeArgs {
+            path: Some("nonexistent/path/to/k8s/manifests".to_string()),
+            content: None,
+            severity: None,
+            threshold: None,
+            include_info: false,
+            include_system: false,
+            full: false,
+            cluster: None,
+            prometheus: None,
+            prometheus_auth_type: None,
+            prometheus_username: None,
+            prometheus_password: None,
+            prometheus_token: None,
+            period: None,
+            cloud_provider: None,
+            region: None,
+        };
+
+        let result = tool.call(args).await.unwrap();
+
+        // Should return a structured error, not panic
+        assert!(result.contains("FILE_NOT_FOUND"));
+        assert!(result.contains("suggestions"));
+        assert!(result.contains("error"));
+
+        // Parse as JSON to verify structure
+        let json: serde_json::Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(json["error"], true);
+        assert_eq!(json["code"], "FILE_NOT_FOUND");
+        assert!(json["suggestions"].is_array());
+    }
+
+    #[tokio::test]
+    async fn test_empty_content_handled() {
+        let tool = K8sOptimizeTool::new(PathBuf::from("."));
+
+        let args = K8sOptimizeArgs {
+            path: None,
+            content: Some("".to_string()),
+            severity: None,
+            threshold: None,
+            include_info: false,
+            include_system: false,
+            full: false,
+            cluster: None,
+            prometheus: None,
+            prometheus_auth_type: None,
+            prometheus_username: None,
+            prometheus_password: None,
+            prometheus_token: None,
+            period: None,
+            cloud_provider: None,
+            region: None,
+        };
+
+        let result = tool.call(args).await.unwrap();
+
+        // Should handle gracefully with a structured response
+        // Empty content should fall back to path analysis of "."
+        // which will likely have no K8s manifests, returning VALIDATION_FAILED
+        let json: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        // Either we get an error response (no K8s manifests) or a valid analysis
+        if json.get("error").is_some() && json["error"] == true {
+            // Error case - no K8s manifests found in current directory
+            assert!(result.contains("VALIDATION_FAILED") || result.contains("FILE_NOT_FOUND"));
+            assert!(json["suggestions"].is_array());
+        } else {
+            // Success case - valid analysis response
+            assert!(json.get("summary").is_some());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_no_k8s_manifests_in_directory() {
+        // Create a temp directory with no K8s manifests
+        let temp_dir = std::env::temp_dir().join("test-k8s-optimize-empty");
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        let tool = K8sOptimizeTool::new(temp_dir.clone());
+
+        let args = K8sOptimizeArgs {
+            path: Some(".".to_string()),
+            content: None,
+            severity: None,
+            threshold: None,
+            include_info: false,
+            include_system: false,
+            full: false,
+            cluster: None,
+            prometheus: None,
+            prometheus_auth_type: None,
+            prometheus_username: None,
+            prometheus_password: None,
+            prometheus_token: None,
+            period: None,
+            cloud_provider: None,
+            region: None,
+        };
+
+        let result = tool.call(args).await.unwrap();
+
+        // Should return validation error for empty directory
+        let json: serde_json::Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(json["error"], true);
+        assert_eq!(json["code"], "VALIDATION_FAILED");
+        assert!(result.contains("No Kubernetes resources found"));
+        assert!(json["suggestions"].is_array());
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }
