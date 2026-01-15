@@ -910,3 +910,183 @@ fn read_simple_input(prompt: &str) -> InputResult {
         Err(_) => InputResult::Cancel,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn new_state() -> InputState {
+        InputState::new(PathBuf::from("/tmp"), false)
+    }
+
+    #[test]
+    fn test_insert_char_basic() {
+        let mut state = new_state();
+        state.insert_char('h');
+        state.insert_char('i');
+        assert_eq!(state.text, "hi");
+        assert_eq!(state.cursor, 2);
+    }
+
+    #[test]
+    fn test_insert_char_utf8() {
+        let mut state = new_state();
+        state.insert_char('日');
+        state.insert_char('本');
+        assert_eq!(state.text, "日本");
+        assert_eq!(state.cursor, 2);
+    }
+
+    #[test]
+    fn test_insert_char_skips_cr() {
+        let mut state = new_state();
+        state.insert_char('a');
+        state.insert_char('\r');
+        state.insert_char('b');
+        assert_eq!(state.text, "ab");
+    }
+
+    #[test]
+    fn test_backspace_basic() {
+        let mut state = new_state();
+        state.insert_char('h');
+        state.insert_char('e');
+        state.insert_char('l');
+        state.backspace();
+        assert_eq!(state.text, "he");
+        assert_eq!(state.cursor, 2);
+    }
+
+    #[test]
+    fn test_backspace_utf8() {
+        let mut state = new_state();
+        state.insert_char('日');
+        state.insert_char('本');
+        state.backspace();
+        assert_eq!(state.text, "日");
+        assert_eq!(state.cursor, 1);
+    }
+
+    #[test]
+    fn test_backspace_at_start() {
+        let mut state = new_state();
+        state.backspace(); // Should not panic
+        assert_eq!(state.text, "");
+        assert_eq!(state.cursor, 0);
+    }
+
+    #[test]
+    fn test_cursor_movement() {
+        let mut state = new_state();
+        state.insert_char('h');
+        state.insert_char('e');
+        state.insert_char('l');
+        state.insert_char('l');
+        state.insert_char('o');
+        assert_eq!(state.cursor, 5);
+
+        state.cursor_left();
+        assert_eq!(state.cursor, 4);
+
+        state.cursor_home();
+        assert_eq!(state.cursor, 0);
+
+        state.cursor_right();
+        assert_eq!(state.cursor, 1);
+
+        state.cursor_end();
+        assert_eq!(state.cursor, 5);
+    }
+
+    #[test]
+    fn test_cursor_bounds() {
+        let mut state = new_state();
+        state.insert_char('a');
+
+        state.cursor_left();
+        state.cursor_left(); // Should not go below 0
+        assert_eq!(state.cursor, 0);
+
+        state.cursor_right();
+        state.cursor_right(); // Should not go beyond text length
+        assert_eq!(state.cursor, 1);
+    }
+
+    #[test]
+    fn test_char_to_byte_pos_ascii() {
+        let mut state = new_state();
+        state.text = "hello".to_string();
+        assert_eq!(state.char_to_byte_pos(0), 0);
+        assert_eq!(state.char_to_byte_pos(2), 2);
+        assert_eq!(state.char_to_byte_pos(5), 5);
+    }
+
+    #[test]
+    fn test_char_to_byte_pos_utf8() {
+        let mut state = new_state();
+        state.text = "日本語".to_string(); // Each char is 3 bytes
+        assert_eq!(state.char_to_byte_pos(0), 0);
+        assert_eq!(state.char_to_byte_pos(1), 3);
+        assert_eq!(state.char_to_byte_pos(2), 6);
+        assert_eq!(state.char_to_byte_pos(3), 9);
+    }
+
+    #[test]
+    fn test_clear_all() {
+        let mut state = new_state();
+        state.insert_char('h');
+        state.insert_char('e');
+        state.insert_char('l');
+        state.clear_all();
+        assert_eq!(state.text, "");
+        assert_eq!(state.cursor, 0);
+    }
+
+    #[test]
+    fn test_delete_word_left() {
+        let mut state = new_state();
+        for c in "hello world".chars() {
+            state.insert_char(c);
+        }
+        state.delete_word_left();
+        assert_eq!(state.text, "hello ");
+        assert_eq!(state.cursor, 6);
+    }
+
+    #[test]
+    fn test_multiline_cursor_navigation() {
+        let mut state = new_state();
+        // "ab\ncd"
+        for c in "ab".chars() {
+            state.insert_char(c);
+        }
+        state.insert_char('\n');
+        for c in "cd".chars() {
+            state.insert_char(c);
+        }
+        assert_eq!(state.cursor, 5); // at end
+
+        state.cursor_up();
+        assert_eq!(state.cursor, 2); // end of first line "ab"
+
+        state.cursor_down();
+        assert_eq!(state.cursor, 5); // back to end
+    }
+
+    #[test]
+    fn test_get_filter_at_symbol() {
+        let mut state = new_state();
+        state.text = "@src".to_string();
+        state.cursor = 4;
+        state.completion_start = Some(0);
+        assert_eq!(state.get_filter(), Some("src".to_string()));
+    }
+
+    #[test]
+    fn test_get_filter_no_completion() {
+        let mut state = new_state();
+        state.text = "hello".to_string();
+        state.cursor = 5;
+        assert_eq!(state.get_filter(), None);
+    }
+}
