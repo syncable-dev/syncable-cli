@@ -102,21 +102,37 @@ impl Tool for ReadFileTool {
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
             name: Self::NAME.to_string(),
-            description: "Read the contents of a file in the project. Use this to examine source code, configuration files, or any text file.".to_string(),
+            description: r#"Read the contents of a file in the project.
+
+**Truncation Limits:**
+- Maximum 2000 lines returned by default
+- Lines longer than 2000 characters are truncated
+- Use start_line/end_line to read specific sections of large files
+
+**Path Restrictions:**
+- Paths must be within the project directory (security boundary)
+- Both relative and absolute paths are supported
+- Relative paths are resolved from project root
+
+**Line Range Usage:**
+- start_line: 1-based line number to start reading from
+- end_line: 1-based line number to stop at (inclusive)
+- If only start_line is provided, reads from that line to end of file
+- If start_line exceeds file length, returns an error with file size info"#.to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "Path to the file to read (relative to project root)"
+                        "description": "Path to the file to read (relative to project root or absolute within project)"
                     },
                     "start_line": {
                         "type": "integer",
-                        "description": "Optional starting line number (1-based)"
+                        "description": "Starting line number (1-based). Use with end_line to read specific sections of large files."
                     },
                     "end_line": {
                         "type": "integer",
-                        "description": "Optional ending line number (1-based, inclusive)"
+                        "description": "Ending line number (1-based, inclusive). If omitted with start_line, reads to end of file."
                     }
                 },
                 "required": ["path"]
@@ -341,17 +357,33 @@ impl Tool for ListDirectoryTool {
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
             name: Self::NAME.to_string(),
-            description: "List the contents of a directory in the project. Returns file and subdirectory names with their types and sizes.".to_string(),
+            description: r#"List the contents of a directory in the project.
+
+**Truncation Limits:**
+- Maximum 500 entries returned
+- Use more specific paths to explore large directories
+
+**Output Format:**
+- Returns entries sorted alphabetically by name
+- Each entry includes: name, path, type (file/directory), size (for files)
+
+**Filtering:**
+- Automatically skips common non-essential directories: node_modules, .git, target, __pycache__, .venv, venv, dist, build
+- Respects .gitignore patterns in recursive mode
+
+**Path Restrictions:**
+- Paths must be within the project directory (security boundary)
+- Use '.' or empty path for project root"#.to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "Path to the directory to list (relative to project root). Use '.' for root."
+                        "description": "Path to the directory (relative to project root). Use '.' or omit for project root."
                     },
                     "recursive": {
                         "type": "boolean",
-                        "description": "If true, list contents recursively (max depth 3). Default is false."
+                        "description": "If true, list contents recursively (max depth 3, skips node_modules/.git/etc). Default: false."
                     }
                 }
             }),
@@ -550,13 +582,22 @@ impl Tool for WriteFileTool {
             name: Self::NAME.to_string(),
             description: r#"Write content to a file in the project. Creates the file if it doesn't exist, or overwrites if it does.
 
+**SECURITY: Path Restriction (Intentional)**
+- Writes are ONLY allowed within the project directory
+- Writing to /tmp, /etc, or any path outside the project is blocked
+- This is a security feature to prevent unintended system modifications
+- For temporary files, create a 'tmp/' directory within your project root
+
+**Confirmation Workflow:**
+- All writes show a diff preview before applying
+- User can approve, reject, or request modifications
+- Use 'Always' option to skip confirmation for repeated file types
+
 **IMPORTANT**: Use this tool IMMEDIATELY when the user asks you to:
 - Create ANY file (Dockerfile, .tf, .yaml, .md, .json, etc.)
 - Generate configuration files
 - Write documentation to a specific location
-- "Put content in" or "under" a directory
 - Save analysis results or findings
-- Document anything in a file
 
 **DO NOT** just describe what you would write - actually call this tool with the content.
 
@@ -565,10 +606,9 @@ Use cases:
 - Create Terraform configuration files (.tf)
 - Write Helm chart templates and values
 - Create docker-compose.yml files
-- Generate CI/CD configuration files (.github/workflows, .gitlab-ci.yml)
+- Generate CI/CD configuration files
 - Write Kubernetes manifests
 - Save analysis findings to markdown files
-- Create any text file the user requests
 
 The tool will create parent directories automatically if they don't exist."#.to_string(),
             parameters: json!({
@@ -576,7 +616,7 @@ The tool will create parent directories automatically if they don't exist."#.to_
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "Path to the file to write (relative to project root). Example: 'Dockerfile', 'terraform/main.tf', 'helm/values.yaml'"
+                        "description": "Path to the file (relative to project root). Must be within project. Examples: 'Dockerfile', 'terraform/main.tf', 'tmp/scratch.txt'"
                     },
                     "content": {
                         "type": "string",
@@ -836,31 +876,39 @@ impl Tool for WriteFilesTool {
             name: Self::NAME.to_string(),
             description: r#"Write multiple files at once. Ideal for creating complete infrastructure configurations.
 
-**IMPORTANT**: Use this tool when you need to create multiple related files together.
+**SECURITY: Path Restriction (Intentional)**
+- ALL paths must be within the project directory
+- Writing to /tmp, /etc, or any path outside the project is blocked
+- This is a security feature to prevent unintended system modifications
+- For temporary files, create a 'tmp/' directory within your project root
+
+**Atomicity:**
+- All paths are validated BEFORE any files are written
+- If any path is invalid, NO files are written
+- Confirmation is requested for each file individually
 
 **USE THIS TOOL** (not just describe files) when the user asks for:
 - Complete Terraform modules (main.tf, variables.tf, outputs.tf, providers.tf)
 - Full Helm charts (Chart.yaml, values.yaml, templates/*.yaml)
 - Kubernetes manifests (deployment.yaml, service.yaml, configmap.yaml)
 - Multi-file docker-compose setups
-- Multiple documentation files in a directory
 - Any set of related files
 
 **DO NOT** just describe the files - actually call this tool to create them.
 
-All files are written atomically. Parent directories are created automatically."#.to_string(),
+Parent directories are created automatically."#.to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "files": {
                         "type": "array",
-                        "description": "List of files to write",
+                        "description": "List of files to write. All paths must be within project directory.",
                         "items": {
                             "type": "object",
                             "properties": {
                                 "path": {
                                     "type": "string",
-                                    "description": "Path to the file (relative to project root)"
+                                    "description": "Path to the file (relative to project root). Must be within project."
                                 },
                                 "content": {
                                     "type": "string",
