@@ -475,7 +475,10 @@ USAGE:
                 return Ok(format_error_for_llm(
                     "dclint",
                     ErrorCategory::ValidationFailed,
-                    &format!("Invalid Docker Compose YAML syntax: {}", result.parse_errors.join(", ")),
+                    &format!(
+                        "Invalid Docker Compose YAML syntax: {}",
+                        result.parse_errors.join(", ")
+                    ),
                     Some(vec![
                         "Check YAML indentation (use spaces, not tabs)",
                         "Verify key-value pair syntax (key: value)",

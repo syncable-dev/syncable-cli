@@ -113,8 +113,7 @@ pub fn has_api_key(provider: ProviderType) -> bool {
             ProviderType::Bedrock => {
                 if let Some(bedrock) = &profile.bedrock
                     && (bedrock.profile.is_some()
-                        || (bedrock.access_key_id.is_some()
-                            && bedrock.secret_access_key.is_some()))
+                        || (bedrock.access_key_id.is_some() && bedrock.secret_access_key.is_some()))
                 {
                     return true;
                 }
@@ -148,8 +147,7 @@ pub fn has_api_key(provider: ProviderType) -> bool {
             ProviderType::Bedrock => {
                 if let Some(bedrock) = &profile.bedrock
                     && (bedrock.profile.is_some()
-                        || (bedrock.access_key_id.is_some()
-                            && bedrock.secret_access_key.is_some()))
+                        || (bedrock.access_key_id.is_some() && bedrock.secret_access_key.is_some()))
                 {
                     return true;
                 }
@@ -410,8 +408,7 @@ pub(crate) fn run_bedrock_setup_wizard() -> AgentResult<String> {
         }
         "3" => {
             // Use existing env vars
-            if std::env::var("AWS_ACCESS_KEY_ID").is_err()
-                && std::env::var("AWS_PROFILE").is_err()
+            if std::env::var("AWS_ACCESS_KEY_ID").is_err() && std::env::var("AWS_PROFILE").is_err()
             {
                 println!("{}", "No AWS credentials found in environment!".yellow());
                 println!("Set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY or AWS_PROFILE");

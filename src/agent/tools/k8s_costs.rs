@@ -422,23 +422,41 @@ mod tests {
         assert!(matches!(tool.parse_provider("AWS"), CloudProvider::Aws));
         assert!(matches!(tool.parse_provider("GCP"), CloudProvider::Gcp));
         assert!(matches!(tool.parse_provider("AZURE"), CloudProvider::Azure));
-        assert!(matches!(tool.parse_provider("ONPREM"), CloudProvider::OnPrem));
+        assert!(matches!(
+            tool.parse_provider("ONPREM"),
+            CloudProvider::OnPrem
+        ));
 
         // Test mixed case
         assert!(matches!(tool.parse_provider("Aws"), CloudProvider::Aws));
         assert!(matches!(tool.parse_provider("Gcp"), CloudProvider::Gcp));
         assert!(matches!(tool.parse_provider("Azure"), CloudProvider::Azure));
-        assert!(matches!(tool.parse_provider("OnPrem"), CloudProvider::OnPrem));
+        assert!(matches!(
+            tool.parse_provider("OnPrem"),
+            CloudProvider::OnPrem
+        ));
 
         // Test lowercase
         assert!(matches!(tool.parse_provider("aws"), CloudProvider::Aws));
         assert!(matches!(tool.parse_provider("gcp"), CloudProvider::Gcp));
         assert!(matches!(tool.parse_provider("azure"), CloudProvider::Azure));
-        assert!(matches!(tool.parse_provider("onprem"), CloudProvider::OnPrem));
+        assert!(matches!(
+            tool.parse_provider("onprem"),
+            CloudProvider::OnPrem
+        ));
 
         // Test alternative formats
-        assert!(matches!(tool.parse_provider("on-prem"), CloudProvider::OnPrem));
-        assert!(matches!(tool.parse_provider("on_prem"), CloudProvider::OnPrem));
-        assert!(matches!(tool.parse_provider("ON-PREM"), CloudProvider::OnPrem));
+        assert!(matches!(
+            tool.parse_provider("on-prem"),
+            CloudProvider::OnPrem
+        ));
+        assert!(matches!(
+            tool.parse_provider("on_prem"),
+            CloudProvider::OnPrem
+        ));
+        assert!(matches!(
+            tool.parse_provider("ON-PREM"),
+            CloudProvider::OnPrem
+        ));
     }
 }

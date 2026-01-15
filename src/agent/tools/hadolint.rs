@@ -823,10 +823,7 @@ CMD ["node", "dist/index.js"]
             HadolintTool::get_priority(Severity::Info, "best-practice"),
             "low"
         );
-        assert_eq!(
-            HadolintTool::get_priority(Severity::Style, "any"),
-            "low"
-        );
+        assert_eq!(HadolintTool::get_priority(Severity::Style, "any"), "low");
 
         // Info priority for Ignore severity
         assert_eq!(
@@ -875,10 +872,12 @@ CMD ["node", "dist/index.js"]
         // Should return structured error for missing default Dockerfile
         assert_eq!(parsed["error"], true);
         assert_eq!(parsed["code"], "FILE_NOT_FOUND");
-        assert!(parsed["message"]
-            .as_str()
-            .unwrap()
-            .contains("No Dockerfile specified"));
+        assert!(
+            parsed["message"]
+                .as_str()
+                .unwrap()
+                .contains("No Dockerfile specified")
+        );
 
         // Cleanup
         fs::remove_dir_all(&temp).ok();

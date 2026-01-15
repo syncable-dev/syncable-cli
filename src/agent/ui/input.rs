@@ -579,10 +579,7 @@ fn render(state: &mut InputState, prompt: &str, stdout: &mut io::Stdout) -> io::
     // Move up from the cursor's current line position to the start of input
     // We use prev_cursor_line (where we left the cursor last render) not prev_wrapped_lines
     if state.prev_cursor_line > 0 {
-        execute!(
-            stdout,
-            cursor::MoveUp(state.prev_cursor_line as u16)
-        )?;
+        execute!(stdout, cursor::MoveUp(state.prev_cursor_line as u16))?;
     }
     execute!(stdout, cursor::MoveToColumn(0))?;
 

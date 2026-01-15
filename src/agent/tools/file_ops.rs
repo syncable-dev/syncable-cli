@@ -16,7 +16,9 @@
 //! - Long lines: Truncated at 2000 characters
 
 use super::error::{ErrorCategory, format_error_for_llm};
-use super::response::{format_cancelled, format_file_content, format_file_content_range, format_list};
+use super::response::{
+    format_cancelled, format_file_content, format_file_content_range, format_list,
+};
 use super::truncation::{TruncationLimits, truncate_dir_listing, truncate_file_content};
 use crate::agent::ide::IdeClient;
 use crate::agent::ui::confirmation::ConfirmationResult;
@@ -63,15 +65,14 @@ impl ReadFileTool {
 
     /// Check if a symlink target is within the project boundary
     fn validate_symlink_target(&self, path: &PathBuf) -> Result<PathBuf, String> {
-        let canonical_project = self
-            .project_path
-            .canonicalize()
-            .map_err(|e| format_error_for_llm(
+        let canonical_project = self.project_path.canonicalize().map_err(|e| {
+            format_error_for_llm(
                 "read_file",
                 ErrorCategory::InternalError,
                 &format!("Invalid project path: {}", e),
                 Some(vec!["This is an internal configuration error"]),
-            ))?;
+            )
+        })?;
 
         // Read the symlink target and resolve it
         let target = fs::read_link(path).map_err(|e| {
@@ -94,7 +95,11 @@ impl ReadFileTool {
         let canonical_target = match resolved.canonicalize() {
             Ok(p) => p,
             Err(e) => {
-                let hint1 = format!("Symlink '{}' points to '{}'", path.display(), target.display());
+                let hint1 = format!(
+                    "Symlink '{}' points to '{}'",
+                    path.display(),
+                    target.display()
+                );
                 let hint2 = format!("Error: {}", e);
                 return Err(format_error_for_llm(
                     "read_file",
@@ -113,7 +118,10 @@ impl ReadFileTool {
             return Err(format_error_for_llm(
                 "read_file",
                 ErrorCategory::PathOutsideBoundary,
-                &format!("Symlink target '{}' is outside project boundary", target.display()),
+                &format!(
+                    "Symlink target '{}' is outside project boundary",
+                    target.display()
+                ),
                 Some(vec![
                     "The symlink points to a location outside the project directory",
                     &hint_symlink,
@@ -129,15 +137,14 @@ impl ReadFileTool {
     /// Validates a path is within the project boundary.
     /// Returns Ok(Some(path)) if valid, Ok(None) with formatted error string if invalid.
     fn validate_path(&self, requested: &PathBuf) -> Result<PathBuf, String> {
-        let canonical_project = self
-            .project_path
-            .canonicalize()
-            .map_err(|e| format_error_for_llm(
+        let canonical_project = self.project_path.canonicalize().map_err(|e| {
+            format_error_for_llm(
                 "read_file",
                 ErrorCategory::InternalError,
                 &format!("Invalid project path: {}", e),
                 Some(vec!["This is an internal configuration error"]),
-            ))?;
+            )
+        })?;
 
         let target = if requested.is_absolute() {
             requested.clone()
@@ -148,26 +155,24 @@ impl ReadFileTool {
         let canonical_target = target.canonicalize().map_err(|e| {
             let kind = e.kind();
             match kind {
-                std::io::ErrorKind::NotFound => {
-                    format_error_for_llm(
-                        "read_file",
-                        ErrorCategory::FileNotFound,
-                        &format!("File not found: {}", requested.display()),
-                        Some(vec![
-                            "Check if the file path is spelled correctly",
-                            "Use list_directory to explore available files",
-                            &format!("Project root: {}", self.project_path.display()),
-                        ]),
-                    )
-                }
-                std::io::ErrorKind::PermissionDenied => {
-                    format_error_for_llm(
-                        "read_file",
-                        ErrorCategory::PermissionDenied,
-                        &format!("Permission denied: {}", requested.display()),
-                        Some(vec!["The file exists but cannot be read due to permissions"]),
-                    )
-                }
+                std::io::ErrorKind::NotFound => format_error_for_llm(
+                    "read_file",
+                    ErrorCategory::FileNotFound,
+                    &format!("File not found: {}", requested.display()),
+                    Some(vec![
+                        "Check if the file path is spelled correctly",
+                        "Use list_directory to explore available files",
+                        &format!("Project root: {}", self.project_path.display()),
+                    ]),
+                ),
+                std::io::ErrorKind::PermissionDenied => format_error_for_llm(
+                    "read_file",
+                    ErrorCategory::PermissionDenied,
+                    &format!("Permission denied: {}", requested.display()),
+                    Some(vec![
+                        "The file exists but cannot be read due to permissions",
+                    ]),
+                ),
                 _ => format_error_for_llm(
                     "read_file",
                     ErrorCategory::FileNotFound,
@@ -220,7 +225,8 @@ impl Tool for ReadFileTool {
 - start_line: 1-based line number to start reading from
 - end_line: 1-based line number to stop at (inclusive)
 - If only start_line is provided, reads from that line to end of file
-- If start_line exceeds file length, returns an error with file size info"#.to_string(),
+- If start_line exceeds file length, returns an error with file size info"#
+                .to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -265,13 +271,7 @@ impl Tool for ReadFileTool {
 
         // Handle empty files gracefully
         if metadata.len() == 0 {
-            return Ok(format_file_content(
-                &args.path,
-                "(empty file)",
-                0,
-                0,
-                false,
-            ));
+            return Ok(format_file_content(&args.path, "(empty file)", 0, 0, false));
         }
 
         const MAX_SIZE: u64 = 1024 * 1024;
@@ -300,7 +300,10 @@ impl Tool for ReadFileTool {
             return Ok(format_error_for_llm(
                 "read_file",
                 ErrorCategory::ValidationFailed,
-                &format!("File '{}' appears to be binary (contains null bytes)", args.path),
+                &format!(
+                    "File '{}' appears to be binary (contains null bytes)",
+                    args.path
+                ),
                 Some(vec![
                     "This tool is designed for text files only",
                     "Binary files cannot be displayed as text",
@@ -397,15 +400,14 @@ impl ListDirectoryTool {
     /// Validates a path is within the project boundary.
     /// Returns Ok(path) if valid, Err(formatted_error_string) if invalid.
     fn validate_path(&self, requested: &PathBuf) -> Result<PathBuf, String> {
-        let canonical_project = self
-            .project_path
-            .canonicalize()
-            .map_err(|e| format_error_for_llm(
+        let canonical_project = self.project_path.canonicalize().map_err(|e| {
+            format_error_for_llm(
                 "list_directory",
                 ErrorCategory::InternalError,
                 &format!("Invalid project path: {}", e),
                 Some(vec!["This is an internal configuration error"]),
-            ))?;
+            )
+        })?;
 
         let target = if requested.is_absolute() {
             requested.clone()
@@ -416,26 +418,24 @@ impl ListDirectoryTool {
         let canonical_target = target.canonicalize().map_err(|e| {
             let kind = e.kind();
             match kind {
-                std::io::ErrorKind::NotFound => {
-                    format_error_for_llm(
-                        "list_directory",
-                        ErrorCategory::FileNotFound,
-                        &format!("Directory not found: {}", requested.display()),
-                        Some(vec![
-                            "Check if the directory path is spelled correctly",
-                            "Use '.' to list the project root",
-                            &format!("Project root: {}", self.project_path.display()),
-                        ]),
-                    )
-                }
-                std::io::ErrorKind::PermissionDenied => {
-                    format_error_for_llm(
-                        "list_directory",
-                        ErrorCategory::PermissionDenied,
-                        &format!("Permission denied: {}", requested.display()),
-                        Some(vec!["The directory exists but cannot be read due to permissions"]),
-                    )
-                }
+                std::io::ErrorKind::NotFound => format_error_for_llm(
+                    "list_directory",
+                    ErrorCategory::FileNotFound,
+                    &format!("Directory not found: {}", requested.display()),
+                    Some(vec![
+                        "Check if the directory path is spelled correctly",
+                        "Use '.' to list the project root",
+                        &format!("Project root: {}", self.project_path.display()),
+                    ]),
+                ),
+                std::io::ErrorKind::PermissionDenied => format_error_for_llm(
+                    "list_directory",
+                    ErrorCategory::PermissionDenied,
+                    &format!("Permission denied: {}", requested.display()),
+                    Some(vec![
+                        "The directory exists but cannot be read due to permissions",
+                    ]),
+                ),
                 _ => format_error_for_llm(
                     "list_directory",
                     ErrorCategory::FileNotFound,
@@ -700,15 +700,14 @@ impl WriteFileTool {
     /// Validates a path is within the project boundary for writing.
     /// Returns Ok(path) if valid, Err(formatted_error_string) if invalid.
     fn validate_path(&self, requested: &PathBuf) -> Result<PathBuf, String> {
-        let canonical_project = self
-            .project_path
-            .canonicalize()
-            .map_err(|e| format_error_for_llm(
+        let canonical_project = self.project_path.canonicalize().map_err(|e| {
+            format_error_for_llm(
                 "write_file",
                 ErrorCategory::InternalError,
                 &format!("Invalid project path: {}", e),
                 Some(vec!["This is an internal configuration error"]),
-            ))?;
+            )
+        })?;
 
         let target = if requested.is_absolute() {
             requested.clone()
@@ -721,7 +720,10 @@ impl WriteFileTool {
             format_error_for_llm(
                 "write_file",
                 ErrorCategory::ValidationFailed,
-                &format!("Invalid path '{}': no parent directory", requested.display()),
+                &format!(
+                    "Invalid path '{}': no parent directory",
+                    requested.display()
+                ),
                 Some(vec![
                     "Provide a valid file path with at least a filename",
                     "Example: 'tmp/output.txt' or 'results/analysis.md'",
@@ -734,14 +736,15 @@ impl WriteFileTool {
             let canonical_parent = parent.canonicalize().map_err(|e| {
                 let kind = e.kind();
                 match kind {
-                    std::io::ErrorKind::PermissionDenied => {
-                        format_error_for_llm(
-                            "write_file",
-                            ErrorCategory::PermissionDenied,
-                            &format!("Permission denied accessing parent directory: {}", parent.display()),
-                            Some(vec!["The parent directory exists but cannot be accessed"]),
-                        )
-                    }
+                    std::io::ErrorKind::PermissionDenied => format_error_for_llm(
+                        "write_file",
+                        ErrorCategory::PermissionDenied,
+                        &format!(
+                            "Permission denied accessing parent directory: {}",
+                            parent.display()
+                        ),
+                        Some(vec!["The parent directory exists but cannot be accessed"]),
+                    ),
                     _ => format_error_for_llm(
                         "write_file",
                         ErrorCategory::ValidationFailed,
@@ -1028,15 +1031,14 @@ impl WriteFilesTool {
     /// Validates a path is within the project boundary for writing.
     /// Returns Ok(path) if valid, Err(formatted_error_string) if invalid.
     fn validate_path(&self, requested: &PathBuf) -> Result<PathBuf, String> {
-        let canonical_project = self
-            .project_path
-            .canonicalize()
-            .map_err(|e| format_error_for_llm(
+        let canonical_project = self.project_path.canonicalize().map_err(|e| {
+            format_error_for_llm(
                 "write_files",
                 ErrorCategory::InternalError,
                 &format!("Invalid project path: {}", e),
                 Some(vec!["This is an internal configuration error"]),
-            ))?;
+            )
+        })?;
 
         let target = if requested.is_absolute() {
             requested.clone()
@@ -1048,7 +1050,10 @@ impl WriteFilesTool {
             format_error_for_llm(
                 "write_files",
                 ErrorCategory::ValidationFailed,
-                &format!("Invalid path '{}': no parent directory", requested.display()),
+                &format!(
+                    "Invalid path '{}': no parent directory",
+                    requested.display()
+                ),
                 Some(vec![
                     "Provide a valid file path with at least a filename",
                     "Example: 'tmp/output.txt' or 'results/analysis.md'",
@@ -1060,14 +1065,15 @@ impl WriteFilesTool {
             let canonical_parent = parent.canonicalize().map_err(|e| {
                 let kind = e.kind();
                 match kind {
-                    std::io::ErrorKind::PermissionDenied => {
-                        format_error_for_llm(
-                            "write_files",
-                            ErrorCategory::PermissionDenied,
-                            &format!("Permission denied accessing parent directory: {}", parent.display()),
-                            Some(vec!["The parent directory exists but cannot be accessed"]),
-                        )
-                    }
+                    std::io::ErrorKind::PermissionDenied => format_error_for_llm(
+                        "write_files",
+                        ErrorCategory::PermissionDenied,
+                        &format!(
+                            "Permission denied accessing parent directory: {}",
+                            parent.display()
+                        ),
+                        Some(vec!["The parent directory exists but cannot be accessed"]),
+                    ),
                     _ => format_error_for_llm(
                         "write_files",
                         ErrorCategory::ValidationFailed,
@@ -1375,7 +1381,12 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
 
         assert_eq!(parsed["file"], "test.txt");
-        assert!(parsed["content"].as_str().unwrap().contains("Hello, world!"));
+        assert!(
+            parsed["content"]
+                .as_str()
+                .unwrap()
+                .contains("Hello, world!")
+        );
     }
 
     #[tokio::test]
@@ -1390,7 +1401,11 @@ mod tests {
 
         let result = tool.call(args).await.unwrap();
         // Should return error formatted for LLM
-        assert!(result.contains("error") || result.contains("not found") || result.contains("does not exist"));
+        assert!(
+            result.contains("error")
+                || result.contains("not found")
+                || result.contains("does not exist")
+        );
     }
 
     // =========================================================================

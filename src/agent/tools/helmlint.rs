@@ -653,10 +653,12 @@ spec:
         assert_eq!(parsed["error"], true);
         assert_eq!(parsed["tool"], "helmlint");
         assert_eq!(parsed["code"], "VALIDATION_FAILED");
-        assert!(parsed["message"]
-            .as_str()
-            .unwrap()
-            .contains("No chart specified"));
+        assert!(
+            parsed["message"]
+                .as_str()
+                .unwrap()
+                .contains("No chart specified")
+        );
         assert!(parsed["suggestions"].is_array());
     }
 
@@ -681,10 +683,12 @@ spec:
         assert_eq!(parsed["error"], true);
         assert_eq!(parsed["tool"], "helmlint");
         assert_eq!(parsed["code"], "VALIDATION_FAILED");
-        assert!(parsed["message"]
-            .as_str()
-            .unwrap()
-            .contains("Chart.yaml not found"));
+        assert!(
+            parsed["message"]
+                .as_str()
+                .unwrap()
+                .contains("Chart.yaml not found")
+        );
         assert!(parsed["suggestions"].is_array());
     }
 
@@ -705,10 +709,12 @@ spec:
         assert_eq!(parsed["error"], true);
         assert_eq!(parsed["tool"], "helmlint");
         assert_eq!(parsed["code"], "FILE_NOT_FOUND");
-        assert!(parsed["message"]
-            .as_str()
-            .unwrap()
-            .contains("does not exist"));
+        assert!(
+            parsed["message"]
+                .as_str()
+                .unwrap()
+                .contains("does not exist")
+        );
     }
 
     #[tokio::test]
@@ -730,10 +736,12 @@ spec:
         assert_eq!(parsed["error"], true);
         assert_eq!(parsed["tool"], "helmlint");
         assert_eq!(parsed["code"], "VALIDATION_FAILED");
-        assert!(parsed["message"]
-            .as_str()
-            .unwrap()
-            .contains("not a directory"));
+        assert!(
+            parsed["message"]
+                .as_str()
+                .unwrap()
+                .contains("not a directory")
+        );
     }
 
     #[tokio::test]

@@ -328,9 +328,8 @@ pub fn format_list_with_metadata(
         }
     }
 
-    serde_json::to_string_pretty(&data).unwrap_or_else(|_| {
-        r#"{"error": "Failed to serialize list response"}"#.to_string()
-    })
+    serde_json::to_string_pretty(&data)
+        .unwrap_or_else(|_| r#"{"error": "Failed to serialize list response"}"#.to_string())
 }
 
 /// Format a write operation response
@@ -374,13 +373,13 @@ pub fn format_cancelled(path: &str, reason: &str, feedback: Option<&str>) -> Str
         data["user_feedback"] = json!(fb);
         data["STOP"] =
             json!("Do NOT create this file or any similar files. Wait for user instruction.");
-        data["action_required"] =
-            json!("Read the user_feedback and respond accordingly. Do NOT try to create alternative files.");
+        data["action_required"] = json!(
+            "Read the user_feedback and respond accordingly. Do NOT try to create alternative files."
+        );
     }
 
-    serde_json::to_string_pretty(&data).unwrap_or_else(|_| {
-        format!(r#"{{"cancelled": true, "reason": "{}"}}"#, reason)
-    })
+    serde_json::to_string_pretty(&data)
+        .unwrap_or_else(|_| format!(r#"{{"cancelled": true, "reason": "{}"}}"#, reason))
 }
 
 #[cfg(test)]
@@ -498,10 +497,12 @@ mod tests {
 
         assert_eq!(parsed["cancelled"], true);
         assert_eq!(parsed["user_feedback"], "Please add comments");
-        assert!(parsed["action_required"]
-            .as_str()
-            .unwrap()
-            .contains("user_feedback"));
+        assert!(
+            parsed["action_required"]
+                .as_str()
+                .unwrap()
+                .contains("user_feedback")
+        );
     }
 
     #[test]

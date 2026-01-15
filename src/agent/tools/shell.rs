@@ -37,10 +37,10 @@ const ALLOWED_COMMANDS: &[&str] = &[
     // ==========================================================================
     // GENERAL DEVELOPMENT - Safe utility commands for output and testing
     // ==========================================================================
-    "echo",    // Safe string output
-    "printf",  // Formatted output
-    "test",    // File/string condition tests
-    "expr",    // Expression evaluation
+    "echo",   // Safe string output
+    "printf", // Formatted output
+    "test",   // File/string condition tests
+    "expr",   // Expression evaluation
     // ==========================================================================
     // DOCKER - Container building and orchestration
     // ==========================================================================
@@ -78,16 +78,16 @@ const ALLOWED_COMMANDS: &[&str] = &[
     // ==========================================================================
     "make",
     "npm run",
-    "pnpm run",              // npm alternative
-    "yarn run",              // npm alternative
+    "pnpm run", // npm alternative
+    "yarn run", // npm alternative
     "cargo build",
     "go build",
-    "gradle",                // Java/Kotlin builds
-    "mvn",                   // Maven builds
+    "gradle", // Java/Kotlin builds
+    "mvn",    // Maven builds
     "python -m py_compile",
-    "poetry",                // Python package manager
-    "pip install",           // Python package installation
-    "bundle exec",           // Ruby bundler
+    "poetry",      // Python package manager
+    "pip install", // Python package installation
+    "bundle exec", // Ruby bundler
     // ==========================================================================
     // TESTING COMMANDS - Test runners for various languages
     // ==========================================================================
@@ -449,7 +449,8 @@ impl Tool for ShellTool {
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
             name: Self::NAME.to_string(),
-            description: r#"Execute shell commands for building, testing, and development workflows.
+            description:
+                r#"Execute shell commands for building, testing, and development workflows.
 
 **Supported command categories:**
 - General: echo, printf, test, expr
@@ -469,7 +470,8 @@ impl Tool for ShellTool {
 - Dockerfile → hadolint tool (AI-optimized JSON output)
 - Helm charts → helmlint tool
 - K8s YAML → kubelint tool
-Native linting tools return structured output with priorities and fix recommendations."#.to_string(),
+Native linting tools return structured output with priorities and fix recommendations."#
+                    .to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -520,14 +522,14 @@ Native linting tools return structured output with priorities and fix recommenda
                     ErrorCategory::CommandRejected,
                     &format!(
                         "Command '{}' is not in the default allowlist",
-                        args.command.split_whitespace().next().unwrap_or(&args.command)
+                        args.command
+                            .split_whitespace()
+                            .next()
+                            .unwrap_or(&args.command)
                     ),
                     &[
                         ("blocked_command", json!(args.command)),
-                        (
-                            "category_hint",
-                            json!(category.unwrap_or("unrecognized")),
-                        ),
+                        ("category_hint", json!(category.unwrap_or("unrecognized"))),
                         ("suggestions", json!(suggestions)),
                         (
                             "note",
@@ -976,9 +978,11 @@ mod tests {
     fn test_category_suggestions() {
         // Linting suggestions should mention native tools
         let linting_suggestions = get_category_suggestions(Some("linting"));
-        assert!(linting_suggestions
-            .iter()
-            .any(|s| s.contains("native tools")));
+        assert!(
+            linting_suggestions
+                .iter()
+                .any(|s| s.contains("native tools"))
+        );
 
         // Unknown commands should suggest asking the user
         let unknown_suggestions = get_category_suggestions(None);

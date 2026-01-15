@@ -15,7 +15,7 @@ mod providers;
 mod ui;
 
 // Re-exports for backward compatibility
-pub use plan_mode::{find_incomplete_plans, IncompletePlan, PlanMode};
+pub use plan_mode::{IncompletePlan, PlanMode, find_incomplete_plans};
 pub use providers::{get_available_models, get_configured_providers, prompt_api_key};
 
 use crate::agent::commands::TokenUsage;
