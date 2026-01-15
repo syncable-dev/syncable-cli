@@ -110,7 +110,7 @@ impl ContextSummary {
 }
 
 /// A summary frame ready to be inserted into context
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SummaryFrame {
     /// The rendered summary text
     pub content: String,

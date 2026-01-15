@@ -47,7 +47,7 @@ pub struct ToolCallRecord {
 }
 
 /// Conversation history manager with forge-style compaction support
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationHistory {
     /// Full conversation turns
     turns: Vec<ConversationTurn>,
@@ -505,6 +505,16 @@ impl ConversationHistory {
             .iter()
             .map(|s| s.as_str())
     }
+
+    /// Serialize to JSON for session persistence
+    pub fn to_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(self)
+    }
+
+    /// Deserialize from JSON (for session restore)
+    pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(json)
+    }
 }
 
 /// Helper to truncate text with ellipsis
@@ -732,5 +742,85 @@ mod tests {
         // Both should have no turns
         assert_eq!(history_preserve.turn_count(), 0);
         assert_eq!(history_clear.turn_count(), 0);
+    }
+
+    #[test]
+    fn test_history_serialization() {
+        let mut history = ConversationHistory::new();
+
+        // Add some turns
+        history.add_turn(
+            "What is this project?".to_string(),
+            "This is a Rust CLI tool.".to_string(),
+            vec![ToolCallRecord {
+                tool_name: "analyze".to_string(),
+                args_summary: "path: .".to_string(),
+                result_summary: "Found Rust project".to_string(),
+                tool_id: Some("tool_1".to_string()),
+                droppable: false,
+            }],
+        );
+
+        // Serialize
+        let json = history.to_json().expect("Should serialize");
+        assert!(!json.is_empty());
+
+        // Deserialize
+        let restored = ConversationHistory::from_json(&json).expect("Should deserialize");
+        assert_eq!(restored.turn_count(), 1);
+        assert_eq!(restored.user_turn_count(), 1);
+
+        // Verify tool call preserved
+        let messages = restored.to_messages();
+        assert!(!messages.is_empty());
+    }
+
+    #[test]
+    fn test_history_serialization_with_compaction() {
+        // Create history with compaction triggered
+        let mut history = ConversationHistory::with_config(CompactConfig {
+            retention_window: 2,
+            eviction_window: 0.6,
+            thresholds: CompactThresholds {
+                token_threshold: Some(200),
+                turn_threshold: Some(3),
+                message_threshold: Some(5),
+                on_turn_end: None,
+            },
+        });
+
+        // Add many turns to trigger compaction
+        for i in 0..6 {
+            history.add_turn(
+                format!("Question {} with some text", i),
+                format!("Answer {} with more detail", i),
+                vec![],
+            );
+        }
+
+        // Trigger compaction
+        if history.needs_compaction() {
+            let _ = history.compact();
+        }
+
+        let had_summary = history.summary_frame.is_some();
+
+        // Serialize with summary
+        let json = history.to_json().expect("Should serialize");
+
+        // Deserialize and verify summary preserved
+        let restored = ConversationHistory::from_json(&json).expect("Should deserialize");
+        assert_eq!(
+            restored.summary_frame.is_some(),
+            had_summary,
+            "Summary frame should be preserved"
+        );
+
+        // to_messages should include summary
+        let messages = restored.to_messages();
+        if had_summary {
+            // Summary adds 2 messages (user + assistant acknowledgment)
+            assert!(messages.len() >= 2, "Should have summary messages");
+        }
     }
 }

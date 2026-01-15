@@ -37,6 +37,10 @@ pub struct ConversationRecord {
     pub messages: Vec<MessageRecord>,
     /// Optional AI-generated summary
     pub summary: Option<String>,
+    /// Full ConversationHistory state including compacted context (JSON-serialized)
+    /// Added in v0.27 - older sessions will have None
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub history_snapshot: Option<String>,
 }
 
 /// A single message in the conversation
@@ -131,6 +135,7 @@ impl SessionRecorder {
             last_updated: start_time,
             messages: Vec::new(),
             summary: None,
+            history_snapshot: None,
         };
 
         Self {
@@ -189,6 +194,25 @@ impl SessionRecorder {
         let json = serde_json::to_string_pretty(&self.record)?;
         fs::write(&self.file_path, json)?;
         Ok(())
+    }
+
+    /// Save the session with full conversation history snapshot
+    /// This preserves compacted context for session resume
+    pub fn save_with_history(
+        &mut self,
+        history: &super::history::ConversationHistory,
+    ) -> io::Result<()> {
+        // Serialize conversation history to JSON string
+        match history.to_json() {
+            Ok(history_json) => {
+                self.record.history_snapshot = Some(history_json);
+            }
+            Err(e) => {
+                // Log but don't fail - save without history if serialization fails
+                eprintln!("Warning: Failed to serialize history: {}", e);
+            }
+        }
+        self.save()
     }
 
     /// Check if the session has any messages
