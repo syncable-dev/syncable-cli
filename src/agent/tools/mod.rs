@@ -65,6 +65,8 @@
 //! - `ListProjectsTool` - List projects within an organization
 //! - `SelectProjectTool` - Select a project as current context
 //! - `CurrentContextTool` - Get the currently selected project context
+//! - `OpenProviderSettingsTool` - Open cloud provider settings in browser
+//! - `CheckProviderConnectionTool` - Check if a cloud provider is connected
 //!
 //! ## Error Handling Pattern
 //!
@@ -163,7 +165,10 @@ pub use k8s_drift::K8sDriftTool;
 pub use k8s_optimize::K8sOptimizeTool;
 pub use kubelint::KubelintTool;
 pub use plan::{PlanCreateTool, PlanListTool, PlanNextTool, PlanUpdateTool};
-pub use platform::{CurrentContextTool, ListOrganizationsTool, ListProjectsTool, SelectProjectTool};
+pub use platform::{
+    CheckProviderConnectionTool, CurrentContextTool, ListOrganizationsTool, ListProjectsTool,
+    OpenProviderSettingsTool, SelectProjectTool,
+};
 pub use prometheus_connect::PrometheusConnectTool;
 pub use prometheus_discover::PrometheusDiscoverTool;
 pub use security::{SecurityScanTool, VulnerabilitiesTool};
