@@ -6,6 +6,7 @@
 //! - Querying current context state
 //! - Cloud provider connection management
 //! - Service deployment management
+//! - Service log retrieval
 //!
 //! ## Tools
 //!
@@ -19,6 +20,7 @@
 //! - `TriggerDeploymentTool` - Trigger a deployment using a config
 //! - `GetDeploymentStatusTool` - Get deployment task status
 //! - `ListDeploymentsTool` - List recent deployments for a project
+//! - `GetServiceLogsTool` - Get container logs for a deployed service
 //!
 //! ## Prerequisites
 //!
@@ -46,6 +48,7 @@
 //! 2. Agent calls `trigger_deployment` with project_id and config_id
 //! 3. Agent calls `get_deployment_status` with task_id to monitor progress
 //! 4. Agent calls `list_deployments` to see deployment history and public URLs
+//! 5. Agent calls `get_service_logs` to view container logs for debugging
 //!
 //! **SECURITY NOTE:** The agent NEVER handles actual credentials (OAuth tokens,
 //! API keys). It only checks connection STATUS. All credential handling happens
@@ -54,6 +57,7 @@
 mod check_provider_connection;
 mod current_context;
 mod get_deployment_status;
+mod get_service_logs;
 mod list_deployment_configs;
 mod list_deployments;
 mod list_organizations;
@@ -65,6 +69,7 @@ mod trigger_deployment;
 pub use check_provider_connection::CheckProviderConnectionTool;
 pub use current_context::CurrentContextTool;
 pub use get_deployment_status::GetDeploymentStatusTool;
+pub use get_service_logs::GetServiceLogsTool;
 pub use list_deployment_configs::ListDeploymentConfigsTool;
 pub use list_deployments::ListDeploymentsTool;
 pub use list_organizations::ListOrganizationsTool;

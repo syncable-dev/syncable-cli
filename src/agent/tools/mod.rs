@@ -71,6 +71,7 @@
 //! - `TriggerDeploymentTool` - Trigger a deployment using a config
 //! - `GetDeploymentStatusTool` - Get deployment task status and progress
 //! - `ListDeploymentsTool` - List recent deployments with URLs
+//! - `GetServiceLogsTool` - Get container logs for a deployed service
 //!
 //! ## Error Handling Pattern
 //!
@@ -170,7 +171,7 @@ pub use k8s_optimize::K8sOptimizeTool;
 pub use kubelint::KubelintTool;
 pub use plan::{PlanCreateTool, PlanListTool, PlanNextTool, PlanUpdateTool};
 pub use platform::{
-    CheckProviderConnectionTool, CurrentContextTool, GetDeploymentStatusTool,
+    CheckProviderConnectionTool, CurrentContextTool, GetDeploymentStatusTool, GetServiceLogsTool,
     ListDeploymentConfigsTool, ListDeploymentsTool, ListOrganizationsTool, ListProjectsTool,
     OpenProviderSettingsTool, SelectProjectTool, TriggerDeploymentTool,
 };

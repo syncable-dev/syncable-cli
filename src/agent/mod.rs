@@ -597,7 +597,8 @@ pub async fn run_interactive(
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
                         .tool(GetDeploymentStatusTool::new())
-                        .tool(ListDeploymentsTool::new());
+                        .tool(ListDeploymentsTool::new())
+                        .tool(GetServiceLogsTool::new());
 
                     // Add tools based on mode
                     if is_planning {
@@ -710,7 +711,8 @@ pub async fn run_interactive(
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
                         .tool(GetDeploymentStatusTool::new())
-                        .tool(ListDeploymentsTool::new());
+                        .tool(ListDeploymentsTool::new())
+                        .tool(GetServiceLogsTool::new());
 
                     // Add tools based on mode
                     if is_planning {
@@ -814,7 +816,8 @@ pub async fn run_interactive(
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
                         .tool(GetDeploymentStatusTool::new())
-                        .tool(ListDeploymentsTool::new());
+                        .tool(ListDeploymentsTool::new())
+                        .tool(GetServiceLogsTool::new());
 
                     // Add tools based on mode
                     if is_planning {
@@ -2266,7 +2269,8 @@ pub async fn run_query(
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
                         .tool(GetDeploymentStatusTool::new())
-                        .tool(ListDeploymentsTool::new());
+                        .tool(ListDeploymentsTool::new())
+                        .tool(GetServiceLogsTool::new());
 
             // Add generation tools if this is a generation query
             if is_generation {
@@ -2347,7 +2351,8 @@ pub async fn run_query(
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
                         .tool(GetDeploymentStatusTool::new())
-                        .tool(ListDeploymentsTool::new());
+                        .tool(ListDeploymentsTool::new())
+                        .tool(GetServiceLogsTool::new());
 
             // Add generation tools if this is a generation query
             if is_generation {
@@ -2417,7 +2422,8 @@ pub async fn run_query(
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
                         .tool(GetDeploymentStatusTool::new())
-                        .tool(ListDeploymentsTool::new());
+                        .tool(ListDeploymentsTool::new())
+                        .tool(GetServiceLogsTool::new());
 
             // Add generation tools if this is a generation query
             if is_generation {
