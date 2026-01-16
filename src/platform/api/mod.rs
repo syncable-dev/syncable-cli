@@ -29,4 +29,8 @@ pub mod types;
 // Re-export commonly used items
 pub use client::PlatformApiClient;
 pub use error::{PlatformApiError, Result};
-pub use types::{CloudCredentialStatus, CloudProvider, Organization, Project, ProjectMember, UserProfile};
+pub use types::{
+    CloudCredentialStatus, CloudProvider, DeployedService, DeploymentConfig, DeploymentTaskStatus,
+    Organization, PaginatedDeployments, PaginationInfo, Project, ProjectMember,
+    TriggerDeploymentRequest, TriggerDeploymentResponse, UserProfile,
+};

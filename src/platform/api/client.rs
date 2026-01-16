@@ -4,7 +4,11 @@
 //! organizations, projects, and other platform resources.
 
 use super::error::{PlatformApiError, Result};
-use super::types::{ApiErrorResponse, CloudCredentialStatus, CloudProvider, Organization, Project, UserProfile};
+use super::types::{
+    ApiErrorResponse, CloudCredentialStatus, CloudProvider, DeploymentConfig,
+    DeploymentTaskStatus, GenericResponse, Organization, PaginatedDeployments, Project,
+    TriggerDeploymentRequest, TriggerDeploymentResponse, UserProfile,
+};
 use crate::auth::credentials;
 use reqwest::Client;
 use serde::de::DeserializeOwned;
@@ -273,6 +277,65 @@ impl PlatformApiClient {
             project_id
         );
         self.get_optional(&path).await
+    }
+
+    // =========================================================================
+    // Deployment API methods
+    // =========================================================================
+
+    /// List deployment configurations for a project
+    ///
+    /// Returns all deployment configs associated with the project, including
+    /// service name, branch, target type, and auto-deploy settings.
+    ///
+    /// Endpoint: GET /api/projects/:projectId/deployment-configs
+    pub async fn list_deployment_configs(&self, project_id: &str) -> Result<Vec<DeploymentConfig>> {
+        let response: GenericResponse<Vec<DeploymentConfig>> = self
+            .get(&format!("/api/projects/{}/deployment-configs", project_id))
+            .await?;
+        Ok(response.data)
+    }
+
+    /// Trigger a deployment using a deployment config
+    ///
+    /// Starts a new deployment for the specified config. Optionally specify
+    /// a commit SHA to deploy a specific version.
+    ///
+    /// Endpoint: POST /api/deployment-configs/deploy
+    pub async fn trigger_deployment(
+        &self,
+        request: &TriggerDeploymentRequest,
+    ) -> Result<TriggerDeploymentResponse> {
+        self.post("/api/deployment-configs/deploy", request).await
+    }
+
+    /// Get deployment task status
+    ///
+    /// Returns the current status of a deployment task, including progress
+    /// percentage, current step, and overall status.
+    ///
+    /// Endpoint: GET /api/deployments/task/:taskId
+    pub async fn get_deployment_status(&self, task_id: &str) -> Result<DeploymentTaskStatus> {
+        self.get(&format!("/api/deployments/task/{}", task_id))
+            .await
+    }
+
+    /// List deployments for a project
+    ///
+    /// Returns a paginated list of deployments for the project, sorted by
+    /// creation time (most recent first).
+    ///
+    /// Endpoint: GET /api/deployments/project/:projectId
+    pub async fn list_deployments(
+        &self,
+        project_id: &str,
+        limit: Option<i32>,
+    ) -> Result<PaginatedDeployments> {
+        let path = match limit {
+            Some(l) => format!("/api/deployments/project/{}?limit={}", project_id, l),
+            None => format!("/api/deployments/project/{}", project_id),
+        };
+        self.get(&path).await
     }
 }
 
