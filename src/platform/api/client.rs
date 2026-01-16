@@ -4,7 +4,7 @@
 //! organizations, projects, and other platform resources.
 
 use super::error::{PlatformApiError, Result};
-use super::types::{ApiErrorResponse, Organization, Project, UserProfile};
+use super::types::{ApiErrorResponse, CloudCredentialStatus, CloudProvider, Organization, Project, UserProfile};
 use crate::auth::credentials;
 use reqwest::Client;
 use serde::de::DeserializeOwned;
@@ -73,6 +73,54 @@ impl PlatformApiClient {
             .await?;
 
         self.handle_response(response).await
+    }
+
+    /// Make an authenticated GET request that returns Option<T>
+    /// Returns None for 404 responses instead of an error
+    async fn get_optional<T: DeserializeOwned>(&self, path: &str) -> Result<Option<T>> {
+        let token = Self::get_auth_token()?;
+        let url = format!("{}{}", self.api_url, path);
+
+        let response = self
+            .http_client
+            .get(&url)
+            .bearer_auth(&token)
+            .send()
+            .await?;
+
+        let status = response.status();
+
+        if status.is_success() {
+            let result = response
+                .json::<T>()
+                .await
+                .map_err(|e| PlatformApiError::ParseError(e.to_string()))?;
+            Ok(Some(result))
+        } else if status.as_u16() == 404 {
+            // Not found means no connection exists - this is expected
+            Ok(None)
+        } else {
+            // For other errors, parse and return the error
+            let status_code = status.as_u16();
+            let error_body = response.text().await.unwrap_or_default();
+            let error_message = serde_json::from_str::<ApiErrorResponse>(&error_body)
+                .map(|e| e.get_message())
+                .unwrap_or_else(|_| error_body.clone());
+
+            match status_code {
+                401 => Err(PlatformApiError::Unauthorized),
+                403 => Err(PlatformApiError::PermissionDenied(error_message)),
+                429 => Err(PlatformApiError::RateLimited),
+                500..=599 => Err(PlatformApiError::ServerError {
+                    status: status_code,
+                    message: error_message,
+                }),
+                _ => Err(PlatformApiError::ApiError {
+                    status: status_code,
+                    message: error_message,
+                }),
+            }
+        }
     }
 
     /// Make an authenticated POST request with a JSON body
@@ -201,6 +249,31 @@ impl PlatformApiClient {
 
         self.post("/api/projects", &request).await
     }
+
+    // =========================================================================
+    // Cloud Credentials API methods
+    // =========================================================================
+
+    /// Check if a cloud provider is connected to a project
+    ///
+    /// Returns `Some(status)` if the provider is connected, `None` if not connected.
+    ///
+    /// SECURITY NOTE: This method only returns connection STATUS, never actual credentials.
+    /// The agent should never have access to OAuth tokens, API keys, or other secrets.
+    ///
+    /// Endpoint: GET /api/cloud-credentials/provider/:provider?projectId=xxx
+    pub async fn check_provider_connection(
+        &self,
+        provider: &CloudProvider,
+        project_id: &str,
+    ) -> Result<Option<CloudCredentialStatus>> {
+        let path = format!(
+            "/api/cloud-credentials/provider/{}?projectId={}",
+            provider.as_str(),
+            project_id
+        );
+        self.get_optional(&path).await
+    }
 }
 
 /// Get the API URL based on environment
@@ -289,5 +362,18 @@ mod tests {
         // Test that reqwest errors can be converted
         // This is a compile-time check via the From trait
         let _: fn(reqwest::Error) -> PlatformApiError = PlatformApiError::from;
+    }
+
+    #[test]
+    fn test_provider_connection_path() {
+        // Test that the API path is built correctly
+        let provider = CloudProvider::Gcp;
+        let project_id = "proj-123";
+        let expected_path = format!(
+            "/api/cloud-credentials/provider/{}?projectId={}",
+            provider.as_str(),
+            project_id
+        );
+        assert_eq!(expected_path, "/api/cloud-credentials/provider/gcp?projectId=proj-123");
     }
 }

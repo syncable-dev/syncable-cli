@@ -4,6 +4,8 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::fmt;
+use std::str::FromStr;
 
 /// Generic API response wrapper
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,5 +104,155 @@ impl ApiErrorResponse {
             .clone()
             .or_else(|| self.error.clone())
             .unwrap_or_else(|| "Unknown error".to_string())
+    }
+}
+
+/// Cloud provider types supported by the platform
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum CloudProvider {
+    Gcp,
+    Aws,
+    Azure,
+    Hetzner,
+}
+
+impl CloudProvider {
+    /// Returns the lowercase string identifier for this provider
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            CloudProvider::Gcp => "gcp",
+            CloudProvider::Aws => "aws",
+            CloudProvider::Azure => "azure",
+            CloudProvider::Hetzner => "hetzner",
+        }
+    }
+
+    /// Returns the human-readable display name for this provider
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            CloudProvider::Gcp => "Google Cloud Platform",
+            CloudProvider::Aws => "Amazon Web Services",
+            CloudProvider::Azure => "Microsoft Azure",
+            CloudProvider::Hetzner => "Hetzner Cloud",
+        }
+    }
+
+    /// Returns all supported cloud providers
+    pub fn all() -> &'static [CloudProvider] {
+        &[
+            CloudProvider::Gcp,
+            CloudProvider::Aws,
+            CloudProvider::Azure,
+            CloudProvider::Hetzner,
+        ]
+    }
+}
+
+impl fmt::Display for CloudProvider {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl FromStr for CloudProvider {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "gcp" | "google" | "google-cloud" => Ok(CloudProvider::Gcp),
+            "aws" | "amazon" => Ok(CloudProvider::Aws),
+            "azure" | "microsoft" => Ok(CloudProvider::Azure),
+            "hetzner" => Ok(CloudProvider::Hetzner),
+            _ => Err(format!(
+                "Unknown cloud provider: '{}'. Valid options: gcp, aws, azure, hetzner",
+                s
+            )),
+        }
+    }
+}
+
+/// Minimal credential info (no secrets - just connection status)
+///
+/// SECURITY NOTE: This type intentionally contains only non-sensitive metadata.
+/// Actual credentials (OAuth tokens, API keys, etc.) are NEVER exposed through
+/// this API. The agent only needs to know IF a provider is connected, not the
+/// actual credential values.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CloudCredentialStatus {
+    /// Unique identifier for this credential record
+    pub id: String,
+    /// The cloud provider this credential is for (lowercase: gcp, aws, azure, hetzner)
+    pub provider: String,
+    // NOTE: Never include tokens/secrets here - this is intentionally minimal
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cloud_provider_as_str() {
+        assert_eq!(CloudProvider::Gcp.as_str(), "gcp");
+        assert_eq!(CloudProvider::Aws.as_str(), "aws");
+        assert_eq!(CloudProvider::Azure.as_str(), "azure");
+        assert_eq!(CloudProvider::Hetzner.as_str(), "hetzner");
+    }
+
+    #[test]
+    fn test_cloud_provider_display_name() {
+        assert_eq!(CloudProvider::Gcp.display_name(), "Google Cloud Platform");
+        assert_eq!(CloudProvider::Aws.display_name(), "Amazon Web Services");
+        assert_eq!(CloudProvider::Azure.display_name(), "Microsoft Azure");
+        assert_eq!(CloudProvider::Hetzner.display_name(), "Hetzner Cloud");
+    }
+
+    #[test]
+    fn test_cloud_provider_from_str() {
+        assert_eq!(CloudProvider::from_str("gcp").unwrap(), CloudProvider::Gcp);
+        assert_eq!(CloudProvider::from_str("GCP").unwrap(), CloudProvider::Gcp);
+        assert_eq!(CloudProvider::from_str("aws").unwrap(), CloudProvider::Aws);
+        assert_eq!(
+            CloudProvider::from_str("azure").unwrap(),
+            CloudProvider::Azure
+        );
+        assert_eq!(
+            CloudProvider::from_str("hetzner").unwrap(),
+            CloudProvider::Hetzner
+        );
+        assert!(CloudProvider::from_str("unknown").is_err());
+    }
+
+    #[test]
+    fn test_cloud_provider_display() {
+        assert_eq!(format!("{}", CloudProvider::Gcp), "gcp");
+        assert_eq!(format!("{}", CloudProvider::Aws), "aws");
+    }
+
+    #[test]
+    fn test_cloud_provider_all() {
+        let all = CloudProvider::all();
+        assert_eq!(all.len(), 4);
+        assert!(all.contains(&CloudProvider::Gcp));
+        assert!(all.contains(&CloudProvider::Aws));
+        assert!(all.contains(&CloudProvider::Azure));
+        assert!(all.contains(&CloudProvider::Hetzner));
+    }
+
+    #[test]
+    fn test_cloud_credential_status_serialization() {
+        let status = CloudCredentialStatus {
+            id: "cred-123".to_string(),
+            provider: "gcp".to_string(),
+        };
+
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("\"id\":\"cred-123\""));
+        assert!(json.contains("\"provider\":\"gcp\""));
+        // Verify no tokens/secrets in serialized output
+        assert!(!json.contains("token"));
+        assert!(!json.contains("secret"));
+        assert!(!json.contains("key"));
     }
 }

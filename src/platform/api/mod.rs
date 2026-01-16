@@ -29,4 +29,4 @@ pub mod types;
 // Re-export commonly used items
 pub use client::PlatformApiClient;
 pub use error::{PlatformApiError, Result};
-pub use types::{Organization, Project, ProjectMember, UserProfile};
+pub use types::{CloudCredentialStatus, CloudProvider, Organization, Project, ProjectMember, UserProfile};
