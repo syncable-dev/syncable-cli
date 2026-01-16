@@ -590,7 +590,9 @@ pub async fn run_interactive(
                         .tool(ListOrganizationsTool::new())
                         .tool(ListProjectsTool::new())
                         .tool(SelectProjectTool::new())
-                        .tool(CurrentContextTool::new());
+                        .tool(CurrentContextTool::new())
+                        .tool(OpenProviderSettingsTool::new())
+                        .tool(CheckProviderConnectionTool::new());
 
                     // Add tools based on mode
                     if is_planning {
@@ -696,7 +698,9 @@ pub async fn run_interactive(
                         .tool(ListOrganizationsTool::new())
                         .tool(ListProjectsTool::new())
                         .tool(SelectProjectTool::new())
-                        .tool(CurrentContextTool::new());
+                        .tool(CurrentContextTool::new())
+                        .tool(OpenProviderSettingsTool::new())
+                        .tool(CheckProviderConnectionTool::new());
 
                     // Add tools based on mode
                     if is_planning {
@@ -793,7 +797,9 @@ pub async fn run_interactive(
                         .tool(ListOrganizationsTool::new())
                         .tool(ListProjectsTool::new())
                         .tool(SelectProjectTool::new())
-                        .tool(CurrentContextTool::new());
+                        .tool(CurrentContextTool::new())
+                        .tool(OpenProviderSettingsTool::new())
+                        .tool(CheckProviderConnectionTool::new());
 
                     // Add tools based on mode
                     if is_planning {
@@ -2238,7 +2244,9 @@ pub async fn run_query(
                         .tool(ListOrganizationsTool::new())
                         .tool(ListProjectsTool::new())
                         .tool(SelectProjectTool::new())
-                        .tool(CurrentContextTool::new());
+                        .tool(CurrentContextTool::new())
+                        .tool(OpenProviderSettingsTool::new())
+                        .tool(CheckProviderConnectionTool::new());
 
             // Add generation tools if this is a generation query
             if is_generation {
@@ -2312,7 +2320,9 @@ pub async fn run_query(
                         .tool(ListOrganizationsTool::new())
                         .tool(ListProjectsTool::new())
                         .tool(SelectProjectTool::new())
-                        .tool(CurrentContextTool::new());
+                        .tool(CurrentContextTool::new())
+                        .tool(OpenProviderSettingsTool::new())
+                        .tool(CheckProviderConnectionTool::new());
 
             // Add generation tools if this is a generation query
             if is_generation {
@@ -2375,7 +2385,9 @@ pub async fn run_query(
                         .tool(ListOrganizationsTool::new())
                         .tool(ListProjectsTool::new())
                         .tool(SelectProjectTool::new())
-                        .tool(CurrentContextTool::new());
+                        .tool(CurrentContextTool::new())
+                        .tool(OpenProviderSettingsTool::new())
+                        .tool(CheckProviderConnectionTool::new());
 
             // Add generation tools if this is a generation query
             if is_generation {
