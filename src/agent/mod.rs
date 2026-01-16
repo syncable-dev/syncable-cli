@@ -585,7 +585,12 @@ pub async fn run_interactive(
                         .tool(PrometheusConnectTool::new(bg_manager.clone()))
                         // RAG retrieval tools for compressed tool outputs
                         .tool(RetrieveOutputTool::new())
-                        .tool(ListOutputsTool::new());
+                        .tool(ListOutputsTool::new())
+                        // Platform tools for project management
+                        .tool(ListOrganizationsTool::new())
+                        .tool(ListProjectsTool::new())
+                        .tool(SelectProjectTool::new())
+                        .tool(CurrentContextTool::new());
 
                     // Add tools based on mode
                     if is_planning {
@@ -686,7 +691,12 @@ pub async fn run_interactive(
                         .tool(PrometheusConnectTool::new(bg_manager.clone()))
                         // RAG retrieval tools for compressed tool outputs
                         .tool(RetrieveOutputTool::new())
-                        .tool(ListOutputsTool::new());
+                        .tool(ListOutputsTool::new())
+                        // Platform tools for project management
+                        .tool(ListOrganizationsTool::new())
+                        .tool(ListProjectsTool::new())
+                        .tool(SelectProjectTool::new())
+                        .tool(CurrentContextTool::new());
 
                     // Add tools based on mode
                     if is_planning {
@@ -778,7 +788,12 @@ pub async fn run_interactive(
                         .tool(PrometheusConnectTool::new(bg_manager.clone()))
                         // RAG retrieval tools for compressed tool outputs
                         .tool(RetrieveOutputTool::new())
-                        .tool(ListOutputsTool::new());
+                        .tool(ListOutputsTool::new())
+                        // Platform tools for project management
+                        .tool(ListOrganizationsTool::new())
+                        .tool(ListProjectsTool::new())
+                        .tool(SelectProjectTool::new())
+                        .tool(CurrentContextTool::new());
 
                     // Add tools based on mode
                     if is_planning {
@@ -2218,7 +2233,12 @@ pub async fn run_query(
                 .tool(PrometheusConnectTool::new(bg_manager.clone()))
                 // RAG retrieval tools for compressed tool outputs
                 .tool(RetrieveOutputTool::new())
-                .tool(ListOutputsTool::new());
+                .tool(ListOutputsTool::new())
+                        // Platform tools for project management
+                        .tool(ListOrganizationsTool::new())
+                        .tool(ListProjectsTool::new())
+                        .tool(SelectProjectTool::new())
+                        .tool(CurrentContextTool::new());
 
             // Add generation tools if this is a generation query
             if is_generation {
@@ -2287,7 +2307,12 @@ pub async fn run_query(
                 .tool(PrometheusConnectTool::new(bg_manager.clone()))
                 // RAG retrieval tools for compressed tool outputs
                 .tool(RetrieveOutputTool::new())
-                .tool(ListOutputsTool::new());
+                .tool(ListOutputsTool::new())
+                        // Platform tools for project management
+                        .tool(ListOrganizationsTool::new())
+                        .tool(ListProjectsTool::new())
+                        .tool(SelectProjectTool::new())
+                        .tool(CurrentContextTool::new());
 
             // Add generation tools if this is a generation query
             if is_generation {
@@ -2345,7 +2370,12 @@ pub async fn run_query(
                 .tool(PrometheusConnectTool::new(bg_manager.clone()))
                 // RAG retrieval tools for compressed tool outputs
                 .tool(RetrieveOutputTool::new())
-                .tool(ListOutputsTool::new());
+                .tool(ListOutputsTool::new())
+                        // Platform tools for project management
+                        .tool(ListOrganizationsTool::new())
+                        .tool(ListProjectsTool::new())
+                        .tool(SelectProjectTool::new())
+                        .tool(CurrentContextTool::new());
 
             // Add generation tools if this is a generation query
             if is_generation {
