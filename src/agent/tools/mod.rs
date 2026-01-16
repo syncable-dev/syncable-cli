@@ -67,6 +67,10 @@
 //! - `CurrentContextTool` - Get the currently selected project context
 //! - `OpenProviderSettingsTool` - Open cloud provider settings in browser
 //! - `CheckProviderConnectionTool` - Check if a cloud provider is connected
+//! - `ListDeploymentConfigsTool` - List deployment configurations for a project
+//! - `TriggerDeploymentTool` - Trigger a deployment using a config
+//! - `GetDeploymentStatusTool` - Get deployment task status and progress
+//! - `ListDeploymentsTool` - List recent deployments with URLs
 //!
 //! ## Error Handling Pattern
 //!
@@ -166,8 +170,9 @@ pub use k8s_optimize::K8sOptimizeTool;
 pub use kubelint::KubelintTool;
 pub use plan::{PlanCreateTool, PlanListTool, PlanNextTool, PlanUpdateTool};
 pub use platform::{
-    CheckProviderConnectionTool, CurrentContextTool, ListOrganizationsTool, ListProjectsTool,
-    OpenProviderSettingsTool, SelectProjectTool,
+    CheckProviderConnectionTool, CurrentContextTool, GetDeploymentStatusTool,
+    ListDeploymentConfigsTool, ListDeploymentsTool, ListOrganizationsTool, ListProjectsTool,
+    OpenProviderSettingsTool, SelectProjectTool, TriggerDeploymentTool,
 };
 pub use prometheus_connect::PrometheusConnectTool;
 pub use prometheus_discover::PrometheusDiscoverTool;
