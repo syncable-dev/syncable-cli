@@ -184,6 +184,14 @@ pub async fn run_interactive(
 
     session.print_banner();
 
+    // Display platform context if a project is selected
+    if session.platform_session.is_project_selected() {
+        println!(
+            "{}",
+            format!("Platform context: {}", session.platform_session.display_context()).dimmed()
+        );
+    }
+
     // NOTE: Terminal layout with ANSI scroll regions is disabled for now.
     // The scroll region approach conflicts with the existing input/output flow.
     // TODO: Implement proper scroll region support that integrates with the input handler.
