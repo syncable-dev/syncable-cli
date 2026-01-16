@@ -188,6 +188,129 @@ pub struct CloudCredentialStatus {
     // NOTE: Never include tokens/secrets here - this is intentionally minimal
 }
 
+// =============================================================================
+// Deployment Types
+// =============================================================================
+
+/// Deployment configuration for a service
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeploymentConfig {
+    /// Unique identifier for this deployment config
+    pub id: String,
+    /// The project this config belongs to
+    pub project_id: String,
+    /// Repository ID (from GitHub/GitLab integration)
+    pub repository_id: i64,
+    /// Full repository name (e.g., "owner/repo")
+    pub repository_full_name: String,
+    /// Name of the service being deployed
+    pub service_name: String,
+    /// Environment ID for deployment
+    pub environment_id: String,
+    /// Target type: "kubernetes" or "cloud_runner"
+    pub target_type: Option<String>,
+    /// Branch to deploy from
+    pub branch: String,
+    /// Port the service listens on
+    pub port: i32,
+    /// Whether auto-deploy on push is enabled
+    pub auto_deploy_enabled: bool,
+    /// Deployment strategy (e.g., "rolling", "blue_green")
+    pub deployment_strategy: Option<String>,
+    /// When this config was created
+    pub created_at: DateTime<Utc>,
+}
+
+/// Request to trigger deployment
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TriggerDeploymentRequest {
+    /// Project ID for the deployment
+    pub project_id: String,
+    /// Deployment config ID to use
+    pub config_id: String,
+    /// Optional specific commit SHA to deploy (defaults to latest)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commit_sha: Option<String>,
+}
+
+/// Response from triggering a deployment
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TriggerDeploymentResponse {
+    /// The deployment config ID used
+    pub config_id: String,
+    /// Task ID to track deployment progress
+    pub backstage_task_id: String,
+    /// Initial status of the deployment
+    pub status: String,
+    /// Human-readable message about the deployment
+    pub message: String,
+}
+
+/// Deployment task status
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeploymentTaskStatus {
+    /// Task status: "processing", "completed", "failed"
+    pub status: String,
+    /// Progress percentage (0-100)
+    pub progress: i32,
+    /// Current step description
+    pub current_step: Option<String>,
+    /// Overall deployment status: "generating", "building", "deploying", "healthy", "failed"
+    pub overall_status: String,
+    /// Human-readable overall message
+    pub overall_message: String,
+    /// Error message if deployment failed
+    pub error: Option<String>,
+}
+
+/// Deployed service info
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeployedService {
+    /// Unique deployment ID
+    pub id: String,
+    /// Project this deployment belongs to
+    pub project_id: String,
+    /// Name of the deployed service
+    pub service_name: String,
+    /// Full repository name
+    pub repository_full_name: String,
+    /// Deployment status
+    pub status: String,
+    /// Task ID used for this deployment
+    pub backstage_task_id: Option<String>,
+    /// Commit SHA that was deployed
+    pub commit_sha: Option<String>,
+    /// Public URL of the deployed service
+    pub public_url: Option<String>,
+    /// When this deployment was created
+    pub created_at: DateTime<Utc>,
+}
+
+/// Paginated list of deployments
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaginatedDeployments {
+    /// List of deployments
+    pub data: Vec<DeployedService>,
+    /// Pagination info
+    pub pagination: PaginationInfo,
+}
+
+/// Pagination information for list responses
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaginationInfo {
+    /// Cursor for next page (if any)
+    pub next_cursor: Option<String>,
+    /// Whether there are more results
+    pub has_more: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
