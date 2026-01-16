@@ -592,7 +592,12 @@ pub async fn run_interactive(
                         .tool(SelectProjectTool::new())
                         .tool(CurrentContextTool::new())
                         .tool(OpenProviderSettingsTool::new())
-                        .tool(CheckProviderConnectionTool::new());
+                        .tool(CheckProviderConnectionTool::new())
+                        // Deployment tools for service management
+                        .tool(ListDeploymentConfigsTool::new())
+                        .tool(TriggerDeploymentTool::new())
+                        .tool(GetDeploymentStatusTool::new())
+                        .tool(ListDeploymentsTool::new());
 
                     // Add tools based on mode
                     if is_planning {
@@ -700,7 +705,12 @@ pub async fn run_interactive(
                         .tool(SelectProjectTool::new())
                         .tool(CurrentContextTool::new())
                         .tool(OpenProviderSettingsTool::new())
-                        .tool(CheckProviderConnectionTool::new());
+                        .tool(CheckProviderConnectionTool::new())
+                        // Deployment tools for service management
+                        .tool(ListDeploymentConfigsTool::new())
+                        .tool(TriggerDeploymentTool::new())
+                        .tool(GetDeploymentStatusTool::new())
+                        .tool(ListDeploymentsTool::new());
 
                     // Add tools based on mode
                     if is_planning {
@@ -799,7 +809,12 @@ pub async fn run_interactive(
                         .tool(SelectProjectTool::new())
                         .tool(CurrentContextTool::new())
                         .tool(OpenProviderSettingsTool::new())
-                        .tool(CheckProviderConnectionTool::new());
+                        .tool(CheckProviderConnectionTool::new())
+                        // Deployment tools for service management
+                        .tool(ListDeploymentConfigsTool::new())
+                        .tool(TriggerDeploymentTool::new())
+                        .tool(GetDeploymentStatusTool::new())
+                        .tool(ListDeploymentsTool::new());
 
                     // Add tools based on mode
                     if is_planning {
@@ -2246,7 +2261,12 @@ pub async fn run_query(
                         .tool(SelectProjectTool::new())
                         .tool(CurrentContextTool::new())
                         .tool(OpenProviderSettingsTool::new())
-                        .tool(CheckProviderConnectionTool::new());
+                        .tool(CheckProviderConnectionTool::new())
+                        // Deployment tools for service management
+                        .tool(ListDeploymentConfigsTool::new())
+                        .tool(TriggerDeploymentTool::new())
+                        .tool(GetDeploymentStatusTool::new())
+                        .tool(ListDeploymentsTool::new());
 
             // Add generation tools if this is a generation query
             if is_generation {
@@ -2322,7 +2342,12 @@ pub async fn run_query(
                         .tool(SelectProjectTool::new())
                         .tool(CurrentContextTool::new())
                         .tool(OpenProviderSettingsTool::new())
-                        .tool(CheckProviderConnectionTool::new());
+                        .tool(CheckProviderConnectionTool::new())
+                        // Deployment tools for service management
+                        .tool(ListDeploymentConfigsTool::new())
+                        .tool(TriggerDeploymentTool::new())
+                        .tool(GetDeploymentStatusTool::new())
+                        .tool(ListDeploymentsTool::new());
 
             // Add generation tools if this is a generation query
             if is_generation {
@@ -2387,7 +2412,12 @@ pub async fn run_query(
                         .tool(SelectProjectTool::new())
                         .tool(CurrentContextTool::new())
                         .tool(OpenProviderSettingsTool::new())
-                        .tool(CheckProviderConnectionTool::new());
+                        .tool(CheckProviderConnectionTool::new())
+                        // Deployment tools for service management
+                        .tool(ListDeploymentConfigsTool::new())
+                        .tool(TriggerDeploymentTool::new())
+                        .tool(GetDeploymentStatusTool::new())
+                        .tool(ListDeploymentsTool::new());
 
             // Add generation tools if this is a generation query
             if is_generation {
