@@ -6,8 +6,8 @@
 use super::error::{PlatformApiError, Result};
 use super::types::{
     ApiErrorResponse, CloudCredentialStatus, CloudProvider, DeploymentConfig,
-    DeploymentTaskStatus, GenericResponse, Organization, PaginatedDeployments, Project,
-    TriggerDeploymentRequest, TriggerDeploymentResponse, UserProfile,
+    DeploymentTaskStatus, GenericResponse, GetLogsResponse, Organization, PaginatedDeployments,
+    Project, TriggerDeploymentRequest, TriggerDeploymentResponse, UserProfile,
 };
 use crate::auth::credentials;
 use reqwest::Client;
@@ -337,6 +337,51 @@ impl PlatformApiClient {
         };
         self.get(&path).await
     }
+
+    /// Get container logs for a deployed service
+    ///
+    /// Returns recent logs from the service's containers. Supports time filtering
+    /// and line limits for efficient log retrieval.
+    ///
+    /// # Arguments
+    ///
+    /// * `service_id` - The service/deployment ID (from list_deployments)
+    /// * `start` - Optional ISO timestamp to filter logs from
+    /// * `end` - Optional ISO timestamp to filter logs until
+    /// * `limit` - Optional max number of log lines (default: 100)
+    ///
+    /// Endpoint: GET /api/deployments/services/:serviceId/logs
+    pub async fn get_service_logs(
+        &self,
+        service_id: &str,
+        start: Option<&str>,
+        end: Option<&str>,
+        limit: Option<i32>,
+    ) -> Result<GetLogsResponse> {
+        let mut query_params = Vec::new();
+
+        if let Some(s) = start {
+            query_params.push(format!("start={}", s));
+        }
+        if let Some(e) = end {
+            query_params.push(format!("end={}", e));
+        }
+        if let Some(l) = limit {
+            query_params.push(format!("limit={}", l));
+        }
+
+        let path = if query_params.is_empty() {
+            format!("/api/deployments/services/{}/logs", service_id)
+        } else {
+            format!(
+                "/api/deployments/services/{}/logs?{}",
+                service_id,
+                query_params.join("&")
+            )
+        };
+
+        self.get(&path).await
+    }
 }
 
 /// Get the API URL based on environment
@@ -438,5 +483,28 @@ mod tests {
             project_id
         );
         assert_eq!(expected_path, "/api/cloud-credentials/provider/gcp?projectId=proj-123");
+    }
+
+    #[test]
+    fn test_service_logs_path_no_params() {
+        // Test logs path without query params
+        let service_id = "svc-123";
+        let path = format!("/api/deployments/services/{}/logs", service_id);
+        assert_eq!(path, "/api/deployments/services/svc-123/logs");
+    }
+
+    #[test]
+    fn test_service_logs_path_with_params() {
+        // Test logs path with query params
+        let service_id = "svc-123";
+        let mut query_params = Vec::new();
+        query_params.push("start=2024-01-01T00:00:00Z".to_string());
+        query_params.push("limit=50".to_string());
+        let path = format!(
+            "/api/deployments/services/{}/logs?{}",
+            service_id,
+            query_params.join("&")
+        );
+        assert_eq!(path, "/api/deployments/services/svc-123/logs?start=2024-01-01T00:00:00Z&limit=50");
     }
 }
