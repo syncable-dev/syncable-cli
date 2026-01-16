@@ -311,6 +311,42 @@ pub struct PaginationInfo {
     pub has_more: bool,
 }
 
+// =============================================================================
+// Log Types
+// =============================================================================
+
+/// A single log entry from a container
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LogEntry {
+    /// ISO timestamp when log was generated
+    pub timestamp: String,
+    /// Log message content
+    pub message: String,
+    /// Container metadata labels
+    pub labels: std::collections::HashMap<String, String>,
+}
+
+/// Statistics about the log query
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LogQueryStats {
+    /// Number of log entries returned
+    pub entries_returned: i32,
+    /// Time taken to execute query in milliseconds
+    pub query_time_ms: i64,
+}
+
+/// Response from log query endpoint
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetLogsResponse {
+    /// Log entries
+    pub data: Vec<LogEntry>,
+    /// Query statistics
+    pub stats: LogQueryStats,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
