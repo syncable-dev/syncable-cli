@@ -8,6 +8,7 @@ pub mod config;
 pub mod error;
 pub mod generator;
 pub mod handlers;
+pub mod platform; // Platform session state for project/org context
 pub mod telemetry; // Add telemetry module
 
 // Re-export commonly used types and functions
