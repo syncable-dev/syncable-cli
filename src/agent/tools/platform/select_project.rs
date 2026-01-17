@@ -255,6 +255,15 @@ fn format_api_error(tool_name: &str, error: PlatformApiError) -> String {
                 "Try again later",
             ]),
         ),
+        PlatformApiError::ConnectionFailed => format_error_for_llm(
+            tool_name,
+            ErrorCategory::NetworkError,
+            "Could not connect to Syncable API",
+            Some(vec![
+                "Check your internet connection",
+                "The Syncable API may be temporarily unavailable",
+            ]),
+        ),
     }
 }
 
