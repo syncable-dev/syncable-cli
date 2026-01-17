@@ -7,6 +7,9 @@ use crate::platform::api::{
     },
     PlatformApiClient,
 };
+use crate::wizard::render::{display_step_header, status_indicator, wizard_render_config};
+use colored::Colorize;
+use inquire::{InquireError, Select};
 use std::collections::HashMap;
 
 /// Get deployment status for all providers
@@ -129,6 +132,103 @@ fn build_status_summary(
     }
 }
 
+/// Result of provider selection step
+#[derive(Debug, Clone)]
+pub enum ProviderSelectionResult {
+    /// User selected a provider
+    Selected(CloudProvider),
+    /// User cancelled the wizard
+    Cancelled,
+}
+
+/// Display provider selection and prompt user to choose
+pub fn select_provider(statuses: &[ProviderDeploymentStatus]) -> ProviderSelectionResult {
+    display_step_header(
+        1,
+        "Select Provider",
+        "Choose which cloud provider to deploy to. You'll need to connect providers in the platform settings first.",
+    );
+
+    // Build options with status indicators
+    let options: Vec<String> = statuses
+        .iter()
+        .map(|s| {
+            let indicator = status_indicator(s.is_connected);
+            let name = format!("{:?}", s.provider);
+            if s.is_connected {
+                format!("{} {}  {}", indicator, name, s.summary.dimmed())
+            } else {
+                format!("{} {}  {}", indicator, name.dimmed(), "Not connected".dimmed())
+            }
+        })
+        .collect();
+
+    // Find connected providers for validation
+    let connected_indices: Vec<usize> = statuses
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| s.is_connected)
+        .map(|(i, _)| i)
+        .collect();
+
+    if connected_indices.is_empty() {
+        println!(
+            "\n{}",
+            "No providers connected. Connect a cloud provider in platform settings first.".red()
+        );
+        println!(
+            "  {}",
+            "Visit: https://app.syncable.dev/integrations".dimmed()
+        );
+        return ProviderSelectionResult::Cancelled;
+    }
+
+    let selection = Select::new("Select a provider:", options)
+        .with_render_config(wizard_render_config())
+        .with_help_message("↑↓ to move, Enter to select, Esc to cancel")
+        .with_page_size(4)
+        .prompt();
+
+    match selection {
+        Ok(answer) => {
+            // Find which provider was selected
+            let selected_idx = statuses
+                .iter()
+                .position(|s| {
+                    let display = format!("{:?}", s.provider);
+                    answer.contains(&display)
+                })
+                .unwrap_or(0);
+
+            let selected_status = &statuses[selected_idx];
+
+            if !selected_status.is_connected {
+                println!(
+                    "\n{}",
+                    format!(
+                        "{:?} is not connected. Please connect it in platform settings first.",
+                        selected_status.provider
+                    )
+                    .yellow()
+                );
+                return ProviderSelectionResult::Cancelled;
+            }
+
+            println!(
+                "\n{} Selected: {:?}",
+                "✓".green(),
+                selected_status.provider
+            );
+            ProviderSelectionResult::Selected(selected_status.provider.clone())
+        }
+        Err(InquireError::OperationCanceled) | Err(InquireError::OperationInterrupted) => {
+            println!("\n{}", "Wizard cancelled.".dimmed());
+            ProviderSelectionResult::Cancelled
+        }
+        Err(_) => ProviderSelectionResult::Cancelled,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -169,5 +269,11 @@ mod tests {
     fn test_build_status_summary_not_connected() {
         let summary = build_status_summary(&[], &[], false);
         assert_eq!(summary, "Not connected");
+    }
+
+    #[test]
+    fn test_provider_selection_result_variants() {
+        let _ = ProviderSelectionResult::Selected(CloudProvider::Gcp);
+        let _ = ProviderSelectionResult::Cancelled;
     }
 }
