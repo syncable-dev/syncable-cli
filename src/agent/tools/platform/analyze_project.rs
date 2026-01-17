@@ -154,11 +154,13 @@ Before deploying, use this tool to understand what can be deployed from a projec
                     "summary": summary,
                     "next_steps": if dockerfile_count > 0 {
                         vec![
+                            "Use analyze_codebase for deeper analysis of build requirements and environment variables",
                             "Use list_deployment_capabilities to see available deployment targets",
                             "Use create_deployment_config to create a deployment configuration"
                         ]
                     } else {
                         vec![
+                            "Use analyze_codebase to understand the project's technology stack and recommended Dockerfile base image",
                             "Create a Dockerfile for your application",
                             "Consider using a multi-stage build for smaller images"
                         ]
