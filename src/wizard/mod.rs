@@ -6,6 +6,7 @@ mod cluster_selection;
 mod config_form;
 mod orchestrator;
 mod provider_selection;
+mod registry_provisioning;
 mod registry_selection;
 mod render;
 mod target_selection;
@@ -16,6 +17,7 @@ pub use orchestrator::{run_wizard, WizardResult};
 pub use provider_selection::{
     get_provider_deployment_statuses, select_provider, ProviderSelectionResult,
 };
+pub use registry_provisioning::{provision_registry, RegistryProvisioningResult};
 pub use registry_selection::{select_registry, RegistrySelectionResult};
 pub use render::{count_badge, display_step_header, status_indicator, wizard_render_config};
 pub use target_selection::{select_target, TargetSelectionResult};
