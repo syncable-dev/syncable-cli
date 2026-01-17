@@ -24,6 +24,8 @@
 //! - `GetServiceLogsTool` - Get container logs for a deployed service
 //! - `AnalyzeProjectTool` - Analyze project for Dockerfiles and deployment options
 //! - `ListDeploymentCapabilitiesTool` - List available deployment targets and providers
+//! - `CreateDeploymentConfigTool` - Create a new deployment configuration
+//! - `ProvisionRegistryTool` - Provision a new container registry
 //!
 //! ## Prerequisites
 //!
@@ -59,6 +61,7 @@
 
 mod analyze_project;
 mod check_provider_connection;
+mod create_deployment_config;
 mod current_context;
 mod get_deployment_status;
 mod get_service_logs;
@@ -68,11 +71,13 @@ mod list_deployments;
 mod list_organizations;
 mod list_projects;
 mod open_provider_settings;
+mod provision_registry;
 mod select_project;
 mod trigger_deployment;
 
 pub use analyze_project::AnalyzeProjectTool;
 pub use check_provider_connection::CheckProviderConnectionTool;
+pub use create_deployment_config::CreateDeploymentConfigTool;
 pub use current_context::CurrentContextTool;
 pub use get_deployment_status::GetDeploymentStatusTool;
 pub use get_service_logs::GetServiceLogsTool;
@@ -82,5 +87,6 @@ pub use list_deployments::ListDeploymentsTool;
 pub use list_organizations::ListOrganizationsTool;
 pub use list_projects::ListProjectsTool;
 pub use open_provider_settings::OpenProviderSettingsTool;
+pub use provision_registry::ProvisionRegistryTool;
 pub use select_project::SelectProjectTool;
 pub use trigger_deployment::TriggerDeploymentTool;
