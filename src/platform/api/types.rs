@@ -447,6 +447,242 @@ impl RegistryStatus {
     }
 }
 
+// =============================================================================
+// CLI Wizard Types
+// =============================================================================
+
+/// Deployment target type for the CLI wizard
+///
+/// Determines whether the service deploys to a managed Cloud Runner
+/// (GCP Cloud Run, Hetzner container) or to a Kubernetes cluster.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DeploymentTarget {
+    /// Deploy to Cloud Runner (GCP Cloud Run or Hetzner container)
+    /// No cluster required - fully managed by cloud provider
+    CloudRunner,
+    /// Deploy to a Kubernetes cluster
+    /// Requires cluster selection
+    Kubernetes,
+}
+
+impl DeploymentTarget {
+    /// Returns the API string representation
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DeploymentTarget::CloudRunner => "cloud_runner",
+            DeploymentTarget::Kubernetes => "kubernetes",
+        }
+    }
+
+    /// Returns a human-readable display name
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            DeploymentTarget::CloudRunner => "Cloud Runner",
+            DeploymentTarget::Kubernetes => "Kubernetes",
+        }
+    }
+}
+
+impl fmt::Display for DeploymentTarget {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+/// Deployment configuration being built by the CLI wizard
+///
+/// This type accumulates selections made during the wizard flow
+/// before being converted to a CreateDeploymentConfigRequest.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WizardDeploymentConfig {
+    /// Service name (from Dockerfile discovery or user input)
+    pub service_name: Option<String>,
+    /// Path to the Dockerfile relative to repo root
+    pub dockerfile_path: Option<String>,
+    /// Build context path relative to repo root
+    pub build_context: Option<String>,
+    /// Port the service listens on
+    pub port: Option<u16>,
+    /// Git branch to deploy from
+    pub branch: Option<String>,
+    /// Deployment target type
+    pub target: Option<DeploymentTarget>,
+    /// Selected cloud provider
+    pub provider: Option<CloudProvider>,
+    /// Selected cluster ID (required for Kubernetes target)
+    pub cluster_id: Option<String>,
+    /// Selected registry ID (or None to provision new)
+    pub registry_id: Option<String>,
+    /// Environment ID for deployment
+    pub environment_id: Option<String>,
+    /// Enable auto-deploy on push
+    pub auto_deploy: bool,
+}
+
+impl WizardDeploymentConfig {
+    /// Create a new empty wizard config
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Check if all required fields are set for the selected target
+    pub fn is_complete(&self) -> bool {
+        let base_complete = self.service_name.is_some()
+            && self.port.is_some()
+            && self.branch.is_some()
+            && self.target.is_some()
+            && self.provider.is_some()
+            && self.environment_id.is_some();
+
+        if !base_complete {
+            return false;
+        }
+
+        // K8s requires cluster selection
+        if self.target == Some(DeploymentTarget::Kubernetes) {
+            return self.cluster_id.is_some();
+        }
+
+        true
+    }
+
+    /// Get a list of missing required fields
+    pub fn missing_fields(&self) -> Vec<&'static str> {
+        let mut missing = Vec::new();
+        if self.service_name.is_none() {
+            missing.push("service_name");
+        }
+        if self.port.is_none() {
+            missing.push("port");
+        }
+        if self.branch.is_none() {
+            missing.push("branch");
+        }
+        if self.target.is_none() {
+            missing.push("target");
+        }
+        if self.provider.is_none() {
+            missing.push("provider");
+        }
+        if self.environment_id.is_none() {
+            missing.push("environment_id");
+        }
+        if self.target == Some(DeploymentTarget::Kubernetes) && self.cluster_id.is_none() {
+            missing.push("cluster_id");
+        }
+        missing
+    }
+}
+
+/// Request body for creating a new deployment configuration
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateDeploymentConfigRequest {
+    /// Service name for the deployment
+    pub service_name: String,
+    /// Repository ID (from GitHub/GitLab integration)
+    pub repository_id: i64,
+    /// Full repository name (e.g., "owner/repo")
+    pub repository_full_name: String,
+    /// Path to Dockerfile relative to repo root
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dockerfile_path: Option<String>,
+    /// Build context path relative to repo root
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub build_context: Option<String>,
+    /// Port the service listens on
+    pub port: i32,
+    /// Git branch to deploy from
+    pub branch: String,
+    /// Target type: "kubernetes" or "cloud_runner"
+    pub target_type: String,
+    /// Cloud provider (gcp, hetzner)
+    pub provider: String,
+    /// Environment ID for deployment
+    pub environment_id: String,
+    /// Cluster ID (required for kubernetes target)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cluster_id: Option<String>,
+    /// Registry ID (optional - will provision if not provided)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub registry_id: Option<String>,
+    /// Enable auto-deploy on push
+    pub auto_deploy_enabled: bool,
+    /// Deployment strategy (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deployment_strategy: Option<String>,
+}
+
+/// Provider deployment availability status for the wizard
+///
+/// Combines provider connection status with available resources
+/// to help users select where to deploy.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderDeploymentStatus {
+    /// The cloud provider
+    pub provider: CloudProvider,
+    /// Whether the provider is connected (has credentials)
+    pub is_connected: bool,
+    /// Available Kubernetes clusters (empty if no clusters or not connected)
+    pub clusters: Vec<ClusterSummary>,
+    /// Available artifact registries (empty if none or not connected)
+    pub registries: Vec<RegistrySummary>,
+    /// Whether Cloud Runner is available for this provider
+    pub cloud_runner_available: bool,
+    /// Display message for the wizard (e.g., "2 clusters, 1 registry")
+    pub summary: String,
+}
+
+/// Summary of a K8s cluster for wizard display
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClusterSummary {
+    /// Cluster ID
+    pub id: String,
+    /// Cluster display name
+    pub name: String,
+    /// Region
+    pub region: String,
+    /// Is cluster running/healthy
+    pub is_healthy: bool,
+}
+
+/// Summary of an artifact registry for wizard display
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegistrySummary {
+    /// Registry ID
+    pub id: String,
+    /// Registry display name
+    pub name: String,
+    /// Region
+    pub region: String,
+    /// Is registry ready
+    pub is_ready: bool,
+}
+
+impl ProviderDeploymentStatus {
+    /// Check if this provider can be used for deployment
+    pub fn can_deploy(&self) -> bool {
+        self.is_connected && (self.cloud_runner_available || !self.clusters.is_empty())
+    }
+
+    /// Get available deployment targets for this provider
+    pub fn available_targets(&self) -> Vec<DeploymentTarget> {
+        let mut targets = Vec::new();
+        if self.cloud_runner_available {
+            targets.push(DeploymentTarget::CloudRunner);
+        }
+        if !self.clusters.is_empty() {
+            targets.push(DeploymentTarget::Kubernetes);
+        }
+        targets
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -513,5 +749,134 @@ mod tests {
         assert!(!json.contains("token"));
         assert!(!json.contains("secret"));
         assert!(!json.contains("key"));
+    }
+
+    // =========================================================================
+    // CLI Wizard Types Tests
+    // =========================================================================
+
+    #[test]
+    fn test_deployment_target_as_str() {
+        assert_eq!(DeploymentTarget::CloudRunner.as_str(), "cloud_runner");
+        assert_eq!(DeploymentTarget::Kubernetes.as_str(), "kubernetes");
+    }
+
+    #[test]
+    fn test_deployment_target_display_name() {
+        assert_eq!(DeploymentTarget::CloudRunner.display_name(), "Cloud Runner");
+        assert_eq!(DeploymentTarget::Kubernetes.display_name(), "Kubernetes");
+    }
+
+    #[test]
+    fn test_wizard_config_is_complete_cloud_runner() {
+        let mut config = WizardDeploymentConfig::new();
+        assert!(!config.is_complete());
+
+        config.service_name = Some("api".to_string());
+        config.port = Some(8080);
+        config.branch = Some("main".to_string());
+        config.target = Some(DeploymentTarget::CloudRunner);
+        config.provider = Some(CloudProvider::Gcp);
+        config.environment_id = Some("env-123".to_string());
+
+        assert!(config.is_complete());
+    }
+
+    #[test]
+    fn test_wizard_config_is_complete_kubernetes() {
+        let mut config = WizardDeploymentConfig::new();
+        config.service_name = Some("api".to_string());
+        config.port = Some(8080);
+        config.branch = Some("main".to_string());
+        config.target = Some(DeploymentTarget::Kubernetes);
+        config.provider = Some(CloudProvider::Gcp);
+        config.environment_id = Some("env-123".to_string());
+
+        // K8s requires cluster_id
+        assert!(!config.is_complete());
+
+        config.cluster_id = Some("cluster-123".to_string());
+        assert!(config.is_complete());
+    }
+
+    #[test]
+    fn test_wizard_config_missing_fields() {
+        let config = WizardDeploymentConfig::new();
+        let missing = config.missing_fields();
+        assert!(missing.contains(&"service_name"));
+        assert!(missing.contains(&"port"));
+        assert!(missing.contains(&"branch"));
+    }
+
+    #[test]
+    fn test_provider_deployment_status_can_deploy() {
+        let status = ProviderDeploymentStatus {
+            provider: CloudProvider::Gcp,
+            is_connected: true,
+            clusters: vec![],
+            registries: vec![],
+            cloud_runner_available: true,
+            summary: "Cloud Run available".to_string(),
+        };
+        assert!(status.can_deploy());
+
+        let disconnected = ProviderDeploymentStatus {
+            provider: CloudProvider::Aws,
+            is_connected: false,
+            clusters: vec![],
+            registries: vec![],
+            cloud_runner_available: false,
+            summary: "Not connected".to_string(),
+        };
+        assert!(!disconnected.can_deploy());
+    }
+
+    #[test]
+    fn test_provider_deployment_status_available_targets() {
+        let status = ProviderDeploymentStatus {
+            provider: CloudProvider::Gcp,
+            is_connected: true,
+            clusters: vec![ClusterSummary {
+                id: "c1".to_string(),
+                name: "prod-cluster".to_string(),
+                region: "us-central1".to_string(),
+                is_healthy: true,
+            }],
+            registries: vec![],
+            cloud_runner_available: true,
+            summary: "1 cluster, Cloud Run".to_string(),
+        };
+
+        let targets = status.available_targets();
+        assert_eq!(targets.len(), 2);
+        assert!(targets.contains(&DeploymentTarget::CloudRunner));
+        assert!(targets.contains(&DeploymentTarget::Kubernetes));
+    }
+
+    #[test]
+    fn test_create_deployment_config_request_serialization() {
+        let request = CreateDeploymentConfigRequest {
+            service_name: "api".to_string(),
+            repository_id: 12345,
+            repository_full_name: "org/repo".to_string(),
+            dockerfile_path: Some("Dockerfile".to_string()),
+            build_context: Some(".".to_string()),
+            port: 8080,
+            branch: "main".to_string(),
+            target_type: "cloud_runner".to_string(),
+            provider: "gcp".to_string(),
+            environment_id: "env-123".to_string(),
+            cluster_id: None,
+            registry_id: Some("reg-456".to_string()),
+            auto_deploy_enabled: true,
+            deployment_strategy: None,
+        };
+
+        let json = serde_json::to_string(&request).unwrap();
+        assert!(json.contains("\"serviceName\":\"api\""));
+        assert!(json.contains("\"port\":8080"));
+        // Optional None fields should be skipped
+        assert!(!json.contains("clusterId"));
+        assert!(!json.contains("deploymentStrategy"));
     }
 }
