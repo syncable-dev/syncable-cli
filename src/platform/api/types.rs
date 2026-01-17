@@ -347,6 +347,106 @@ pub struct GetLogsResponse {
     pub stats: LogQueryStats,
 }
 
+// =============================================================================
+// Cluster Types
+// =============================================================================
+
+/// K8s cluster entity from platform
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClusterEntity {
+    /// Unique cluster identifier
+    pub id: String,
+    /// Cluster display name
+    pub name: String,
+    /// Cloud provider hosting the cluster
+    pub provider: CloudProvider,
+    /// Region where cluster is deployed
+    pub region: String,
+    /// Current cluster status
+    pub status: ClusterStatus,
+    /// Kubernetes version (if available)
+    pub kubernetes_version: Option<String>,
+    /// Number of nodes in the cluster (if available)
+    pub node_count: Option<i32>,
+    /// When the cluster was created
+    pub created_at: String,
+}
+
+/// Status of a K8s cluster
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ClusterStatus {
+    Provisioning,
+    Running,
+    Updating,
+    Deleting,
+    Error,
+    #[serde(other)]
+    Unknown,
+}
+
+impl ClusterStatus {
+    /// Returns a human-readable display string for the status
+    pub fn display(&self) -> &'static str {
+        match self {
+            ClusterStatus::Provisioning => "Provisioning",
+            ClusterStatus::Running => "Running",
+            ClusterStatus::Updating => "Updating",
+            ClusterStatus::Deleting => "Deleting",
+            ClusterStatus::Error => "Error",
+            ClusterStatus::Unknown => "Unknown",
+        }
+    }
+}
+
+// =============================================================================
+// Artifact Registry Types
+// =============================================================================
+
+/// Artifact registry for container images
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtifactRegistry {
+    /// Unique registry identifier
+    pub id: String,
+    /// Registry display name
+    pub name: String,
+    /// Cloud provider hosting the registry
+    pub provider: CloudProvider,
+    /// Region where registry is located
+    pub region: String,
+    /// URL to push/pull images
+    pub registry_url: String,
+    /// Current registry status
+    pub status: RegistryStatus,
+    /// When the registry was created
+    pub created_at: String,
+}
+
+/// Status of an artifact registry
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RegistryStatus {
+    Provisioning,
+    Ready,
+    Error,
+    #[serde(other)]
+    Unknown,
+}
+
+impl RegistryStatus {
+    /// Returns a human-readable display string for the status
+    pub fn display(&self) -> &'static str {
+        match self {
+            RegistryStatus::Provisioning => "Provisioning",
+            RegistryStatus::Ready => "Ready",
+            RegistryStatus::Error => "Error",
+            RegistryStatus::Unknown => "Unknown",
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
