@@ -2,8 +2,8 @@ use clap::Parser;
 use syncable_cli::{
     analyzer::{self, analyze_monorepo, vulnerability::VulnerabilitySeverity},
     cli::{
-        ChatProvider, Cli, ColorScheme, Commands, DisplayFormat, OutputFormat, SecurityScanMode,
-        SeverityThreshold, ToolsCommand,
+        ChatProvider, Cli, ColorScheme, Commands, DisplayFormat, EnvCommand, OutputFormat,
+        SecurityScanMode, SeverityThreshold, ToolsCommand,
     },
     config, generator,
     telemetry::{self},
@@ -117,6 +117,7 @@ async fn run() -> syncable_cli::Result<()> {
         Commands::Auth { .. } => "auth",
         Commands::Project { .. } => "project",
         Commands::Org { .. } => "org",
+        Commands::Env { .. } => "env",
         Commands::Deploy { .. } => "deploy",
     };
 
@@ -697,6 +698,135 @@ async fn run() -> syncable_cli::Result<()> {
         Commands::Org { command } => {
             // Org commands are handled by lib.rs
             syncable_cli::run_command(Commands::Org { command }).await
+        }
+        Commands::Env { command } => {
+            use syncable_cli::auth::credentials;
+            use syncable_cli::platform::api::PlatformApiClient;
+            use syncable_cli::platform::session::PlatformSession;
+
+            // Check authentication
+            if !credentials::is_authenticated() {
+                eprintln!("Not logged in. Run `sync-ctl auth login` first.");
+                process::exit(1);
+            }
+
+            // Load platform session for org/project context
+            let session = match PlatformSession::load() {
+                Ok(s) => s,
+                Err(_) => {
+                    eprintln!("No project selected. Run `sync-ctl project select` first.");
+                    process::exit(1);
+                }
+            };
+
+            let project_id = match &session.project_id {
+                Some(p) => p.clone(),
+                None => {
+                    eprintln!("No project selected. Run `sync-ctl project select` first.");
+                    process::exit(1);
+                }
+            };
+
+            // Create API client
+            let client = match PlatformApiClient::new() {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("Failed to create API client: {}", e);
+                    process::exit(1);
+                }
+            };
+
+            match command {
+                EnvCommand::List { format } => {
+                    match client.list_environments(&project_id).await {
+                        Ok(environments) => {
+                            if environments.is_empty() {
+                                println!("No environments found in project.");
+                                println!(
+                                    "\nCreate one with: {}",
+                                    "sync-ctl deploy new-env".bright_cyan()
+                                );
+                            } else {
+                                match format {
+                                    OutputFormat::Json => {
+                                        println!(
+                                            "{}",
+                                            serde_json::to_string_pretty(&environments).unwrap()
+                                        );
+                                    }
+                                    OutputFormat::Table => {
+                                        println!("\nEnvironments in project:\n");
+                                        for env in &environments {
+                                            let selected = session
+                                                .environment_id
+                                                .as_ref()
+                                                .map(|id| id == &env.id)
+                                                .unwrap_or(false);
+                                            let marker =
+                                                if selected { "→ ".green() } else { "  ".normal() };
+                                            println!(
+                                                "{}{} ({}) - {}",
+                                                marker,
+                                                env.name.bold(),
+                                                env.id.dimmed(),
+                                                env.target_type
+                                            );
+                                        }
+                                        println!(
+                                            "\nSelect with: {}",
+                                            "sync-ctl env select <ID>".bright_cyan()
+                                        );
+                                    }
+                                }
+                            }
+                            Ok(())
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to list environments: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+                EnvCommand::Select { id } => {
+                    // Verify environment exists
+                    match client.list_environments(&project_id).await {
+                        Ok(environments) => {
+                            if let Some(env) = environments.iter().find(|e| e.id == id) {
+                                // Update session with environment
+                                let new_session = PlatformSession::with_environment(
+                                    session.project_id.unwrap(),
+                                    session.project_name.unwrap_or_default(),
+                                    session.org_id.unwrap_or_default(),
+                                    session.org_name.unwrap_or_default(),
+                                    env.id.clone(),
+                                    env.name.clone(),
+                                );
+
+                                if let Err(e) = new_session.save() {
+                                    eprintln!("Failed to save session: {}", e);
+                                    process::exit(1);
+                                }
+
+                                println!(
+                                    "{} Selected environment: {}",
+                                    "✓".green(),
+                                    env.name.bold()
+                                );
+                                println!("Context: {}", new_session.display_context());
+                                Ok(())
+                            } else {
+                                eprintln!("Environment not found: {}", id);
+                                eprintln!("Run `sync-ctl env list` to see available environments.");
+                                process::exit(1);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to list environments: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+            }
         }
         Commands::Deploy { path, command } => {
             use syncable_cli::auth::credentials;
