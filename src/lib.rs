@@ -398,12 +398,20 @@ pub async fn run_command(command: Commands) -> Result<()> {
                         return Ok(());
                     }
 
-                    println!("\nCurrent context:");
+                    println!("\nCurrent context: {}", session.display_context());
                     if let (Some(org_name), Some(org_id)) = (&session.org_name, &session.org_id) {
                         println!("  Organization: {} ({})", org_name, org_id);
                     }
                     if let (Some(project_name), Some(project_id)) = (&session.project_name, &session.project_id) {
                         println!("  Project:      {} ({})", project_name, project_id);
+                    }
+                    if let (Some(env_name), Some(env_id)) = (&session.environment_name, &session.environment_id) {
+                        println!("  Environment:  {} ({})", env_name, env_id);
+                    } else {
+                        println!("  Environment:  (none selected)");
+                        println!("\n  To select an environment:");
+                        println!("    sync-ctl env list");
+                        println!("    sync-ctl env select <env-id>");
                     }
                     if let Some(updated) = session.last_updated {
                         println!("  Last updated: {}", updated.format("%Y-%m-%d %H:%M:%S UTC"));
@@ -621,6 +629,10 @@ pub async fn run_command(command: Commands) -> Result<()> {
         Commands::Deploy { .. } => {
             // Deploy commands are handled in main.rs directly
             unreachable!("Deploy commands should be handled in main.rs")
+        }
+        Commands::Env { .. } => {
+            // Env commands are handled in main.rs directly
+            unreachable!("Env commands should be handled in main.rs")
         }
     }
 }

@@ -359,6 +359,12 @@ pub enum Commands {
         command: OrgCommand,
     },
 
+    /// Manage environments within a project
+    Env {
+        #[command(subcommand)]
+        command: EnvCommand,
+    },
+
     /// Deploy services to the Syncable platform (launches wizard by default)
     Deploy {
         /// Path to the project directory (default: current directory)
@@ -492,6 +498,23 @@ pub enum OrgCommand {
     /// Select an organization to work with
     Select {
         /// Organization ID to select
+        id: String,
+    },
+}
+
+/// Environment management subcommands
+#[derive(Subcommand)]
+pub enum EnvCommand {
+    /// List environments in the current project
+    List {
+        /// Output format
+        #[arg(long, value_enum, default_value = "table")]
+        format: OutputFormat,
+    },
+
+    /// Select an environment to work with
+    Select {
+        /// Environment ID to select
         id: String,
     },
 }
