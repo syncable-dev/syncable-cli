@@ -73,11 +73,14 @@ pub async fn get_provider_deployment_statuses(
     }
 
     // Build status for each supported provider
+    // Available providers first, then coming soon providers
     let providers = [
         CloudProvider::Gcp,
         CloudProvider::Hetzner,
         CloudProvider::Aws,
         CloudProvider::Azure,
+        CloudProvider::Scaleway,
+        CloudProvider::Cyso,
     ];
     let mut statuses = Vec::new();
 
@@ -165,25 +168,30 @@ pub fn select_provider(statuses: &[ProviderDeploymentStatus]) -> ProviderSelecti
     let options: Vec<String> = statuses
         .iter()
         .map(|s| {
-            let indicator = status_indicator(s.is_connected);
             let name = format!("{:?}", s.provider);
-            if s.is_connected {
-                format!("{} {}  {}", indicator, name, s.summary.dimmed())
+            // Check availability first - unavailable providers show "Coming Soon"
+            if !s.provider.is_available() {
+                format!("○ {}  {}", name.dimmed(), "(Coming Soon)".yellow())
             } else {
-                format!("{} {}  {}", indicator, name.dimmed(), "Not connected".dimmed())
+                let indicator = status_indicator(s.is_connected);
+                if s.is_connected {
+                    format!("{} {}  {}", indicator, name, s.summary.dimmed())
+                } else {
+                    format!("{} {}  {}", indicator, name.dimmed(), "Not connected".dimmed())
+                }
             }
         })
         .collect();
 
-    // Find connected providers for validation
-    let connected_indices: Vec<usize> = statuses
+    // Find available AND connected providers for validation
+    let available_connected_indices: Vec<usize> = statuses
         .iter()
         .enumerate()
-        .filter(|(_, s)| s.is_connected)
+        .filter(|(_, s)| s.provider.is_available() && s.is_connected)
         .map(|(i, _)| i)
         .collect();
 
-    if connected_indices.is_empty() {
+    if available_connected_indices.is_empty() {
         println!(
             "\n{}",
             "No providers connected. Connect a cloud provider in platform settings first.".red()
@@ -192,13 +200,17 @@ pub fn select_provider(statuses: &[ProviderDeploymentStatus]) -> ProviderSelecti
             "  {}",
             "Visit: https://app.syncable.dev/integrations".dimmed()
         );
+        println!(
+            "  {}",
+            "Note: GCP and Hetzner are currently available. AWS, Azure, Scaleway, and Cyso Cloud are coming soon.".dimmed()
+        );
         return ProviderSelectionResult::Cancelled;
     }
 
     let selection = Select::new("Select a provider:", options)
         .with_render_config(wizard_render_config())
         .with_help_message("↑↓ to move, Enter to select, Esc to cancel")
-        .with_page_size(4)
+        .with_page_size(6)
         .prompt();
 
     match selection {
@@ -213,6 +225,19 @@ pub fn select_provider(statuses: &[ProviderDeploymentStatus]) -> ProviderSelecti
                 .unwrap_or(0);
 
             let selected_status = &statuses[selected_idx];
+
+            // Check availability first - coming soon providers can't be selected
+            if !selected_status.provider.is_available() {
+                println!(
+                    "\n{}",
+                    format!(
+                        "{} is coming soon! Currently only GCP and Hetzner are available.",
+                        selected_status.provider.display_name()
+                    )
+                    .yellow()
+                );
+                return ProviderSelectionResult::Cancelled;
+            }
 
             if !selected_status.is_connected {
                 println!(
