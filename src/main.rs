@@ -117,6 +117,7 @@ async fn run() -> syncable_cli::Result<()> {
         Commands::Auth { .. } => "auth",
         Commands::Project { .. } => "project",
         Commands::Org { .. } => "org",
+        Commands::Deploy { .. } => "deploy",
     };
 
     log::debug!("Command name: {}", command_name);
@@ -696,6 +697,82 @@ async fn run() -> syncable_cli::Result<()> {
         Commands::Org { command } => {
             // Org commands are handled by lib.rs
             syncable_cli::run_command(Commands::Org { command }).await
+        }
+        Commands::Deploy { command } => {
+            use syncable_cli::auth::credentials;
+            use syncable_cli::cli::DeployCommand;
+            use syncable_cli::platform::api::PlatformApiClient;
+            use syncable_cli::platform::session::PlatformSession;
+            use syncable_cli::wizard::{run_wizard, WizardResult};
+
+            match command {
+                DeployCommand::Wizard { path } => {
+                    // Check authentication
+                    if !credentials::is_authenticated() {
+                        eprintln!("Not logged in. Run `sync-ctl auth login` first.");
+                        process::exit(1);
+                    }
+
+                    // Load platform session for org/project context
+                    let session = match PlatformSession::load() {
+                        Ok(s) => s,
+                        Err(_) => {
+                            eprintln!("No project selected. Run `sync-ctl project select` first.");
+                            process::exit(1);
+                        }
+                    };
+
+                    let project_id = match &session.project_id {
+                        Some(p) => p.clone(),
+                        None => {
+                            eprintln!("No project selected. Run `sync-ctl project select` first.");
+                            process::exit(1);
+                        }
+                    };
+
+                    // Create API client
+                    let client = match PlatformApiClient::new() {
+                        Ok(c) => c,
+                        Err(e) => {
+                            eprintln!("Failed to create API client: {}", e);
+                            process::exit(1);
+                        }
+                    };
+
+                    // Get default environment ID (for now, use "production" as placeholder)
+                    // TODO: Add environment selection in Phase 58+
+                    let environment_id = "production";
+
+                    // Run wizard
+                    match run_wizard(&client, &project_id, environment_id, &path).await {
+                        WizardResult::Success(config) => {
+                            use colored::Colorize;
+                            println!("{}", "Deployment configuration created!".green().bold());
+                            if !config.is_complete() {
+                                println!(
+                                    "{}",
+                                    format!("Missing fields: {:?}", config.missing_fields()).yellow()
+                                );
+                            }
+                            // TODO: Phase 58 will submit config to API
+                            println!(
+                                "\n{}",
+                                "Next: Run deployment with created config".dimmed()
+                            );
+                            Ok(())
+                        }
+                        WizardResult::Cancelled => {
+                            use colored::Colorize;
+                            println!("{}", "Wizard cancelled.".dimmed());
+                            Ok(())
+                        }
+                        WizardResult::Error(e) => {
+                            eprintln!("Error: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+            }
         }
     };
 

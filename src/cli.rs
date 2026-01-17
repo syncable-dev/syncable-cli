@@ -358,6 +358,12 @@ pub enum Commands {
         #[command(subcommand)]
         command: OrgCommand,
     },
+
+    /// Deploy services to the Syncable platform
+    Deploy {
+        #[command(subcommand)]
+        command: DeployCommand,
+    },
 }
 
 #[derive(Subcommand)]
@@ -483,6 +489,17 @@ pub enum OrgCommand {
     Select {
         /// Organization ID to select
         id: String,
+    },
+}
+
+/// Deployment subcommands
+#[derive(Subcommand)]
+pub enum DeployCommand {
+    /// Launch interactive deployment wizard
+    Wizard {
+        /// Path to the project directory (default: current directory)
+        #[arg(value_name = "PROJECT_PATH", default_value = ".")]
+        path: PathBuf,
     },
 }
 
