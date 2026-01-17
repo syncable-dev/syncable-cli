@@ -67,7 +67,7 @@ pub async fn get_provider_deployment_statuses(
             is_ready: registry.status == RegistryStatus::Ready,
         };
         provider_registries
-            .entry(registry.provider)
+            .entry(registry.cloud_provider)
             .or_default()
             .push(summary);
     }

@@ -466,6 +466,8 @@ impl ClusterStatus {
 // =============================================================================
 
 /// Artifact registry for container images
+///
+/// This maps to the backend's ProvisionedArtifactRegistryDto
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ArtifactRegistry {
@@ -474,15 +476,27 @@ pub struct ArtifactRegistry {
     /// Registry display name
     pub name: String,
     /// Cloud provider hosting the registry
-    pub provider: CloudProvider,
+    #[serde(alias = "provider")]
+    pub cloud_provider: CloudProvider,
     /// Region where registry is located
     pub region: String,
     /// URL to push/pull images
     pub registry_url: String,
     /// Current registry status
     pub status: RegistryStatus,
-    /// When the registry was created
-    pub created_at: String,
+    /// When the registry was created (ISO 8601 format)
+    #[serde(default)]
+    pub created_at: Option<String>,
+    /// When the registry was last updated
+    #[serde(default)]
+    pub updated_at: Option<String>,
+}
+
+impl ArtifactRegistry {
+    /// Get the cloud provider (for backwards compatibility)
+    pub fn provider(&self) -> &CloudProvider {
+        &self.cloud_provider
+    }
 }
 
 /// Status of an artifact registry
