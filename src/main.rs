@@ -769,7 +769,7 @@ async fn run() -> syncable_cli::Result<()> {
                                                 marker,
                                                 env.name.bold(),
                                                 env.id.dimmed(),
-                                                env.target_type
+                                                env.environment_type
                                             );
                                         }
                                         println!(

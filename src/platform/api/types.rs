@@ -223,14 +223,30 @@ pub struct Environment {
     pub name: String,
     /// Parent project ID
     pub project_id: String,
-    /// Target type: "kubernetes" or "cloud_runner"
-    pub target_type: String,
-    /// Cluster ID (only for kubernetes target type)
+    /// Environment type: "cluster" (K8s) or "cloud" (Cloud Runner)
+    pub environment_type: String,
+    /// Cluster ID (only for cluster type)
     #[serde(default)]
     pub cluster_id: Option<String>,
+    /// Kubernetes namespace (only for cluster type)
+    #[serde(default)]
+    pub namespace: Option<String>,
+    /// Description
+    #[serde(default)]
+    pub description: Option<String>,
+    /// Whether the environment is active
+    #[serde(default = "default_true")]
+    pub is_active: bool,
     /// When the environment was created
     #[serde(default)]
     pub created_at: Option<String>,
+    /// When the environment was last updated
+    #[serde(default)]
+    pub updated_at: Option<String>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 // =============================================================================
@@ -1032,16 +1048,20 @@ mod tests {
             id: "env-123".to_string(),
             name: "production".to_string(),
             project_id: "proj-456".to_string(),
-            target_type: "kubernetes".to_string(),
+            environment_type: "cluster".to_string(),
             cluster_id: Some("cluster-789".to_string()),
+            namespace: Some("prod-ns".to_string()),
+            description: Some("Production environment".to_string()),
+            is_active: true,
             created_at: Some("2024-01-01T00:00:00Z".to_string()),
+            updated_at: Some("2024-01-01T00:00:00Z".to_string()),
         };
 
         let json = serde_json::to_string(&env).unwrap();
         assert!(json.contains("\"id\":\"env-123\""));
         assert!(json.contains("\"name\":\"production\""));
         assert!(json.contains("\"projectId\":\"proj-456\""));
-        assert!(json.contains("\"targetType\":\"kubernetes\""));
+        assert!(json.contains("\"environmentType\":\"cluster\""));
         assert!(json.contains("\"clusterId\":\"cluster-789\""));
     }
 
@@ -1051,15 +1071,17 @@ mod tests {
             "id": "env-abc",
             "name": "staging",
             "projectId": "proj-def",
-            "targetType": "cloud_runner",
-            "createdAt": "2024-01-15T12:00:00Z"
+            "environmentType": "cloud",
+            "isActive": true,
+            "createdAt": "2024-01-15T12:00:00Z",
+            "updatedAt": "2024-01-15T12:00:00Z"
         }"#;
 
         let env: Environment = serde_json::from_str(json).unwrap();
         assert_eq!(env.id, "env-abc");
         assert_eq!(env.name, "staging");
         assert_eq!(env.project_id, "proj-def");
-        assert_eq!(env.target_type, "cloud_runner");
+        assert_eq!(env.environment_type, "cloud");
         assert!(env.cluster_id.is_none());
         assert_eq!(env.created_at, Some("2024-01-15T12:00:00Z".to_string()));
     }
@@ -1070,12 +1092,13 @@ mod tests {
             "id": "env-min",
             "name": "minimal",
             "projectId": "proj-min",
-            "targetType": "cloud_runner"
+            "environmentType": "cloud"
         }"#;
 
         let env: Environment = serde_json::from_str(json).unwrap();
         assert!(env.cluster_id.is_none());
         assert!(env.created_at.is_none());
+        assert!(env.is_active); // default_true
     }
 
     #[test]
