@@ -115,6 +115,8 @@ async fn run() -> syncable_cli::Result<()> {
         Commands::Optimize { .. } => "optimize",
         Commands::Chat { .. } => "chat",
         Commands::Auth { .. } => "auth",
+        Commands::Project { .. } => "project",
+        Commands::Org { .. } => "org",
     };
 
     log::debug!("Command name: {}", command_name);
@@ -686,6 +688,14 @@ async fn run() -> syncable_cli::Result<()> {
         Commands::Auth { command } => {
             // Auth commands are handled by lib.rs
             syncable_cli::run_command(Commands::Auth { command }).await
+        }
+        Commands::Project { command } => {
+            // Project commands are handled by lib.rs
+            syncable_cli::run_command(Commands::Project { command }).await
+        }
+        Commands::Org { command } => {
+            // Org commands are handled by lib.rs
+            syncable_cli::run_command(Commands::Org { command }).await
         }
     };
 
