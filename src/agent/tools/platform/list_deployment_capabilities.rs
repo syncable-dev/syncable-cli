@@ -62,12 +62,17 @@ targets are available (clusters, registries, Cloud Run).
 
 **What it returns:**
 - providers: Array of provider status objects with:
-  - provider: Provider name (Gcp, Hetzner, Aws, Azure)
+  - provider: Provider name (Gcp, Hetzner, Aws, Azure, Scaleway, Cyso)
+  - is_available: Whether the provider is currently supported (false = coming soon)
   - is_connected: Whether the provider has cloud credentials
   - cloud_runner_available: Whether Cloud Run/serverless is available
   - clusters: Array of available Kubernetes clusters
   - registries: Array of available container registries
   - summary: Human-readable status
+
+**Provider Availability:**
+- Available now: GCP, Hetzner
+- Coming soon: AWS, Azure, Scaleway, Cyso Cloud
 
 **Use Cases:**
 - Before creating a deployment, check what options are available
@@ -112,8 +117,11 @@ targets are available (clusters, registries, Cloud Run).
         // Get provider deployment statuses
         match get_provider_deployment_statuses(&client, &args.project_id).await {
             Ok(statuses) => {
-                // Count connected providers
-                let connected_count = statuses.iter().filter(|s| s.is_connected).count();
+                // Count available and connected providers (only available providers can deploy)
+                let available_connected_count = statuses
+                    .iter()
+                    .filter(|s| s.provider.is_available() && s.is_connected)
+                    .count();
                 let total_clusters: usize = statuses.iter().map(|s| s.clusters.len()).sum();
                 let total_registries: usize = statuses.iter().map(|s| s.registries.len()).sum();
 
@@ -149,20 +157,25 @@ targets are available (clusters, registries, Cloud Run).
 
                         json!({
                             "provider": format!("{:?}", s.provider),
+                            "is_available": s.provider.is_available(),
                             "is_connected": s.is_connected,
                             "cloud_runner_available": s.cloud_runner_available,
                             "clusters": clusters,
                             "registries": registries,
-                            "summary": s.summary,
+                            "summary": if s.provider.is_available() {
+                                s.summary.clone()
+                            } else {
+                                "Coming soon".to_string()
+                            },
                         })
                     })
                     .collect();
 
                 // Build summary
-                let summary = if connected_count == 0 {
-                    "No providers connected. Connect a cloud provider in platform settings first.".to_string()
+                let summary = if available_connected_count == 0 {
+                    "No available providers connected. Connect GCP or Hetzner in platform settings.".to_string()
                 } else {
-                    let mut parts = vec![format!("{} provider{} connected", connected_count, if connected_count == 1 { "" } else { "s" })];
+                    let mut parts = vec![format!("{} provider{} ready", available_connected_count, if available_connected_count == 1 { "" } else { "s" })];
                     if total_clusters > 0 {
                         parts.push(format!("{} cluster{}", total_clusters, if total_clusters == 1 { "" } else { "s" }));
                     }
@@ -177,19 +190,22 @@ targets are available (clusters, registries, Cloud Run).
                     "project_id": args.project_id,
                     "providers": provider_data,
                     "summary": summary,
-                    "connected_providers_count": connected_count,
+                    "available_connected_count": available_connected_count,
                     "total_clusters": total_clusters,
                     "total_registries": total_registries,
-                    "next_steps": if connected_count > 0 {
+                    "coming_soon_providers": ["AWS", "Azure", "Scaleway", "Cyso Cloud"],
+                    "next_steps": if available_connected_count > 0 {
                         vec![
                             "Use analyze_project to discover Dockerfiles in the project",
                             "Use create_deployment_config to create a deployment configuration",
-                            "For Cloud Run deployments, no cluster is needed"
+                            "For Cloud Run deployments, no cluster is needed",
+                            "Note: AWS, Azure, Scaleway, and Cyso Cloud are coming soon"
                         ]
                     } else {
                         vec![
-                            "Use open_provider_settings to connect a cloud provider",
-                            "After connecting, run this tool again to see available options"
+                            "Use open_provider_settings to connect GCP or Hetzner",
+                            "After connecting, run this tool again to see available options",
+                            "Note: AWS, Azure, Scaleway, and Cyso Cloud are coming soon"
                         ]
                     }
                 });
