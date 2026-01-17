@@ -447,6 +447,103 @@ impl RegistryStatus {
     }
 }
 
+/// Request to provision a new artifact registry
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateRegistryRequest {
+    /// Project ID for the registry
+    pub project_id: String,
+    /// Cluster ID to associate registry with
+    pub cluster_id: String,
+    /// Cluster name for display
+    pub cluster_name: String,
+    /// Name for the new registry
+    pub registry_name: String,
+    /// Cloud provider hosting the registry
+    pub cloud_provider: String,
+    /// Region for the registry
+    pub region: String,
+    /// GCP project ID (required for GCP provider)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gcp_project_id: Option<String>,
+}
+
+/// Response from registry provisioning
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateRegistryResponse {
+    /// Task ID for tracking provisioning progress
+    pub task_id: String,
+    /// Initial status
+    pub status: String,
+    /// Human-readable message
+    pub message: String,
+    /// Registry name (if immediately available)
+    pub registry_name: Option<String>,
+    /// Registry URL (if immediately available)
+    pub registry_url: Option<String>,
+    /// Cloud provider
+    pub cloud_provider: String,
+    /// When the task was created
+    pub created_at: String,
+}
+
+/// Task status when polling registry provisioning
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegistryTaskStatus {
+    /// Current task state
+    pub status: RegistryTaskState,
+    /// Current step description
+    pub current_step: Option<String>,
+    /// Progress percentage (0-100)
+    pub progress: Option<u8>,
+    /// Overall status message
+    pub overall_status: Option<String>,
+    /// Overall human-readable message
+    pub overall_message: Option<String>,
+    /// Output data when completed
+    #[serde(default)]
+    pub output: RegistryTaskOutput,
+    /// Error info if failed
+    pub error: Option<RegistryTaskError>,
+}
+
+/// State of a registry provisioning task
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum RegistryTaskState {
+    Processing,
+    Completed,
+    Failed,
+    Cancelled,
+    #[serde(other)]
+    Unknown,
+}
+
+/// Output data from a completed registry provisioning task
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RegistryTaskOutput {
+    /// Name of the provisioned registry
+    pub registry_name: Option<String>,
+    /// URL to push/pull images
+    pub registry_url: Option<String>,
+    /// Cloud provider that hosts the registry
+    pub cloud_provider: Option<String>,
+    /// URL to the commit that created the registry
+    pub commit_url: Option<String>,
+}
+
+/// Error details from a failed registry provisioning task
+#[derive(Debug, Clone, Deserialize)]
+pub struct RegistryTaskError {
+    /// Error name/type
+    pub name: String,
+    /// Error message
+    pub message: String,
+}
+
 // =============================================================================
 // CLI Wizard Types
 // =============================================================================
