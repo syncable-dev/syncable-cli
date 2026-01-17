@@ -516,12 +516,14 @@ pub async fn run_command(command: Commands) -> Result<()> {
 
                     match client.get_organization(&id).await {
                         Ok(org) => {
-                            // Create session with org only (clear any project selection)
+                            // Create session with org only (clear any project/env selection)
                             let session = PlatformSession {
                                 project_id: None,
                                 project_name: None,
                                 org_id: Some(org.id.clone()),
                                 org_name: Some(org.name.clone()),
+                                environment_id: None,
+                                environment_name: None,
                                 last_updated: Some(chrono::Utc::now()),
                             };
 
