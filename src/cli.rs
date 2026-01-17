@@ -359,10 +359,14 @@ pub enum Commands {
         command: OrgCommand,
     },
 
-    /// Deploy services to the Syncable platform
+    /// Deploy services to the Syncable platform (launches wizard by default)
     Deploy {
+        /// Path to the project directory (default: current directory)
+        #[arg(value_name = "PROJECT_PATH", default_value = ".")]
+        path: PathBuf,
+
         #[command(subcommand)]
-        command: DeployCommand,
+        command: Option<DeployCommand>,
     },
 }
 
