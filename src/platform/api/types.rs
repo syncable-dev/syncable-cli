@@ -115,6 +115,8 @@ pub enum CloudProvider {
     Aws,
     Azure,
     Hetzner,
+    Scaleway,
+    Cyso,
 }
 
 impl CloudProvider {
@@ -125,6 +127,8 @@ impl CloudProvider {
             CloudProvider::Aws => "aws",
             CloudProvider::Azure => "azure",
             CloudProvider::Hetzner => "hetzner",
+            CloudProvider::Scaleway => "scaleway",
+            CloudProvider::Cyso => "cyso",
         }
     }
 
@@ -135,6 +139,8 @@ impl CloudProvider {
             CloudProvider::Aws => "Amazon Web Services",
             CloudProvider::Azure => "Microsoft Azure",
             CloudProvider::Hetzner => "Hetzner Cloud",
+            CloudProvider::Scaleway => "Scaleway",
+            CloudProvider::Cyso => "Cyso Cloud",
         }
     }
 
@@ -142,10 +148,20 @@ impl CloudProvider {
     pub fn all() -> &'static [CloudProvider] {
         &[
             CloudProvider::Gcp,
+            CloudProvider::Hetzner,
             CloudProvider::Aws,
             CloudProvider::Azure,
-            CloudProvider::Hetzner,
+            CloudProvider::Scaleway,
+            CloudProvider::Cyso,
         ]
+    }
+
+    /// Returns whether this provider is currently available for deployment
+    ///
+    /// Returns `true` for GCP and Hetzner (currently supported).
+    /// Returns `false` for AWS, Azure, Scaleway, Cyso (coming soon).
+    pub fn is_available(&self) -> bool {
+        matches!(self, CloudProvider::Gcp | CloudProvider::Hetzner)
     }
 }
 
@@ -164,8 +180,10 @@ impl FromStr for CloudProvider {
             "aws" | "amazon" => Ok(CloudProvider::Aws),
             "azure" | "microsoft" => Ok(CloudProvider::Azure),
             "hetzner" => Ok(CloudProvider::Hetzner),
+            "scaleway" => Ok(CloudProvider::Scaleway),
+            "cyso" | "cyso-cloud" => Ok(CloudProvider::Cyso),
             _ => Err(format!(
-                "Unknown cloud provider: '{}'. Valid options: gcp, aws, azure, hetzner",
+                "Unknown cloud provider: '{}'. Valid options: gcp, aws, azure, hetzner, scaleway, cyso",
                 s
             )),
         }
@@ -790,6 +808,8 @@ mod tests {
         assert_eq!(CloudProvider::Aws.as_str(), "aws");
         assert_eq!(CloudProvider::Azure.as_str(), "azure");
         assert_eq!(CloudProvider::Hetzner.as_str(), "hetzner");
+        assert_eq!(CloudProvider::Scaleway.as_str(), "scaleway");
+        assert_eq!(CloudProvider::Cyso.as_str(), "cyso");
     }
 
     #[test]
@@ -798,6 +818,8 @@ mod tests {
         assert_eq!(CloudProvider::Aws.display_name(), "Amazon Web Services");
         assert_eq!(CloudProvider::Azure.display_name(), "Microsoft Azure");
         assert_eq!(CloudProvider::Hetzner.display_name(), "Hetzner Cloud");
+        assert_eq!(CloudProvider::Scaleway.display_name(), "Scaleway");
+        assert_eq!(CloudProvider::Cyso.display_name(), "Cyso Cloud");
     }
 
     #[test]
@@ -813,6 +835,14 @@ mod tests {
             CloudProvider::from_str("hetzner").unwrap(),
             CloudProvider::Hetzner
         );
+        assert_eq!(
+            CloudProvider::from_str("scaleway").unwrap(),
+            CloudProvider::Scaleway
+        );
+        assert_eq!(
+            CloudProvider::from_str("cyso").unwrap(),
+            CloudProvider::Cyso
+        );
         assert!(CloudProvider::from_str("unknown").is_err());
     }
 
@@ -825,11 +855,26 @@ mod tests {
     #[test]
     fn test_cloud_provider_all() {
         let all = CloudProvider::all();
-        assert_eq!(all.len(), 4);
+        assert_eq!(all.len(), 6);
         assert!(all.contains(&CloudProvider::Gcp));
         assert!(all.contains(&CloudProvider::Aws));
         assert!(all.contains(&CloudProvider::Azure));
         assert!(all.contains(&CloudProvider::Hetzner));
+        assert!(all.contains(&CloudProvider::Scaleway));
+        assert!(all.contains(&CloudProvider::Cyso));
+    }
+
+    #[test]
+    fn test_cloud_provider_is_available() {
+        // Available providers
+        assert!(CloudProvider::Gcp.is_available());
+        assert!(CloudProvider::Hetzner.is_available());
+
+        // Coming soon providers
+        assert!(!CloudProvider::Aws.is_available());
+        assert!(!CloudProvider::Azure.is_available());
+        assert!(!CloudProvider::Scaleway.is_available());
+        assert!(!CloudProvider::Cyso.is_available());
     }
 
     #[test]
