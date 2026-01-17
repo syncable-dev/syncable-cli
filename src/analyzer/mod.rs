@@ -63,8 +63,9 @@ pub use monorepo::{MonorepoDetectionConfig, analyze_monorepo, analyze_monorepo_w
 
 // Re-export Docker analysis types
 pub use docker_analyzer::{
-    ComposeFileInfo, DockerAnalysis, DockerEnvironment, DockerService, DockerfileInfo,
-    NetworkingConfig, OrchestrationPattern, analyze_docker_infrastructure,
+    ComposeFileInfo, DiscoveredDockerfile, DockerAnalysis, DockerEnvironment, DockerService,
+    DockerfileInfo, NetworkingConfig, OrchestrationPattern, analyze_docker_infrastructure,
+    discover_dockerfiles_for_deployment,
 };
 
 /// Represents a detected programming language
