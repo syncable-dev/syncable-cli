@@ -616,5 +616,9 @@ pub async fn run_command(command: Commands) -> Result<()> {
                 },
             }
         }
+        Commands::Deploy { .. } => {
+            // Deploy commands are handled in main.rs directly
+            unreachable!("Deploy commands should be handled in main.rs")
+        }
     }
 }
