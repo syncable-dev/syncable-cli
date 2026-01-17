@@ -4,6 +4,7 @@
 
 mod cluster_selection;
 mod config_form;
+mod dockerfile_selection;
 mod environment_creation;
 mod orchestrator;
 mod provider_selection;
@@ -14,6 +15,7 @@ mod target_selection;
 
 pub use cluster_selection::{select_cluster, ClusterSelectionResult};
 pub use config_form::{collect_config, ConfigFormResult};
+pub use dockerfile_selection::{select_dockerfile, DockerfileSelectionResult};
 pub use environment_creation::{create_environment_wizard, EnvironmentCreationResult};
 pub use orchestrator::{run_wizard, WizardResult};
 pub use provider_selection::{
