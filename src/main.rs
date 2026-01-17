@@ -932,6 +932,22 @@ async fn run() -> syncable_cli::Result<()> {
                             );
                             Ok(())
                         }
+                        WizardResult::StartAgent(prompt) => {
+                            println!(
+                                "\n{} Starting agent to help create Dockerfile...\n",
+                                "→".cyan()
+                            );
+                            // Transition to chat mode with the prompt
+                            syncable_cli::run_command(Commands::Chat {
+                                path: wizard_path,
+                                provider: ChatProvider::Auto,
+                                model: None,
+                                query: Some(prompt),
+                                resume: None,
+                                list_sessions: false,
+                            })
+                            .await
+                        }
                         WizardResult::Cancelled => {
                             println!("{}", "Wizard cancelled.".dimmed());
                             Ok(())
@@ -965,6 +981,22 @@ async fn run() -> syncable_cli::Result<()> {
                                 "Next: Run deployment with created config".dimmed()
                             );
                             Ok(())
+                        }
+                        WizardResult::StartAgent(prompt) => {
+                            println!(
+                                "\n{} Starting agent to help create Dockerfile...\n",
+                                "→".cyan()
+                            );
+                            // Transition to chat mode with the prompt
+                            syncable_cli::run_command(Commands::Chat {
+                                path: path.clone(),
+                                provider: ChatProvider::Auto,
+                                model: None,
+                                query: Some(prompt),
+                                resume: None,
+                                list_sessions: false,
+                            })
+                            .await
                         }
                         WizardResult::Cancelled => {
                             println!("{}", "Wizard cancelled.".dimmed());

@@ -1,13 +1,13 @@
 //! Wizard orchestration - ties all steps together
 
-use crate::analyzer::{discover_dockerfiles_for_deployment, DiscoveredDockerfile};
+use crate::analyzer::discover_dockerfiles_for_deployment;
 use crate::platform::api::types::{DeploymentTarget, WizardDeploymentConfig};
 use crate::platform::api::PlatformApiClient;
 use crate::wizard::{
     collect_config, get_provider_deployment_statuses, provision_registry, select_cluster,
-    select_provider, select_registry, select_target, ClusterSelectionResult, ConfigFormResult,
-    ProviderSelectionResult, RegistryProvisioningResult, RegistrySelectionResult,
-    TargetSelectionResult,
+    select_dockerfile, select_provider, select_registry, select_target, ClusterSelectionResult,
+    ConfigFormResult, DockerfileSelectionResult, ProviderSelectionResult,
+    RegistryProvisioningResult, RegistrySelectionResult, TargetSelectionResult,
 };
 use colored::Colorize;
 use std::path::Path;
@@ -17,6 +17,8 @@ use std::path::Path;
 pub enum WizardResult {
     /// Wizard completed successfully
     Success(WizardDeploymentConfig),
+    /// User wants to start agent to create Dockerfile
+    StartAgent(String),
     /// User cancelled the wizard
     Cancelled,
     /// An error occurred
@@ -45,18 +47,6 @@ pub async fn run_wizard(
         "{}",
         "═══════════════════════════════════════════════════════════════".bright_cyan()
     );
-
-    // Discover Dockerfiles for smart defaults
-    let dockerfiles = discover_dockerfiles_for_deployment(project_path).unwrap_or_default();
-    let dockerfile: Option<&DiscoveredDockerfile> = dockerfiles.first();
-
-    if let Some(df) = dockerfile {
-        println!(
-            "\n{} Found Dockerfile: {}",
-            "ℹ".blue(),
-            df.path.display().to_string().dimmed()
-        );
-    }
 
     // Step 1: Provider selection
     let provider_statuses = match get_provider_deployment_statuses(client, project_id).await {
@@ -165,14 +155,40 @@ pub async fn run_wizard(
         }
     };
 
-    // Step 5: Config form
+    // Step 5: Dockerfile selection
+    let dockerfiles = discover_dockerfiles_for_deployment(project_path).unwrap_or_default();
+    let (selected_dockerfile, build_context) = match select_dockerfile(&dockerfiles, project_path) {
+        DockerfileSelectionResult::Selected {
+            dockerfile,
+            build_context,
+        } => (dockerfile, build_context),
+        DockerfileSelectionResult::StartAgent(prompt) => {
+            return WizardResult::StartAgent(prompt);
+        }
+        DockerfileSelectionResult::Back => {
+            // Go back (restart wizard for simplicity)
+            return Box::pin(run_wizard(client, project_id, environment_id, project_path)).await;
+        }
+        DockerfileSelectionResult::Cancelled => return WizardResult::Cancelled,
+    };
+
+    // Get relative dockerfile path for config
+    let dockerfile_path = selected_dockerfile
+        .path
+        .strip_prefix(project_path)
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| selected_dockerfile.path.to_string_lossy().to_string());
+
+    // Step 6: Config form
     match collect_config(
         provider,
         target,
         cluster_id,
         registry_id,
         environment_id,
-        dockerfile,
+        &dockerfile_path,
+        &build_context,
+        &selected_dockerfile,
     ) {
         ConfigFormResult::Completed(config) => {
             // Show summary
