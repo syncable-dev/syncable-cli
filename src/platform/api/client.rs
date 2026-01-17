@@ -200,14 +200,18 @@ impl PlatformApiClient {
     ///
     /// Endpoint: GET /api/organizations/attended-by-user
     pub async fn list_organizations(&self) -> Result<Vec<Organization>> {
-        self.get("/api/organizations/attended-by-user").await
+        let response: GenericResponse<Vec<Organization>> =
+            self.get("/api/organizations/attended-by-user").await?;
+        Ok(response.data)
     }
 
     /// Get an organization by ID
     ///
     /// Endpoint: GET /api/organizations/:id
     pub async fn get_organization(&self, id: &str) -> Result<Organization> {
-        self.get(&format!("/api/organizations/{}", id)).await
+        let response: GenericResponse<Organization> =
+            self.get(&format!("/api/organizations/{}", id)).await?;
+        Ok(response.data)
     }
 
     // =========================================================================
@@ -218,15 +222,19 @@ impl PlatformApiClient {
     ///
     /// Endpoint: GET /api/projects/organization/:organizationId
     pub async fn list_projects(&self, org_id: &str) -> Result<Vec<Project>> {
-        self.get(&format!("/api/projects/organization/{}", org_id))
-            .await
+        let response: GenericResponse<Vec<Project>> = self
+            .get(&format!("/api/projects/organization/{}", org_id))
+            .await?;
+        Ok(response.data)
     }
 
     /// Get a project by ID
     ///
     /// Endpoint: GET /api/projects/:id
     pub async fn get_project(&self, id: &str) -> Result<Project> {
-        self.get(&format!("/api/projects/{}", id)).await
+        let response: GenericResponse<Project> =
+            self.get(&format!("/api/projects/{}", id)).await?;
+        Ok(response.data)
     }
 
     /// Create a new project in an organization
@@ -251,7 +259,8 @@ impl PlatformApiClient {
             "context": ""
         });
 
-        self.post("/api/projects", &request).await
+        let response: GenericResponse<Project> = self.post("/api/projects", &request).await?;
+        Ok(response.data)
     }
 
     // =========================================================================
