@@ -278,6 +278,274 @@ pub async fn run_command(command: Commands) -> Result<()> {
                 Ok(())
             }
         }
+        Commands::Project { command } => {
+            use cli::{OutputFormat, ProjectCommand};
+            use platform::api::client::PlatformApiClient;
+            use platform::session::PlatformSession;
+
+            match command {
+                ProjectCommand::List { org_id, format } => {
+                    // Get org_id from argument or session
+                    let effective_org_id = match org_id {
+                        Some(id) => id,
+                        None => {
+                            let session = PlatformSession::load().unwrap_or_default();
+                            match session.org_id {
+                                Some(id) => id,
+                                None => {
+                                    eprintln!("No organization selected.");
+                                    eprintln!("Run: sync-ctl org list");
+                                    eprintln!("Then: sync-ctl org select <id>");
+                                    return Ok(());
+                                }
+                            }
+                        }
+                    };
+
+                    let client = PlatformApiClient::new().map_err(|e| {
+                        error::IaCGeneratorError::Config(error::ConfigError::ParsingFailed(
+                            e.to_string(),
+                        ))
+                    })?;
+
+                    match client.list_projects(&effective_org_id).await {
+                        Ok(projects) => {
+                            if projects.is_empty() {
+                                println!("No projects found in this organization.");
+                                return Ok(());
+                            }
+
+                            match format {
+                                OutputFormat::Json => {
+                                    println!("{}", serde_json::to_string_pretty(&projects).unwrap_or_default());
+                                }
+                                OutputFormat::Table => {
+                                    println!("\n{:<40} {:<30} {}", "ID", "NAME", "DESCRIPTION");
+                                    println!("{}", "-".repeat(90));
+                                    for project in projects {
+                                        let desc = if project.description.is_empty() { "-" } else { &project.description };
+                                        let desc_truncated = if desc.len() > 30 {
+                                            format!("{}...", &desc[..27])
+                                        } else {
+                                            desc.to_string()
+                                        };
+                                        println!("{:<40} {:<30} {}", project.id, project.name, desc_truncated);
+                                    }
+                                    println!();
+                                }
+                            }
+                        }
+                        Err(platform::api::error::PlatformApiError::Unauthorized) => {
+                            eprintln!("Not authenticated. Run: sync-ctl auth login");
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to list projects: {}", e);
+                        }
+                    }
+                    Ok(())
+                }
+                ProjectCommand::Select { id } => {
+                    let client = PlatformApiClient::new().map_err(|e| {
+                        error::IaCGeneratorError::Config(error::ConfigError::ParsingFailed(
+                            e.to_string(),
+                        ))
+                    })?;
+
+                    match client.get_project(&id).await {
+                        Ok(project) => {
+                            // Get org info
+                            let org = client.get_organization(&project.organization_id).await.ok();
+                            let org_name = org.as_ref().map(|o| o.name.clone()).unwrap_or_else(|| "Unknown".to_string());
+
+                            let session = PlatformSession::with_project(
+                                project.id.clone(),
+                                project.name.clone(),
+                                project.organization_id.clone(),
+                                org_name.clone(),
+                            );
+
+                            if let Err(e) = session.save() {
+                                eprintln!("Warning: Failed to save session: {}", e);
+                            }
+
+                            println!("✓ Selected project: {} ({})", project.name, project.id);
+                            println!("  Organization: {} ({})", org_name, project.organization_id);
+                        }
+                        Err(platform::api::error::PlatformApiError::Unauthorized) => {
+                            eprintln!("Not authenticated. Run: sync-ctl auth login");
+                        }
+                        Err(platform::api::error::PlatformApiError::NotFound(_)) => {
+                            eprintln!("Project not found: {}", id);
+                            eprintln!("Run: sync-ctl project list");
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to select project: {}", e);
+                        }
+                    }
+                    Ok(())
+                }
+                ProjectCommand::Current => {
+                    let session = PlatformSession::load().unwrap_or_default();
+
+                    if !session.is_project_selected() {
+                        println!("No project selected.");
+                        println!("\nTo select a project:");
+                        println!("  1. sync-ctl org list");
+                        println!("  2. sync-ctl org select <org-id>");
+                        println!("  3. sync-ctl project list");
+                        println!("  4. sync-ctl project select <project-id>");
+                        return Ok(());
+                    }
+
+                    println!("\nCurrent context:");
+                    if let (Some(org_name), Some(org_id)) = (&session.org_name, &session.org_id) {
+                        println!("  Organization: {} ({})", org_name, org_id);
+                    }
+                    if let (Some(project_name), Some(project_id)) = (&session.project_name, &session.project_id) {
+                        println!("  Project:      {} ({})", project_name, project_id);
+                    }
+                    if let Some(updated) = session.last_updated {
+                        println!("  Last updated: {}", updated.format("%Y-%m-%d %H:%M:%S UTC"));
+                    }
+                    println!();
+                    Ok(())
+                }
+                ProjectCommand::Info { id } => {
+                    // Get project id from arg or session
+                    let project_id = match id {
+                        Some(id) => id,
+                        None => {
+                            let session = PlatformSession::load().unwrap_or_default();
+                            match session.project_id {
+                                Some(id) => id,
+                                None => {
+                                    eprintln!("No project specified or selected.");
+                                    eprintln!("Run: sync-ctl project select <id>");
+                                    return Ok(());
+                                }
+                            }
+                        }
+                    };
+
+                    let client = PlatformApiClient::new().map_err(|e| {
+                        error::IaCGeneratorError::Config(error::ConfigError::ParsingFailed(
+                            e.to_string(),
+                        ))
+                    })?;
+
+                    match client.get_project(&project_id).await {
+                        Ok(project) => {
+                            // Get org info
+                            let org = client.get_organization(&project.organization_id).await.ok();
+                            let org_name = org.as_ref().map(|o| o.name.clone()).unwrap_or_else(|| "Unknown".to_string());
+
+                            println!("\nProject Details:");
+                            println!("  ID:           {}", project.id);
+                            println!("  Name:         {}", project.name);
+                            let desc = if project.description.is_empty() { "-" } else { &project.description };
+                            println!("  Description:  {}", desc);
+                            println!("  Organization: {} ({})", org_name, project.organization_id);
+                            println!("  Created:      {}", project.created_at.format("%Y-%m-%d %H:%M:%S UTC"));
+                            println!();
+                        }
+                        Err(platform::api::error::PlatformApiError::Unauthorized) => {
+                            eprintln!("Not authenticated. Run: sync-ctl auth login");
+                        }
+                        Err(platform::api::error::PlatformApiError::NotFound(_)) => {
+                            eprintln!("Project not found: {}", project_id);
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to get project info: {}", e);
+                        }
+                    }
+                    Ok(())
+                }
+            }
+        }
+        Commands::Org { command } => {
+            use cli::{OutputFormat, OrgCommand};
+            use platform::api::client::PlatformApiClient;
+            use platform::session::PlatformSession;
+
+            match command {
+                OrgCommand::List { format } => {
+                    let client = PlatformApiClient::new().map_err(|e| {
+                        error::IaCGeneratorError::Config(error::ConfigError::ParsingFailed(
+                            e.to_string(),
+                        ))
+                    })?;
+
+                    match client.list_organizations().await {
+                        Ok(orgs) => {
+                            if orgs.is_empty() {
+                                println!("No organizations found.");
+                                return Ok(());
+                            }
+
+                            match format {
+                                OutputFormat::Json => {
+                                    println!("{}", serde_json::to_string_pretty(&orgs).unwrap_or_default());
+                                }
+                                OutputFormat::Table => {
+                                    println!("\n{:<40} {:<30} {}", "ID", "NAME", "SLUG");
+                                    println!("{}", "-".repeat(90));
+                                    for org in orgs {
+                                        let slug = if org.slug.is_empty() { "-" } else { &org.slug };
+                                        println!("{:<40} {:<30} {}", org.id, org.name, slug);
+                                    }
+                                    println!();
+                                }
+                            }
+                        }
+                        Err(platform::api::error::PlatformApiError::Unauthorized) => {
+                            eprintln!("Not authenticated. Run: sync-ctl auth login");
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to list organizations: {}", e);
+                        }
+                    }
+                    Ok(())
+                }
+                OrgCommand::Select { id } => {
+                    let client = PlatformApiClient::new().map_err(|e| {
+                        error::IaCGeneratorError::Config(error::ConfigError::ParsingFailed(
+                            e.to_string(),
+                        ))
+                    })?;
+
+                    match client.get_organization(&id).await {
+                        Ok(org) => {
+                            // Create session with org only (clear any project selection)
+                            let session = PlatformSession {
+                                project_id: None,
+                                project_name: None,
+                                org_id: Some(org.id.clone()),
+                                org_name: Some(org.name.clone()),
+                                last_updated: Some(chrono::Utc::now()),
+                            };
+
+                            if let Err(e) = session.save() {
+                                eprintln!("Warning: Failed to save session: {}", e);
+                            }
+
+                            println!("✓ Selected organization: {} ({})", org.name, org.id);
+                            println!("\nNext: Run 'sync-ctl project list' to see projects");
+                        }
+                        Err(platform::api::error::PlatformApiError::Unauthorized) => {
+                            eprintln!("Not authenticated. Run: sync-ctl auth login");
+                        }
+                        Err(platform::api::error::PlatformApiError::NotFound(_)) => {
+                            eprintln!("Organization not found: {}", id);
+                            eprintln!("Run: sync-ctl org list");
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to select organization: {}", e);
+                        }
+                    }
+                    Ok(())
+                }
+            }
+        }
         Commands::Auth { command } => {
             use auth::credentials;
             use auth::device_flow;
