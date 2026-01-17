@@ -260,8 +260,18 @@ impl ChatSession {
     pub fn read_input(&self) -> io::Result<crate::agent::ui::input::InputResult> {
         use crate::agent::ui::input::read_input_with_file_picker;
 
+        // Build prompt with platform context if project is selected
+        let prompt = if self.platform_session.is_project_selected() {
+            format!(
+                "{} >",
+                self.platform_session.display_context()
+            )
+        } else {
+            ">".to_string()
+        };
+
         Ok(read_input_with_file_picker(
-            ">",
+            &prompt,
             &self.project_path,
             self.plan_mode.is_planning(),
         ))
