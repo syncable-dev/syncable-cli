@@ -20,6 +20,18 @@ pub async fn get_provider_deployment_statuses(
     client: &PlatformApiClient,
     project_id: &str,
 ) -> Result<Vec<ProviderDeploymentStatus>, crate::platform::api::PlatformApiError> {
+    // Get all cloud credentials for the project (determines connectivity)
+    let credentials = client
+        .list_cloud_credentials_for_project(project_id)
+        .await
+        .unwrap_or_default();
+
+    // Build set of connected providers from credentials
+    let connected_providers: std::collections::HashSet<String> = credentials
+        .iter()
+        .map(|c| c.provider.to_lowercase())
+        .collect();
+
     // Get all clusters and registries for the project
     let clusters = client
         .list_clusters_for_project(project_id)
@@ -73,10 +85,10 @@ pub async fn get_provider_deployment_statuses(
         let clusters = provider_clusters.remove(&provider).unwrap_or_default();
         let registries = provider_registries.remove(&provider).unwrap_or_default();
 
-        // Provider is connected if it has any resources (clusters or registries)
-        let is_connected = !clusters.is_empty() || !registries.is_empty();
+        // Provider is connected if it has cloud credentials (NOT just resources)
+        let is_connected = connected_providers.contains(provider.as_str());
 
-        // Cloud Runner available for GCP and Hetzner
+        // Cloud Runner available for GCP and Hetzner when connected
         let cloud_runner_available =
             is_connected && matches!(provider, CloudProvider::Gcp | CloudProvider::Hetzner);
 

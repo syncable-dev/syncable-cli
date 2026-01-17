@@ -419,6 +419,23 @@ impl PlatformApiClient {
         self.get_optional(&path).await
     }
 
+    /// List all cloud credentials for a project
+    ///
+    /// Returns all connected cloud providers for the project.
+    ///
+    /// SECURITY NOTE: This method only returns connection STATUS, never actual credentials.
+    ///
+    /// Endpoint: GET /api/cloud-credentials?projectId=xxx
+    pub async fn list_cloud_credentials_for_project(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<CloudCredentialStatus>> {
+        let response: GenericResponse<Vec<CloudCredentialStatus>> = self
+            .get(&format!("/api/cloud-credentials?projectId={}", project_id))
+            .await?;
+        Ok(response.data)
+    }
+
     // =========================================================================
     // Deployment API methods
     // =========================================================================
