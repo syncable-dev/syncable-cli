@@ -56,6 +56,28 @@ pub struct DockerfileInfo {
     pub instruction_count: usize,
 }
 
+/// Dockerfile discovery result for deployment wizard
+///
+/// Provides deployment-focused metadata about a Dockerfile including
+/// build context path, suggested service name, and port configuration.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DiscoveredDockerfile {
+    /// Absolute path to the Dockerfile
+    pub path: PathBuf,
+    /// Relative path from project root to Dockerfile directory (build context)
+    pub build_context: String,
+    /// Suggested service name based on directory structure
+    pub suggested_service_name: String,
+    /// Suggested port for deployment (from EXPOSE or default)
+    pub suggested_port: Option<u16>,
+    /// Base image from Dockerfile
+    pub base_image: Option<String>,
+    /// Whether this is a multi-stage build
+    pub is_multistage: bool,
+    /// Environment type (dev, prod, staging) from filename
+    pub environment: Option<String>,
+}
+
 /// Information about a Docker Compose file
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ComposeFileInfo {
@@ -1237,6 +1259,199 @@ fn analyze_environments(
     environments.into_values().collect()
 }
 
+// =============================================================================
+// Dockerfile Discovery for Deployment Wizard
+// =============================================================================
+
+/// Suggests a service name based on Dockerfile path and project structure.
+///
+/// Uses the parent directory name if not at project root, otherwise uses
+/// the project root's directory name. The name is sanitized to be lowercase
+/// with hyphens (suitable for Kubernetes service names).
+fn suggest_service_name(dockerfile_path: &Path, project_root: &Path) -> String {
+    // Get parent directory of Dockerfile
+    let dockerfile_dir = dockerfile_path.parent().unwrap_or(dockerfile_path);
+
+    // Determine which directory name to use
+    let name = if dockerfile_dir == project_root {
+        // Dockerfile is in project root - use project root's directory name
+        project_root
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("app")
+    } else {
+        // Use the immediate parent directory name
+        dockerfile_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("app")
+    };
+
+    // Sanitize: lowercase, replace underscores/spaces with hyphens, remove non-alphanumeric
+    sanitize_service_name(name)
+}
+
+/// Sanitizes a string to be a valid Kubernetes service name.
+/// Lowercase, alphanumeric with hyphens, no leading/trailing hyphens.
+fn sanitize_service_name(name: &str) -> String {
+    let sanitized: String = name
+        .to_lowercase()
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+
+    // Remove consecutive hyphens and trim hyphens from ends
+    let mut result = String::new();
+    let mut prev_hyphen = true; // Start true to skip leading hyphens
+
+    for c in sanitized.chars() {
+        if c == '-' {
+            if !prev_hyphen {
+                result.push(c);
+                prev_hyphen = true;
+            }
+        } else {
+            result.push(c);
+            prev_hyphen = false;
+        }
+    }
+
+    // Remove trailing hyphen
+    if result.ends_with('-') {
+        result.pop();
+    }
+
+    if result.is_empty() {
+        "app".to_string()
+    } else {
+        result
+    }
+}
+
+/// Computes build context path relative to project root.
+///
+/// Returns the relative path from project root to the Dockerfile's directory,
+/// suitable for use as a Docker build context path.
+fn compute_build_context(dockerfile_path: &Path, project_root: &Path) -> String {
+    let dockerfile_dir = dockerfile_path.parent().unwrap_or(dockerfile_path);
+
+    // Try to get relative path from project root to dockerfile directory
+    if let Ok(relative) = dockerfile_dir.strip_prefix(project_root) {
+        let path_str = relative.to_string_lossy().to_string();
+        if path_str.is_empty() {
+            ".".to_string()
+        } else {
+            path_str
+        }
+    } else {
+        // Fallback: use "." if we can't compute relative path
+        ".".to_string()
+    }
+}
+
+/// Infers default port based on base image.
+///
+/// Returns a common default port for well-known base images.
+fn infer_default_port(base_image: &Option<String>) -> Option<u16> {
+    let image = base_image.as_ref()?;
+    let image_lower = image.to_lowercase();
+
+    // Extract image name without registry/tag
+    let image_name = image_lower
+        .split('/')
+        .last()
+        .unwrap_or(&image_lower)
+        .split(':')
+        .next()
+        .unwrap_or(&image_lower);
+
+    match image_name {
+        // Node.js
+        s if s.starts_with("node") => Some(3000),
+        // Python web frameworks
+        s if s.contains("python") => Some(8000),
+        s if s.contains("flask") => Some(5000),
+        s if s.contains("django") => Some(8000),
+        s if s.contains("fastapi") => Some(8000),
+        // Go
+        s if s.starts_with("golang") || s.starts_with("go") => Some(8080),
+        // Rust
+        s if s.starts_with("rust") => Some(8080),
+        // Web servers
+        s if s.starts_with("nginx") => Some(80),
+        s if s.starts_with("httpd") || s.starts_with("apache") => Some(80),
+        s if s.starts_with("caddy") => Some(80),
+        // Java
+        s if s.contains("openjdk") || s.contains("java") => Some(8080),
+        s if s.contains("tomcat") => Some(8080),
+        s if s.contains("spring") => Some(8080),
+        // Ruby
+        s if s.starts_with("ruby") => Some(3000),
+        s if s.contains("rails") => Some(3000),
+        // PHP
+        s if s.starts_with("php") => Some(80),
+        // .NET
+        s if s.contains("dotnet") || s.contains("aspnet") => Some(80),
+        // Elixir/Phoenix
+        s if s.contains("elixir") || s.contains("phoenix") => Some(4000),
+        // Default: no inference
+        _ => None,
+    }
+}
+
+/// Discovers Dockerfiles in a project and returns deployment-focused metadata.
+///
+/// This function finds all Dockerfiles in the project, parses them, and returns
+/// deployment-relevant information including build context paths, suggested
+/// service names, and port configurations.
+///
+/// # Arguments
+///
+/// * `project_root` - The root directory of the project to analyze
+///
+/// # Returns
+///
+/// A vector of `DiscoveredDockerfile` structs, one for each Dockerfile found
+pub fn discover_dockerfiles_for_deployment(
+    project_root: &Path,
+) -> Result<Vec<DiscoveredDockerfile>> {
+    let dockerfiles = find_dockerfiles(project_root)?;
+
+    let discovered: Vec<DiscoveredDockerfile> = dockerfiles
+        .into_iter()
+        .filter_map(|path| {
+            let info = parse_dockerfile(&path).ok()?;
+            let build_context = compute_build_context(&path, project_root);
+            let suggested_name = suggest_service_name(&path, project_root);
+
+            // Get port from EXPOSE instruction or infer from base image
+            let suggested_port = info
+                .exposed_ports
+                .first()
+                .copied()
+                .or_else(|| infer_default_port(&info.base_image));
+
+            Some(DiscoveredDockerfile {
+                path,
+                build_context,
+                suggested_service_name: suggested_name,
+                suggested_port,
+                base_image: info.base_image,
+                is_multistage: info.is_multistage,
+                environment: info.environment,
+            })
+        })
+        .collect();
+
+    Ok(discovered)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1278,5 +1493,148 @@ mod tests {
             extract_environment_from_filename(&PathBuf::from("Dockerfile")),
             None
         );
+    }
+
+    // =============================================================================
+    // Dockerfile Discovery Tests
+    // =============================================================================
+
+    #[test]
+    fn test_suggest_service_name_from_subdirectory() {
+        let path = PathBuf::from("/project/services/api/Dockerfile");
+        let root = PathBuf::from("/project");
+        assert_eq!(suggest_service_name(&path, &root), "api");
+    }
+
+    #[test]
+    fn test_suggest_service_name_from_root() {
+        let path = PathBuf::from("/project/Dockerfile");
+        let root = PathBuf::from("/project");
+        assert_eq!(suggest_service_name(&path, &root), "project");
+    }
+
+    #[test]
+    fn test_suggest_service_name_nested() {
+        let path = PathBuf::from("/myapp/apps/web-frontend/Dockerfile");
+        let root = PathBuf::from("/myapp");
+        assert_eq!(suggest_service_name(&path, &root), "web-frontend");
+    }
+
+    #[test]
+    fn test_suggest_service_name_sanitizes() {
+        // Underscores become hyphens
+        let path = PathBuf::from("/project/my_service_api/Dockerfile");
+        let root = PathBuf::from("/project");
+        assert_eq!(suggest_service_name(&path, &root), "my-service-api");
+    }
+
+    #[test]
+    fn test_sanitize_service_name() {
+        assert_eq!(sanitize_service_name("My_Service"), "my-service");
+        assert_eq!(sanitize_service_name("api-v2"), "api-v2");
+        assert_eq!(sanitize_service_name("__leading__"), "leading");
+        assert_eq!(sanitize_service_name("trailing--"), "trailing");
+        assert_eq!(sanitize_service_name("multi---hyphens"), "multi-hyphens");
+        assert_eq!(sanitize_service_name("special@#chars!"), "special-chars");
+        assert_eq!(sanitize_service_name(""), "app"); // Empty defaults to "app"
+    }
+
+    #[test]
+    fn test_compute_build_context_subdirectory() {
+        let path = PathBuf::from("/project/services/api/Dockerfile");
+        let root = PathBuf::from("/project");
+        assert_eq!(compute_build_context(&path, &root), "services/api");
+    }
+
+    #[test]
+    fn test_compute_build_context_root() {
+        let path = PathBuf::from("/project/Dockerfile");
+        let root = PathBuf::from("/project");
+        assert_eq!(compute_build_context(&path, &root), ".");
+    }
+
+    #[test]
+    fn test_compute_build_context_deep_nested() {
+        let path = PathBuf::from("/myapp/packages/frontend/apps/web/Dockerfile");
+        let root = PathBuf::from("/myapp");
+        assert_eq!(
+            compute_build_context(&path, &root),
+            "packages/frontend/apps/web"
+        );
+    }
+
+    #[test]
+    fn test_infer_default_port_node() {
+        assert_eq!(infer_default_port(&Some("node:18".to_string())), Some(3000));
+        assert_eq!(
+            infer_default_port(&Some("node:18-alpine".to_string())),
+            Some(3000)
+        );
+    }
+
+    #[test]
+    fn test_infer_default_port_nginx() {
+        assert_eq!(
+            infer_default_port(&Some("nginx:latest".to_string())),
+            Some(80)
+        );
+        assert_eq!(
+            infer_default_port(&Some("nginx:1.25-alpine".to_string())),
+            Some(80)
+        );
+    }
+
+    #[test]
+    fn test_infer_default_port_python() {
+        assert_eq!(
+            infer_default_port(&Some("python:3.11".to_string())),
+            Some(8000)
+        );
+    }
+
+    #[test]
+    fn test_infer_default_port_go() {
+        assert_eq!(
+            infer_default_port(&Some("golang:1.21".to_string())),
+            Some(8080)
+        );
+    }
+
+    #[test]
+    fn test_infer_default_port_java() {
+        assert_eq!(
+            infer_default_port(&Some("openjdk:17".to_string())),
+            Some(8080)
+        );
+    }
+
+    #[test]
+    fn test_infer_default_port_ruby() {
+        assert_eq!(
+            infer_default_port(&Some("ruby:3.2".to_string())),
+            Some(3000)
+        );
+    }
+
+    #[test]
+    fn test_infer_default_port_with_registry() {
+        // Should handle images with registry prefix
+        assert_eq!(
+            infer_default_port(&Some("gcr.io/my-project/node:18".to_string())),
+            Some(3000)
+        );
+        assert_eq!(
+            infer_default_port(&Some("docker.io/library/nginx:latest".to_string())),
+            Some(80)
+        );
+    }
+
+    #[test]
+    fn test_infer_default_port_unknown() {
+        assert_eq!(
+            infer_default_port(&Some("custom-base:latest".to_string())),
+            None
+        );
+        assert_eq!(infer_default_port(&None), None);
     }
 }
