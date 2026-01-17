@@ -7,6 +7,7 @@
 //! - Cloud provider connection management
 //! - Service deployment management
 //! - Service log retrieval
+//! - Project analysis for deployment
 //!
 //! ## Tools
 //!
@@ -21,6 +22,8 @@
 //! - `GetDeploymentStatusTool` - Get deployment task status
 //! - `ListDeploymentsTool` - List recent deployments for a project
 //! - `GetServiceLogsTool` - Get container logs for a deployed service
+//! - `AnalyzeProjectTool` - Analyze project for Dockerfiles and deployment options
+//! - `ListDeploymentCapabilitiesTool` - List available deployment targets and providers
 //!
 //! ## Prerequisites
 //!
@@ -54,10 +57,12 @@
 //! API keys). It only checks connection STATUS. All credential handling happens
 //! securely in the browser through the platform's OAuth flow.
 
+mod analyze_project;
 mod check_provider_connection;
 mod current_context;
 mod get_deployment_status;
 mod get_service_logs;
+mod list_deployment_capabilities;
 mod list_deployment_configs;
 mod list_deployments;
 mod list_organizations;
@@ -66,10 +71,12 @@ mod open_provider_settings;
 mod select_project;
 mod trigger_deployment;
 
+pub use analyze_project::AnalyzeProjectTool;
 pub use check_provider_connection::CheckProviderConnectionTool;
 pub use current_context::CurrentContextTool;
 pub use get_deployment_status::GetDeploymentStatusTool;
 pub use get_service_logs::GetServiceLogsTool;
+pub use list_deployment_capabilities::ListDeploymentCapabilitiesTool;
 pub use list_deployment_configs::ListDeploymentConfigsTool;
 pub use list_deployments::ListDeploymentsTool;
 pub use list_organizations::ListOrganizationsTool;
