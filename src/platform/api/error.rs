@@ -50,5 +50,40 @@ pub enum PlatformApiError {
     },
 }
 
+impl PlatformApiError {
+    /// Get a user-friendly suggestion for resolving this error
+    ///
+    /// Returns actionable advice that helps users fix the issue.
+    pub fn suggestion(&self) -> Option<&'static str> {
+        match self {
+            Self::Unauthorized => Some("Run `sync-ctl auth login` to authenticate"),
+            Self::RateLimited => Some("Wait a moment and try again"),
+            Self::HttpError(_) => Some("Check your internet connection"),
+            Self::ServerError { .. } => {
+                Some("The server is experiencing issues. Try again later")
+            }
+            Self::PermissionDenied(_) => {
+                Some("Check your project permissions in the Syncable dashboard")
+            }
+            Self::NotFound(_) => Some("Verify the resource ID is correct"),
+            Self::ParseError(_) => Some("This may be a bug - please report it"),
+            Self::ApiError { status, .. } if *status >= 400 && *status < 500 => {
+                Some("Check the request parameters")
+            }
+            _ => None,
+        }
+    }
+
+    /// Format the error with suggestion if available
+    ///
+    /// Returns the error message followed by a suggestion on how to resolve it.
+    pub fn with_suggestion(&self) -> String {
+        match self.suggestion() {
+            Some(suggestion) => format!("{}\n  → {}", self, suggestion),
+            None => self.to_string(),
+        }
+    }
+}
+
 /// Result type alias for Platform API operations
 pub type Result<T> = std::result::Result<T, PlatformApiError>;
