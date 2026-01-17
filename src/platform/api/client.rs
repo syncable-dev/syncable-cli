@@ -37,6 +37,7 @@ fn is_retryable_error(error: &PlatformApiError) -> bool {
         PlatformApiError::HttpError(_)      // Network errors, timeouts
         | PlatformApiError::RateLimited     // 429 - rate limited
         | PlatformApiError::ServerError { .. } // 5xx - server errors
+        | PlatformApiError::ConnectionFailed // Connection failures
     )
 }
 
@@ -519,6 +520,38 @@ impl PlatformApiClient {
         };
 
         self.get(&path).await
+    }
+
+    // =========================================================================
+    // Health Check API methods
+    // =========================================================================
+
+    /// Check if the API is reachable (quick health check)
+    ///
+    /// Uses a shorter timeout (5s) for quick connectivity verification.
+    /// This method does NOT require authentication.
+    ///
+    /// Returns `Ok(())` if API is reachable, `Err(ConnectionFailed)` otherwise.
+    pub async fn check_connection(&self) -> Result<()> {
+        // Use a shorter timeout for health checks
+        let health_client = Client::builder()
+            .timeout(Duration::from_secs(5))
+            .user_agent(USER_AGENT)
+            .build()
+            .map_err(PlatformApiError::HttpError)?;
+
+        let url = format!("{}/health", self.api_url);
+
+        match health_client.get(&url).send().await {
+            Ok(response) => {
+                if response.status().is_success() {
+                    Ok(())
+                } else {
+                    Err(PlatformApiError::ConnectionFailed)
+                }
+            }
+            Err(_) => Err(PlatformApiError::ConnectionFailed),
+        }
     }
 }
 

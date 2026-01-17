@@ -48,6 +48,10 @@ pub enum PlatformApiError {
         /// Error message
         message: String,
     },
+
+    /// Could not connect to the Syncable API
+    #[error("Could not connect to Syncable API - check your internet connection")]
+    ConnectionFailed,
 }
 
 impl PlatformApiError {
@@ -69,6 +73,9 @@ impl PlatformApiError {
             Self::ParseError(_) => Some("This may be a bug - please report it"),
             Self::ApiError { status, .. } if *status >= 400 && *status < 500 => {
                 Some("Check the request parameters")
+            }
+            Self::ConnectionFailed => {
+                Some("Check your internet connection and try again")
             }
             _ => None,
         }
