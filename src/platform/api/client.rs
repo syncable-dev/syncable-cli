@@ -23,6 +23,23 @@ const SYNCABLE_API_URL_DEV: &str = "http://localhost:4000";
 /// User agent for API requests
 const USER_AGENT: &str = concat!("syncable-cli/", env!("CARGO_PKG_VERSION"));
 
+/// Maximum number of retry attempts for transient failures
+const MAX_RETRIES: u32 = 3;
+/// Initial backoff delay in milliseconds
+const INITIAL_BACKOFF_MS: u64 = 500;
+/// Maximum backoff delay in milliseconds
+const MAX_BACKOFF_MS: u64 = 5000;
+
+/// Check if an error is retryable (transient failure)
+fn is_retryable_error(error: &PlatformApiError) -> bool {
+    matches!(
+        error,
+        PlatformApiError::HttpError(_)      // Network errors, timeouts
+        | PlatformApiError::RateLimited     // 429 - rate limited
+        | PlatformApiError::ServerError { .. } // 5xx - server errors
+    )
+}
+
 /// Client for interacting with the Syncable Platform API
 pub struct PlatformApiClient {
     /// HTTP client with configured timeout and headers
@@ -64,83 +81,195 @@ impl PlatformApiClient {
         credentials::get_access_token().ok_or(PlatformApiError::Unauthorized)
     }
 
-    /// Make an authenticated GET request
+    /// Make an authenticated GET request with automatic retry for transient failures
     async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<T> {
         let token = Self::get_auth_token()?;
         let url = format!("{}{}", self.api_url, path);
 
-        let response = self
-            .http_client
-            .get(&url)
-            .bearer_auth(&token)
-            .send()
-            .await?;
+        let mut last_error = None;
+        let mut backoff_ms = INITIAL_BACKOFF_MS;
 
-        self.handle_response(response).await
+        for attempt in 0..=MAX_RETRIES {
+            let result = self
+                .http_client
+                .get(&url)
+                .bearer_auth(&token)
+                .send()
+                .await;
+
+            match result {
+                Ok(response) => {
+                    match self.handle_response(response).await {
+                        Ok(data) => return Ok(data),
+                        Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
+                            eprintln!(
+                                "Request failed (attempt {}/{}), retrying in {}ms...",
+                                attempt + 1,
+                                MAX_RETRIES + 1,
+                                backoff_ms
+                            );
+                            last_error = Some(e);
+                            tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+                            backoff_ms = (backoff_ms * 2).min(MAX_BACKOFF_MS);
+                        }
+                        Err(e) => return Err(e),
+                    }
+                }
+                Err(e) => {
+                    let platform_error = PlatformApiError::HttpError(e);
+                    if is_retryable_error(&platform_error) && attempt < MAX_RETRIES {
+                        eprintln!(
+                            "Network error (attempt {}/{}), retrying in {}ms...",
+                            attempt + 1,
+                            MAX_RETRIES + 1,
+                            backoff_ms
+                        );
+                        last_error = Some(platform_error);
+                        tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+                        backoff_ms = (backoff_ms * 2).min(MAX_BACKOFF_MS);
+                    } else {
+                        return Err(platform_error);
+                    }
+                }
+            }
+        }
+
+        Err(last_error.expect("retry loop should have set last_error"))
     }
 
     /// Make an authenticated GET request that returns Option<T>
     /// Returns None for 404 responses instead of an error
+    /// Includes retry logic for transient failures
     async fn get_optional<T: DeserializeOwned>(&self, path: &str) -> Result<Option<T>> {
         let token = Self::get_auth_token()?;
         let url = format!("{}{}", self.api_url, path);
 
-        let response = self
-            .http_client
-            .get(&url)
-            .bearer_auth(&token)
-            .send()
-            .await?;
+        let mut last_error = None;
+        let mut backoff_ms = INITIAL_BACKOFF_MS;
 
-        let status = response.status();
+        for attempt in 0..=MAX_RETRIES {
+            let result = self
+                .http_client
+                .get(&url)
+                .bearer_auth(&token)
+                .send()
+                .await;
 
-        if status.is_success() {
-            let result = response
-                .json::<T>()
-                .await
-                .map_err(|e| PlatformApiError::ParseError(e.to_string()))?;
-            Ok(Some(result))
-        } else if status.as_u16() == 404 {
-            // Not found means no connection exists - this is expected
-            Ok(None)
-        } else {
-            // For other errors, parse and return the error
-            let status_code = status.as_u16();
-            let error_body = response.text().await.unwrap_or_default();
-            let error_message = serde_json::from_str::<ApiErrorResponse>(&error_body)
-                .map(|e| e.get_message())
-                .unwrap_or_else(|_| error_body.clone());
+            match result {
+                Ok(response) => {
+                    let status = response.status();
 
-            match status_code {
-                401 => Err(PlatformApiError::Unauthorized),
-                403 => Err(PlatformApiError::PermissionDenied(error_message)),
-                429 => Err(PlatformApiError::RateLimited),
-                500..=599 => Err(PlatformApiError::ServerError {
-                    status: status_code,
-                    message: error_message,
-                }),
-                _ => Err(PlatformApiError::ApiError {
-                    status: status_code,
-                    message: error_message,
-                }),
+                    if status.is_success() {
+                        let result = response
+                            .json::<T>()
+                            .await
+                            .map_err(|e| PlatformApiError::ParseError(e.to_string()))?;
+                        return Ok(Some(result));
+                    } else if status.as_u16() == 404 {
+                        return Ok(None);
+                    } else {
+                        let status_code = status.as_u16();
+                        let error_body = response.text().await.unwrap_or_default();
+                        let error_message = serde_json::from_str::<ApiErrorResponse>(&error_body)
+                            .map(|e| e.get_message())
+                            .unwrap_or_else(|_| error_body.clone());
+
+                        let error = match status_code {
+                            401 => PlatformApiError::Unauthorized,
+                            403 => PlatformApiError::PermissionDenied(error_message),
+                            429 => PlatformApiError::RateLimited,
+                            500..=599 => PlatformApiError::ServerError {
+                                status: status_code,
+                                message: error_message,
+                            },
+                            _ => PlatformApiError::ApiError {
+                                status: status_code,
+                                message: error_message,
+                            },
+                        };
+
+                        if is_retryable_error(&error) && attempt < MAX_RETRIES {
+                            eprintln!(
+                                "Request failed (attempt {}/{}), retrying in {}ms...",
+                                attempt + 1,
+                                MAX_RETRIES + 1,
+                                backoff_ms
+                            );
+                            last_error = Some(error);
+                            tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+                            backoff_ms = (backoff_ms * 2).min(MAX_BACKOFF_MS);
+                        } else {
+                            return Err(error);
+                        }
+                    }
+                }
+                Err(e) => {
+                    let platform_error = PlatformApiError::HttpError(e);
+                    if is_retryable_error(&platform_error) && attempt < MAX_RETRIES {
+                        eprintln!(
+                            "Network error (attempt {}/{}), retrying in {}ms...",
+                            attempt + 1,
+                            MAX_RETRIES + 1,
+                            backoff_ms
+                        );
+                        last_error = Some(platform_error);
+                        tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+                        backoff_ms = (backoff_ms * 2).min(MAX_BACKOFF_MS);
+                    } else {
+                        return Err(platform_error);
+                    }
+                }
             }
         }
+
+        Err(last_error.expect("retry loop should have set last_error"))
     }
 
     /// Make an authenticated POST request with a JSON body
+    /// Only retries on network errors (before request completes), not on server responses,
+    /// since POST requests may not be idempotent.
     async fn post<T: DeserializeOwned, B: Serialize>(&self, path: &str, body: &B) -> Result<T> {
         let token = Self::get_auth_token()?;
         let url = format!("{}{}", self.api_url, path);
 
-        let response = self
-            .http_client
-            .post(&url)
-            .bearer_auth(&token)
-            .json(body)
-            .send()
-            .await?;
+        let mut last_error = None;
+        let mut backoff_ms = INITIAL_BACKOFF_MS;
 
-        self.handle_response(response).await
+        for attempt in 0..=MAX_RETRIES {
+            let result = self
+                .http_client
+                .post(&url)
+                .bearer_auth(&token)
+                .json(body)
+                .send()
+                .await;
+
+            match result {
+                Ok(response) => {
+                    // Got a response - don't retry POST even on server errors
+                    return self.handle_response(response).await;
+                }
+                Err(e) => {
+                    // Network error before request completed - safe to retry
+                    let platform_error = PlatformApiError::HttpError(e);
+                    if attempt < MAX_RETRIES {
+                        eprintln!(
+                            "Network error (attempt {}/{}), retrying in {}ms...",
+                            attempt + 1,
+                            MAX_RETRIES + 1,
+                            backoff_ms
+                        );
+                        last_error = Some(platform_error);
+                        tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+                        backoff_ms = (backoff_ms * 2).min(MAX_BACKOFF_MS);
+                    } else {
+                        return Err(platform_error);
+                    }
+                }
+            }
+        }
+
+        Err(last_error.expect("retry loop should have set last_error"))
     }
 
     /// Handle the HTTP response, converting errors appropriately
