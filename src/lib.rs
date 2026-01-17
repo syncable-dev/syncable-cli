@@ -10,6 +10,7 @@ pub mod generator;
 pub mod handlers;
 pub mod platform; // Platform session state for project/org context
 pub mod telemetry; // Add telemetry module
+pub mod wizard; // Interactive deployment wizard
 
 // Re-export commonly used types and functions
 pub use analyzer::{ProjectAnalysis, analyze_project};
