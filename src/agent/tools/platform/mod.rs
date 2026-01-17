@@ -23,6 +23,7 @@
 //! - `ListDeploymentsTool` - List recent deployments for a project
 //! - `GetServiceLogsTool` - Get container logs for a deployed service
 //! - `AnalyzeProjectTool` - Analyze project for Dockerfiles and deployment options
+//! - `AnalyzeCodebaseTool` - Comprehensive codebase analysis (languages, frameworks, ports, env vars)
 //! - `ListDeploymentCapabilitiesTool` - List available deployment targets and providers
 //! - `CreateDeploymentConfigTool` - Create a new deployment configuration
 //! - `ProvisionRegistryTool` - Provision a new container registry
@@ -59,6 +60,7 @@
 //! API keys). It only checks connection STATUS. All credential handling happens
 //! securely in the browser through the platform's OAuth flow.
 
+mod analyze_codebase;
 mod analyze_project;
 mod check_provider_connection;
 mod create_deployment_config;
@@ -75,6 +77,7 @@ mod provision_registry;
 mod select_project;
 mod trigger_deployment;
 
+pub use analyze_codebase::AnalyzeCodebaseTool;
 pub use analyze_project::AnalyzeProjectTool;
 pub use check_provider_connection::CheckProviderConnectionTool;
 pub use create_deployment_config::CreateDeploymentConfigTool;
