@@ -4,9 +4,10 @@ use crate::analyzer::{discover_dockerfiles_for_deployment, DiscoveredDockerfile}
 use crate::platform::api::types::{DeploymentTarget, WizardDeploymentConfig};
 use crate::platform::api::PlatformApiClient;
 use crate::wizard::{
-    collect_config, get_provider_deployment_statuses, select_cluster, select_provider,
-    select_registry, select_target, ClusterSelectionResult, ConfigFormResult,
-    ProviderSelectionResult, RegistrySelectionResult, TargetSelectionResult,
+    collect_config, get_provider_deployment_statuses, provision_registry, select_cluster,
+    select_provider, select_registry, select_target, ClusterSelectionResult, ConfigFormResult,
+    ProviderSelectionResult, RegistryProvisioningResult, RegistrySelectionResult,
+    TargetSelectionResult,
 };
 use colored::Colorize;
 use std::path::Path;
@@ -111,7 +112,57 @@ pub async fn run_wizard(
     let registry_id = loop {
         match select_registry(&provider_status.registries) {
             RegistrySelectionResult::Selected(r) => break Some(r.id),
-            RegistrySelectionResult::ProvisionNew => break None, // Will provision during deployment
+            RegistrySelectionResult::ProvisionNew => {
+                // Get cluster info for provisioning
+                let (prov_cluster_id, prov_cluster_name, prov_region) =
+                    if let Some(ref cid) = cluster_id {
+                        // Use selected cluster
+                        let cluster = provider_status
+                            .clusters
+                            .iter()
+                            .find(|c| c.id == *cid)
+                            .expect("Selected cluster must exist");
+                        (cid.clone(), cluster.name.clone(), cluster.region.clone())
+                    } else {
+                        // For Cloud Runner, use first available cluster for registry provisioning
+                        if let Some(cluster) = provider_status.clusters.first() {
+                            (
+                                cluster.id.clone(),
+                                cluster.name.clone(),
+                                cluster.region.clone(),
+                            )
+                        } else {
+                            return WizardResult::Error(
+                                "No cluster available for registry provisioning".to_string(),
+                            );
+                        }
+                    };
+
+                // Provision the registry
+                match provision_registry(
+                    client,
+                    project_id,
+                    &prov_cluster_id,
+                    &prov_cluster_name,
+                    provider.clone(),
+                    &prov_region,
+                    None, // GCP project ID resolved by backend
+                )
+                .await
+                {
+                    RegistryProvisioningResult::Success(registry) => {
+                        break Some(registry.id);
+                    }
+                    RegistryProvisioningResult::Cancelled => {
+                        return WizardResult::Cancelled;
+                    }
+                    RegistryProvisioningResult::Error(e) => {
+                        eprintln!("{} {}", "Registry provisioning failed:".red(), e);
+                        // Allow retry - loop back to selection
+                        continue;
+                    }
+                }
+            }
             RegistrySelectionResult::Back => {
                 // Go back (restart wizard for simplicity)
                 return Box::pin(run_wizard(client, project_id, environment_id, project_path)).await;
