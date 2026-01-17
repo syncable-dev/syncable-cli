@@ -30,7 +30,8 @@ pub mod types;
 pub use client::PlatformApiClient;
 pub use error::{PlatformApiError, Result};
 pub use types::{
-    CloudCredentialStatus, CloudProvider, DeployedService, DeploymentConfig, DeploymentTaskStatus,
-    Organization, PaginatedDeployments, PaginationInfo, Project, ProjectMember,
-    TriggerDeploymentRequest, TriggerDeploymentResponse, UserProfile,
+    ArtifactRegistry, CloudCredentialStatus, CloudProvider, ClusterEntity, ClusterStatus,
+    DeployedService, DeploymentConfig, DeploymentTaskStatus, Organization, PaginatedDeployments,
+    PaginationInfo, Project, ProjectMember, RegistryStatus, TriggerDeploymentRequest,
+    TriggerDeploymentResponse, UserProfile,
 };

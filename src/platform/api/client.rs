@@ -5,9 +5,9 @@
 
 use super::error::{PlatformApiError, Result};
 use super::types::{
-    ApiErrorResponse, CloudCredentialStatus, CloudProvider, DeploymentConfig,
-    DeploymentTaskStatus, GenericResponse, GetLogsResponse, Organization, PaginatedDeployments,
-    Project, TriggerDeploymentRequest, TriggerDeploymentResponse, UserProfile,
+    ApiErrorResponse, ArtifactRegistry, CloudCredentialStatus, CloudProvider, ClusterEntity,
+    DeploymentConfig, DeploymentTaskStatus, GenericResponse, GetLogsResponse, Organization,
+    PaginatedDeployments, Project, TriggerDeploymentRequest, TriggerDeploymentResponse, UserProfile,
 };
 use crate::auth::credentials;
 use reqwest::Client;
@@ -520,6 +520,70 @@ impl PlatformApiClient {
         };
 
         self.get(&path).await
+    }
+
+    // =========================================================================
+    // Cluster API methods
+    // =========================================================================
+
+    /// List all clusters for a project
+    ///
+    /// Returns all K8s clusters available for deployments in this project.
+    ///
+    /// Endpoint: GET /api/clusters/project/:projectId
+    pub async fn list_clusters_for_project(&self, project_id: &str) -> Result<Vec<ClusterEntity>> {
+        let response: GenericResponse<Vec<ClusterEntity>> = self
+            .get(&format!("/api/clusters/project/{}", project_id))
+            .await?;
+        Ok(response.data)
+    }
+
+    /// Get a specific cluster by ID
+    ///
+    /// Returns cluster details or None if not found.
+    ///
+    /// Endpoint: GET /api/clusters/:clusterId
+    pub async fn get_cluster(&self, cluster_id: &str) -> Result<Option<ClusterEntity>> {
+        self.get_optional(&format!("/api/clusters/{}", cluster_id))
+            .await
+    }
+
+    // =========================================================================
+    // Artifact Registry API methods
+    // =========================================================================
+
+    /// List all artifact registries for a project
+    ///
+    /// Returns all container registries available for image storage in this project.
+    ///
+    /// Endpoint: GET /api/projects/:projectId/artifact-registries
+    pub async fn list_registries_for_project(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<ArtifactRegistry>> {
+        let response: GenericResponse<Vec<ArtifactRegistry>> = self
+            .get(&format!("/api/projects/{}/artifact-registries", project_id))
+            .await?;
+        Ok(response.data)
+    }
+
+    /// List only ready artifact registries for a project
+    ///
+    /// Returns registries that are ready to receive image pushes.
+    /// Use this for deployment wizard to show only usable registries.
+    ///
+    /// Endpoint: GET /api/projects/:projectId/artifact-registries/ready
+    pub async fn list_ready_registries_for_project(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<ArtifactRegistry>> {
+        let response: GenericResponse<Vec<ArtifactRegistry>> = self
+            .get(&format!(
+                "/api/projects/{}/artifact-registries/ready",
+                project_id
+            ))
+            .await?;
+        Ok(response.data)
     }
 
     // =========================================================================
