@@ -6,9 +6,9 @@
 use super::error::{PlatformApiError, Result};
 use super::types::{
     ApiErrorResponse, ArtifactRegistry, CloudCredentialStatus, CloudProvider, ClusterEntity,
-    CreateRegistryRequest, CreateRegistryResponse, DeploymentConfig, DeploymentTaskStatus,
-    GenericResponse, GetLogsResponse, Organization, PaginatedDeployments, Project,
-    RegistryTaskStatus, TriggerDeploymentRequest, TriggerDeploymentResponse, UserProfile,
+    CreateDeploymentConfigRequest, CreateRegistryRequest, CreateRegistryResponse, DeploymentConfig,
+    DeploymentTaskStatus, GenericResponse, GetLogsResponse, Organization, PaginatedDeployments,
+    Project, RegistryTaskStatus, TriggerDeploymentRequest, TriggerDeploymentResponse, UserProfile,
 };
 use crate::auth::credentials;
 use reqwest::Client;
@@ -449,6 +449,26 @@ impl PlatformApiClient {
     pub async fn list_deployment_configs(&self, project_id: &str) -> Result<Vec<DeploymentConfig>> {
         let response: GenericResponse<Vec<DeploymentConfig>> = self
             .get(&format!("/api/projects/{}/deployment-configs", project_id))
+            .await?;
+        Ok(response.data)
+    }
+
+    /// Create a new deployment configuration
+    ///
+    /// Creates a deployment config for a service. Requires repository integration
+    /// to be set up first (GitHub/GitLab).
+    ///
+    /// Endpoint: POST /api/deployment-configs?projectId=xxx
+    pub async fn create_deployment_config(
+        &self,
+        project_id: &str,
+        request: &CreateDeploymentConfigRequest,
+    ) -> Result<DeploymentConfig> {
+        let response: GenericResponse<DeploymentConfig> = self
+            .post(
+                &format!("/api/deployment-configs?projectId={}", project_id),
+                request,
+            )
             .await?;
         Ok(response.data)
     }
