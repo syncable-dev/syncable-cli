@@ -6,8 +6,9 @@
 use super::error::{PlatformApiError, Result};
 use super::types::{
     ApiErrorResponse, ArtifactRegistry, CloudCredentialStatus, CloudProvider, ClusterEntity,
-    DeploymentConfig, DeploymentTaskStatus, GenericResponse, GetLogsResponse, Organization,
-    PaginatedDeployments, Project, TriggerDeploymentRequest, TriggerDeploymentResponse, UserProfile,
+    CreateRegistryRequest, CreateRegistryResponse, DeploymentConfig, DeploymentTaskStatus,
+    GenericResponse, GetLogsResponse, Organization, PaginatedDeployments, Project,
+    RegistryTaskStatus, TriggerDeploymentRequest, TriggerDeploymentResponse, UserProfile,
 };
 use crate::auth::credentials;
 use reqwest::Client;
@@ -584,6 +585,34 @@ impl PlatformApiClient {
             ))
             .await?;
         Ok(response.data)
+    }
+
+    /// Provision a new artifact registry
+    ///
+    /// Starts async provisioning via Backstage scaffolder.
+    /// Returns task ID for polling status.
+    ///
+    /// Endpoint: POST /api/projects/:projectId/artifact-registries
+    pub async fn create_registry(
+        &self,
+        project_id: &str,
+        request: &CreateRegistryRequest,
+    ) -> Result<CreateRegistryResponse> {
+        self.post(
+            &format!("/api/projects/{}/artifact-registries", project_id),
+            request,
+        )
+        .await
+    }
+
+    /// Get registry provisioning task status
+    ///
+    /// Poll this endpoint to check provisioning progress.
+    ///
+    /// Endpoint: GET /api/artifact-registries/task/:taskId
+    pub async fn get_registry_task_status(&self, task_id: &str) -> Result<RegistryTaskStatus> {
+        self.get(&format!("/api/artifact-registries/task/{}", task_id))
+            .await
     }
 
     // =========================================================================
