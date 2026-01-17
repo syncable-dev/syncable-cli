@@ -203,6 +203,39 @@ pub fn print_banner(session: &ChatSession) {
     );
     println!("  {}", "Your AI-powered code analysis assistant".dimmed());
 
+    // Show platform context (selected project/organization)
+    if session.platform_session.is_project_selected() {
+        println!(
+            "  {} {}: {}/{}",
+            "📦",
+            "Project".white(),
+            session
+                .platform_session
+                .org_name
+                .as_deref()
+                .unwrap_or("?")
+                .cyan(),
+            session
+                .platform_session
+                .project_name
+                .as_deref()
+                .unwrap_or("?")
+                .cyan()
+        );
+    } else {
+        println!(
+            "  {} {} {}",
+            "📦",
+            "Project:".white(),
+            "(none selected)".dimmed()
+        );
+        println!(
+            "     {} {}",
+            "→".cyan(),
+            "sync-ctl org list".dimmed()
+        );
+    }
+
     // Check for incomplete plans and show a hint
     let incomplete_plans = find_incomplete_plans(&session.project_path);
     if !incomplete_plans.is_empty() {
