@@ -66,11 +66,9 @@ pub async fn run_wizard(
         }
     };
 
-    let provider = loop {
-        match select_provider(&provider_statuses) {
-            ProviderSelectionResult::Selected(p) => break p,
-            ProviderSelectionResult::Cancelled => return WizardResult::Cancelled,
-        }
+    let provider = match select_provider(&provider_statuses) {
+        ProviderSelectionResult::Selected(p) => p,
+        ProviderSelectionResult::Cancelled => return WizardResult::Cancelled,
     };
 
     // Get status for selected provider
@@ -80,29 +78,25 @@ pub async fn run_wizard(
         .expect("Selected provider must exist in statuses");
 
     // Step 2: Target selection (with back navigation)
-    let target = loop {
-        match select_target(provider_status) {
-            TargetSelectionResult::Selected(t) => break t,
-            TargetSelectionResult::Back => {
-                // Restart from provider selection
-                return Box::pin(run_wizard(client, project_id, environment_id, project_path)).await;
-            }
-            TargetSelectionResult::Cancelled => return WizardResult::Cancelled,
+    let target = match select_target(provider_status) {
+        TargetSelectionResult::Selected(t) => t,
+        TargetSelectionResult::Back => {
+            // Restart from provider selection
+            return Box::pin(run_wizard(client, project_id, environment_id, project_path)).await;
         }
+        TargetSelectionResult::Cancelled => return WizardResult::Cancelled,
     };
 
     // Step 3: Cluster selection (if Kubernetes)
     let cluster_id = if target == DeploymentTarget::Kubernetes {
-        loop {
-            match select_cluster(&provider_status.clusters) {
-                ClusterSelectionResult::Selected(c) => break Some(c.id),
-                ClusterSelectionResult::Back => {
-                    // Go back to target selection (restart wizard for simplicity)
-                    return Box::pin(run_wizard(client, project_id, environment_id, project_path))
-                        .await;
-                }
-                ClusterSelectionResult::Cancelled => return WizardResult::Cancelled,
+        match select_cluster(&provider_status.clusters) {
+            ClusterSelectionResult::Selected(c) => Some(c.id),
+            ClusterSelectionResult::Back => {
+                // Go back to target selection (restart wizard for simplicity)
+                return Box::pin(run_wizard(client, project_id, environment_id, project_path))
+                    .await;
             }
+            ClusterSelectionResult::Cancelled => return WizardResult::Cancelled,
         }
     } else {
         None
