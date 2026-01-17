@@ -207,6 +207,33 @@ pub struct CloudCredentialStatus {
 }
 
 // =============================================================================
+// Environment Types
+// =============================================================================
+
+/// Environment entity for a project
+///
+/// Environments define deployment targets within a project.
+/// Each deployment configuration is associated with an environment.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Environment {
+    /// Unique environment identifier (UUID)
+    pub id: String,
+    /// Environment display name (e.g., "production", "staging", "development")
+    pub name: String,
+    /// Parent project ID
+    pub project_id: String,
+    /// Target type: "kubernetes" or "cloud_runner"
+    pub target_type: String,
+    /// Cluster ID (only for kubernetes target type)
+    #[serde(default)]
+    pub cluster_id: Option<String>,
+    /// When the environment was created
+    #[serde(default)]
+    pub created_at: Option<String>,
+}
+
+// =============================================================================
 // Deployment Types
 // =============================================================================
 
@@ -993,6 +1020,62 @@ mod tests {
         assert_eq!(targets.len(), 2);
         assert!(targets.contains(&DeploymentTarget::CloudRunner));
         assert!(targets.contains(&DeploymentTarget::Kubernetes));
+    }
+
+    // =========================================================================
+    // Environment Tests
+    // =========================================================================
+
+    #[test]
+    fn test_environment_serialization() {
+        let env = Environment {
+            id: "env-123".to_string(),
+            name: "production".to_string(),
+            project_id: "proj-456".to_string(),
+            target_type: "kubernetes".to_string(),
+            cluster_id: Some("cluster-789".to_string()),
+            created_at: Some("2024-01-01T00:00:00Z".to_string()),
+        };
+
+        let json = serde_json::to_string(&env).unwrap();
+        assert!(json.contains("\"id\":\"env-123\""));
+        assert!(json.contains("\"name\":\"production\""));
+        assert!(json.contains("\"projectId\":\"proj-456\""));
+        assert!(json.contains("\"targetType\":\"kubernetes\""));
+        assert!(json.contains("\"clusterId\":\"cluster-789\""));
+    }
+
+    #[test]
+    fn test_environment_deserialization() {
+        let json = r#"{
+            "id": "env-abc",
+            "name": "staging",
+            "projectId": "proj-def",
+            "targetType": "cloud_runner",
+            "createdAt": "2024-01-15T12:00:00Z"
+        }"#;
+
+        let env: Environment = serde_json::from_str(json).unwrap();
+        assert_eq!(env.id, "env-abc");
+        assert_eq!(env.name, "staging");
+        assert_eq!(env.project_id, "proj-def");
+        assert_eq!(env.target_type, "cloud_runner");
+        assert!(env.cluster_id.is_none());
+        assert_eq!(env.created_at, Some("2024-01-15T12:00:00Z".to_string()));
+    }
+
+    #[test]
+    fn test_environment_optional_fields_default() {
+        let json = r#"{
+            "id": "env-min",
+            "name": "minimal",
+            "projectId": "proj-min",
+            "targetType": "cloud_runner"
+        }"#;
+
+        let env: Environment = serde_json::from_str(json).unwrap();
+        assert!(env.cluster_id.is_none());
+        assert!(env.created_at.is_none());
     }
 
     #[test]

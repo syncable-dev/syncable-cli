@@ -7,8 +7,9 @@ use super::error::{PlatformApiError, Result};
 use super::types::{
     ApiErrorResponse, ArtifactRegistry, CloudCredentialStatus, CloudProvider, ClusterEntity,
     CreateDeploymentConfigRequest, CreateRegistryRequest, CreateRegistryResponse, DeploymentConfig,
-    DeploymentTaskStatus, GenericResponse, GetLogsResponse, Organization, PaginatedDeployments,
-    Project, RegistryTaskStatus, TriggerDeploymentRequest, TriggerDeploymentResponse, UserProfile,
+    DeploymentTaskStatus, Environment, GenericResponse, GetLogsResponse, Organization,
+    PaginatedDeployments, Project, RegistryTaskStatus, TriggerDeploymentRequest,
+    TriggerDeploymentResponse, UserProfile,
 };
 use crate::auth::credentials;
 use reqwest::Client;
@@ -391,6 +392,50 @@ impl PlatformApiClient {
         });
 
         let response: GenericResponse<Project> = self.post("/api/projects", &request).await?;
+        Ok(response.data)
+    }
+
+    // =========================================================================
+    // Environment API methods
+    // =========================================================================
+
+    /// List environments for a project
+    ///
+    /// Returns all environments (deployment targets) defined for the project.
+    ///
+    /// Endpoint: GET /api/environments/project/:projectId
+    pub async fn list_environments(&self, project_id: &str) -> Result<Vec<Environment>> {
+        let response: GenericResponse<Vec<Environment>> = self
+            .get(&format!("/api/environments/project/{}", project_id))
+            .await?;
+        Ok(response.data)
+    }
+
+    /// Create a new environment for a project
+    ///
+    /// Creates an environment with the specified target type (kubernetes or cloud_runner).
+    /// For kubernetes targets, a cluster_id is required.
+    ///
+    /// Endpoint: POST /api/environments
+    pub async fn create_environment(
+        &self,
+        project_id: &str,
+        name: &str,
+        target_type: &str,
+        cluster_id: Option<&str>,
+    ) -> Result<Environment> {
+        let mut request = serde_json::json!({
+            "projectId": project_id,
+            "name": name,
+            "targetType": target_type,
+        });
+
+        if let Some(cid) = cluster_id {
+            request["clusterId"] = serde_json::json!(cid);
+        }
+
+        let response: GenericResponse<Environment> =
+            self.post("/api/environments", &request).await?;
         Ok(response.data)
     }
 
@@ -807,5 +852,61 @@ mod tests {
             query_params.join("&")
         );
         assert_eq!(path, "/api/deployments/services/svc-123/logs?start=2024-01-01T00:00:00Z&limit=50");
+    }
+
+    #[test]
+    fn test_list_environments_path() {
+        // Test that the API path is built correctly
+        let project_id = "proj-123";
+        let path = format!("/api/environments/project/{}", project_id);
+        assert_eq!(path, "/api/environments/project/proj-123");
+    }
+
+    #[test]
+    fn test_create_environment_request() {
+        // Test that the request JSON is built correctly
+        let project_id = "proj-123";
+        let name = "production";
+        let target_type = "kubernetes";
+        let cluster_id = Some("cluster-456");
+
+        let mut request = serde_json::json!({
+            "projectId": project_id,
+            "name": name,
+            "targetType": target_type,
+        });
+
+        if let Some(cid) = cluster_id {
+            request["clusterId"] = serde_json::json!(cid);
+        }
+
+        let json_str = request.to_string();
+        assert!(json_str.contains("\"projectId\":\"proj-123\""));
+        assert!(json_str.contains("\"name\":\"production\""));
+        assert!(json_str.contains("\"targetType\":\"kubernetes\""));
+        assert!(json_str.contains("\"clusterId\":\"cluster-456\""));
+    }
+
+    #[test]
+    fn test_create_environment_request_cloud_runner() {
+        // Test request without cluster_id (cloud runner)
+        let project_id = "proj-123";
+        let name = "staging";
+        let target_type = "cloud_runner";
+        let cluster_id: Option<&str> = None;
+
+        let mut request = serde_json::json!({
+            "projectId": project_id,
+            "name": name,
+            "targetType": target_type,
+        });
+
+        if let Some(cid) = cluster_id {
+            request["clusterId"] = serde_json::json!(cid);
+        }
+
+        let json_str = request.to_string();
+        assert!(json_str.contains("\"targetType\":\"cloud_runner\""));
+        assert!(!json_str.contains("clusterId"));
     }
 }
