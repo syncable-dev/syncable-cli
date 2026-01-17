@@ -833,12 +833,8 @@ async fn run() -> syncable_cli::Result<()> {
             use syncable_cli::cli::DeployCommand;
             use syncable_cli::platform::api::PlatformApiClient;
             use syncable_cli::platform::session::PlatformSession;
-            use syncable_cli::wizard::{run_wizard, WizardResult};
-
-            // Determine the project path - use subcommand path if provided, otherwise top-level path
-            let project_path = match &command {
-                Some(DeployCommand::Wizard { path: wizard_path }) => wizard_path.clone(),
-                None => path.clone(),
+            use syncable_cli::wizard::{
+                create_environment_wizard, run_wizard, EnvironmentCreationResult, WizardResult,
             };
 
             // Check authentication
@@ -873,36 +869,112 @@ async fn run() -> syncable_cli::Result<()> {
                 }
             };
 
-            // Get default environment ID (for now, use "production" as placeholder)
-            // TODO: Add environment selection in Phase 58+
-            let environment_id = "production";
+            match command {
+                Some(DeployCommand::NewEnv) => {
+                    // Run environment creation wizard
+                    match create_environment_wizard(&client, &project_id).await {
+                        EnvironmentCreationResult::Created(env) => {
+                            // Optionally update session with the new environment
+                            let new_session = PlatformSession::with_environment(
+                                session.project_id.unwrap(),
+                                session.project_name.unwrap_or_default(),
+                                session.org_id.unwrap_or_default(),
+                                session.org_name.unwrap_or_default(),
+                                env.id.clone(),
+                                env.name.clone(),
+                            );
 
-            // Run wizard
-            match run_wizard(&client, &project_id, environment_id, &project_path).await {
-                WizardResult::Success(config) => {
-                    use colored::Colorize;
-                    println!("{}", "Deployment configuration created!".green().bold());
-                    if !config.is_complete() {
-                        println!(
-                            "{}",
-                            format!("Missing fields: {:?}", config.missing_fields()).yellow()
-                        );
+                            if let Err(e) = new_session.save() {
+                                eprintln!("Warning: Failed to save session: {}", e);
+                            }
+
+                            println!(
+                                "\nContext updated: {}",
+                                new_session.display_context().bright_cyan()
+                            );
+                            println!(
+                                "\nNext: Run {} to deploy a service",
+                                "sync-ctl deploy".bright_cyan()
+                            );
+                            Ok(())
+                        }
+                        EnvironmentCreationResult::Cancelled => {
+                            println!("{}", "Environment creation cancelled.".dimmed());
+                            Ok(())
+                        }
+                        EnvironmentCreationResult::Error(e) => {
+                            eprintln!("Error: {}", e);
+                            process::exit(1);
+                        }
                     }
-                    // TODO: Phase 58 will submit config to API
-                    println!(
-                        "\n{}",
-                        "Next: Run deployment with created config".dimmed()
-                    );
-                    Ok(())
                 }
-                WizardResult::Cancelled => {
-                    use colored::Colorize;
-                    println!("{}", "Wizard cancelled.".dimmed());
-                    Ok(())
+                Some(DeployCommand::Wizard { path: wizard_path }) => {
+                    // Get environment ID from session or use placeholder
+                    let environment_id = session
+                        .environment_id
+                        .clone()
+                        .unwrap_or_else(|| "production".to_string());
+
+                    // Run deployment wizard
+                    match run_wizard(&client, &project_id, &environment_id, &wizard_path).await {
+                        WizardResult::Success(config) => {
+                            println!("{}", "Deployment configuration created!".green().bold());
+                            if !config.is_complete() {
+                                println!(
+                                    "{}",
+                                    format!("Missing fields: {:?}", config.missing_fields())
+                                        .yellow()
+                                );
+                            }
+                            println!(
+                                "\n{}",
+                                "Next: Run deployment with created config".dimmed()
+                            );
+                            Ok(())
+                        }
+                        WizardResult::Cancelled => {
+                            println!("{}", "Wizard cancelled.".dimmed());
+                            Ok(())
+                        }
+                        WizardResult::Error(e) => {
+                            eprintln!("Error: {}", e);
+                            process::exit(1);
+                        }
+                    }
                 }
-                WizardResult::Error(e) => {
-                    eprintln!("Error: {}", e);
-                    process::exit(1);
+                None => {
+                    // Get environment ID from session or use placeholder
+                    let environment_id = session
+                        .environment_id
+                        .clone()
+                        .unwrap_or_else(|| "production".to_string());
+
+                    // Run deployment wizard with top-level path
+                    match run_wizard(&client, &project_id, &environment_id, &path).await {
+                        WizardResult::Success(config) => {
+                            println!("{}", "Deployment configuration created!".green().bold());
+                            if !config.is_complete() {
+                                println!(
+                                    "{}",
+                                    format!("Missing fields: {:?}", config.missing_fields())
+                                        .yellow()
+                                );
+                            }
+                            println!(
+                                "\n{}",
+                                "Next: Run deployment with created config".dimmed()
+                            );
+                            Ok(())
+                        }
+                        WizardResult::Cancelled => {
+                            println!("{}", "Wizard cancelled.".dimmed());
+                            Ok(())
+                        }
+                        WizardResult::Error(e) => {
+                            eprintln!("Error: {}", e);
+                            process::exit(1);
+                        }
+                    }
                 }
             }
         }

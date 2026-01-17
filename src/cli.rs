@@ -528,6 +528,9 @@ pub enum DeployCommand {
         #[arg(value_name = "PROJECT_PATH", default_value = ".")]
         path: PathBuf,
     },
+
+    /// Create a new environment for the current project
+    NewEnv,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
