@@ -403,31 +403,33 @@ impl PlatformApiClient {
     ///
     /// Returns all environments (deployment targets) defined for the project.
     ///
-    /// Endpoint: GET /api/environments/project/:projectId
+    /// Endpoint: GET /api/projects/:projectId/environments
     pub async fn list_environments(&self, project_id: &str) -> Result<Vec<Environment>> {
         let response: GenericResponse<Vec<Environment>> = self
-            .get(&format!("/api/environments/project/{}", project_id))
+            .get(&format!("/api/projects/{}/environments", project_id))
             .await?;
         Ok(response.data)
     }
 
     /// Create a new environment for a project
     ///
-    /// Creates an environment with the specified target type (kubernetes or cloud_runner).
-    /// For kubernetes targets, a cluster_id is required.
+    /// Creates an environment with the specified type (cluster or cloud).
+    /// For cluster environments, a cluster_id is required.
     ///
     /// Endpoint: POST /api/environments
+    ///
+    /// Note: environment_type should be "cluster" (for K8s) or "cloud" (for Cloud Runner)
     pub async fn create_environment(
         &self,
         project_id: &str,
         name: &str,
-        target_type: &str,
+        environment_type: &str,
         cluster_id: Option<&str>,
     ) -> Result<Environment> {
         let mut request = serde_json::json!({
             "projectId": project_id,
             "name": name,
-            "targetType": target_type,
+            "environmentType": environment_type,
         });
 
         if let Some(cid) = cluster_id {
@@ -858,8 +860,8 @@ mod tests {
     fn test_list_environments_path() {
         // Test that the API path is built correctly
         let project_id = "proj-123";
-        let path = format!("/api/environments/project/{}", project_id);
-        assert_eq!(path, "/api/environments/project/proj-123");
+        let path = format!("/api/projects/{}/environments", project_id);
+        assert_eq!(path, "/api/projects/proj-123/environments");
     }
 
     #[test]
@@ -867,13 +869,13 @@ mod tests {
         // Test that the request JSON is built correctly
         let project_id = "proj-123";
         let name = "production";
-        let target_type = "kubernetes";
+        let environment_type = "cluster";
         let cluster_id = Some("cluster-456");
 
         let mut request = serde_json::json!({
             "projectId": project_id,
             "name": name,
-            "targetType": target_type,
+            "environmentType": environment_type,
         });
 
         if let Some(cid) = cluster_id {
@@ -883,22 +885,22 @@ mod tests {
         let json_str = request.to_string();
         assert!(json_str.contains("\"projectId\":\"proj-123\""));
         assert!(json_str.contains("\"name\":\"production\""));
-        assert!(json_str.contains("\"targetType\":\"kubernetes\""));
+        assert!(json_str.contains("\"environmentType\":\"cluster\""));
         assert!(json_str.contains("\"clusterId\":\"cluster-456\""));
     }
 
     #[test]
-    fn test_create_environment_request_cloud_runner() {
+    fn test_create_environment_request_cloud() {
         // Test request without cluster_id (cloud runner)
         let project_id = "proj-123";
         let name = "staging";
-        let target_type = "cloud_runner";
+        let environment_type = "cloud";
         let cluster_id: Option<&str> = None;
 
         let mut request = serde_json::json!({
             "projectId": project_id,
             "name": name,
-            "targetType": target_type,
+            "environmentType": environment_type,
         });
 
         if let Some(cid) = cluster_id {
@@ -906,7 +908,7 @@ mod tests {
         }
 
         let json_str = request.to_string();
-        assert!(json_str.contains("\"targetType\":\"cloud_runner\""));
+        assert!(json_str.contains("\"environmentType\":\"cloud\""));
         assert!(!json_str.contains("clusterId"));
     }
 }

@@ -4,11 +4,36 @@
 //! with target type selection (Kubernetes or Cloud Runner).
 
 use crate::platform::api::client::PlatformApiClient;
-use crate::platform::api::types::{ClusterSummary, DeploymentTarget, Environment};
+use crate::platform::api::types::{ClusterSummary, Environment};
 use crate::wizard::provider_selection::get_provider_deployment_statuses;
 use crate::wizard::render::{display_step_header, wizard_render_config};
 use colored::Colorize;
 use inquire::{InquireError, Select, Text};
+
+/// Environment type for the API
+/// "cluster" = Kubernetes cluster
+/// "cloud" = Cloud Runner (serverless)
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum EnvironmentType {
+    Cluster,
+    Cloud,
+}
+
+impl EnvironmentType {
+    fn as_str(&self) -> &'static str {
+        match self {
+            EnvironmentType::Cluster => "cluster",
+            EnvironmentType::Cloud => "cloud",
+        }
+    }
+
+    fn display_name(&self) -> &'static str {
+        match self {
+            EnvironmentType::Cluster => "Kubernetes",
+            EnvironmentType::Cloud => "Cloud Runner",
+        }
+    }
+}
 
 /// Result of environment creation wizard
 #[derive(Debug)]
@@ -84,12 +109,12 @@ pub async fn create_environment_wizard(
         .with_help_message("Cloud Runner: serverless, Kubernetes: full control")
         .prompt();
 
-    let target_type = match target_selection {
+    let env_type = match target_selection {
         Ok(answer) => {
             if answer.contains("Cloud Runner") {
-                DeploymentTarget::CloudRunner
+                EnvironmentType::Cloud
             } else {
-                DeploymentTarget::Kubernetes
+                EnvironmentType::Cluster
             }
         }
         Err(InquireError::OperationCanceled) | Err(InquireError::OperationInterrupted) => {
@@ -104,11 +129,11 @@ pub async fn create_environment_wizard(
     println!(
         "\n{} Target: {}",
         "✓".green(),
-        target_type.display_name().bold()
+        env_type.display_name().bold()
     );
 
-    // Step 3: If Kubernetes, select cluster
-    let cluster_id = if target_type == DeploymentTarget::Kubernetes {
+    // Step 3: If Kubernetes (cluster), select cluster
+    let cluster_id = if env_type == EnvironmentType::Cluster {
         match select_cluster_for_env(client, project_id).await {
             ClusterSelectionResult::Selected(id) => Some(id),
             ClusterSelectionResult::NoClusters => {
@@ -136,7 +161,7 @@ pub async fn create_environment_wizard(
         .create_environment(
             project_id,
             &name,
-            target_type.as_str(),
+            env_type.as_str(),
             cluster_id.as_deref(),
         )
         .await
@@ -148,7 +173,7 @@ pub async fn create_environment_wizard(
                 env.name.bold()
             );
             println!("  ID: {}", env.id.dimmed());
-            println!("  Target: {}", env.target_type);
+            println!("  Type: {}", env.environment_type);
             if let Some(cid) = &env.cluster_id {
                 println!("  Cluster: {}", cid);
             }
@@ -256,9 +281,13 @@ mod tests {
             id: "env-1".to_string(),
             name: "test".to_string(),
             project_id: "proj-1".to_string(),
-            target_type: "cloud_runner".to_string(),
+            environment_type: "cloud".to_string(),
             cluster_id: None,
+            namespace: None,
+            description: None,
+            is_active: true,
             created_at: None,
+            updated_at: None,
         });
         assert!(matches!(created, EnvironmentCreationResult::Created(_)));
 
@@ -267,5 +296,17 @@ mod tests {
 
         let error = EnvironmentCreationResult::Error("test error".to_string());
         assert!(matches!(error, EnvironmentCreationResult::Error(_)));
+    }
+
+    #[test]
+    fn test_environment_type_as_str() {
+        assert_eq!(EnvironmentType::Cluster.as_str(), "cluster");
+        assert_eq!(EnvironmentType::Cloud.as_str(), "cloud");
+    }
+
+    #[test]
+    fn test_environment_type_display_name() {
+        assert_eq!(EnvironmentType::Cluster.display_name(), "Kubernetes");
+        assert_eq!(EnvironmentType::Cloud.display_name(), "Cloud Runner");
     }
 }
