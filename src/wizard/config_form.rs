@@ -18,36 +18,41 @@ pub enum ConfigFormResult {
 }
 
 /// Collect deployment configuration details from user
+///
+/// Dockerfile path and build context are already selected in the previous step,
+/// so this form only collects service name, port, branch, and auto-deploy settings.
 pub fn collect_config(
     provider: CloudProvider,
     target: DeploymentTarget,
     cluster_id: Option<String>,
     registry_id: Option<String>,
     environment_id: &str,
-    discovered_dockerfile: Option<&DiscoveredDockerfile>,
+    dockerfile_path: &str,
+    build_context: &str,
+    discovered_dockerfile: &DiscoveredDockerfile,
 ) -> ConfigFormResult {
     display_step_header(
-        5,
+        6,
         "Configure Deployment",
         "Provide details for your service deployment.",
     );
 
-    // Pre-populate from discovery if available
-    let default_name = discovered_dockerfile
-        .map(|d| d.suggested_service_name.clone())
-        .unwrap_or_else(|| "my-service".to_string());
+    // Show selected Dockerfile info
+    println!(
+        "  {} Dockerfile: {}",
+        "│".dimmed(),
+        dockerfile_path.cyan()
+    );
+    println!(
+        "  {} Build context: {}",
+        "│".dimmed(),
+        build_context.cyan()
+    );
+    println!();
 
-    let default_dockerfile = discovered_dockerfile
-        .map(|d| d.path.to_string_lossy().to_string())
-        .unwrap_or_else(|| "Dockerfile".to_string());
-
-    let default_build_context = discovered_dockerfile
-        .map(|d| d.build_context.clone())
-        .unwrap_or_else(|| ".".to_string());
-
-    let default_port = discovered_dockerfile
-        .and_then(|d| d.suggested_port)
-        .unwrap_or(8080);
+    // Pre-populate from discovery
+    let default_name = discovered_dockerfile.suggested_service_name.clone();
+    let default_port = discovered_dockerfile.suggested_port.unwrap_or(8080);
 
     // Get current git branch for default
     let default_branch = get_current_branch().unwrap_or_else(|| "main".to_string());
@@ -59,32 +64,6 @@ pub fn collect_config(
         .prompt()
     {
         Ok(name) => sanitize_service_name(&name),
-        Err(InquireError::OperationCanceled) | Err(InquireError::OperationInterrupted) => {
-            return ConfigFormResult::Cancelled;
-        }
-        Err(_) => return ConfigFormResult::Cancelled,
-    };
-
-    // Dockerfile path
-    let dockerfile_path = match Text::new("Dockerfile path:")
-        .with_default(&default_dockerfile)
-        .with_help_message("Path relative to repo root")
-        .prompt()
-    {
-        Ok(path) => path,
-        Err(InquireError::OperationCanceled) | Err(InquireError::OperationInterrupted) => {
-            return ConfigFormResult::Cancelled;
-        }
-        Err(_) => return ConfigFormResult::Cancelled,
-    };
-
-    // Build context
-    let build_context = match Text::new("Build context:")
-        .with_default(&default_build_context)
-        .with_help_message("Directory containing source files")
-        .prompt()
-    {
-        Ok(ctx) => ctx,
         Err(InquireError::OperationCanceled) | Err(InquireError::OperationInterrupted) => {
             return ConfigFormResult::Cancelled;
         }
@@ -134,8 +113,8 @@ pub fn collect_config(
     // Build the config
     let config = WizardDeploymentConfig {
         service_name: Some(service_name.clone()),
-        dockerfile_path: Some(dockerfile_path),
-        build_context: Some(build_context),
+        dockerfile_path: Some(dockerfile_path.to_string()),
+        build_context: Some(build_context.to_string()),
         port: Some(port),
         branch: Some(branch),
         target: Some(target),
