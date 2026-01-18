@@ -691,6 +691,14 @@ pub struct WizardDeploymentConfig {
     pub environment_id: Option<String>,
     /// Enable auto-deploy on push
     pub auto_deploy: bool,
+    /// Region/Location for Cloud Runner deployment (e.g., "nbg1" for Hetzner, "us-central1" for GCP)
+    pub region: Option<String>,
+    /// Machine/Instance type for Cloud Runner (e.g., "cx22" for Hetzner, "e2-small" for GCP)
+    pub machine_type: Option<String>,
+    /// Whether the service should be publicly accessible
+    pub is_public: bool,
+    /// Health check endpoint path (optional, e.g., "/health" or "/healthz")
+    pub health_check_path: Option<String>,
 }
 
 impl WizardDeploymentConfig {
@@ -715,6 +723,11 @@ impl WizardDeploymentConfig {
         // K8s requires cluster selection
         if self.target == Some(DeploymentTarget::Kubernetes) {
             return self.cluster_id.is_some();
+        }
+
+        // Cloud Runner requires region and machine type
+        if self.target == Some(DeploymentTarget::CloudRunner) {
+            return self.region.is_some() && self.machine_type.is_some();
         }
 
         true
@@ -744,14 +757,99 @@ impl WizardDeploymentConfig {
         if self.target == Some(DeploymentTarget::Kubernetes) && self.cluster_id.is_none() {
             missing.push("cluster_id");
         }
+        if self.target == Some(DeploymentTarget::CloudRunner) {
+            if self.region.is_none() {
+                missing.push("region");
+            }
+            if self.machine_type.is_none() {
+                missing.push("machine_type");
+            }
+        }
         missing
     }
+}
+
+/// Repository connected to a project
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectRepository {
+    /// Connection ID
+    pub id: String,
+    /// Project ID
+    pub project_id: String,
+    /// GitHub repository ID
+    pub repository_id: i64,
+    /// Repository name (e.g., "my-repo")
+    pub repository_name: String,
+    /// Full repository name (e.g., "owner/my-repo")
+    pub repository_full_name: String,
+    /// Repository owner
+    pub repository_owner: String,
+    /// Whether the repository is private
+    pub repository_private: bool,
+    /// Default branch name
+    #[serde(default)]
+    pub default_branch: Option<String>,
+    /// Whether the connection is active
+    #[serde(default = "default_true")]
+    pub is_active: bool,
+    /// Connection type (e.g., "app")
+    #[serde(default)]
+    pub connection_type: Option<String>,
+    /// Repository type (e.g., "application", "gitops")
+    #[serde(default)]
+    pub repository_type: Option<String>,
+    /// Whether this is the primary GitOps repository
+    #[serde(default)]
+    pub is_primary_git_ops: Option<bool>,
+    /// GitHub installation ID
+    #[serde(default)]
+    pub github_installation_id: Option<i64>,
+    /// User ID who connected the repository
+    #[serde(default)]
+    pub user_id: Option<String>,
+    /// When the repository was connected
+    #[serde(default)]
+    pub created_at: Option<String>,
+    /// When the repository was last updated
+    #[serde(default)]
+    pub updated_at: Option<String>,
+}
+
+/// Response for listing project repositories
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectRepositoriesResponse {
+    /// Connected repositories
+    pub repositories: Vec<ProjectRepository>,
+    /// Total count
+    pub total_count: i32,
+}
+
+/// Cloud Runner configuration for deployment
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CloudRunnerConfig {
+    /// Region/location (e.g., "nbg1", "us-central1")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub region: Option<String>,
+    /// Machine/instance type (e.g., "cx22", "e2-small")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub machine_type: Option<String>,
+    /// Whether service should be publicly accessible
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_public: Option<bool>,
+    /// Health check endpoint path
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub health_check_path: Option<String>,
 }
 
 /// Request body for creating a new deployment configuration
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateDeploymentConfigRequest {
+    /// Project ID
+    pub project_id: String,
     /// Service name for the deployment
     pub service_name: String,
     /// Repository ID (from GitHub/GitLab integration)
@@ -771,7 +869,7 @@ pub struct CreateDeploymentConfigRequest {
     /// Target type: "kubernetes" or "cloud_runner"
     pub target_type: String,
     /// Cloud provider (gcp, hetzner)
-    pub provider: String,
+    pub cloud_provider: String,
     /// Environment ID for deployment
     pub environment_id: String,
     /// Cluster ID (required for kubernetes target)
@@ -782,9 +880,12 @@ pub struct CreateDeploymentConfigRequest {
     pub registry_id: Option<String>,
     /// Enable auto-deploy on push
     pub auto_deploy_enabled: bool,
-    /// Deployment strategy (optional)
+    /// Public access for the service
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub deployment_strategy: Option<String>,
+    pub is_public: Option<bool>,
+    /// Cloud Runner specific configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cloud_runner_config: Option<CloudRunnerConfig>,
 }
 
 /// Provider deployment availability status for the wizard
@@ -853,6 +954,165 @@ impl ProviderDeploymentStatus {
         }
         targets
     }
+}
+
+// =========================================================================
+// GitHub Integration Types
+// =========================================================================
+
+/// GitHub App installation connected to the organization
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubInstallation {
+    /// GitHub App installation ID
+    pub installation_id: i64,
+    /// GitHub account ID
+    pub account_id: i64,
+    /// GitHub account login/username
+    pub account_login: String,
+    /// Account type: "User" or "Organization"
+    pub account_type: String,
+    /// Repository selection: "all" or "selected"
+    #[serde(default)]
+    pub repository_selection: Option<String>,
+    /// When the installation was created
+    #[serde(default)]
+    pub created_at: Option<String>,
+}
+
+/// Response for listing GitHub installations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubInstallationsResponse {
+    /// List of GitHub App installations
+    pub installations: Vec<GitHubInstallation>,
+}
+
+/// Response for getting GitHub App installation URL
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubInstallationUrlResponse {
+    /// URL to install the GitHub App
+    pub installation_url: String,
+}
+
+/// Repository available for connection (from GitHub)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AvailableRepository {
+    /// GitHub repository ID
+    pub id: i64,
+    /// Repository name (e.g., "my-repo")
+    pub name: String,
+    /// Full repository name (e.g., "owner/my-repo")
+    pub full_name: String,
+    /// Repository owner
+    #[serde(default)]
+    pub owner: Option<String>,
+    /// Whether the repository is private
+    #[serde(default)]
+    pub private: bool,
+    /// Default branch name
+    #[serde(default)]
+    pub default_branch: Option<String>,
+    /// Repository description
+    #[serde(default)]
+    pub description: Option<String>,
+    /// Repository HTML URL
+    #[serde(default)]
+    pub html_url: Option<String>,
+    /// GitHub installation ID this repo is accessible through
+    #[serde(default)]
+    pub installation_id: Option<i64>,
+}
+
+/// Response for listing available repositories
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AvailableRepositoriesResponse {
+    /// List of available repositories
+    pub repositories: Vec<AvailableRepository>,
+    /// IDs of repositories already connected to the project
+    #[serde(default)]
+    pub connected_repositories: Vec<i64>,
+    /// Total count of available repositories
+    #[serde(default)]
+    pub total_count: i32,
+    /// Current page number
+    #[serde(default)]
+    pub page: i32,
+    /// Items per page
+    #[serde(default)]
+    pub per_page: i32,
+    /// Whether there are more pages
+    #[serde(default)]
+    pub has_more: bool,
+}
+
+/// Request to connect a repository to a project
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectRepositoryRequest {
+    /// Project ID to connect the repository to
+    pub project_id: String,
+    /// GitHub repository ID
+    pub repository_id: i64,
+    /// Repository name
+    pub repository_name: String,
+    /// Full repository name (owner/repo)
+    pub repository_full_name: String,
+    /// Repository owner
+    pub repository_owner: String,
+    /// Whether the repository is private
+    pub repository_private: bool,
+    /// Default branch name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_branch: Option<String>,
+    /// Connection type (e.g., "app")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connection_type: Option<String>,
+    /// GitHub installation ID
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub github_installation_id: Option<i64>,
+    /// Repository type: "application" or "gitops"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repository_type: Option<String>,
+}
+
+/// Response after connecting a repository to a project
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectRepositoryResponse {
+    /// Connection ID
+    pub id: String,
+    /// Project ID
+    pub project_id: String,
+    /// GitHub repository ID
+    pub repository_id: i64,
+    /// Full repository name
+    pub repository_full_name: String,
+    /// Whether the connection is active
+    #[serde(default = "default_true")]
+    pub is_active: bool,
+}
+
+/// Request to initialize GitOps repository for a project
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InitializeGitOpsRequest {
+    /// GitHub installation ID to use for creating the repo
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub installation_id: Option<i64>,
+}
+
+/// Response after initializing GitOps repository
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InitializeGitOpsResponse {
+    /// Full name of the created/existing GitOps repository
+    pub repo_full_name: String,
+    /// GitHub installation ID used
+    pub installation_id: i64,
 }
 
 #[cfg(test)]
@@ -977,6 +1237,12 @@ mod tests {
         config.target = Some(DeploymentTarget::CloudRunner);
         config.provider = Some(CloudProvider::Gcp);
         config.environment_id = Some("env-123".to_string());
+
+        // Cloud Runner requires region and machine type
+        assert!(!config.is_complete());
+
+        config.region = Some("us-central1".to_string());
+        config.machine_type = Some("e2-small".to_string());
 
         assert!(config.is_complete());
     }
@@ -1118,6 +1384,7 @@ mod tests {
     #[test]
     fn test_create_deployment_config_request_serialization() {
         let request = CreateDeploymentConfigRequest {
+            project_id: "proj-123".to_string(),
             service_name: "api".to_string(),
             repository_id: 12345,
             repository_full_name: "org/repo".to_string(),
@@ -1126,12 +1393,13 @@ mod tests {
             port: 8080,
             branch: "main".to_string(),
             target_type: "cloud_runner".to_string(),
-            provider: "gcp".to_string(),
+            cloud_provider: "gcp".to_string(),
             environment_id: "env-123".to_string(),
             cluster_id: None,
             registry_id: Some("reg-456".to_string()),
             auto_deploy_enabled: true,
-            deployment_strategy: None,
+            is_public: None,
+            cloud_runner_config: None,
         };
 
         let json = serde_json::to_string(&request).unwrap();
@@ -1139,6 +1407,6 @@ mod tests {
         assert!(json.contains("\"port\":8080"));
         // Optional None fields should be skipped
         assert!(!json.contains("clusterId"));
-        assert!(!json.contains("deploymentStrategy"));
+        assert!(!json.contains("isPublic"));
     }
 }
