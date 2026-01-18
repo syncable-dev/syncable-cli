@@ -5,16 +5,20 @@
 
 use super::error::{PlatformApiError, Result};
 use super::types::{
-    ApiErrorResponse, ArtifactRegistry, CloudCredentialStatus, CloudProvider, ClusterEntity,
+    ApiErrorResponse, ArtifactRegistry, AvailableRepositoriesResponse, CloudCredentialStatus,
+    CloudProvider, ClusterEntity, ConnectRepositoryRequest, ConnectRepositoryResponse,
     CreateDeploymentConfigRequest, CreateRegistryRequest, CreateRegistryResponse, DeploymentConfig,
-    DeploymentTaskStatus, Environment, GenericResponse, GetLogsResponse, Organization,
-    PaginatedDeployments, Project, RegistryTaskStatus, TriggerDeploymentRequest,
+    DeploymentTaskStatus, Environment, GenericResponse, GetLogsResponse,
+    GitHubInstallationUrlResponse, GitHubInstallationsResponse, InitializeGitOpsRequest,
+    InitializeGitOpsResponse, Organization, PaginatedDeployments, Project,
+    ProjectRepositoriesResponse, RegistryTaskStatus, TriggerDeploymentRequest,
     TriggerDeploymentResponse, UserProfile,
 };
 use crate::auth::credentials;
 use reqwest::Client;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use urlencoding;
 use std::time::Duration;
 
 /// Production API URL
@@ -396,6 +400,124 @@ impl PlatformApiClient {
     }
 
     // =========================================================================
+    // Repository API methods
+    // =========================================================================
+
+    /// List repositories connected to a project
+    ///
+    /// Returns all GitHub/GitLab repositories that have been connected to the project.
+    /// Use this to get repository info needed for deployment configuration.
+    ///
+    /// Endpoint: GET /api/github/projects/:projectId/repositories
+    pub async fn list_project_repositories(
+        &self,
+        project_id: &str,
+    ) -> Result<ProjectRepositoriesResponse> {
+        let response: GenericResponse<ProjectRepositoriesResponse> = self
+            .get(&format!(
+                "/api/github/projects/{}/repositories",
+                project_id
+            ))
+            .await?;
+        Ok(response.data)
+    }
+
+    // =========================================================================
+    // GitHub Integration API methods
+    // =========================================================================
+
+    /// List GitHub App installations for the organization
+    ///
+    /// Returns all GitHub App installations accessible to the authenticated user's organization.
+    /// Use this to find which GitHub accounts are connected.
+    ///
+    /// Endpoint: GET /api/github/installations
+    pub async fn list_github_installations(&self) -> Result<GitHubInstallationsResponse> {
+        let response: GenericResponse<GitHubInstallationsResponse> =
+            self.get("/api/github/installations").await?;
+        Ok(response.data)
+    }
+
+    /// Get the URL to install the GitHub App
+    ///
+    /// Returns the URL users should visit to install the Syncable GitHub App.
+    /// Use this when no installations are found.
+    ///
+    /// Endpoint: GET /api/github/installation/url
+    pub async fn get_github_installation_url(&self) -> Result<GitHubInstallationUrlResponse> {
+        self.get("/api/github/installation/url").await
+    }
+
+    /// List repositories available for connection
+    ///
+    /// Returns repositories accessible through GitHub App installations,
+    /// including which ones are already connected to the project.
+    ///
+    /// Endpoint: GET /api/github/repositories/available
+    pub async fn list_available_repositories(
+        &self,
+        project_id: Option<&str>,
+        search: Option<&str>,
+        page: Option<i32>,
+    ) -> Result<AvailableRepositoriesResponse> {
+        let mut path = "/api/github/repositories/available".to_string();
+        let mut params = vec![];
+
+        if let Some(pid) = project_id {
+            params.push(format!("projectId={}", pid));
+        }
+        if let Some(s) = search {
+            params.push(format!("search={}", urlencoding::encode(s)));
+        }
+        if let Some(p) = page {
+            params.push(format!("page={}", p));
+        }
+
+        if !params.is_empty() {
+            path = format!("{}?{}", path, params.join("&"));
+        }
+
+        let response: GenericResponse<AvailableRepositoriesResponse> = self.get(&path).await?;
+        Ok(response.data)
+    }
+
+    /// Connect a repository to a project
+    ///
+    /// Connects a GitHub repository to a project, allowing deployments from that repo.
+    ///
+    /// Endpoint: POST /api/github/projects/repositories/connect
+    pub async fn connect_repository(
+        &self,
+        request: &ConnectRepositoryRequest,
+    ) -> Result<ConnectRepositoryResponse> {
+        let response: GenericResponse<ConnectRepositoryResponse> = self
+            .post("/api/github/projects/repositories/connect", request)
+            .await?;
+        Ok(response.data)
+    }
+
+    /// Initialize GitOps repository for a project
+    ///
+    /// Ensures a GitOps infrastructure repository exists for the project.
+    /// If it doesn't exist, automatically creates it using the GitHub App installation.
+    ///
+    /// Endpoint: POST /api/projects/:projectId/gitops/initialize
+    pub async fn initialize_gitops(
+        &self,
+        project_id: &str,
+        installation_id: Option<i64>,
+    ) -> Result<InitializeGitOpsResponse> {
+        let request = InitializeGitOpsRequest { installation_id };
+        let response: GenericResponse<InitializeGitOpsResponse> = self
+            .post(
+                &format!("/api/projects/{}/gitops/initialize", project_id),
+                &request,
+            )
+            .await?;
+        Ok(response.data)
+    }
+
+    // =========================================================================
     // Environment API methods
     // =========================================================================
 
@@ -503,20 +625,15 @@ impl PlatformApiClient {
     /// Create a new deployment configuration
     ///
     /// Creates a deployment config for a service. Requires repository integration
-    /// to be set up first (GitHub/GitLab).
+    /// to be set up first (GitHub/GitLab). The project_id should be included in the request body.
     ///
-    /// Endpoint: POST /api/deployment-configs?projectId=xxx
+    /// Endpoint: POST /api/deployment-configs
     pub async fn create_deployment_config(
         &self,
-        project_id: &str,
         request: &CreateDeploymentConfigRequest,
     ) -> Result<DeploymentConfig> {
-        let response: GenericResponse<DeploymentConfig> = self
-            .post(
-                &format!("/api/deployment-configs?projectId={}", project_id),
-                request,
-            )
-            .await?;
+        let response: GenericResponse<DeploymentConfig> =
+            self.post("/api/deployment-configs", request).await?;
         Ok(response.data)
     }
 
