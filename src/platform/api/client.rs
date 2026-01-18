@@ -634,8 +634,21 @@ impl PlatformApiClient {
         &self,
         request: &CreateDeploymentConfigRequest,
     ) -> Result<DeploymentConfig> {
+        // Log the full request for debugging
+        if let Ok(json) = serde_json::to_string_pretty(request) {
+            log::debug!("Creating deployment config with request:\n{}", json);
+        }
+
         let response: GenericResponse<CreateDeploymentConfigResponse> =
             self.post("/api/deployment-configs", request).await?;
+
+        log::debug!(
+            "Deployment config created: id={}, serviceName={}, wasUpdated={}",
+            response.data.config.id,
+            response.data.config.service_name,
+            response.data.was_updated
+        );
+
         Ok(response.data.config)
     }
 

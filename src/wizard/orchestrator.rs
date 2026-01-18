@@ -381,6 +381,23 @@ pub async fn run_wizard(
         },
     };
 
+    // Debug output - show key fields being sent
+    log::debug!("CreateDeploymentConfigRequest fields:");
+    log::debug!("  projectId: {}", deploy_request.project_id);
+    log::debug!("  serviceName: {}", deploy_request.service_name);
+    log::debug!("  environmentId: {}", deploy_request.environment_id);
+    log::debug!("  repositoryId: {}", deploy_request.repository_id);
+    log::debug!("  repositoryFullName: {}", deploy_request.repository_full_name);
+    log::debug!("  dockerfilePath: {:?}", deploy_request.dockerfile_path);
+    log::debug!("  buildContext: {:?}", deploy_request.build_context);
+    log::debug!("  targetType: {}", deploy_request.target_type);
+    log::debug!("  cloudProvider: {}", deploy_request.cloud_provider);
+    log::debug!("  port: {}", deploy_request.port);
+    log::debug!("  branch: {}", deploy_request.branch);
+    if let Some(ref config) = deploy_request.cloud_runner_config {
+        log::debug!("  cloudRunnerConfig: {}", config);
+    }
+
     let deployment_config = match client.create_deployment_config(&deploy_request).await {
         Ok(config) => config,
         Err(e) => {
@@ -393,6 +410,9 @@ pub async fn run_wizard(
         "✓".green(),
         deployment_config.id.dimmed()
     );
+    log::debug!("  Config ID: {}", deployment_config.id);
+    log::debug!("  Service Name: {}", deployment_config.service_name);
+    log::debug!("  Environment ID: {}", deployment_config.environment_id);
 
     // Trigger deployment
     println!("{}", "Triggering deployment...".dimmed());
