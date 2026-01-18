@@ -531,6 +531,16 @@ pub enum DeployCommand {
 
     /// Create a new environment for the current project
     NewEnv,
+
+    /// Check deployment status
+    Status {
+        /// The deployment task ID (from deploy command output)
+        task_id: String,
+
+        /// Watch for status updates (poll until complete)
+        #[arg(short, long)]
+        watch: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
