@@ -433,9 +433,8 @@ impl PlatformApiClient {
     ///
     /// Endpoint: GET /api/github/installations
     pub async fn list_github_installations(&self) -> Result<GitHubInstallationsResponse> {
-        let response: GenericResponse<GitHubInstallationsResponse> =
-            self.get("/api/github/installations").await?;
-        Ok(response.data)
+        // API returns { installations: [...] } directly (no GenericResponse wrapper)
+        self.get("/api/github/installations").await
     }
 
     /// Get the URL to install the GitHub App
@@ -650,7 +649,10 @@ impl PlatformApiClient {
         &self,
         request: &TriggerDeploymentRequest,
     ) -> Result<TriggerDeploymentResponse> {
-        self.post("/api/deployment-configs/deploy", request).await
+        // API returns { data: TriggerDeploymentResponse }
+        let response: GenericResponse<TriggerDeploymentResponse> =
+            self.post("/api/deployment-configs/deploy", request).await?;
+        Ok(response.data)
     }
 
     /// Get deployment task status
