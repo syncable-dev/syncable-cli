@@ -282,26 +282,13 @@ pub async fn run_wizard(
         DockerfileSelectionResult::Cancelled => return WizardResult::Cancelled,
     };
 
-    // Get dockerfile path relative to build context
-    // If build_context is a subdirectory and dockerfile is within it, make path relative
-    let dockerfile_path = {
-        let full_path = selected_dockerfile
-            .path
-            .strip_prefix(project_path)
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|_| selected_dockerfile.path.to_string_lossy().to_string());
-
-        // If build_context is not "." and dockerfile starts with build_context, make it relative
-        if build_context != "." && full_path.starts_with(&build_context) {
-            full_path
-                .strip_prefix(&build_context)
-                .and_then(|p| p.strip_prefix('/'))
-                .unwrap_or(&full_path)
-                .to_string()
-        } else {
-            full_path
-        }
-    };
+    // Get dockerfile path relative to repo root (not build context)
+    // Docker's -f flag expects path from where docker is invoked, not relative to context
+    let dockerfile_path = selected_dockerfile
+        .path
+        .strip_prefix(project_path)
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| selected_dockerfile.path.to_string_lossy().to_string());
 
     // Step 6: Config form
     let config = match collect_config(
