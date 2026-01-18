@@ -282,13 +282,27 @@ pub async fn run_wizard(
         DockerfileSelectionResult::Cancelled => return WizardResult::Cancelled,
     };
 
-    // Get dockerfile path relative to repo root (not build context)
-    // Docker's -f flag expects path from where docker is invoked, not relative to context
-    let dockerfile_path = selected_dockerfile
+    // Construct dockerfile path from build_context and filename
+    // This is more robust than strip_prefix which can have path matching edge cases
+    // Docker's -f flag expects path relative to repo root (where docker is invoked)
+    let dockerfile_name = selected_dockerfile
         .path
-        .strip_prefix(project_path)
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| selected_dockerfile.path.to_string_lossy().to_string());
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "Dockerfile".to_string());
+
+    let dockerfile_path = if build_context == "." || build_context.is_empty() {
+        dockerfile_name.clone() // Dockerfile at repo root
+    } else {
+        format!("{}/{}", build_context, dockerfile_name) // e.g., "services/foo/Dockerfile"
+    };
+
+    log::debug!(
+        "Dockerfile path: {}, build_context: {}, dockerfile_name: {}",
+        dockerfile_path,
+        build_context,
+        dockerfile_name
+    );
 
     // Step 6: Config form
     let config = match collect_config(
