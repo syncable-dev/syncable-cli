@@ -283,6 +283,19 @@ pub struct DeploymentConfig {
     pub created_at: DateTime<Utc>,
 }
 
+/// Response from creating a deployment config
+///
+/// The API returns the config wrapped with a wasUpdated flag indicating
+/// whether an existing config was updated or a new one was created.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateDeploymentConfigResponse {
+    /// The created or updated deployment config
+    pub config: DeploymentConfig,
+    /// Whether this was an update to an existing config (vs new creation)
+    pub was_updated: bool,
+}
+
 /// Request to trigger deployment
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
