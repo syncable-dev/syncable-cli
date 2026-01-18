@@ -7,10 +7,10 @@ use super::error::{PlatformApiError, Result};
 use super::types::{
     ApiErrorResponse, ArtifactRegistry, AvailableRepositoriesResponse, CloudCredentialStatus,
     CloudProvider, ClusterEntity, ConnectRepositoryRequest, ConnectRepositoryResponse,
-    CreateDeploymentConfigRequest, CreateRegistryRequest, CreateRegistryResponse, DeploymentConfig,
-    DeploymentTaskStatus, Environment, GenericResponse, GetLogsResponse,
-    GitHubInstallationUrlResponse, GitHubInstallationsResponse, InitializeGitOpsRequest,
-    InitializeGitOpsResponse, Organization, PaginatedDeployments, Project,
+    CreateDeploymentConfigRequest, CreateDeploymentConfigResponse, CreateRegistryRequest,
+    CreateRegistryResponse, DeploymentConfig, DeploymentTaskStatus, Environment, GenericResponse,
+    GetLogsResponse, GitHubInstallationUrlResponse, GitHubInstallationsResponse,
+    InitializeGitOpsRequest, InitializeGitOpsResponse, Organization, PaginatedDeployments, Project,
     ProjectRepositoriesResponse, RegistryTaskStatus, TriggerDeploymentRequest,
     TriggerDeploymentResponse, UserProfile,
 };
@@ -627,14 +627,17 @@ impl PlatformApiClient {
     /// Creates a deployment config for a service. Requires repository integration
     /// to be set up first (GitHub/GitLab). The project_id should be included in the request body.
     ///
+    /// Returns the created/updated deployment config. The API also returns a `was_updated`
+    /// flag indicating whether this was an update to an existing config.
+    ///
     /// Endpoint: POST /api/deployment-configs
     pub async fn create_deployment_config(
         &self,
         request: &CreateDeploymentConfigRequest,
     ) -> Result<DeploymentConfig> {
-        let response: GenericResponse<DeploymentConfig> =
+        let response: GenericResponse<CreateDeploymentConfigResponse> =
             self.post("/api/deployment-configs", request).await?;
-        Ok(response.data)
+        Ok(response.data.config)
     }
 
     /// Trigger a deployment using a deployment config
