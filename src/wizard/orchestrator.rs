@@ -2,8 +2,8 @@
 
 use crate::analyzer::discover_dockerfiles_for_deployment;
 use crate::platform::api::types::{
-    CloudRunnerConfig, ConnectRepositoryRequest, CreateDeploymentConfigRequest, DeploymentTarget,
-    ProjectRepository, TriggerDeploymentRequest, WizardDeploymentConfig,
+    build_cloud_runner_config, ConnectRepositoryRequest, CreateDeploymentConfigRequest,
+    DeploymentTarget, ProjectRepository, TriggerDeploymentRequest, WizardDeploymentConfig,
 };
 use crate::platform::api::PlatformApiClient;
 use crate::wizard::{
@@ -354,12 +354,13 @@ pub async fn run_wizard(
         auto_deploy_enabled: config.auto_deploy,
         is_public: Some(config.is_public),
         cloud_runner_config: if target == DeploymentTarget::CloudRunner {
-            Some(CloudRunnerConfig {
-                region: region.clone(),
-                machine_type: machine_type.clone(),
-                is_public: Some(config.is_public),
-                health_check_path: config.health_check_path.clone(),
-            })
+            Some(build_cloud_runner_config(
+                &provider,
+                region.as_deref().unwrap_or(""),
+                machine_type.as_deref().unwrap_or(""),
+                config.is_public,
+                config.health_check_path.as_deref(),
+            ))
         } else {
             None
         },
