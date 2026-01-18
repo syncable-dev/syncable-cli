@@ -402,8 +402,22 @@ pub async fn run_wizard(
         commit_sha: None, // Use latest from branch
     };
 
+    // Debug: Show trigger request
+    log::debug!(
+        "Trigger request: projectId={}, configId={}",
+        trigger_request.project_id,
+        trigger_request.config_id
+    );
+
     match client.trigger_deployment(&trigger_request).await {
         Ok(response) => {
+            log::info!(
+                "Deployment triggered successfully: taskId={}, status={}, message={}",
+                response.backstage_task_id,
+                response.status,
+                response.message
+            );
+
             println!();
             println!(
                 "{}",
@@ -435,6 +449,13 @@ pub async fn run_wizard(
             })
         }
         Err(e) => {
+            log::error!("Failed to trigger deployment: {}", e);
+            eprintln!(
+                "\n{} {} {}\n",
+                "✗".red().bold(),
+                "Deployment trigger failed:".red().bold(),
+                e
+            );
             WizardResult::Error(format!("Failed to trigger deployment: {}", e))
         }
     }

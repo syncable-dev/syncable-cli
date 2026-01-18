@@ -649,9 +649,22 @@ impl PlatformApiClient {
         &self,
         request: &TriggerDeploymentRequest,
     ) -> Result<TriggerDeploymentResponse> {
+        log::debug!(
+            "Triggering deployment: POST /api/deployment-configs/deploy with projectId={}, configId={}",
+            request.project_id,
+            request.config_id
+        );
+
         // API returns { data: TriggerDeploymentResponse }
         let response: GenericResponse<TriggerDeploymentResponse> =
             self.post("/api/deployment-configs/deploy", request).await?;
+
+        log::debug!(
+            "Deployment triggered successfully: backstageTaskId={}, status={}",
+            response.data.backstage_task_id,
+            response.data.status
+        );
+
         Ok(response.data)
     }
 
