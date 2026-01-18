@@ -839,7 +839,11 @@ pub struct ProjectRepositoriesResponse {
     pub total_count: i32,
 }
 
-/// Cloud Runner configuration for deployment
+/// Cloud Runner configuration for internal wizard use
+///
+/// Note: This is used internally by the wizard to collect configuration.
+/// When sending to the API, use `build_cloud_runner_config()` to create
+/// the provider-nested structure the backend expects.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CloudRunnerConfig {
@@ -855,6 +859,59 @@ pub struct CloudRunnerConfig {
     /// Health check endpoint path
     #[serde(skip_serializing_if = "Option::is_none")]
     pub health_check_path: Option<String>,
+}
+
+/// Build the cloud runner config in the provider-nested structure expected by backend.
+///
+/// The backend expects:
+/// - For GCP: `{ "gcp": { "region": "...", "allowUnauthenticated": true } }`
+/// - For Hetzner: `{ "hetzner": { "location": "...", "serverType": "..." } }`
+///
+/// # Arguments
+/// * `provider` - The cloud provider (GCP, Hetzner, etc.)
+/// * `region` - Region/location for deployment
+/// * `machine_type` - Machine/server type
+/// * `is_public` - Whether the service should be publicly accessible
+/// * `health_check_path` - Optional health check endpoint path
+pub fn build_cloud_runner_config(
+    provider: &CloudProvider,
+    region: &str,
+    machine_type: &str,
+    is_public: bool,
+    health_check_path: Option<&str>,
+) -> serde_json::Value {
+    match provider {
+        CloudProvider::Gcp => {
+            let mut gcp_config = serde_json::json!({
+                "region": region,
+                "allowUnauthenticated": is_public,
+            });
+            if let Some(path) = health_check_path {
+                gcp_config["healthCheckPath"] = serde_json::json!(path);
+            }
+            serde_json::json!({
+                "gcp": gcp_config
+            })
+        }
+        CloudProvider::Hetzner => {
+            serde_json::json!({
+                "hetzner": {
+                    "location": region,
+                    "serverType": machine_type
+                }
+            })
+        }
+        // For other providers, use a generic structure
+        _ => {
+            serde_json::json!({
+                provider.as_str(): {
+                    "region": region,
+                    "machineType": machine_type,
+                    "isPublic": is_public
+                }
+            })
+        }
+    }
 }
 
 /// Request body for creating a new deployment configuration
@@ -896,9 +953,12 @@ pub struct CreateDeploymentConfigRequest {
     /// Public access for the service
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_public: Option<bool>,
-    /// Cloud Runner specific configuration
+    /// Cloud Runner specific configuration (provider-nested structure)
+    ///
+    /// Use `build_cloud_runner_config()` to create this value.
+    /// Backend expects: `{ "gcp": {...} }` or `{ "hetzner": {...} }`
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cloud_runner_config: Option<CloudRunnerConfig>,
+    pub cloud_runner_config: Option<serde_json::Value>,
 }
 
 /// Provider deployment availability status for the wizard
@@ -985,12 +1045,36 @@ pub struct GitHubInstallation {
     pub account_login: String,
     /// Account type: "User" or "Organization"
     pub account_type: String,
+    /// Target type: "User" or "Organization"
+    #[serde(default)]
+    pub target_type: Option<String>,
+    /// Permissions granted to the app
+    #[serde(default)]
+    pub permissions: Option<serde_json::Value>,
+    /// Events the app is subscribed to
+    #[serde(default)]
+    pub events: Option<Vec<String>>,
     /// Repository selection: "all" or "selected"
     #[serde(default)]
     pub repository_selection: Option<String>,
+    /// GitHub App ID
+    #[serde(default)]
+    pub app_id: Option<i64>,
+    /// GitHub App slug
+    #[serde(default)]
+    pub app_slug: Option<String>,
+    /// When the installation was suspended
+    #[serde(default)]
+    pub suspended_at: Option<String>,
+    /// Who suspended the installation
+    #[serde(default)]
+    pub suspended_by: Option<String>,
     /// When the installation was created
     #[serde(default)]
     pub created_at: Option<String>,
+    /// When the installation was last updated
+    #[serde(default)]
+    pub updated_at: Option<String>,
 }
 
 /// Response for listing GitHub installations
@@ -1421,5 +1505,69 @@ mod tests {
         // Optional None fields should be skipped
         assert!(!json.contains("clusterId"));
         assert!(!json.contains("isPublic"));
+    }
+
+    // =========================================================================
+    // Cloud Runner Config Builder Tests
+    // =========================================================================
+
+    #[test]
+    fn test_build_cloud_runner_config_gcp() {
+        let config = build_cloud_runner_config(
+            &CloudProvider::Gcp,
+            "us-central1",
+            "e2-small",
+            true,
+            Some("/health"),
+        );
+        let gcp = config.get("gcp").expect("should have gcp key");
+        assert_eq!(gcp.get("region").and_then(|v| v.as_str()), Some("us-central1"));
+        assert_eq!(gcp.get("allowUnauthenticated").and_then(|v| v.as_bool()), Some(true));
+        assert_eq!(gcp.get("healthCheckPath").and_then(|v| v.as_str()), Some("/health"));
+    }
+
+    #[test]
+    fn test_build_cloud_runner_config_gcp_private() {
+        let config = build_cloud_runner_config(
+            &CloudProvider::Gcp,
+            "europe-west1",
+            "e2-medium",
+            false,
+            None,
+        );
+        let gcp = config.get("gcp").expect("should have gcp key");
+        assert_eq!(gcp.get("region").and_then(|v| v.as_str()), Some("europe-west1"));
+        assert_eq!(gcp.get("allowUnauthenticated").and_then(|v| v.as_bool()), Some(false));
+        // No health check path when not provided
+        assert!(gcp.get("healthCheckPath").is_none());
+    }
+
+    #[test]
+    fn test_build_cloud_runner_config_hetzner() {
+        let config = build_cloud_runner_config(
+            &CloudProvider::Hetzner,
+            "nbg1",
+            "cx22",
+            true,
+            None,
+        );
+        let hetzner = config.get("hetzner").expect("should have hetzner key");
+        assert_eq!(hetzner.get("location").and_then(|v| v.as_str()), Some("nbg1"));
+        assert_eq!(hetzner.get("serverType").and_then(|v| v.as_str()), Some("cx22"));
+    }
+
+    #[test]
+    fn test_build_cloud_runner_config_hetzner_different_location() {
+        let config = build_cloud_runner_config(
+            &CloudProvider::Hetzner,
+            "fsn1",
+            "cx32",
+            false,
+            Some("/healthz"),
+        );
+        let hetzner = config.get("hetzner").expect("should have hetzner key");
+        assert_eq!(hetzner.get("location").and_then(|v| v.as_str()), Some("fsn1"));
+        assert_eq!(hetzner.get("serverType").and_then(|v| v.as_str()), Some("cx32"));
+        // Hetzner config doesn't include health check path in current implementation
     }
 }
