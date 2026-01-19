@@ -584,7 +584,10 @@ impl PlatformApiClient {
             provider.as_str(),
             project_id
         );
-        self.get_optional(&path).await
+        // API wraps responses in { "data": ... }, so we need GenericResponse
+        let response: Option<GenericResponse<CloudCredentialStatus>> =
+            self.get_optional(&path).await?;
+        Ok(response.map(|r| r.data))
     }
 
     /// List all cloud credentials for a project
@@ -777,8 +780,11 @@ impl PlatformApiClient {
     ///
     /// Endpoint: GET /api/clusters/:clusterId
     pub async fn get_cluster(&self, cluster_id: &str) -> Result<Option<ClusterEntity>> {
-        self.get_optional(&format!("/api/clusters/{}", cluster_id))
-            .await
+        // API wraps responses in { "data": ... }, so we need GenericResponse
+        let response: Option<GenericResponse<ClusterEntity>> = self
+            .get_optional(&format!("/api/clusters/{}", cluster_id))
+            .await?;
+        Ok(response.map(|r| r.data))
     }
 
     // =========================================================================
