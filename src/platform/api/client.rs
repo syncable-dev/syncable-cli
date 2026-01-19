@@ -573,21 +573,19 @@ impl PlatformApiClient {
     /// SECURITY NOTE: This method only returns connection STATUS, never actual credentials.
     /// The agent should never have access to OAuth tokens, API keys, or other secrets.
     ///
-    /// Endpoint: GET /api/cloud-credentials/provider/:provider?projectId=xxx
+    /// Uses: GET /api/cloud-credentials?projectId=xxx (lists all, then filters)
     pub async fn check_provider_connection(
         &self,
         provider: &CloudProvider,
         project_id: &str,
     ) -> Result<Option<CloudCredentialStatus>> {
-        let path = format!(
-            "/api/cloud-credentials/provider/{}?projectId={}",
-            provider.as_str(),
-            project_id
-        );
-        // API wraps responses in { "data": ... }, so we need GenericResponse
-        let response: Option<GenericResponse<CloudCredentialStatus>> =
-            self.get_optional(&path).await?;
-        Ok(response.map(|r| r.data))
+        // Use the list endpoint (which works) and filter by provider
+        // The single-provider endpoint may not exist on the backend
+        let all_credentials = self.list_cloud_credentials_for_project(project_id).await?;
+        let matching = all_credentials
+            .into_iter()
+            .find(|c| c.provider.eq_ignore_ascii_case(provider.as_str()));
+        Ok(matching)
     }
 
     /// List all cloud credentials for a project
