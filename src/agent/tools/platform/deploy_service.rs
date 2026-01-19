@@ -561,17 +561,19 @@ User: "deploy this service"
 
         // Build deployment config request
         // Derive dockerfile path and build context from DockerfileInfo
+        // NOTE: When analyzing a subdirectory (args.path), paths must be relative to repo root
         let (dockerfile_path, build_context) = analysis.docker_analysis
             .as_ref()
             .and_then(|d| d.dockerfiles.first())
             .map(|df| {
-                // Get the dockerfile path relative to project root
-                let df_path = df.path.strip_prefix(&analysis_path)
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_else(|_| df.path.to_string_lossy().to_string());
+                // Get dockerfile filename (e.g., "Dockerfile" or "Dockerfile.prod")
+                let dockerfile_name = df.path.file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "Dockerfile".to_string());
 
-                // Build context is the parent directory of the Dockerfile
-                let context = df.path.parent()
+                // Derive build context from dockerfile path relative to analysis_path
+                // The parent directory of the Dockerfile is typically the build context
+                let analysis_relative_context = df.path.parent()
                     .and_then(|p| p.strip_prefix(&analysis_path).ok())
                     .map(|p| {
                         let s = p.to_string_lossy().to_string();
@@ -579,9 +581,44 @@ User: "deploy this service"
                     })
                     .unwrap_or_else(|| ".".to_string());
 
-                (df_path, context)
+                // If we analyzed a subdirectory (args.path), prepend it to get repo-root-relative paths
+                // Otherwise, the context from analyzer is already relative to project root
+                let repo_relative_context = if let Some(ref subpath) = args.path {
+                    // Combine subpath with the analysis-relative build context
+                    if analysis_relative_context == "." {
+                        subpath.clone()
+                    } else {
+                        format!("{}/{}", subpath, analysis_relative_context)
+                    }
+                } else {
+                    analysis_relative_context
+                };
+
+                // Construct dockerfile path: context/Dockerfile
+                // Following orchestrator.rs pattern (see commit 3cb8698)
+                let df_path = if repo_relative_context == "." || repo_relative_context.is_empty() {
+                    dockerfile_name
+                } else {
+                    format!("{}/{}", repo_relative_context, dockerfile_name)
+                };
+
+                (df_path, repo_relative_context)
             })
-            .unwrap_or_else(|| ("Dockerfile".to_string(), ".".to_string()));
+            .unwrap_or_else(|| {
+                // No dockerfile found - use subpath if provided, else defaults
+                if let Some(ref subpath) = args.path {
+                    (format!("{}/Dockerfile", subpath), subpath.clone())
+                } else {
+                    ("Dockerfile".to_string(), ".".to_string())
+                }
+            });
+
+        tracing::debug!(
+            "Deploy service docker config: dockerfile_path={}, build_context={}, subpath={:?}",
+            dockerfile_path,
+            build_context,
+            args.path
+        );
 
         let cloud_runner_config = build_cloud_runner_config(
             &final_provider,
@@ -644,6 +681,10 @@ User: "deploy this service"
                     "machine_type": final_machine,
                     "region": final_region,
                     "port": final_port,
+                    "docker_config": {
+                        "dockerfile_path": dockerfile_path,
+                        "build_context": build_context,
+                    },
                     "message": format!(
                         "NEW deployment started for '{}' on {} environment. Task ID: {}",
                         service_name, resolved_env_name, response.backstage_task_id
