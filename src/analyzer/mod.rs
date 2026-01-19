@@ -167,12 +167,76 @@ pub struct EntryPoint {
     pub command: Option<String>,
 }
 
+/// Source of port detection - indicates where the port was discovered
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum PortSource {
+    /// Detected from Dockerfile EXPOSE directive
+    Dockerfile,
+    /// Detected from docker-compose.yml ports section
+    DockerCompose,
+    /// Detected from package.json scripts (Node.js)
+    PackageJson,
+    /// Inferred from framework defaults (e.g., Express=3000, FastAPI=8000)
+    FrameworkDefault,
+    /// Detected from environment variable reference (e.g., process.env.PORT)
+    EnvVar,
+    /// Detected from source code analysis (e.g., .listen(3000))
+    SourceCode,
+    /// Detected from configuration files (e.g., config.yaml, settings.py)
+    ConfigFile,
+}
+
+impl PortSource {
+    /// Returns a human-readable description of the port source
+    pub fn description(&self) -> &'static str {
+        match self {
+            PortSource::Dockerfile => "Dockerfile EXPOSE",
+            PortSource::DockerCompose => "docker-compose.yml",
+            PortSource::PackageJson => "package.json scripts",
+            PortSource::FrameworkDefault => "framework default",
+            PortSource::EnvVar => "environment variable",
+            PortSource::SourceCode => "source code",
+            PortSource::ConfigFile => "configuration file",
+        }
+    }
+}
+
 /// Represents exposed network ports
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Port {
     pub number: u16,
     pub protocol: Protocol,
     pub description: Option<String>,
+    /// Source where this port was detected (optional for backward compatibility)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<PortSource>,
+}
+
+impl Port {
+    /// Create a new port with source information
+    pub fn with_source(number: u16, protocol: Protocol, source: PortSource) -> Self {
+        Self {
+            number,
+            protocol,
+            description: None,
+            source: Some(source),
+        }
+    }
+
+    /// Create a new port with source and description
+    pub fn with_source_and_description(
+        number: u16,
+        protocol: Protocol,
+        source: PortSource,
+        description: impl Into<String>,
+    ) -> Self {
+        Self {
+            number,
+            protocol,
+            description: Some(description.into()),
+            source: Some(source),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]

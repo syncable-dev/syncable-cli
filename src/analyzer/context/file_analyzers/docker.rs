@@ -1,4 +1,4 @@
-use crate::analyzer::{Port, Protocol, context::helpers::create_regex};
+use crate::analyzer::{Port, PortSource, Protocol, context::helpers::create_regex};
 use crate::common::file_utils::is_readable_file;
 use crate::error::{AnalysisError, Result};
 use std::collections::{HashMap, HashSet};
@@ -101,6 +101,7 @@ fn analyze_docker_files_at(
                     number: port,
                     protocol,
                     description: Some(format!("Exposed in Dockerfile ({})", root.display())),
+                    source: Some(PortSource::Dockerfile),
                 });
             }
         }
@@ -189,6 +190,7 @@ fn analyze_docker_compose(
                                 number: port,
                                 protocol,
                                 description: Some(description),
+                                source: Some(PortSource::DockerCompose),
                             });
                         }
                     }

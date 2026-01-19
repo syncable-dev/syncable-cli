@@ -1,5 +1,5 @@
 use crate::analyzer::{
-    AnalysisConfig, BuildScript, Port, Protocol, context::helpers::create_regex,
+    AnalysisConfig, BuildScript, Port, PortSource, Protocol, context::helpers::create_regex,
 };
 use crate::common::file_utils::{is_readable_file, read_file_safe};
 use crate::error::Result;
@@ -115,6 +115,7 @@ fn analyze_application_properties(
                 number: port,
                 protocol: Protocol::Http,
                 description: Some("Spring Boot server".to_string()),
+                source: Some(PortSource::ConfigFile),
             });
         }
     }
@@ -129,6 +130,7 @@ fn analyze_application_properties(
                 number: port,
                 protocol: Protocol::Http,
                 description: Some("Spring Boot server (default)".to_string()),
+                source: Some(PortSource::ConfigFile),
             });
         }
     }
@@ -144,6 +146,7 @@ fn analyze_application_properties(
                 number: port,
                 protocol: Protocol::Http,
                 description: Some("Quarkus HTTP server".to_string()),
+                source: Some(PortSource::ConfigFile),
             });
         }
     }
@@ -159,6 +162,7 @@ fn analyze_application_properties(
                 number: port,
                 protocol: Protocol::Http,
                 description: Some("Micronaut server".to_string()),
+                source: Some(PortSource::ConfigFile),
             });
         }
     }
@@ -177,6 +181,7 @@ fn analyze_application_properties(
                 number: port,
                 protocol: Protocol::Http,
                 description: Some("Java HTTP server".to_string()),
+                source: Some(PortSource::ConfigFile),
             });
         }
     }
@@ -192,6 +197,7 @@ fn analyze_application_properties(
                 number: port,
                 protocol: Protocol::Http,
                 description: Some("MicroProfile server".to_string()),
+                source: Some(PortSource::ConfigFile),
             });
         }
     }
