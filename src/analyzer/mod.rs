@@ -247,6 +247,63 @@ pub enum Protocol {
     Https,
 }
 
+/// Source of health endpoint detection
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum HealthEndpointSource {
+    /// Found by analyzing source code patterns
+    CodePattern,
+    /// Known framework convention (e.g., Spring Actuator)
+    FrameworkDefault,
+    /// Found in configuration files (e.g., K8s manifests, docker-compose)
+    ConfigFile,
+}
+
+impl HealthEndpointSource {
+    /// Returns a human-readable description of the detection source
+    pub fn description(&self) -> &'static str {
+        match self {
+            HealthEndpointSource::CodePattern => "source code analysis",
+            HealthEndpointSource::FrameworkDefault => "framework convention",
+            HealthEndpointSource::ConfigFile => "configuration file",
+        }
+    }
+}
+
+/// Represents a detected health check endpoint
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct HealthEndpoint {
+    /// The HTTP path for the health check (e.g., "/health", "/healthz")
+    pub path: String,
+    /// Confidence level (0.0-1.0) in this detection
+    pub confidence: f32,
+    /// Where this endpoint was detected from
+    pub source: HealthEndpointSource,
+    /// Optional description or context
+    pub description: Option<String>,
+}
+
+impl HealthEndpoint {
+    /// Create a new health endpoint with high confidence from code analysis
+    pub fn from_code(path: impl Into<String>, confidence: f32) -> Self {
+        Self {
+            path: path.into(),
+            confidence,
+            source: HealthEndpointSource::CodePattern,
+            description: None,
+        }
+    }
+
+    /// Create a health endpoint from a framework default
+    pub fn from_framework(path: impl Into<String>, framework: &str) -> Self {
+        Self {
+            path: path.into(),
+            confidence: 0.7, // Framework defaults have moderate confidence
+            source: HealthEndpointSource::FrameworkDefault,
+            description: Some(format!("{} default health endpoint", framework)),
+        }
+    }
+}
+
 /// Represents environment variables
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EnvVar {
@@ -310,6 +367,9 @@ pub struct ProjectAnalysis {
     pub dependencies: DependencyMap,
     pub entry_points: Vec<EntryPoint>,
     pub ports: Vec<Port>,
+    /// Detected health check endpoints
+    #[serde(default)]
+    pub health_endpoints: Vec<HealthEndpoint>,
     pub environment_variables: Vec<EnvVar>,
     pub project_type: ProjectType,
     pub build_scripts: Vec<BuildScript>,
@@ -473,6 +533,9 @@ pub fn analyze_project_with_config(
     let dependencies = dependency_parser::parse_dependencies(&project_root, &languages, config)?;
     let context = context::analyze_context(&project_root, &languages, &frameworks, config)?;
 
+    // Detect health check endpoints
+    let health_endpoints = context::detect_health_endpoints(&project_root, &frameworks, config.max_file_size);
+
     // Analyze Docker infrastructure
     let docker_analysis = analyze_docker_infrastructure(&project_root).ok();
 
@@ -488,6 +551,7 @@ pub fn analyze_project_with_config(
         dependencies,
         entry_points: context.entry_points,
         ports: context.ports,
+        health_endpoints,
         environment_variables: context.environment_variables,
         project_type: context.project_type,
         build_scripts: context.build_scripts,
