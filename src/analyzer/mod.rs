@@ -337,6 +337,47 @@ pub struct BuildScript {
     pub is_default: bool,
 }
 
+/// Detected infrastructure files and configurations in the project
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct InfrastructurePresence {
+    /// Whether Kubernetes manifests were detected
+    pub has_kubernetes: bool,
+    /// Paths to directories or files containing K8s manifests
+    pub kubernetes_paths: Vec<PathBuf>,
+    /// Whether Helm charts were detected
+    pub has_helm: bool,
+    /// Paths to Helm chart directories (containing Chart.yaml)
+    pub helm_chart_paths: Vec<PathBuf>,
+    /// Whether docker-compose files were detected
+    pub has_docker_compose: bool,
+    /// Whether Terraform files were detected
+    pub has_terraform: bool,
+    /// Paths to directories containing .tf files
+    pub terraform_paths: Vec<PathBuf>,
+    /// Whether Syncable deployment config exists
+    pub has_deployment_config: bool,
+    /// Summary of what was detected for display purposes
+    pub summary: Option<String>,
+}
+
+impl InfrastructurePresence {
+    /// Returns true if any infrastructure was detected
+    pub fn has_any(&self) -> bool {
+        self.has_kubernetes || self.has_helm || self.has_docker_compose || self.has_terraform || self.has_deployment_config
+    }
+
+    /// Returns a list of detected infrastructure types
+    pub fn detected_types(&self) -> Vec<&'static str> {
+        let mut types = Vec::new();
+        if self.has_kubernetes { types.push("Kubernetes"); }
+        if self.has_helm { types.push("Helm"); }
+        if self.has_docker_compose { types.push("Docker Compose"); }
+        if self.has_terraform { types.push("Terraform"); }
+        if self.has_deployment_config { types.push("Syncable Config"); }
+        types
+    }
+}
+
 /// Type alias for dependency maps
 pub type DependencyMap = HashMap<String, String>;
 
@@ -379,6 +420,9 @@ pub struct ProjectAnalysis {
     pub architecture_type: ArchitectureType,
     /// Docker infrastructure analysis
     pub docker_analysis: Option<DockerAnalysis>,
+    /// Detected infrastructure (K8s, Helm, Terraform, etc.)
+    #[serde(default)]
+    pub infrastructure: Option<InfrastructurePresence>,
     pub analysis_metadata: AnalysisMetadata,
 }
 
@@ -536,6 +580,9 @@ pub fn analyze_project_with_config(
     // Detect health check endpoints
     let health_endpoints = context::detect_health_endpoints(&project_root, &frameworks, config.max_file_size);
 
+    // Detect infrastructure presence (K8s, Helm, Terraform, etc.)
+    let infrastructure = context::detect_infrastructure(&project_root);
+
     // Analyze Docker infrastructure
     let docker_analysis = analyze_docker_infrastructure(&project_root).ok();
 
@@ -558,6 +605,7 @@ pub fn analyze_project_with_config(
         services: vec![], // TODO: Implement microservice detection
         architecture_type: ArchitectureType::Monolithic, // TODO: Detect architecture type
         docker_analysis,
+        infrastructure: Some(infrastructure),
         analysis_metadata: AnalysisMetadata {
             timestamp: Utc::now().to_rfc3339(),
             analyzer_version: env!("CARGO_PKG_VERSION").to_string(),
