@@ -357,8 +357,11 @@ pub async fn run_wizard(
         service_name: config.service_name.clone().unwrap_or_default(),
         repository_id: repository.repository_id,
         repository_full_name: repository.repository_full_name.clone(),
+        // Send both field name variants for backend compatibility
         dockerfile_path: config.dockerfile_path.clone(),
+        dockerfile: config.dockerfile_path.clone(), // Alias
         build_context: config.build_context.clone(),
+        context: config.build_context.clone(), // Alias
         port: config.port.unwrap_or(8080) as i32,
         branch: config.branch.clone().unwrap_or_else(|| "main".to_string()),
         target_type: target.as_str().to_string(),

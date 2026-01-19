@@ -19,8 +19,10 @@ pub enum ConfigFormResult {
 
 /// Collect deployment configuration details from user
 ///
-/// Dockerfile path and build context are already selected in the previous step,
-/// so this form only collects service name, port, branch, and auto-deploy settings.
+/// Region, machine type, Dockerfile path, and build context are already selected
+/// in previous steps. This form collects service name, port, branch, public access,
+/// health check, and auto-deploy settings.
+#[allow(clippy::too_many_arguments)]
 pub fn collect_config(
     provider: CloudProvider,
     target: DeploymentTarget,
@@ -30,14 +32,17 @@ pub fn collect_config(
     dockerfile_path: &str,
     build_context: &str,
     discovered_dockerfile: &DiscoveredDockerfile,
+    region: Option<String>,
+    machine_type: Option<String>,
+    step_number: u8,
 ) -> ConfigFormResult {
     display_step_header(
-        6,
-        "Configure Deployment",
+        step_number,
+        "Configure Service",
         "Provide details for your service deployment.",
     );
 
-    // Show selected Dockerfile info
+    // Show previously selected options
     println!(
         "  {} Dockerfile: {}",
         "│".dimmed(),
@@ -48,6 +53,12 @@ pub fn collect_config(
         "│".dimmed(),
         build_context.cyan()
     );
+    if let Some(ref r) = region {
+        println!("  {} Region: {}", "│".dimmed(), r.cyan());
+    }
+    if let Some(ref m) = machine_type {
+        println!("  {} Machine: {}", "│".dimmed(), m.cyan());
+    }
     println!();
 
     // Pre-populate from discovery
@@ -97,18 +108,61 @@ pub fn collect_config(
         Err(_) => return ConfigFormResult::Cancelled,
     };
 
-    // Auto-deploy toggle
-    let auto_deploy = match Confirm::new("Enable auto-deploy on push?")
-        .with_default(true)
-        .with_help_message("Automatically deploy when pushing to this branch")
-        .prompt()
-    {
-        Ok(v) => v,
-        Err(InquireError::OperationCanceled) | Err(InquireError::OperationInterrupted) => {
-            return ConfigFormResult::Cancelled;
+    // Public access toggle (for Cloud Runner)
+    let is_public = if target == DeploymentTarget::CloudRunner {
+        println!();
+        println!(
+            "{}",
+            "─── Access Configuration ────────────────────".dimmed()
+        );
+        match Confirm::new("Enable public access?")
+            .with_default(true)
+            .with_help_message("Make service accessible via public IP/URL")
+            .prompt()
+        {
+            Ok(v) => v,
+            Err(InquireError::OperationCanceled) | Err(InquireError::OperationInterrupted) => {
+                return ConfigFormResult::Cancelled;
+            }
+            Err(_) => return ConfigFormResult::Cancelled,
         }
-        Err(_) => return ConfigFormResult::Cancelled,
+    } else {
+        true // Default to public for K8s
     };
+
+    // Health check (optional)
+    let health_check_path = if target == DeploymentTarget::CloudRunner {
+        match Confirm::new("Configure health check endpoint?")
+            .with_default(false)
+            .with_help_message("Optional HTTP health probe for your service")
+            .prompt()
+        {
+            Ok(true) => {
+                match Text::new("Health check path:")
+                    .with_default("/health")
+                    .with_help_message("e.g., /health, /healthz, /api/health")
+                    .prompt()
+                {
+                    Ok(path) => Some(path),
+                    Err(InquireError::OperationCanceled)
+                    | Err(InquireError::OperationInterrupted) => {
+                        return ConfigFormResult::Cancelled;
+                    }
+                    Err(_) => return ConfigFormResult::Cancelled,
+                }
+            }
+            Ok(false) => None,
+            Err(InquireError::OperationCanceled) | Err(InquireError::OperationInterrupted) => {
+                return ConfigFormResult::Cancelled;
+            }
+            Err(_) => return ConfigFormResult::Cancelled,
+        }
+    } else {
+        None
+    };
+
+    // Auto-deploy disabled by default (CI/CD not ready yet)
+    let auto_deploy = false;
 
     // Build the config
     let config = WizardDeploymentConfig {
@@ -123,6 +177,10 @@ pub fn collect_config(
         registry_id,
         environment_id: Some(environment_id.to_string()),
         auto_deploy,
+        region,
+        machine_type,
+        is_public,
+        health_check_path,
     };
 
     println!("\n{} Configuration complete: {}", "✓".green(), service_name);
