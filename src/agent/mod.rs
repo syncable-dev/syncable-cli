@@ -595,6 +595,8 @@ pub async fn run_interactive(
                         .tool(CheckProviderConnectionTool::new())
                         .tool(ListDeploymentCapabilitiesTool::new())
                         // Deployment tools for service management
+                        .tool(CreateDeploymentConfigTool::new())
+                        .tool(DeployServiceTool::new(project_path_buf.clone()))
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
                         .tool(GetDeploymentStatusTool::new())
@@ -710,6 +712,8 @@ pub async fn run_interactive(
                         .tool(CheckProviderConnectionTool::new())
                         .tool(ListDeploymentCapabilitiesTool::new())
                         // Deployment tools for service management
+                        .tool(CreateDeploymentConfigTool::new())
+                        .tool(DeployServiceTool::new(project_path_buf.clone()))
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
                         .tool(GetDeploymentStatusTool::new())
@@ -816,6 +820,8 @@ pub async fn run_interactive(
                         .tool(CheckProviderConnectionTool::new())
                         .tool(ListDeploymentCapabilitiesTool::new())
                         // Deployment tools for service management
+                        .tool(CreateDeploymentConfigTool::new())
+                        .tool(DeployServiceTool::new(project_path_buf.clone()))
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
                         .tool(GetDeploymentStatusTool::new())
@@ -2270,6 +2276,8 @@ pub async fn run_query(
                         .tool(CheckProviderConnectionTool::new())
                         .tool(ListDeploymentCapabilitiesTool::new())
                         // Deployment tools for service management
+                        .tool(CreateDeploymentConfigTool::new())
+                        .tool(DeployServiceTool::new(project_path_buf.clone()))
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
                         .tool(GetDeploymentStatusTool::new())
@@ -2353,6 +2361,8 @@ pub async fn run_query(
                         .tool(CheckProviderConnectionTool::new())
                         .tool(ListDeploymentCapabilitiesTool::new())
                         // Deployment tools for service management
+                        .tool(CreateDeploymentConfigTool::new())
+                        .tool(DeployServiceTool::new(project_path_buf.clone()))
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
                         .tool(GetDeploymentStatusTool::new())
@@ -2425,6 +2435,8 @@ pub async fn run_query(
                         .tool(CheckProviderConnectionTool::new())
                         .tool(ListDeploymentCapabilitiesTool::new())
                         // Deployment tools for service management
+                        .tool(CreateDeploymentConfigTool::new())
+                        .tool(DeployServiceTool::new(project_path_buf.clone()))
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
                         .tool(GetDeploymentStatusTool::new())
