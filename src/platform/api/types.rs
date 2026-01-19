@@ -927,11 +927,18 @@ pub struct CreateDeploymentConfigRequest {
     /// Full repository name (e.g., "owner/repo")
     pub repository_full_name: String,
     /// Path to Dockerfile relative to repo root
+    /// Note: Backend may use "dockerfile" or "dockerfilePath" - sending both for compatibility
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dockerfile_path: Option<String>,
+    /// Alias for dockerfile_path (some backend endpoints expect this name)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dockerfile: Option<String>,
     /// Build context path relative to repo root
     #[serde(skip_serializing_if = "Option::is_none")]
     pub build_context: Option<String>,
+    /// Alias for build_context (some backend endpoints expect this name)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context: Option<String>,
     /// Port the service listens on
     pub port: i32,
     /// Git branch to deploy from
@@ -1486,7 +1493,9 @@ mod tests {
             repository_id: 12345,
             repository_full_name: "org/repo".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
+            dockerfile: Some("Dockerfile".to_string()),
             build_context: Some(".".to_string()),
+            context: Some(".".to_string()),
             port: 8080,
             branch: "main".to_string(),
             target_type: "cloud_runner".to_string(),
