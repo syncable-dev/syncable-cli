@@ -15,6 +15,10 @@ use crate::platform::api::{PlatformApiClient, PlatformApiError};
 pub struct GetDeploymentStatusArgs {
     /// The task ID to check status for
     pub task_id: String,
+    /// Optional project ID to check actual deployment status (for public_url)
+    pub project_id: Option<String>,
+    /// Optional service name to find the specific deployment
+    pub service_name: Option<String>,
 }
 
 /// Error type for get deployment status operations
@@ -46,14 +50,20 @@ impl Tool for GetDeploymentStatusTool {
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
             name: Self::NAME.to_string(),
-            description: r#"Get the status of a deployment task.
+            description: r#"Get the status of a deployment task and optionally check the actual service status.
 
 Returns the current status of a deployment, including progress percentage,
-current step, and overall status.
+current step, overall status, and optionally the public URL if the service is ready.
+
+**IMPORTANT for Cloud Runner:**
+The task may show "completed" when infrastructure is provisioned, but the actual
+service build and deployment takes longer. Pass project_id and service_name to
+also check if the service has a public URL (meaning it's actually ready).
 
 **Status Values:**
 - Task status: "processing", "completed", "failed"
 - Overall status: "generating", "building", "deploying", "healthy", "failed"
+- Service ready: Only when public_url is available
 
 **Prerequisites:**
 - User must be authenticated via `sync-ctl auth login`
@@ -61,7 +71,7 @@ current step, and overall status.
 
 **Use Cases:**
 - Monitor deployment progress after triggering
-- Check if a deployment has completed
+- Check if a deployment has completed AND is actually serving traffic
 - Get error details if deployment failed"#
                 .to_string(),
             parameters: json!({
@@ -70,6 +80,14 @@ current step, and overall status.
                     "task_id": {
                         "type": "string",
                         "description": "The deployment task ID (from trigger_deployment response)"
+                    },
+                    "project_id": {
+                        "type": "string",
+                        "description": "Optional: Project ID to check actual service status and public URL"
+                    },
+                    "service_name": {
+                        "type": "string",
+                        "description": "Optional: Service name to find the specific deployment"
                     }
                 },
                 "required": ["task_id"]
@@ -99,32 +117,71 @@ current step, and overall status.
             }
         };
 
-        // Get the deployment status
+        // Get the deployment status (Backstage task)
         match client.get_deployment_status(&args.task_id).await {
             Ok(status) => {
-                let is_complete = status.status == "completed";
+                let task_complete = status.status == "completed";
                 let is_failed = status.status == "failed" || status.overall_status == "failed";
                 let is_healthy = status.overall_status == "healthy";
+
+                // Also check actual deployment if project_id and service_name provided
+                // This is crucial for Cloud Runner where task completes but service takes longer
+                let (service_status, public_url, service_ready) = if let (Some(project_id), Some(service_name)) = (&args.project_id, &args.service_name) {
+                    match client.list_deployments(project_id, Some(10)).await {
+                        Ok(paginated) => {
+                            // Find the deployment for this service
+                            let deployment = paginated.data.iter()
+                                .find(|d| d.service_name.eq_ignore_ascii_case(service_name));
+
+                            match deployment {
+                                Some(d) => (
+                                    Some(d.status.clone()),
+                                    d.public_url.clone(),
+                                    d.public_url.is_some() && d.status == "running"
+                                ),
+                                None => (None, None, false)
+                            }
+                        }
+                        Err(_) => (None, None, false)
+                    }
+                } else {
+                    (None, None, false)
+                };
+
+                // True completion = task done AND (service has URL or no service check requested)
+                let truly_ready = if args.project_id.is_some() {
+                    service_ready
+                } else {
+                    is_healthy
+                };
 
                 let mut result = json!({
                     "success": true,
                     "task_id": args.task_id,
-                    "status": status.status,
-                    "progress": status.progress,
+                    "task_status": status.status,
+                    "task_progress": status.progress,
                     "current_step": status.current_step,
                     "overall_status": status.overall_status,
                     "overall_message": status.overall_message,
-                    "is_complete": is_complete,
+                    "task_complete": task_complete,
                     "is_failed": is_failed,
-                    "is_healthy": is_healthy
+                    "service_ready": truly_ready
                 });
+
+                // Add service-specific info if we checked
+                if let Some(svc_status) = service_status {
+                    result["service_status"] = json!(svc_status);
+                }
+                if let Some(url) = &public_url {
+                    result["public_url"] = json!(url);
+                }
 
                 // Add error details if failed
                 if let Some(error) = &status.error {
                     result["error"] = json!(error);
                 }
 
-                // Add next steps based on status
+                // Add next steps based on actual status
                 if is_failed {
                     result["next_steps"] = json!([
                         "Review the error message for details",
@@ -132,13 +189,20 @@ current step, and overall status.
                         "Verify the code builds successfully locally",
                         "Try triggering a new deployment after fixing the issue"
                     ]);
-                } else if is_healthy {
+                } else if truly_ready && public_url.is_some() {
                     result["next_steps"] = json!([
-                        "Deployment completed successfully",
-                        "Use list_deployments to see the deployed service details",
-                        "Check the public_url to access the deployed service"
+                        format!("Service is live at: {}", public_url.as_ref().unwrap()),
+                        "Deployment completed successfully!",
+                        "Use get_service_logs to view container logs"
                     ]);
-                } else if !is_complete {
+                } else if task_complete && !truly_ready {
+                    result["next_steps"] = json!([
+                        "Infrastructure task completed, but service is still deploying",
+                        "Cloud Runner is building and deploying your container",
+                        "Call get_deployment_status again in 30-60 seconds to check for public_url"
+                    ]);
+                    result["note"] = json!("Task shows 100% but service is still being built/deployed. This is normal for Cloud Runner.");
+                } else if !task_complete {
                     result["next_steps"] = json!([
                         format!("Deployment is {} ({}% complete)", status.overall_status, status.progress),
                         "Call get_deployment_status again to check progress"
