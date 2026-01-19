@@ -232,7 +232,50 @@ User: "deploy this service"
         let project_id = session.project_id.clone().unwrap_or_default();
         let environment_id = session.environment_id.clone();
 
-        // 4. Get available providers
+        // 4. Check for existing deployment configs (duplicate detection)
+        let existing_configs = match client.list_deployment_configs(&project_id).await {
+            Ok(configs) => configs,
+            Err(e) => {
+                // Non-fatal - continue without duplicate detection
+                tracing::warn!("Failed to fetch existing configs: {}", e);
+                Vec::new()
+            }
+        };
+
+        // Get service name early to check for duplicates
+        let service_name = get_service_name(&analysis_path);
+
+        // Find existing config with same service name
+        let existing_config = existing_configs
+            .iter()
+            .find(|c| c.service_name.eq_ignore_ascii_case(&service_name));
+
+        // 5. Get environment info for display
+        let environments = match client.list_environments(&project_id).await {
+            Ok(envs) => envs,
+            Err(_) => Vec::new(),
+        };
+
+        // Resolve environment name for display
+        let (resolved_env_id, resolved_env_name, is_production) = if let Some(ref env_id) = environment_id {
+            let env = environments.iter().find(|e| e.id == *env_id);
+            let name = env.map(|e| e.name.clone()).unwrap_or_else(|| "Unknown".to_string());
+            let is_prod = name.to_lowercase().contains("prod");
+            (env_id.clone(), name, is_prod)
+        } else if let Some(existing) = &existing_config {
+            // Use the environment from existing config
+            let env = environments.iter().find(|e| e.id == existing.environment_id);
+            let name = env.map(|e| e.name.clone()).unwrap_or_else(|| "Unknown".to_string());
+            let is_prod = name.to_lowercase().contains("prod");
+            (existing.environment_id.clone(), name, is_prod)
+        } else if let Some(first_env) = environments.first() {
+            let is_prod = first_env.name.to_lowercase().contains("prod");
+            (first_env.id.clone(), first_env.name.clone(), is_prod)
+        } else {
+            ("".to_string(), "No environment".to_string(), false)
+        };
+
+        // 6. Get available providers
         let capabilities = match get_provider_deployment_statuses(&client, &project_id).await {
             Ok(c) => c,
             Err(e) => {
@@ -297,13 +340,63 @@ User: "deploy this service"
             .map(|i| i.has_kubernetes)
             .unwrap_or(false);
 
-        // 8. Get service name
-        let service_name = get_service_name(&analysis_path);
-
-        // 9. If preview_only, return recommendation
+        // 10. If preview_only, return recommendation
         if args.preview_only {
+            // Build the deployment mode info
+            let (deployment_mode, mode_explanation, next_steps) = if let Some(existing) = &existing_config {
+                (
+                    "REDEPLOY",
+                    format!(
+                        "Service '{}' already has a deployment config (ID: {}). Deploying will trigger a REDEPLOY of the existing service.",
+                        existing.service_name, existing.id
+                    ),
+                    vec![
+                        "To redeploy with current config: call deploy_service with preview_only=false".to_string(),
+                        "This will trigger a new deployment of the existing service".to_string(),
+                        "The existing configuration will be used".to_string(),
+                    ]
+                )
+            } else {
+                (
+                    "NEW_DEPLOYMENT",
+                    format!(
+                        "No existing deployment config found for '{}'. This will create a NEW deployment configuration.",
+                        service_name
+                    ),
+                    vec![
+                        "To deploy with these settings: call deploy_service with preview_only=false".to_string(),
+                        "To customize: specify provider, machine_type, region, or port parameters".to_string(),
+                        "To see more options: check the alternatives section above".to_string(),
+                    ]
+                )
+            };
+
+            // Production warning
+            let production_warning = if is_production {
+                Some("⚠️  WARNING: This will deploy to PRODUCTION environment. Please confirm you intend to deploy to production.")
+            } else {
+                None
+            };
+
             let response = json!({
                 "status": "recommendation",
+                "deployment_mode": deployment_mode,
+                "mode_explanation": mode_explanation,
+                "environment": {
+                    "id": resolved_env_id,
+                    "name": resolved_env_name,
+                    "is_production": is_production,
+                },
+                "production_warning": production_warning,
+                "existing_config": existing_config.map(|c| json!({
+                    "id": c.id,
+                    "service_name": c.service_name,
+                    "environment_id": c.environment_id,
+                    "branch": c.branch,
+                    "port": c.port,
+                    "auto_deploy_enabled": c.auto_deploy_enabled,
+                    "created_at": c.created_at.to_rfc3339(),
+                })),
                 "analysis": {
                     "path": analysis_path.display().to_string(),
                     "language": primary_language,
@@ -345,26 +438,73 @@ User: "deploy this service"
                     })).collect::<Vec<_>>(),
                 },
                 "service_name": service_name,
-                "next_steps": [
-                    "To deploy with these settings: call deploy_service with preview_only=false",
-                    "To customize: specify provider, machine_type, region, or port parameters",
-                    "To see more options: check the alternatives section above",
-                ],
-                "confirmation_prompt": format!(
-                    "Deploy '{}' to {} ({}) with {} in {}?",
-                    service_name,
-                    recommendation.provider.display_name(),
-                    recommendation.target.display_name(),
-                    recommendation.machine_type,
-                    recommendation.region
-                ),
+                "next_steps": next_steps,
+                "confirmation_prompt": if existing_config.is_some() {
+                    format!(
+                        "REDEPLOY '{}' to {} environment?{}",
+                        service_name,
+                        resolved_env_name,
+                        if is_production { " ⚠️  (PRODUCTION)" } else { "" }
+                    )
+                } else {
+                    format!(
+                        "Deploy NEW service '{}' to {} ({}) with {} in {} on {} environment?{}",
+                        service_name,
+                        recommendation.provider.display_name(),
+                        recommendation.target.display_name(),
+                        recommendation.machine_type,
+                        recommendation.region,
+                        resolved_env_name,
+                        if is_production { " ⚠️  (PRODUCTION)" } else { "" }
+                    )
+                },
             });
 
             return serde_json::to_string_pretty(&response)
                 .map_err(|e| DeployServiceError(format!("Failed to serialize: {}", e)));
         }
 
-        // 10. Execute deployment
+        // 11. Execute deployment - EITHER redeploy existing OR create new
+
+        // If existing config found, trigger redeploy instead of creating new config
+        if let Some(existing) = &existing_config {
+            let trigger_request = TriggerDeploymentRequest {
+                project_id: project_id.clone(),
+                config_id: existing.id.clone(),
+                commit_sha: None,
+            };
+
+            return match client.trigger_deployment(&trigger_request).await {
+                Ok(response) => {
+                    let result = json!({
+                        "status": "redeployed",
+                        "deployment_mode": "REDEPLOY",
+                        "config_id": existing.id,
+                        "task_id": response.backstage_task_id,
+                        "service_name": service_name,
+                        "environment": {
+                            "id": resolved_env_id,
+                            "name": resolved_env_name,
+                            "is_production": is_production,
+                        },
+                        "message": format!(
+                            "Redeploy triggered for existing service '{}' on {} environment. Task ID: {}",
+                            service_name, resolved_env_name, response.backstage_task_id
+                        ),
+                        "next_steps": [
+                            format!("Monitor progress: use get_deployment_status with task_id '{}'", response.backstage_task_id),
+                            "View logs after deployment: use get_service_logs",
+                        ],
+                    });
+
+                    serde_json::to_string_pretty(&result)
+                        .map_err(|e| DeployServiceError(format!("Failed to serialize: {}", e)))
+                }
+                Err(e) => Ok(format_api_error("deploy_service", e)),
+            };
+        }
+
+        // NEW DEPLOYMENT PATH - no existing config found
         let final_provider = args.provider
             .as_ref()
             .and_then(|p| CloudProvider::from_str(p).ok())
@@ -409,36 +549,15 @@ User: "deploy this service"
             }
         };
 
-        // Get environment from session or use default
-        let env_id = match &environment_id {
-            Some(id) => id.clone(),
-            None => {
-                // Try to get environments from API
-                match client.list_environments(&project_id).await {
-                    Ok(envs) => {
-                        match envs.first() {
-                            Some(env) => env.id.clone(),
-                            None => {
-                                return Ok(format_error_for_llm(
-                                    "deploy_service",
-                                    ErrorCategory::ResourceUnavailable,
-                                    "No environment found for project",
-                                    Some(vec!["Create an environment in the platform first"]),
-                                ));
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        return Ok(format_error_for_llm(
-                            "deploy_service",
-                            ErrorCategory::NetworkError,
-                            &format!("Failed to get environments: {}", e),
-                            None,
-                        ));
-                    }
-                }
-            }
-        };
+        // Use resolved environment ID from earlier
+        if resolved_env_id.is_empty() {
+            return Ok(format_error_for_llm(
+                "deploy_service",
+                ErrorCategory::ResourceUnavailable,
+                "No environment found for project",
+                Some(vec!["Create an environment in the platform first"]),
+            ));
+        }
 
         // Build deployment config request
         // Derive dockerfile path and build context from DockerfileInfo
@@ -485,7 +604,7 @@ User: "deploy this service"
             branch: repo.default_branch.clone().unwrap_or_else(|| "main".to_string()),
             target_type: recommendation.target.as_str().to_string(),
             cloud_provider: final_provider.as_str().to_string(),
-            environment_id: env_id.clone(),
+            environment_id: resolved_env_id.clone(),
             cluster_id: None, // Cloud Runner doesn't need cluster
             registry_id: None, // Auto-provision
             auto_deploy_enabled: true,
@@ -512,16 +631,22 @@ User: "deploy this service"
             Ok(response) => {
                 let result = json!({
                     "status": "deployed",
+                    "deployment_mode": "NEW_DEPLOYMENT",
                     "config_id": config.id,
                     "task_id": response.backstage_task_id,
                     "service_name": service_name,
+                    "environment": {
+                        "id": resolved_env_id,
+                        "name": resolved_env_name,
+                        "is_production": is_production,
+                    },
                     "provider": final_provider.as_str(),
                     "machine_type": final_machine,
                     "region": final_region,
                     "port": final_port,
                     "message": format!(
-                        "Deployment started for '{}'. Task ID: {}",
-                        service_name, response.backstage_task_id
+                        "NEW deployment started for '{}' on {} environment. Task ID: {}",
+                        service_name, resolved_env_name, response.backstage_task_id
                     ),
                     "next_steps": [
                         format!("Monitor progress: use get_deployment_status with task_id '{}'", response.backstage_task_id),
