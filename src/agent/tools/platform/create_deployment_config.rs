@@ -267,25 +267,31 @@ A deployment config defines how to build and deploy a service, including:
         };
 
         // Build the request
+        // Note: Send both field name variants (dockerfile/dockerfilePath, context/buildContext)
+        // for backend compatibility - different endpoints may expect different field names
         let request = CreateDeploymentConfigRequest {
+            project_id: args.project_id.clone(),
             service_name: args.service_name.clone(),
             repository_id: args.repository_id,
             repository_full_name: args.repository_full_name.clone(),
             dockerfile_path: args.dockerfile_path.clone(),
+            dockerfile: args.dockerfile_path.clone(), // Alias for backend compatibility
             build_context: args.build_context.clone(),
+            context: args.build_context.clone(), // Alias for backend compatibility
             port: args.port,
             branch: args.branch.clone(),
             target_type: args.target_type.clone(),
-            provider: args.provider.clone(),
+            cloud_provider: args.provider.clone(),
             environment_id: args.environment_id.clone(),
             cluster_id: args.cluster_id.clone(),
             registry_id: args.registry_id.clone(),
             auto_deploy_enabled: args.auto_deploy_enabled,
-            deployment_strategy: None,
+            is_public: None,
+            cloud_runner_config: None,
         };
 
         // Create the deployment config
-        match client.create_deployment_config(&args.project_id, &request).await {
+        match client.create_deployment_config(&request).await {
             Ok(config) => {
                 let result = json!({
                     "success": true,

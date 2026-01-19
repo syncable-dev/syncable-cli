@@ -593,6 +593,7 @@ pub async fn run_interactive(
                         .tool(CurrentContextTool::new())
                         .tool(OpenProviderSettingsTool::new())
                         .tool(CheckProviderConnectionTool::new())
+                        .tool(ListDeploymentCapabilitiesTool::new())
                         // Deployment tools for service management
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
@@ -707,6 +708,7 @@ pub async fn run_interactive(
                         .tool(CurrentContextTool::new())
                         .tool(OpenProviderSettingsTool::new())
                         .tool(CheckProviderConnectionTool::new())
+                        .tool(ListDeploymentCapabilitiesTool::new())
                         // Deployment tools for service management
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
@@ -812,6 +814,7 @@ pub async fn run_interactive(
                         .tool(CurrentContextTool::new())
                         .tool(OpenProviderSettingsTool::new())
                         .tool(CheckProviderConnectionTool::new())
+                        .tool(ListDeploymentCapabilitiesTool::new())
                         // Deployment tools for service management
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
@@ -2265,6 +2268,7 @@ pub async fn run_query(
                         .tool(CurrentContextTool::new())
                         .tool(OpenProviderSettingsTool::new())
                         .tool(CheckProviderConnectionTool::new())
+                        .tool(ListDeploymentCapabilitiesTool::new())
                         // Deployment tools for service management
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
@@ -2347,6 +2351,7 @@ pub async fn run_query(
                         .tool(CurrentContextTool::new())
                         .tool(OpenProviderSettingsTool::new())
                         .tool(CheckProviderConnectionTool::new())
+                        .tool(ListDeploymentCapabilitiesTool::new())
                         // Deployment tools for service management
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
@@ -2418,6 +2423,7 @@ pub async fn run_query(
                         .tool(CurrentContextTool::new())
                         .tool(OpenProviderSettingsTool::new())
                         .tool(CheckProviderConnectionTool::new())
+                        .tool(ListDeploymentCapabilitiesTool::new())
                         // Deployment tools for service management
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
