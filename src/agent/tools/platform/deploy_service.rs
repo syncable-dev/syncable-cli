@@ -561,8 +561,22 @@ User: "deploy this service"
 
         // Build deployment config request
         // Derive dockerfile path and build context from DockerfileInfo
-        // For monorepos: context = service folder, dockerfile = full path from repo root
-        // This matches what the manual wizard sends when user selects the service folder
+        //
+        // IMPORTANT: Paths are relative to the ANALYZED directory (args.path), NOT the project root.
+        // This matches the manual wizard behavior when you run `sync-ctl deploy` from a subdirectory.
+        //
+        // Example: User's local structure might be:
+        //   /local/project/services/contact-intelligence/Dockerfile
+        // But the GitHub repo might have:
+        //   /Dockerfile (at root)
+        //
+        // When user specifies path="services/contact-intelligence", we analyze that dir and find
+        // Dockerfile there. The paths sent to cloud runner should be:
+        //   dockerfile: "Dockerfile", context: "."
+        // NOT:
+        //   dockerfile: "services/contact-intelligence/Dockerfile", context: "services/contact-intelligence"
+        //
+        // This is because the GitHub repo structure may differ from local structure.
         let (dockerfile_path, build_context) = analysis.docker_analysis
             .as_ref()
             .and_then(|d| d.dockerfiles.first())
@@ -573,44 +587,27 @@ User: "deploy this service"
                     .unwrap_or_else(|| "Dockerfile".to_string());
 
                 // Derive dockerfile's directory relative to analysis_path
+                // This gives us the path relative to what we analyzed, NOT the project root
                 let analysis_relative_dir = df.path.parent()
                     .and_then(|p| p.strip_prefix(&analysis_path).ok())
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_default();
 
-                // Build paths relative to repo root
-                // If we analyzed a subdirectory (args.path), prepend it
-                match (&args.path, analysis_relative_dir.as_str()) {
-                    (Some(subpath), "") | (Some(subpath), ".") => {
-                        // Dockerfile is at the root of the analyzed subpath
-                        // dockerfile: "services/foo/Dockerfile", context: "services/foo"
-                        (format!("{}/{}", subpath, dockerfile_name), subpath.clone())
-                    }
-                    (Some(subpath), rel_dir) => {
-                        // Dockerfile is nested within the analyzed subpath
-                        // dockerfile: "services/foo/nested/Dockerfile", context: "services/foo/nested"
-                        let context = format!("{}/{}", subpath, rel_dir);
-                        (format!("{}/{}", context, dockerfile_name), context)
-                    }
-                    (None, "") | (None, ".") => {
-                        // Dockerfile at repo root
-                        // dockerfile: "Dockerfile", context: "."
-                        (dockerfile_name, ".".to_string())
-                    }
-                    (None, rel_dir) => {
-                        // Dockerfile in subdirectory from repo root
-                        // dockerfile: "subdir/Dockerfile", context: "subdir"
-                        (format!("{}/{}", rel_dir, dockerfile_name), rel_dir.to_string())
-                    }
+                // Build paths relative to the analyzed directory
+                // DO NOT prepend args.path - the repo structure may differ from local structure
+                if analysis_relative_dir.is_empty() {
+                    // Dockerfile is at the root of the analyzed directory
+                    // dockerfile: "Dockerfile", context: "."
+                    (dockerfile_name, ".".to_string())
+                } else {
+                    // Dockerfile is in a subdirectory of the analyzed directory
+                    // dockerfile: "subdir/Dockerfile", context: "subdir"
+                    (format!("{}/{}", analysis_relative_dir, dockerfile_name), analysis_relative_dir)
                 }
             })
             .unwrap_or_else(|| {
-                // No dockerfile found - construct path from subpath if provided
-                if let Some(ref subpath) = args.path {
-                    (format!("{}/Dockerfile", subpath), subpath.clone())
-                } else {
-                    ("Dockerfile".to_string(), ".".to_string())
-                }
+                // No dockerfile found - default to root
+                ("Dockerfile".to_string(), ".".to_string())
             });
 
         tracing::debug!(
