@@ -562,21 +562,22 @@ User: "deploy this service"
         // Build deployment config request
         // Derive dockerfile path and build context from DockerfileInfo
         //
-        // IMPORTANT: Paths are relative to the ANALYZED directory (args.path), NOT the project root.
-        // This matches the manual wizard behavior when you run `sync-ctl deploy` from a subdirectory.
+        // IMPORTANT: Paths must be relative to the REPO ROOT for Cloud Runner.
+        // Cloud Runner clones the GitHub repo and builds from there.
         //
-        // Example: User's local structure might be:
-        //   /local/project/services/contact-intelligence/Dockerfile
-        // But the GitHub repo might have:
-        //   /Dockerfile (at root)
+        // Example: User analyzes path="services/contact-intelligence" which has a Dockerfile.
+        // The GitHub repo structure is:
+        //   repo-root/
+        //     services/
+        //       contact-intelligence/
+        //         Dockerfile
         //
-        // When user specifies path="services/contact-intelligence", we analyze that dir and find
-        // Dockerfile there. The paths sent to cloud runner should be:
-        //   dockerfile: "Dockerfile", context: "."
+        // Cloud Runner needs:
+        //   dockerfile: "services/contact-intelligence/Dockerfile"
+        //   context: "services/contact-intelligence"
+        //
         // NOT:
-        //   dockerfile: "services/contact-intelligence/Dockerfile", context: "services/contact-intelligence"
-        //
-        // This is because the GitHub repo structure may differ from local structure.
+        //   dockerfile: "Dockerfile", context: "."  (would look at repo root)
         let (dockerfile_path, build_context) = analysis.docker_analysis
             .as_ref()
             .and_then(|d| d.dockerfiles.first())
@@ -587,27 +588,44 @@ User: "deploy this service"
                     .unwrap_or_else(|| "Dockerfile".to_string());
 
                 // Derive dockerfile's directory relative to analysis_path
-                // This gives us the path relative to what we analyzed, NOT the project root
                 let analysis_relative_dir = df.path.parent()
                     .and_then(|p| p.strip_prefix(&analysis_path).ok())
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_default();
 
-                // Build paths relative to the analyzed directory
-                // DO NOT prepend args.path - the repo structure may differ from local structure
-                if analysis_relative_dir.is_empty() {
-                    // Dockerfile is at the root of the analyzed directory
-                    // dockerfile: "Dockerfile", context: "."
-                    (dockerfile_name, ".".to_string())
+                // Build paths relative to REPO ROOT by prepending args.path (the subdirectory)
+                // This ensures Cloud Runner finds the Dockerfile in the cloned repo
+                let subpath = args.path.as_deref().unwrap_or("");
+
+                if subpath.is_empty() {
+                    // Analyzing repo root - use paths as-is
+                    if analysis_relative_dir.is_empty() {
+                        (dockerfile_name, ".".to_string())
+                    } else {
+                        (format!("{}/{}", analysis_relative_dir, dockerfile_name), analysis_relative_dir)
+                    }
                 } else {
-                    // Dockerfile is in a subdirectory of the analyzed directory
-                    // dockerfile: "subdir/Dockerfile", context: "subdir"
-                    (format!("{}/{}", analysis_relative_dir, dockerfile_name), analysis_relative_dir)
+                    // Analyzing a subdirectory - prepend subpath to make repo-root-relative
+                    if analysis_relative_dir.is_empty() {
+                        // Dockerfile at root of analyzed subdir
+                        // e.g., subpath="services/contact-intelligence" -> dockerfile="services/contact-intelligence/Dockerfile"
+                        (format!("{}/{}", subpath, dockerfile_name), subpath.to_string())
+                    } else {
+                        // Dockerfile in nested dir within analyzed subdir
+                        // e.g., subpath="services", analysis_relative_dir="contact-intelligence"
+                        let full_context = format!("{}/{}", subpath, analysis_relative_dir);
+                        (format!("{}/{}", full_context, dockerfile_name), full_context)
+                    }
                 }
             })
             .unwrap_or_else(|| {
-                // No dockerfile found - default to root
-                ("Dockerfile".to_string(), ".".to_string())
+                // No dockerfile found - use subpath as context if provided, else root
+                let subpath = args.path.as_deref().unwrap_or("");
+                if subpath.is_empty() {
+                    ("Dockerfile".to_string(), ".".to_string())
+                } else {
+                    (format!("{}/Dockerfile", subpath), subpath.to_string())
+                }
             });
 
         tracing::debug!(
