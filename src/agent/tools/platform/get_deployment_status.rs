@@ -55,6 +55,13 @@ impl Tool for GetDeploymentStatusTool {
 Returns the current status of a deployment, including progress percentage,
 current step, overall status, and optionally the public URL if the service is ready.
 
+**CRITICAL - DO NOT POLL IN A LOOP:**
+After checking status, you MUST inform the user and WAIT for them to ask again.
+DO NOT call this tool repeatedly in succession. Deployments take 1-3 minutes.
+The response includes an "action" field - follow it:
+- "STOP_POLLING": Deployment is done (success or failure). Tell the user.
+- "INFORM_USER_AND_WAIT": Tell user the current status and wait for them to ask for updates.
+
 **IMPORTANT for Cloud Runner:**
 The task may show "completed" when infrastructure is provisioned, but the actual
 service build and deployment takes longer. Pass project_id and service_name to
@@ -70,8 +77,8 @@ also check if the service has a public URL (meaning it's actually ready).
 - A deployment must have been triggered (use trigger_deployment first)
 
 **Use Cases:**
-- Monitor deployment progress after triggering
-- Check if a deployment has completed AND is actually serving traffic
+- Check deployment status ONCE after triggering, then inform user
+- Let user ask for updates when they want them
 - Get error details if deployment failed"#
                 .to_string(),
             parameters: json!({
@@ -182,31 +189,40 @@ also check if the service has a public URL (meaning it's actually ready).
                 }
 
                 // Add next steps based on actual status
+                // IMPORTANT: Guide agent to STOP polling and inform user
                 if is_failed {
                     result["next_steps"] = json!([
+                        "STOP - Deployment failed. Inform the user of the error.",
                         "Review the error message for details",
                         "Check the deployment configuration",
-                        "Verify the code builds successfully locally",
-                        "Try triggering a new deployment after fixing the issue"
+                        "Verify the code builds successfully locally"
                     ]);
+                    result["action"] = json!("STOP_POLLING");
                 } else if truly_ready && public_url.is_some() {
                     result["next_steps"] = json!([
-                        format!("Service is live at: {}", public_url.as_ref().unwrap()),
+                        format!("STOP - Service is live at: {}", public_url.as_ref().unwrap()),
                         "Deployment completed successfully!",
-                        "Use get_service_logs to view container logs"
+                        "Inform the user their service is ready"
                     ]);
+                    result["action"] = json!("STOP_POLLING");
                 } else if task_complete && !truly_ready {
                     result["next_steps"] = json!([
-                        "Infrastructure task completed, but service is still deploying",
-                        "Cloud Runner is building and deploying your container",
-                        "Call get_deployment_status again in 30-60 seconds to check for public_url"
+                        "STOP POLLING - Inform the user that deployment is in progress",
+                        "Infrastructure is ready, Cloud Runner is building the container",
+                        "Tell the user to wait 1-2 minutes, then they can ask you to check status again",
+                        "DO NOT call get_deployment_status again automatically - wait for user to ask"
                     ]);
-                    result["note"] = json!("Task shows 100% but service is still being built/deployed. This is normal for Cloud Runner.");
+                    result["action"] = json!("INFORM_USER_AND_WAIT");
+                    result["estimated_wait"] = json!("1-2 minutes");
+                    result["note"] = json!("Task shows 100% but container is still being built/deployed. This is normal. DO NOT poll repeatedly - inform the user and wait for them to ask for status.");
                 } else if !task_complete {
                     result["next_steps"] = json!([
-                        format!("Deployment is {} ({}% complete)", status.overall_status, status.progress),
-                        "Call get_deployment_status again to check progress"
+                        format!("STOP POLLING - Deployment is {} ({}% complete)", status.overall_status, status.progress),
+                        "Inform the user of current progress",
+                        "Tell them to wait and ask again in 30 seconds if they want an update",
+                        "DO NOT call get_deployment_status again automatically"
                     ]);
+                    result["action"] = json!("INFORM_USER_AND_WAIT");
                 }
 
                 serde_json::to_string_pretty(&result)
