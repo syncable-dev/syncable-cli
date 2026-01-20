@@ -35,6 +35,10 @@ pub struct DeployServiceArgs {
     pub region: Option<String>,
     /// Optional: override detected port
     pub port: Option<u16>,
+    /// Whether to make the service publicly accessible (default: false for safety)
+    /// Internal services can only be accessed within the cluster/network
+    #[serde(default)]
+    pub is_public: bool,
     /// If true (default), show recommendation but don't deploy yet
     /// If false with settings, deploy immediately
     #[serde(default = "default_preview")]
@@ -101,7 +105,13 @@ Uses provided overrides or recommendation defaults to deploy immediately.
 - machine_type: Override machine selection (e.g., cx22, e2-small)
 - region: Override region selection (e.g., nbg1, us-central1)
 - port: Override detected port
+- is_public: Whether service should be publicly accessible (default: false)
 - preview_only: If true (default), show recommendation only
+
+**IMPORTANT - Public vs Internal:**
+- is_public=false (default): Service is internal-only, not accessible from internet
+- is_public=true: Service gets a public URL, accessible from anywhere
+- ALWAYS show this in the preview and ask user before deploying public services
 
 **What it analyzes:**
 - Programming language and framework
@@ -149,6 +159,10 @@ User: "deploy this service"
                     "port": {
                         "type": "integer",
                         "description": "Override: port to expose"
+                    },
+                    "is_public": {
+                        "type": "boolean",
+                        "description": "Whether service should be publicly accessible. Default: false (internal only). Set to true for public URL."
                     },
                     "preview_only": {
                         "type": "boolean",
@@ -419,6 +433,12 @@ User: "deploy this service"
                     "region_reasoning": recommendation.region_reasoning,
                     "port": recommendation.port,
                     "health_check_path": recommendation.health_check_path,
+                    "is_public": args.is_public,
+                    "is_public_note": if args.is_public {
+                        "Service will be PUBLICLY accessible from the internet"
+                    } else {
+                        "Service will be INTERNAL only (not accessible from internet)"
+                    },
                     "confidence": recommendation.confidence,
                 },
                 "alternatives": {
@@ -648,7 +668,7 @@ User: "deploy this service"
             &final_provider,
             &final_region,
             &final_machine,
-            true, // is_public
+            args.is_public,
             recommendation.health_check_path.as_deref(),
         );
 
@@ -669,7 +689,7 @@ User: "deploy this service"
             cluster_id: None, // Cloud Runner doesn't need cluster
             registry_id: None, // Auto-provision
             auto_deploy_enabled: true,
-            is_public: Some(true),
+            is_public: Some(args.is_public),
             cloud_runner_config: Some(cloud_runner_config),
         };
 
