@@ -127,9 +127,16 @@ Uses provided overrides or recommendation defaults to deploy immediately.
 
 **Example flow:**
 User: "deploy this service"
-1. Tool returns analysis + recommendation + confirmation prompt
-2. User: "yes, deploy it" or "use GCP instead"
-3. Call tool again with confirmed settings and preview_only=false
+1. Call with preview_only=true → Shows recommendation
+2. User: "yes, deploy it" → Call with preview_only=false to deploy
+3. User: "make it public" → Call with preview_only=true AND is_public=true to show NEW preview
+4. User: "yes" → NOW call with preview_only=false to deploy
+
+**CRITICAL - Human in the loop:**
+- NEVER deploy (preview_only=false) immediately after user requests a CHANGE
+- If user says "make it public", "use GCP", "change region", etc. → show NEW preview first
+- Only deploy after user explicitly confirms the final settings with "yes", "deploy", "confirm"
+- A change request is NOT a deployment confirmation
 
 **Prerequisites:**
 - User must be authenticated (sync-ctl auth login)
