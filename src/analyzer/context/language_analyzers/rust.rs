@@ -1,5 +1,5 @@
 use crate::analyzer::{
-    AnalysisConfig, BuildScript, EntryPoint, Port, Protocol, context::helpers::create_regex,
+    AnalysisConfig, BuildScript, EntryPoint, Port, PortSource, Protocol, context::helpers::create_regex,
 };
 use crate::common::file_utils::{is_readable_file, read_file_safe};
 use crate::error::Result;
@@ -120,6 +120,7 @@ fn scan_rust_file_for_context(
                     number: port,
                     protocol: Protocol::Http,
                     description: Some("Rust web server".to_string()),
+                    source: Some(PortSource::SourceCode),
                 });
             }
         }

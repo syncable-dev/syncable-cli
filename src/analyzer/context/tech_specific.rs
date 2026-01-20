@@ -1,4 +1,4 @@
-use crate::analyzer::{DetectedTechnology, EntryPoint, Port, Protocol};
+use crate::analyzer::{DetectedTechnology, EntryPoint, Port, PortSource, Protocol};
 use crate::error::Result;
 use std::collections::HashSet;
 use std::path::Path;
@@ -17,6 +17,7 @@ pub(crate) fn analyze_technology_specifics(
                 number: 3000,
                 protocol: Protocol::Http,
                 description: Some("Next.js development server".to_string()),
+                source: Some(PortSource::FrameworkDefault),
             });
 
             // Look for pages directory
@@ -35,6 +36,7 @@ pub(crate) fn analyze_technology_specifics(
                 number: 3000,
                 protocol: Protocol::Http,
                 description: Some(format!("{} server", technology.name)),
+                source: Some(PortSource::FrameworkDefault),
             });
         }
         "Encore" => {
@@ -43,6 +45,7 @@ pub(crate) fn analyze_technology_specifics(
                 number: 4000,
                 protocol: Protocol::Http,
                 description: Some("Encore development server".to_string()),
+                source: Some(PortSource::FrameworkDefault),
             });
         }
         "Astro" => {
@@ -51,6 +54,7 @@ pub(crate) fn analyze_technology_specifics(
                 number: 4321,
                 protocol: Protocol::Http,
                 description: Some("Astro development server".to_string()),
+                source: Some(PortSource::FrameworkDefault),
             });
         }
         "SvelteKit" => {
@@ -59,6 +63,7 @@ pub(crate) fn analyze_technology_specifics(
                 number: 5173,
                 protocol: Protocol::Http,
                 description: Some("SvelteKit development server".to_string()),
+                source: Some(PortSource::FrameworkDefault),
             });
         }
         "Nuxt.js" => {
@@ -67,6 +72,7 @@ pub(crate) fn analyze_technology_specifics(
                 number: 3000,
                 protocol: Protocol::Http,
                 description: Some("Nuxt.js development server".to_string()),
+                source: Some(PortSource::FrameworkDefault),
             });
         }
         "Tanstack Start" => {
@@ -75,6 +81,7 @@ pub(crate) fn analyze_technology_specifics(
                 number: 3000,
                 protocol: Protocol::Http,
                 description: Some(format!("{} development server", technology.name)),
+                source: Some(PortSource::FrameworkDefault),
             });
         }
         "React Router v7" => {
@@ -83,6 +90,7 @@ pub(crate) fn analyze_technology_specifics(
                 number: 5173,
                 protocol: Protocol::Http,
                 description: Some("React Router v7 development server".to_string()),
+                source: Some(PortSource::FrameworkDefault),
             });
         }
         "Django" => {
@@ -90,6 +98,7 @@ pub(crate) fn analyze_technology_specifics(
                 number: 8000,
                 protocol: Protocol::Http,
                 description: Some("Django development server".to_string()),
+                source: Some(PortSource::FrameworkDefault),
             });
         }
         "Flask" | "FastAPI" => {
@@ -97,6 +106,7 @@ pub(crate) fn analyze_technology_specifics(
                 number: 5000,
                 protocol: Protocol::Http,
                 description: Some(format!("{} server", technology.name)),
+                source: Some(PortSource::FrameworkDefault),
             });
         }
         "Spring Boot" => {
@@ -104,6 +114,7 @@ pub(crate) fn analyze_technology_specifics(
                 number: 8080,
                 protocol: Protocol::Http,
                 description: Some("Spring Boot server".to_string()),
+                source: Some(PortSource::FrameworkDefault),
             });
         }
         "Actix Web" | "Rocket" => {
@@ -111,6 +122,7 @@ pub(crate) fn analyze_technology_specifics(
                 number: 8080,
                 protocol: Protocol::Http,
                 description: Some(format!("{} server", technology.name)),
+                source: Some(PortSource::FrameworkDefault),
             });
         }
         _ => {}

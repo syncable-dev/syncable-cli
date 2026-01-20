@@ -1,0 +1,97 @@
+//! Platform tools for managing Syncable platform resources
+//!
+//! This module provides agent tools for interacting with the Syncable Platform API:
+//! - Listing organizations and projects
+//! - Selecting and managing project context
+//! - Querying current context state
+//! - Cloud provider connection management
+//! - Service deployment management
+//! - Service log retrieval
+//! - Project analysis for deployment
+//!
+//! ## Tools
+//!
+//! - `ListOrganizationsTool` - List organizations the user belongs to
+//! - `ListProjectsTool` - List projects within an organization
+//! - `SelectProjectTool` - Select a project as the current context
+//! - `CurrentContextTool` - Get the currently selected project context
+//! - `OpenProviderSettingsTool` - Open cloud provider settings in browser
+//! - `CheckProviderConnectionTool` - Check if a cloud provider is connected
+//! - `ListDeploymentConfigsTool` - List deployment configurations for a project
+//! - `TriggerDeploymentTool` - Trigger a deployment using a config
+//! - `GetDeploymentStatusTool` - Get deployment task status
+//! - `ListDeploymentsTool` - List recent deployments for a project
+//! - `GetServiceLogsTool` - Get container logs for a deployed service
+//! - `AnalyzeProjectTool` - Analyze project for Dockerfiles and deployment options
+//! - `AnalyzeCodebaseTool` - Comprehensive codebase analysis (languages, frameworks, ports, env vars)
+//! - `ListDeploymentCapabilitiesTool` - List available deployment targets and providers
+//! - `CreateDeploymentConfigTool` - Create a new deployment configuration
+//! - `ProvisionRegistryTool` - Provision a new container registry
+//!
+//! ## Prerequisites
+//!
+//! All tools require the user to be authenticated via `sync-ctl auth login`.
+//!
+//! ## Example Flow
+//!
+//! 1. User asks: "What projects do I have access to?"
+//! 2. Agent calls `list_organizations` to get available organizations
+//! 3. Agent calls `list_projects` for each organization
+//! 4. User asks: "Select the 'my-project' project"
+//! 5. Agent calls `select_project` with the project and organization IDs
+//! 6. Agent can then use `current_context` to verify the selection
+//!
+//! ## Cloud Provider Connection Flow
+//!
+//! 1. Agent calls `check_provider_connection` to see if GCP/AWS/etc is connected
+//! 2. If not connected, agent calls `open_provider_settings` to open browser
+//! 3. User completes OAuth flow in browser
+//! 4. Agent calls `check_provider_connection` again to verify
+//!
+//! ## Deployment Flow
+//!
+//! 1. Agent calls `list_deployment_configs` to see available deployment configs
+//! 2. Agent calls `trigger_deployment` with project_id and config_id
+//! 3. Agent calls `get_deployment_status` with task_id to monitor progress
+//! 4. Agent calls `list_deployments` to see deployment history and public URLs
+//! 5. Agent calls `get_service_logs` to view container logs for debugging
+//!
+//! **SECURITY NOTE:** The agent NEVER handles actual credentials (OAuth tokens,
+//! API keys). It only checks connection STATUS. All credential handling happens
+//! securely in the browser through the platform's OAuth flow.
+
+mod analyze_codebase;
+mod analyze_project;
+mod check_provider_connection;
+mod create_deployment_config;
+mod current_context;
+mod deploy_service;
+mod get_deployment_status;
+mod get_service_logs;
+mod list_deployment_capabilities;
+mod list_deployment_configs;
+mod list_deployments;
+mod list_organizations;
+mod list_projects;
+mod open_provider_settings;
+mod provision_registry;
+mod select_project;
+mod trigger_deployment;
+
+pub use analyze_codebase::AnalyzeCodebaseTool;
+pub use analyze_project::AnalyzeProjectTool;
+pub use check_provider_connection::CheckProviderConnectionTool;
+pub use create_deployment_config::CreateDeploymentConfigTool;
+pub use current_context::CurrentContextTool;
+pub use deploy_service::DeployServiceTool;
+pub use get_deployment_status::GetDeploymentStatusTool;
+pub use get_service_logs::GetServiceLogsTool;
+pub use list_deployment_capabilities::ListDeploymentCapabilitiesTool;
+pub use list_deployment_configs::ListDeploymentConfigsTool;
+pub use list_deployments::ListDeploymentsTool;
+pub use list_organizations::ListOrganizationsTool;
+pub use list_projects::ListProjectsTool;
+pub use open_provider_settings::OpenProviderSettingsTool;
+pub use provision_registry::ProvisionRegistryTool;
+pub use select_project::SelectProjectTool;
+pub use trigger_deployment::TriggerDeploymentTool;

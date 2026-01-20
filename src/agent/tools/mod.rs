@@ -60,6 +60,19 @@
 //! ### Web
 //! - `WebFetchTool` - Fetch content from URLs (converts HTML to markdown)
 //!
+//! ### Platform (Syncable Platform API)
+//! - `ListOrganizationsTool` - List organizations the user belongs to
+//! - `ListProjectsTool` - List projects within an organization
+//! - `SelectProjectTool` - Select a project as current context
+//! - `CurrentContextTool` - Get the currently selected project context
+//! - `OpenProviderSettingsTool` - Open cloud provider settings in browser
+//! - `CheckProviderConnectionTool` - Check if a cloud provider is connected
+//! - `ListDeploymentConfigsTool` - List deployment configurations for a project
+//! - `TriggerDeploymentTool` - Trigger a deployment using a config
+//! - `GetDeploymentStatusTool` - Get deployment task status and progress
+//! - `ListDeploymentsTool` - List recent deployments with URLs
+//! - `GetServiceLogsTool` - Get container logs for a deployed service
+//!
 //! ## Error Handling Pattern
 //!
 //! Tools use the shared error utilities in `error.rs`:
@@ -115,6 +128,7 @@ mod k8s_optimize;
 mod kubelint;
 pub mod output_store;
 mod plan;
+pub mod platform;
 mod prometheus_connect;
 mod prometheus_discover;
 pub mod response;
@@ -156,6 +170,13 @@ pub use k8s_drift::K8sDriftTool;
 pub use k8s_optimize::K8sOptimizeTool;
 pub use kubelint::KubelintTool;
 pub use plan::{PlanCreateTool, PlanListTool, PlanNextTool, PlanUpdateTool};
+pub use platform::{
+    CheckProviderConnectionTool, CreateDeploymentConfigTool, CurrentContextTool,
+    DeployServiceTool, GetDeploymentStatusTool, GetServiceLogsTool,
+    ListDeploymentCapabilitiesTool, ListDeploymentConfigsTool, ListDeploymentsTool,
+    ListOrganizationsTool, ListProjectsTool, OpenProviderSettingsTool, SelectProjectTool,
+    TriggerDeploymentTool,
+};
 pub use prometheus_connect::PrometheusConnectTool;
 pub use prometheus_discover::PrometheusDiscoverTool;
 pub use security::{SecurityScanTool, VulnerabilitiesTool};
