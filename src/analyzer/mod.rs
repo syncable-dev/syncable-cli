@@ -63,8 +63,9 @@ pub use monorepo::{MonorepoDetectionConfig, analyze_monorepo, analyze_monorepo_w
 
 // Re-export Docker analysis types
 pub use docker_analyzer::{
-    ComposeFileInfo, DockerAnalysis, DockerEnvironment, DockerService, DockerfileInfo,
-    NetworkingConfig, OrchestrationPattern, analyze_docker_infrastructure,
+    ComposeFileInfo, DiscoveredDockerfile, DockerAnalysis, DockerEnvironment, DockerService,
+    DockerfileInfo, NetworkingConfig, OrchestrationPattern, analyze_docker_infrastructure,
+    discover_dockerfiles_for_deployment,
 };
 
 /// Represents a detected programming language
@@ -166,12 +167,76 @@ pub struct EntryPoint {
     pub command: Option<String>,
 }
 
+/// Source of port detection - indicates where the port was discovered
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum PortSource {
+    /// Detected from Dockerfile EXPOSE directive
+    Dockerfile,
+    /// Detected from docker-compose.yml ports section
+    DockerCompose,
+    /// Detected from package.json scripts (Node.js)
+    PackageJson,
+    /// Inferred from framework defaults (e.g., Express=3000, FastAPI=8000)
+    FrameworkDefault,
+    /// Detected from environment variable reference (e.g., process.env.PORT)
+    EnvVar,
+    /// Detected from source code analysis (e.g., .listen(3000))
+    SourceCode,
+    /// Detected from configuration files (e.g., config.yaml, settings.py)
+    ConfigFile,
+}
+
+impl PortSource {
+    /// Returns a human-readable description of the port source
+    pub fn description(&self) -> &'static str {
+        match self {
+            PortSource::Dockerfile => "Dockerfile EXPOSE",
+            PortSource::DockerCompose => "docker-compose.yml",
+            PortSource::PackageJson => "package.json scripts",
+            PortSource::FrameworkDefault => "framework default",
+            PortSource::EnvVar => "environment variable",
+            PortSource::SourceCode => "source code",
+            PortSource::ConfigFile => "configuration file",
+        }
+    }
+}
+
 /// Represents exposed network ports
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Port {
     pub number: u16,
     pub protocol: Protocol,
     pub description: Option<String>,
+    /// Source where this port was detected (optional for backward compatibility)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<PortSource>,
+}
+
+impl Port {
+    /// Create a new port with source information
+    pub fn with_source(number: u16, protocol: Protocol, source: PortSource) -> Self {
+        Self {
+            number,
+            protocol,
+            description: None,
+            source: Some(source),
+        }
+    }
+
+    /// Create a new port with source and description
+    pub fn with_source_and_description(
+        number: u16,
+        protocol: Protocol,
+        source: PortSource,
+        description: impl Into<String>,
+    ) -> Self {
+        Self {
+            number,
+            protocol,
+            description: Some(description.into()),
+            source: Some(source),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -180,6 +245,63 @@ pub enum Protocol {
     Udp,
     Http,
     Https,
+}
+
+/// Source of health endpoint detection
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum HealthEndpointSource {
+    /// Found by analyzing source code patterns
+    CodePattern,
+    /// Known framework convention (e.g., Spring Actuator)
+    FrameworkDefault,
+    /// Found in configuration files (e.g., K8s manifests, docker-compose)
+    ConfigFile,
+}
+
+impl HealthEndpointSource {
+    /// Returns a human-readable description of the detection source
+    pub fn description(&self) -> &'static str {
+        match self {
+            HealthEndpointSource::CodePattern => "source code analysis",
+            HealthEndpointSource::FrameworkDefault => "framework convention",
+            HealthEndpointSource::ConfigFile => "configuration file",
+        }
+    }
+}
+
+/// Represents a detected health check endpoint
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct HealthEndpoint {
+    /// The HTTP path for the health check (e.g., "/health", "/healthz")
+    pub path: String,
+    /// Confidence level (0.0-1.0) in this detection
+    pub confidence: f32,
+    /// Where this endpoint was detected from
+    pub source: HealthEndpointSource,
+    /// Optional description or context
+    pub description: Option<String>,
+}
+
+impl HealthEndpoint {
+    /// Create a new health endpoint with high confidence from code analysis
+    pub fn from_code(path: impl Into<String>, confidence: f32) -> Self {
+        Self {
+            path: path.into(),
+            confidence,
+            source: HealthEndpointSource::CodePattern,
+            description: None,
+        }
+    }
+
+    /// Create a health endpoint from a framework default
+    pub fn from_framework(path: impl Into<String>, framework: &str) -> Self {
+        Self {
+            path: path.into(),
+            confidence: 0.7, // Framework defaults have moderate confidence
+            source: HealthEndpointSource::FrameworkDefault,
+            description: Some(format!("{} default health endpoint", framework)),
+        }
+    }
 }
 
 /// Represents environment variables
@@ -215,6 +337,47 @@ pub struct BuildScript {
     pub is_default: bool,
 }
 
+/// Detected infrastructure files and configurations in the project
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct InfrastructurePresence {
+    /// Whether Kubernetes manifests were detected
+    pub has_kubernetes: bool,
+    /// Paths to directories or files containing K8s manifests
+    pub kubernetes_paths: Vec<PathBuf>,
+    /// Whether Helm charts were detected
+    pub has_helm: bool,
+    /// Paths to Helm chart directories (containing Chart.yaml)
+    pub helm_chart_paths: Vec<PathBuf>,
+    /// Whether docker-compose files were detected
+    pub has_docker_compose: bool,
+    /// Whether Terraform files were detected
+    pub has_terraform: bool,
+    /// Paths to directories containing .tf files
+    pub terraform_paths: Vec<PathBuf>,
+    /// Whether Syncable deployment config exists
+    pub has_deployment_config: bool,
+    /// Summary of what was detected for display purposes
+    pub summary: Option<String>,
+}
+
+impl InfrastructurePresence {
+    /// Returns true if any infrastructure was detected
+    pub fn has_any(&self) -> bool {
+        self.has_kubernetes || self.has_helm || self.has_docker_compose || self.has_terraform || self.has_deployment_config
+    }
+
+    /// Returns a list of detected infrastructure types
+    pub fn detected_types(&self) -> Vec<&'static str> {
+        let mut types = Vec::new();
+        if self.has_kubernetes { types.push("Kubernetes"); }
+        if self.has_helm { types.push("Helm"); }
+        if self.has_docker_compose { types.push("Docker Compose"); }
+        if self.has_terraform { types.push("Terraform"); }
+        if self.has_deployment_config { types.push("Syncable Config"); }
+        types
+    }
+}
+
 /// Type alias for dependency maps
 pub type DependencyMap = HashMap<String, String>;
 
@@ -245,6 +408,9 @@ pub struct ProjectAnalysis {
     pub dependencies: DependencyMap,
     pub entry_points: Vec<EntryPoint>,
     pub ports: Vec<Port>,
+    /// Detected health check endpoints
+    #[serde(default)]
+    pub health_endpoints: Vec<HealthEndpoint>,
     pub environment_variables: Vec<EnvVar>,
     pub project_type: ProjectType,
     pub build_scripts: Vec<BuildScript>,
@@ -254,6 +420,9 @@ pub struct ProjectAnalysis {
     pub architecture_type: ArchitectureType,
     /// Docker infrastructure analysis
     pub docker_analysis: Option<DockerAnalysis>,
+    /// Detected infrastructure (K8s, Helm, Terraform, etc.)
+    #[serde(default)]
+    pub infrastructure: Option<InfrastructurePresence>,
     pub analysis_metadata: AnalysisMetadata,
 }
 
@@ -408,6 +577,12 @@ pub fn analyze_project_with_config(
     let dependencies = dependency_parser::parse_dependencies(&project_root, &languages, config)?;
     let context = context::analyze_context(&project_root, &languages, &frameworks, config)?;
 
+    // Detect health check endpoints
+    let health_endpoints = context::detect_health_endpoints(&project_root, &frameworks, config.max_file_size);
+
+    // Detect infrastructure presence (K8s, Helm, Terraform, etc.)
+    let infrastructure = context::detect_infrastructure(&project_root);
+
     // Analyze Docker infrastructure
     let docker_analysis = analyze_docker_infrastructure(&project_root).ok();
 
@@ -423,12 +598,14 @@ pub fn analyze_project_with_config(
         dependencies,
         entry_points: context.entry_points,
         ports: context.ports,
+        health_endpoints,
         environment_variables: context.environment_variables,
         project_type: context.project_type,
         build_scripts: context.build_scripts,
         services: vec![], // TODO: Implement microservice detection
         architecture_type: ArchitectureType::Monolithic, // TODO: Detect architecture type
         docker_analysis,
+        infrastructure: Some(infrastructure),
         analysis_metadata: AnalysisMetadata {
             timestamp: Utc::now().to_rfc3339(),
             analyzer_version: env!("CARGO_PKG_VERSION").to_string(),

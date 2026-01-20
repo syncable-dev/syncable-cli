@@ -2,8 +2,8 @@ use clap::Parser;
 use syncable_cli::{
     analyzer::{self, analyze_monorepo, vulnerability::VulnerabilitySeverity},
     cli::{
-        ChatProvider, Cli, ColorScheme, Commands, DisplayFormat, OutputFormat, SecurityScanMode,
-        SeverityThreshold, ToolsCommand,
+        ChatProvider, Cli, ColorScheme, Commands, DisplayFormat, EnvCommand, OutputFormat,
+        SecurityScanMode, SeverityThreshold, ToolsCommand,
     },
     config, generator,
     telemetry::{self},
@@ -115,6 +115,10 @@ async fn run() -> syncable_cli::Result<()> {
         Commands::Optimize { .. } => "optimize",
         Commands::Chat { .. } => "chat",
         Commands::Auth { .. } => "auth",
+        Commands::Project { .. } => "project",
+        Commands::Org { .. } => "org",
+        Commands::Env { .. } => "env",
+        Commands::Deploy { .. } => "deploy",
     };
 
     log::debug!("Command name: {}", command_name);
@@ -686,6 +690,525 @@ async fn run() -> syncable_cli::Result<()> {
         Commands::Auth { command } => {
             // Auth commands are handled by lib.rs
             syncable_cli::run_command(Commands::Auth { command }).await
+        }
+        Commands::Project { command } => {
+            // Project commands are handled by lib.rs
+            syncable_cli::run_command(Commands::Project { command }).await
+        }
+        Commands::Org { command } => {
+            // Org commands are handled by lib.rs
+            syncable_cli::run_command(Commands::Org { command }).await
+        }
+        Commands::Env { command } => {
+            use syncable_cli::auth::credentials;
+            use syncable_cli::platform::api::PlatformApiClient;
+            use syncable_cli::platform::session::PlatformSession;
+
+            // Check authentication
+            if !credentials::is_authenticated() {
+                eprintln!("Not logged in. Run `sync-ctl auth login` first.");
+                process::exit(1);
+            }
+
+            // Load platform session for org/project context
+            let session = match PlatformSession::load() {
+                Ok(s) => s,
+                Err(_) => {
+                    eprintln!("No project selected. Run `sync-ctl project select` first.");
+                    process::exit(1);
+                }
+            };
+
+            let project_id = match &session.project_id {
+                Some(p) => p.clone(),
+                None => {
+                    eprintln!("No project selected. Run `sync-ctl project select` first.");
+                    process::exit(1);
+                }
+            };
+
+            // Create API client
+            let client = match PlatformApiClient::new() {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("Failed to create API client: {}", e);
+                    process::exit(1);
+                }
+            };
+
+            match command {
+                EnvCommand::List { format } => {
+                    match client.list_environments(&project_id).await {
+                        Ok(environments) => {
+                            if environments.is_empty() {
+                                println!("No environments found in project.");
+                                println!(
+                                    "\nCreate one with: {}",
+                                    "sync-ctl deploy new-env".bright_cyan()
+                                );
+                            } else {
+                                match format {
+                                    OutputFormat::Json => {
+                                        println!(
+                                            "{}",
+                                            serde_json::to_string_pretty(&environments).unwrap()
+                                        );
+                                    }
+                                    OutputFormat::Table => {
+                                        println!("\nEnvironments in project:\n");
+                                        for env in &environments {
+                                            let selected = session
+                                                .environment_id
+                                                .as_ref()
+                                                .map(|id| id == &env.id)
+                                                .unwrap_or(false);
+                                            let marker =
+                                                if selected { "→ ".green() } else { "  ".normal() };
+                                            println!(
+                                                "{}{} ({}) - {}",
+                                                marker,
+                                                env.name.bold(),
+                                                env.id.dimmed(),
+                                                env.environment_type
+                                            );
+                                        }
+                                        println!(
+                                            "\nSelect with: {}",
+                                            "sync-ctl env select <ID>".bright_cyan()
+                                        );
+                                    }
+                                }
+                            }
+                            Ok(())
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to list environments: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+                EnvCommand::Select { id } => {
+                    // Verify environment exists (match by ID or name)
+                    match client.list_environments(&project_id).await {
+                        Ok(environments) => {
+                            if let Some(env) = environments
+                                .iter()
+                                .find(|e| e.id == id || e.name.eq_ignore_ascii_case(&id))
+                            {
+                                // Update session with environment
+                                let new_session = PlatformSession::with_environment(
+                                    session.project_id.unwrap(),
+                                    session.project_name.unwrap_or_default(),
+                                    session.org_id.unwrap_or_default(),
+                                    session.org_name.unwrap_or_default(),
+                                    env.id.clone(),
+                                    env.name.clone(),
+                                );
+
+                                if let Err(e) = new_session.save() {
+                                    eprintln!("Failed to save session: {}", e);
+                                    process::exit(1);
+                                }
+
+                                println!(
+                                    "{} Selected environment: {}",
+                                    "✓".green(),
+                                    env.name.bold()
+                                );
+                                println!("Context: {}", new_session.display_context());
+                                Ok(())
+                            } else {
+                                eprintln!("Environment not found: {}", id);
+                                eprintln!("Run `sync-ctl env list` to see available environments.");
+                                process::exit(1);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to list environments: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+            }
+        }
+        Commands::Deploy { path, command } => {
+            use syncable_cli::auth::credentials;
+            use syncable_cli::cli::DeployCommand;
+            use syncable_cli::platform::api::PlatformApiClient;
+            use syncable_cli::platform::session::PlatformSession;
+            use syncable_cli::wizard::{
+                create_environment_wizard, run_wizard, select_environment,
+                EnvironmentCreationResult, EnvironmentSelectionResult, WizardResult,
+            };
+
+            // Check authentication
+            if !credentials::is_authenticated() {
+                eprintln!("Not logged in. Run `sync-ctl auth login` first.");
+                process::exit(1);
+            }
+
+            // Load platform session for org/project context
+            let session = match PlatformSession::load() {
+                Ok(s) => s,
+                Err(_) => {
+                    eprintln!("No project selected. Run `sync-ctl project select` first.");
+                    process::exit(1);
+                }
+            };
+
+            let project_id = match &session.project_id {
+                Some(p) => p.clone(),
+                None => {
+                    eprintln!("No project selected. Run `sync-ctl project select` first.");
+                    process::exit(1);
+                }
+            };
+
+            // Create API client
+            let client = match PlatformApiClient::new() {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("Failed to create API client: {}", e);
+                    process::exit(1);
+                }
+            };
+
+            match command {
+                Some(DeployCommand::NewEnv) => {
+                    // Run environment creation wizard
+                    match create_environment_wizard(&client, &project_id).await {
+                        EnvironmentCreationResult::Created(env) => {
+                            // Optionally update session with the new environment
+                            let new_session = PlatformSession::with_environment(
+                                session.project_id.unwrap(),
+                                session.project_name.unwrap_or_default(),
+                                session.org_id.unwrap_or_default(),
+                                session.org_name.unwrap_or_default(),
+                                env.id.clone(),
+                                env.name.clone(),
+                            );
+
+                            if let Err(e) = new_session.save() {
+                                eprintln!("Warning: Failed to save session: {}", e);
+                            }
+
+                            println!(
+                                "\nContext updated: {}",
+                                new_session.display_context().bright_cyan()
+                            );
+                            println!(
+                                "\nNext: Run {} to deploy a service",
+                                "sync-ctl deploy".bright_cyan()
+                            );
+                            Ok(())
+                        }
+                        EnvironmentCreationResult::Cancelled => {
+                            println!("{}", "Environment creation cancelled.".dimmed());
+                            Ok(())
+                        }
+                        EnvironmentCreationResult::Error(e) => {
+                            eprintln!("Error: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+                Some(DeployCommand::Status { task_id, watch }) => {
+                    // Check deployment status
+                    use std::time::Duration;
+                    use tokio::time::sleep;
+
+                    loop {
+                        match client.get_deployment_status(&task_id).await {
+                            Ok(status) => {
+                                // Clear screen if watching
+                                if watch {
+                                    print!("\x1B[2J\x1B[1;1H");
+                                }
+
+                                println!();
+                                println!(
+                                    "{}",
+                                    "═══════════════════════════════════════════════════════════════"
+                                        .bright_blue()
+                                );
+                                println!(
+                                    "{}",
+                                    format!("  Deployment Status: {}", task_id).bold()
+                                );
+                                println!(
+                                    "{}",
+                                    "═══════════════════════════════════════════════════════════════"
+                                        .bright_blue()
+                                );
+                                println!();
+
+                                // Status with color
+                                let status_color = match status.status.as_str() {
+                                    "completed" => status.status.green(),
+                                    "failed" => status.status.red(),
+                                    _ => status.status.yellow(),
+                                };
+                                println!("  Task Status:    {}", status_color);
+
+                                // Overall status with color
+                                let overall_color = match status.overall_status.as_str() {
+                                    "healthy" => status.overall_status.green(),
+                                    "failed" => status.overall_status.red(),
+                                    _ => status.overall_status.yellow(),
+                                };
+                                println!("  Overall Status: {}", overall_color);
+                                println!("  Progress:       {}%", status.progress);
+
+                                if let Some(step) = &status.current_step {
+                                    println!("  Current Step:   {}", step);
+                                }
+
+                                if !status.overall_message.is_empty() {
+                                    println!("  Message:        {}", status.overall_message);
+                                }
+
+                                if let Some(error) = &status.error {
+                                    println!();
+                                    println!("  {} {}", "Error:".red().bold(), error);
+                                }
+
+                                println!();
+
+                                // Check if we should stop watching
+                                if !watch
+                                    || status.status == "completed"
+                                    || status.status == "failed"
+                                {
+                                    if status.status == "completed"
+                                        && status.overall_status == "healthy"
+                                    {
+                                        println!(
+                                            "  {} Deployment completed successfully!",
+                                            "✓".green()
+                                        );
+                                    } else if status.status == "failed"
+                                        || status.overall_status == "failed"
+                                    {
+                                        println!("  {} Deployment failed.", "✗".red());
+                                        process::exit(1);
+                                    }
+                                    break;
+                                }
+
+                                // Wait before next poll
+                                println!(
+                                    "  {}",
+                                    "Watching... (Ctrl+C to stop)".dimmed()
+                                );
+                                sleep(Duration::from_secs(5)).await;
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to get deployment status: {}", e);
+                                process::exit(1);
+                            }
+                        }
+                    }
+                    Ok(())
+                }
+                Some(DeployCommand::Wizard { path: wizard_path }) => {
+                    // Always ask for environment selection
+                    let (environment_id, _session) = match select_environment(&client, &project_id).await {
+                        EnvironmentSelectionResult::Selected(env) => {
+                            // Update session with selected environment
+                            let new_session = PlatformSession::with_environment(
+                                session.project_id.clone().unwrap(),
+                                session.project_name.clone().unwrap_or_default(),
+                                session.org_id.clone().unwrap_or_default(),
+                                session.org_name.clone().unwrap_or_default(),
+                                env.id.clone(),
+                                env.name.clone(),
+                            );
+                            let _ = new_session.save();
+                            (env.id, new_session)
+                        }
+                        EnvironmentSelectionResult::CreateNew => {
+                            // Run environment creation wizard
+                            match create_environment_wizard(&client, &project_id).await {
+                                EnvironmentCreationResult::Created(env) => {
+                                    let new_session = PlatformSession::with_environment(
+                                        session.project_id.clone().unwrap(),
+                                        session.project_name.clone().unwrap_or_default(),
+                                        session.org_id.clone().unwrap_or_default(),
+                                        session.org_name.clone().unwrap_or_default(),
+                                        env.id.clone(),
+                                        env.name.clone(),
+                                    );
+                                    let _ = new_session.save();
+                                    (env.id, new_session)
+                                }
+                                EnvironmentCreationResult::Cancelled => {
+                                    println!("{}", "Environment creation cancelled.".dimmed());
+                                    return Ok(());
+                                }
+                                EnvironmentCreationResult::Error(e) => {
+                                    eprintln!("Error creating environment: {}", e);
+                                    process::exit(1);
+                                }
+                            }
+                        }
+                        EnvironmentSelectionResult::Cancelled => {
+                            println!("{}", "Wizard cancelled.".dimmed());
+                            return Ok(());
+                        }
+                        EnvironmentSelectionResult::Error(e) => {
+                            eprintln!("Error: {}", e);
+                            process::exit(1);
+                        }
+                    };
+
+                    // Run deployment wizard
+                    match run_wizard(&client, &project_id, &environment_id, &wizard_path).await {
+                        WizardResult::Deployed(_info) => {
+                            // Deployment was triggered successfully
+                            // The orchestrator already printed success message with task ID
+                            Ok(())
+                        }
+                        WizardResult::Success(config) => {
+                            println!("{}", "Deployment configuration created!".green().bold());
+                            if !config.is_complete() {
+                                println!(
+                                    "{}",
+                                    format!("Missing fields: {:?}", config.missing_fields())
+                                        .yellow()
+                                );
+                            }
+                            println!(
+                                "\n{}",
+                                "Next: Run deployment with created config".dimmed()
+                            );
+                            Ok(())
+                        }
+                        WizardResult::StartAgent(prompt) => {
+                            println!(
+                                "\n{} Starting agent to help create Dockerfile...\n",
+                                "→".cyan()
+                            );
+                            // Transition to chat mode with the prompt
+                            syncable_cli::run_command(Commands::Chat {
+                                path: wizard_path,
+                                provider: ChatProvider::Auto,
+                                model: None,
+                                query: Some(prompt),
+                                resume: None,
+                                list_sessions: false,
+                            })
+                            .await
+                        }
+                        WizardResult::Cancelled => {
+                            println!("{}", "Wizard cancelled.".dimmed());
+                            Ok(())
+                        }
+                        WizardResult::Error(e) => {
+                            eprintln!("Error: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+                None => {
+                    // Always ask for environment selection
+                    let (environment_id, _session) = match select_environment(&client, &project_id).await {
+                        EnvironmentSelectionResult::Selected(env) => {
+                            // Update session with selected environment
+                            let new_session = PlatformSession::with_environment(
+                                session.project_id.clone().unwrap(),
+                                session.project_name.clone().unwrap_or_default(),
+                                session.org_id.clone().unwrap_or_default(),
+                                session.org_name.clone().unwrap_or_default(),
+                                env.id.clone(),
+                                env.name.clone(),
+                            );
+                            let _ = new_session.save();
+                            (env.id, new_session)
+                        }
+                        EnvironmentSelectionResult::CreateNew => {
+                            // Run environment creation wizard
+                            match create_environment_wizard(&client, &project_id).await {
+                                EnvironmentCreationResult::Created(env) => {
+                                    let new_session = PlatformSession::with_environment(
+                                        session.project_id.clone().unwrap(),
+                                        session.project_name.clone().unwrap_or_default(),
+                                        session.org_id.clone().unwrap_or_default(),
+                                        session.org_name.clone().unwrap_or_default(),
+                                        env.id.clone(),
+                                        env.name.clone(),
+                                    );
+                                    let _ = new_session.save();
+                                    (env.id, new_session)
+                                }
+                                EnvironmentCreationResult::Cancelled => {
+                                    println!("{}", "Environment creation cancelled.".dimmed());
+                                    return Ok(());
+                                }
+                                EnvironmentCreationResult::Error(e) => {
+                                    eprintln!("Error creating environment: {}", e);
+                                    process::exit(1);
+                                }
+                            }
+                        }
+                        EnvironmentSelectionResult::Cancelled => {
+                            println!("{}", "Wizard cancelled.".dimmed());
+                            return Ok(());
+                        }
+                        EnvironmentSelectionResult::Error(e) => {
+                            eprintln!("Error: {}", e);
+                            process::exit(1);
+                        }
+                    };
+
+                    // Run deployment wizard with top-level path
+                    match run_wizard(&client, &project_id, &environment_id, &path).await {
+                        WizardResult::Deployed(_info) => {
+                            // Deployment was triggered successfully
+                            // The orchestrator already printed success message with task ID
+                            Ok(())
+                        }
+                        WizardResult::Success(config) => {
+                            println!("{}", "Deployment configuration created!".green().bold());
+                            if !config.is_complete() {
+                                println!(
+                                    "{}",
+                                    format!("Missing fields: {:?}", config.missing_fields())
+                                        .yellow()
+                                );
+                            }
+                            println!(
+                                "\n{}",
+                                "Next: Run deployment with created config".dimmed()
+                            );
+                            Ok(())
+                        }
+                        WizardResult::StartAgent(prompt) => {
+                            println!(
+                                "\n{} Starting agent to help create Dockerfile...\n",
+                                "→".cyan()
+                            );
+                            // Transition to chat mode with the prompt
+                            syncable_cli::run_command(Commands::Chat {
+                                path: path.clone(),
+                                provider: ChatProvider::Auto,
+                                model: None,
+                                query: Some(prompt),
+                                resume: None,
+                                list_sessions: false,
+                            })
+                            .await
+                        }
+                        WizardResult::Cancelled => {
+                            println!("{}", "Wizard cancelled.".dimmed());
+                            Ok(())
+                        }
+                        WizardResult::Error(e) => {
+                            eprintln!("Error: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+            }
         }
     };
 

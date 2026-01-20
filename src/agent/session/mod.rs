@@ -20,6 +20,7 @@ pub use providers::{get_available_models, get_configured_providers, prompt_api_k
 
 use crate::agent::commands::TokenUsage;
 use crate::agent::{AgentResult, ProviderType};
+use crate::platform::PlatformSession;
 use colored::Colorize;
 use std::io;
 use std::path::Path;
@@ -35,6 +36,8 @@ pub struct ChatSession {
     pub plan_mode: PlanMode,
     /// Session loaded via /resume command, to be processed by main loop
     pub pending_resume: Option<crate::agent::persistence::ConversationRecord>,
+    /// Platform session state (selected project/org context)
+    pub platform_session: PlatformSession,
 }
 
 impl ChatSession {
@@ -45,6 +48,9 @@ impl ChatSession {
             ProviderType::Bedrock => "global.anthropic.claude-sonnet-4-20250514-v1:0".to_string(),
         };
 
+        // Load platform session from disk (returns default if not exists)
+        let platform_session = PlatformSession::load().unwrap_or_default();
+
         Self {
             provider,
             model: model.unwrap_or(default_model),
@@ -53,6 +59,18 @@ impl ChatSession {
             token_usage: TokenUsage::new(),
             plan_mode: PlanMode::default(),
             pending_resume: None,
+            platform_session,
+        }
+    }
+
+    /// Update the platform session and save to disk
+    pub fn update_platform_session(&mut self, session: PlatformSession) {
+        self.platform_session = session;
+        if let Err(e) = self.platform_session.save() {
+            eprintln!(
+                "{}",
+                format!("Warning: Failed to save platform session: {}", e).yellow()
+            );
         }
     }
 
@@ -242,8 +260,18 @@ impl ChatSession {
     pub fn read_input(&self) -> io::Result<crate::agent::ui::input::InputResult> {
         use crate::agent::ui::input::read_input_with_file_picker;
 
+        // Build prompt with platform context if project is selected
+        let prompt = if self.platform_session.is_project_selected() {
+            format!(
+                "{} >",
+                self.platform_session.display_context()
+            )
+        } else {
+            ">".to_string()
+        };
+
         Ok(read_input_with_file_picker(
-            ">",
+            &prompt,
             &self.project_path,
             self.plan_mode.is_planning(),
         ))

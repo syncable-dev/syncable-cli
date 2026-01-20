@@ -346,6 +346,34 @@ pub enum Commands {
         #[command(subcommand)]
         command: AuthCommand,
     },
+
+    /// Manage Syncable projects
+    Project {
+        #[command(subcommand)]
+        command: ProjectCommand,
+    },
+
+    /// Manage Syncable organizations
+    Org {
+        #[command(subcommand)]
+        command: OrgCommand,
+    },
+
+    /// Manage environments within a project
+    Env {
+        #[command(subcommand)]
+        command: EnvCommand,
+    },
+
+    /// Deploy services to the Syncable platform (launches wizard by default)
+    Deploy {
+        /// Path to the project directory (default: current directory)
+        #[arg(value_name = "PROJECT_PATH", default_value = ".")]
+        path: PathBuf,
+
+        #[command(subcommand)]
+        command: Option<DeployCommand>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -424,6 +452,94 @@ pub enum AuthCommand {
         /// Print raw token without formatting
         #[arg(long)]
         raw: bool,
+    },
+}
+
+/// Project management subcommands
+#[derive(Subcommand)]
+pub enum ProjectCommand {
+    /// List projects in the current organization
+    List {
+        /// Organization ID to list projects from (uses current org if not specified)
+        #[arg(long)]
+        org_id: Option<String>,
+
+        /// Output format
+        #[arg(long, value_enum, default_value = "table")]
+        format: OutputFormat,
+    },
+
+    /// Select a project to work with
+    Select {
+        /// Project ID to select
+        id: String,
+    },
+
+    /// Show current organization and project context
+    Current,
+
+    /// Show details of a project
+    Info {
+        /// Project ID (uses current project if not specified)
+        id: Option<String>,
+    },
+}
+
+/// Organization management subcommands
+#[derive(Subcommand)]
+pub enum OrgCommand {
+    /// List organizations you belong to
+    List {
+        /// Output format
+        #[arg(long, value_enum, default_value = "table")]
+        format: OutputFormat,
+    },
+
+    /// Select an organization to work with
+    Select {
+        /// Organization ID to select
+        id: String,
+    },
+}
+
+/// Environment management subcommands
+#[derive(Subcommand)]
+pub enum EnvCommand {
+    /// List environments in the current project
+    List {
+        /// Output format
+        #[arg(long, value_enum, default_value = "table")]
+        format: OutputFormat,
+    },
+
+    /// Select an environment to work with
+    Select {
+        /// Environment ID to select
+        id: String,
+    },
+}
+
+/// Deployment subcommands
+#[derive(Subcommand)]
+pub enum DeployCommand {
+    /// Launch interactive deployment wizard
+    Wizard {
+        /// Path to the project directory (default: current directory)
+        #[arg(value_name = "PROJECT_PATH", default_value = ".")]
+        path: PathBuf,
+    },
+
+    /// Create a new environment for the current project
+    NewEnv,
+
+    /// Check deployment status
+    Status {
+        /// The deployment task ID (from deploy command output)
+        task_id: String,
+
+        /// Watch for status updates (poll until complete)
+        #[arg(short, long)]
+        watch: bool,
     },
 }
 

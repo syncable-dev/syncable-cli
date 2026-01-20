@@ -184,6 +184,14 @@ pub async fn run_interactive(
 
     session.print_banner();
 
+    // Display platform context if a project is selected
+    if session.platform_session.is_project_selected() {
+        println!(
+            "{}",
+            format!("Platform context: {}", session.platform_session.display_context()).dimmed()
+        );
+    }
+
     // NOTE: Terminal layout with ANSI scroll regions is disabled for now.
     // The scroll region approach conflicts with the existing input/output flow.
     // TODO: Implement proper scroll region support that integrates with the input handler.
@@ -577,7 +585,23 @@ pub async fn run_interactive(
                         .tool(PrometheusConnectTool::new(bg_manager.clone()))
                         // RAG retrieval tools for compressed tool outputs
                         .tool(RetrieveOutputTool::new())
-                        .tool(ListOutputsTool::new());
+                        .tool(ListOutputsTool::new())
+                        // Platform tools for project management
+                        .tool(ListOrganizationsTool::new())
+                        .tool(ListProjectsTool::new())
+                        .tool(SelectProjectTool::new())
+                        .tool(CurrentContextTool::new())
+                        .tool(OpenProviderSettingsTool::new())
+                        .tool(CheckProviderConnectionTool::new())
+                        .tool(ListDeploymentCapabilitiesTool::new())
+                        // Deployment tools for service management
+                        .tool(CreateDeploymentConfigTool::new())
+                        .tool(DeployServiceTool::new(project_path_buf.clone()))
+                        .tool(ListDeploymentConfigsTool::new())
+                        .tool(TriggerDeploymentTool::new())
+                        .tool(GetDeploymentStatusTool::new())
+                        .tool(ListDeploymentsTool::new())
+                        .tool(GetServiceLogsTool::new());
 
                     // Add tools based on mode
                     if is_planning {
@@ -678,7 +702,23 @@ pub async fn run_interactive(
                         .tool(PrometheusConnectTool::new(bg_manager.clone()))
                         // RAG retrieval tools for compressed tool outputs
                         .tool(RetrieveOutputTool::new())
-                        .tool(ListOutputsTool::new());
+                        .tool(ListOutputsTool::new())
+                        // Platform tools for project management
+                        .tool(ListOrganizationsTool::new())
+                        .tool(ListProjectsTool::new())
+                        .tool(SelectProjectTool::new())
+                        .tool(CurrentContextTool::new())
+                        .tool(OpenProviderSettingsTool::new())
+                        .tool(CheckProviderConnectionTool::new())
+                        .tool(ListDeploymentCapabilitiesTool::new())
+                        // Deployment tools for service management
+                        .tool(CreateDeploymentConfigTool::new())
+                        .tool(DeployServiceTool::new(project_path_buf.clone()))
+                        .tool(ListDeploymentConfigsTool::new())
+                        .tool(TriggerDeploymentTool::new())
+                        .tool(GetDeploymentStatusTool::new())
+                        .tool(ListDeploymentsTool::new())
+                        .tool(GetServiceLogsTool::new());
 
                     // Add tools based on mode
                     if is_planning {
@@ -770,7 +810,23 @@ pub async fn run_interactive(
                         .tool(PrometheusConnectTool::new(bg_manager.clone()))
                         // RAG retrieval tools for compressed tool outputs
                         .tool(RetrieveOutputTool::new())
-                        .tool(ListOutputsTool::new());
+                        .tool(ListOutputsTool::new())
+                        // Platform tools for project management
+                        .tool(ListOrganizationsTool::new())
+                        .tool(ListProjectsTool::new())
+                        .tool(SelectProjectTool::new())
+                        .tool(CurrentContextTool::new())
+                        .tool(OpenProviderSettingsTool::new())
+                        .tool(CheckProviderConnectionTool::new())
+                        .tool(ListDeploymentCapabilitiesTool::new())
+                        // Deployment tools for service management
+                        .tool(CreateDeploymentConfigTool::new())
+                        .tool(DeployServiceTool::new(project_path_buf.clone()))
+                        .tool(ListDeploymentConfigsTool::new())
+                        .tool(TriggerDeploymentTool::new())
+                        .tool(GetDeploymentStatusTool::new())
+                        .tool(ListDeploymentsTool::new())
+                        .tool(GetServiceLogsTool::new());
 
                     // Add tools based on mode
                     if is_planning {
@@ -2210,7 +2266,23 @@ pub async fn run_query(
                 .tool(PrometheusConnectTool::new(bg_manager.clone()))
                 // RAG retrieval tools for compressed tool outputs
                 .tool(RetrieveOutputTool::new())
-                .tool(ListOutputsTool::new());
+                .tool(ListOutputsTool::new())
+                        // Platform tools for project management
+                        .tool(ListOrganizationsTool::new())
+                        .tool(ListProjectsTool::new())
+                        .tool(SelectProjectTool::new())
+                        .tool(CurrentContextTool::new())
+                        .tool(OpenProviderSettingsTool::new())
+                        .tool(CheckProviderConnectionTool::new())
+                        .tool(ListDeploymentCapabilitiesTool::new())
+                        // Deployment tools for service management
+                        .tool(CreateDeploymentConfigTool::new())
+                        .tool(DeployServiceTool::new(project_path_buf.clone()))
+                        .tool(ListDeploymentConfigsTool::new())
+                        .tool(TriggerDeploymentTool::new())
+                        .tool(GetDeploymentStatusTool::new())
+                        .tool(ListDeploymentsTool::new())
+                        .tool(GetServiceLogsTool::new());
 
             // Add generation tools if this is a generation query
             if is_generation {
@@ -2279,7 +2351,23 @@ pub async fn run_query(
                 .tool(PrometheusConnectTool::new(bg_manager.clone()))
                 // RAG retrieval tools for compressed tool outputs
                 .tool(RetrieveOutputTool::new())
-                .tool(ListOutputsTool::new());
+                .tool(ListOutputsTool::new())
+                        // Platform tools for project management
+                        .tool(ListOrganizationsTool::new())
+                        .tool(ListProjectsTool::new())
+                        .tool(SelectProjectTool::new())
+                        .tool(CurrentContextTool::new())
+                        .tool(OpenProviderSettingsTool::new())
+                        .tool(CheckProviderConnectionTool::new())
+                        .tool(ListDeploymentCapabilitiesTool::new())
+                        // Deployment tools for service management
+                        .tool(CreateDeploymentConfigTool::new())
+                        .tool(DeployServiceTool::new(project_path_buf.clone()))
+                        .tool(ListDeploymentConfigsTool::new())
+                        .tool(TriggerDeploymentTool::new())
+                        .tool(GetDeploymentStatusTool::new())
+                        .tool(ListDeploymentsTool::new())
+                        .tool(GetServiceLogsTool::new());
 
             // Add generation tools if this is a generation query
             if is_generation {
@@ -2337,7 +2425,23 @@ pub async fn run_query(
                 .tool(PrometheusConnectTool::new(bg_manager.clone()))
                 // RAG retrieval tools for compressed tool outputs
                 .tool(RetrieveOutputTool::new())
-                .tool(ListOutputsTool::new());
+                .tool(ListOutputsTool::new())
+                        // Platform tools for project management
+                        .tool(ListOrganizationsTool::new())
+                        .tool(ListProjectsTool::new())
+                        .tool(SelectProjectTool::new())
+                        .tool(CurrentContextTool::new())
+                        .tool(OpenProviderSettingsTool::new())
+                        .tool(CheckProviderConnectionTool::new())
+                        .tool(ListDeploymentCapabilitiesTool::new())
+                        // Deployment tools for service management
+                        .tool(CreateDeploymentConfigTool::new())
+                        .tool(DeployServiceTool::new(project_path_buf.clone()))
+                        .tool(ListDeploymentConfigsTool::new())
+                        .tool(TriggerDeploymentTool::new())
+                        .tool(GetDeploymentStatusTool::new())
+                        .tool(ListDeploymentsTool::new())
+                        .tool(GetServiceLogsTool::new());
 
             // Add generation tools if this is a generation query
             if is_generation {

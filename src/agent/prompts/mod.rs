@@ -169,7 +169,9 @@ Just identify → explain → fix → proceed.
 /// Thinking guidelines - prevent "oops" and self-doubt patterns
 const THINKING_GUIDELINES: &str = r#"
 <thinking_guidelines>
-- Plan briefly (2-3 sentences), then execute
+- Do NOT narrate what you're about to do (e.g., "I'll call X tool" or "The user wants Y so I'll Z")
+- Just take action directly without announcing it
+- Plan internally, execute externally - users see results, not reasoning
 - Do NOT second-guess yourself with phrases like "oops", "I should have", or "I made a mistake"
 - If you made an error, fix it without self-deprecation - just fix it
 - Show confidence in your actions

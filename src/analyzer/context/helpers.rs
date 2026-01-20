@@ -1,4 +1,4 @@
-use crate::analyzer::{Port, Protocol};
+use crate::analyzer::{Port, PortSource, Protocol};
 use crate::error::{AnalysisError, Result};
 use regex::Regex;
 use std::collections::HashSet;
@@ -11,7 +11,7 @@ pub fn create_regex(pattern: &str) -> Result<Regex> {
     })
 }
 
-/// Extracts ports from command strings
+/// Extracts ports from command strings (e.g., npm scripts in package.json)
 pub fn extract_ports_from_command(command: &str, ports: &mut HashSet<Port>) {
     // Look for common port patterns in commands
     let patterns = [
@@ -31,6 +31,7 @@ pub fn extract_ports_from_command(command: &str, ports: &mut HashSet<Port>) {
                         number: port,
                         protocol: Protocol::Http,
                         description: Some("Port from command".to_string()),
+                        source: Some(PortSource::PackageJson),
                     });
                 }
             }

@@ -1,5 +1,5 @@
 use crate::analyzer::{
-    AnalysisConfig, BuildScript, EntryPoint, Port, Protocol,
+    AnalysisConfig, BuildScript, EntryPoint, Port, PortSource, Protocol,
     context::helpers::{create_regex, extract_ports_from_command, get_script_description},
 };
 use crate::common::file_utils::{is_readable_file, read_file_safe};
@@ -104,6 +104,7 @@ fn scan_js_file_for_context(
                 number: port,
                 protocol: Protocol::Http,
                 description: Some("HTTP server port".to_string()),
+                source: Some(PortSource::SourceCode),
             });
         }
     }
@@ -119,6 +120,7 @@ fn scan_js_file_for_context(
                 number: port,
                 protocol: Protocol::Http,
                 description: Some("Express/HTTP server".to_string()),
+                source: Some(PortSource::SourceCode),
             });
         }
     }
