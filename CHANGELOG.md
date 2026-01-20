@@ -203,6 +203,109 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Other
 
 - release v0.34.0
+- release v0.34.0
+- Merge pull request #279 from syncable-dev/develop
+- add verbose logging for deployment config request
+- *(wizard)* add debug logging for deployment trigger
+- *(62-01)* fix clippy never_loop warnings in wizard orchestrator
+
+## [0.34.0](https://github.com/syncable-dev/syncable-cli/releases/tag/v0.34.0) - 2026-01-20
+
+### Added
+
+- *(11.3-03)* add DeployServiceTool for conversational deployment
+- *(11.3-02)* add deployment recommendation engine
+- *(11.3-01)* add infrastructure presence detection
+- *(11.3-01)* add health endpoint detection
+- *(11.3-01)* add PortSource enum for source-based port tracking
+- *(11.1-01)* fix CloudRunnerConfig to use provider-nested structure
+- *(wizard)* add smart repository connection to deploy flow
+- *(11-01)* add GitHub integration API types and methods
+- *(62.2-01)* integrate Dockerfile selection into wizard
+- *(62.2-01)* add Dockerfile selection wizard step
+- *(62.1-02)* add deploy new-env command with wizard
+- *(62.1-02)* add EnvCommand to CLI with list and select
+- *(62.1-01)* add environment fields to PlatformSession
+- *(62.1-01)* add Environment type and API methods
+- *(61-01)* add is_available to list_deployment_capabilities tool
+- *(61-01)* show Coming Soon for unavailable providers in wizard
+- *(61-01)* add Scaleway, Cyso providers and is_available method
+- *(60-01)* cross-reference analyze_codebase in analyze_project next_steps
+- *(60-01)* register AnalyzeCodebaseTool in platform module
+- *(60-01)* create AnalyzeCodebaseTool for comprehensive analysis
+- *(59-02)* create ProvisionRegistryTool and register tools
+- *(59-02)* create CreateDeploymentConfigTool for agent
+- *(59-02)* add create_deployment_config API method
+- *(59-01)* create ListDeploymentCapabilitiesTool and register tools
+- *(59-01)* create AnalyzeProjectTool for deployment discovery
+- *(58-01)* integrate registry provisioning into wizard orchestrator
+- *(58-01)* create registry provisioning wizard step
+- *(58-01)* add registry provisioning types and API methods
+- *(57-03)* CLI deploy wizard command integration
+- *(57-03)* wizard orchestration
+- *(57-03)* service configuration form
+- *(57-02)* implement registry selection step
+- *(57-02)* implement cluster selection step
+- *(57-02)* implement target selection step
+- *(57-01)* implement provider selection prompt
+- *(57-01)* implement provider status aggregation
+- *(57-01)* create wizard module structure
+- *(56-01)* add CLI wizard deployment config types
+- *(analyzer)* add dockerfile discovery for deployment wizard
+- *(platform)* add cluster and registry API methods
+- *(46-01)* add API connection health check
+- *(46-01)* add actionable suggestions to API errors
+- *(46-01)* add retry logic for transient API failures
+- *(45-01)* add platform context to input prompt
+- *(45-01)* add platform context to welcome banner
+- *(44-01)* wire up Project and Org commands in main.rs
+- *(44-01)* implement Project and Org command handlers
+- *(44-01)* add Project and Org command definitions
+- *(43-01)* create GetServiceLogsTool
+- *(43-01)* add log types and API method
+- *(42-01)* register deployment tools with agent
+- *(42-01)* create deployment tools
+- *(42-01)* add deployment types and API methods
+- *(41-01)* register provider connection tools
+- *(41-01)* create provider connection tools
+- *(41-01)* add provider connection check to API client
+- *(40-01)* register platform tools with agent
+- *(40-01)* create platform listing and selection tools
+- *(39-01)* create platform API client module
+- *(38-01)* wire session loading into agent startup
+- *(38-01)* create platform session module
+
+### Fixed
+
+- *(11.3-01)* enforce human-in-the-loop for deployment changes
+- *(11.3-01)* add is_public parameter with safe default (false)
+- *(11.3-01)* prevent agent from polling deployment status in infinite loop
+- *(11.3-01)* detect correct repository from local git remote
+- *(11.3-01)* derive dockerfile paths relative to repo root for Cloud Runner
+- *(deploy)* use paths relative to analyzed dir, not project root
+- *(deploy)* match manual wizard dockerfile/context path handling
+- *(deploy)* correct dockerfile path derivation for subdirectory deployments
+- *(prompt)* reduce agent narration of internal reasoning
+- *(deploy-status)* check actual service readiness for Cloud Runner
+- *(agent)* register CreateDeploymentConfigTool and DeployServiceTool
+- *(agent)* register ListDeploymentCapabilitiesTool in agent
+- *(api)* use working endpoint for check_provider_connection
+- *(api)* wrap get_optional responses in GenericResponse
+- *(deploy)* add duplicate detection and environment display to DeployServiceTool
+- *(wizard)* use build_context + filename for dockerfile path
+- *(wizard)* use full dockerfile path for Docker build
+- dockerfile path relative to build context + add deploy status command
+- *(api)* correct trigger deployment response parsing
+- *(api)* correct deployment config API response parsing
+- *(62.1-02)* correct ArtifactRegistry cloudProvider field name
+- *(62.1-02)* correct environment API endpoint and field names
+- *(62-01)* make deploy wizard the default when no subcommand provided
+- detect provider connection from cloud credentials, not resources
+- *(api)* unwrap GenericResponse wrapper in platform API client
+
+### Other
+
+- release v0.34.0
 - Merge pull request #279 from syncable-dev/develop
 - add verbose logging for deployment config request
 - *(wizard)* add debug logging for deployment trigger
