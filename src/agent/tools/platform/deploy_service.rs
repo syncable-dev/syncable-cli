@@ -561,7 +561,8 @@ User: "deploy this service"
 
         // Build deployment config request
         // Derive dockerfile path and build context from DockerfileInfo
-        // NOTE: When analyzing a subdirectory (args.path), paths must be relative to repo root
+        // For monorepos: context = service folder, dockerfile = full path from repo root
+        // This matches what the manual wizard sends when user selects the service folder
         let (dockerfile_path, build_context) = analysis.docker_analysis
             .as_ref()
             .and_then(|d| d.dockerfiles.first())
@@ -571,41 +572,40 @@ User: "deploy this service"
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_else(|| "Dockerfile".to_string());
 
-                // Derive build context from dockerfile path relative to analysis_path
-                // The parent directory of the Dockerfile is typically the build context
-                let analysis_relative_context = df.path.parent()
+                // Derive dockerfile's directory relative to analysis_path
+                let analysis_relative_dir = df.path.parent()
                     .and_then(|p| p.strip_prefix(&analysis_path).ok())
-                    .map(|p| {
-                        let s = p.to_string_lossy().to_string();
-                        if s.is_empty() { ".".to_string() } else { s }
-                    })
-                    .unwrap_or_else(|| ".".to_string());
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default();
 
-                // If we analyzed a subdirectory (args.path), prepend it to get repo-root-relative paths
-                // Otherwise, the context from analyzer is already relative to project root
-                let repo_relative_context = if let Some(ref subpath) = args.path {
-                    // Combine subpath with the analysis-relative build context
-                    if analysis_relative_context == "." {
-                        subpath.clone()
-                    } else {
-                        format!("{}/{}", subpath, analysis_relative_context)
+                // Build paths relative to repo root
+                // If we analyzed a subdirectory (args.path), prepend it
+                match (&args.path, analysis_relative_dir.as_str()) {
+                    (Some(subpath), "") | (Some(subpath), ".") => {
+                        // Dockerfile is at the root of the analyzed subpath
+                        // dockerfile: "services/foo/Dockerfile", context: "services/foo"
+                        (format!("{}/{}", subpath, dockerfile_name), subpath.clone())
                     }
-                } else {
-                    analysis_relative_context
-                };
-
-                // Construct dockerfile path: context/Dockerfile
-                // Following orchestrator.rs pattern (see commit 3cb8698)
-                let df_path = if repo_relative_context == "." || repo_relative_context.is_empty() {
-                    dockerfile_name
-                } else {
-                    format!("{}/{}", repo_relative_context, dockerfile_name)
-                };
-
-                (df_path, repo_relative_context)
+                    (Some(subpath), rel_dir) => {
+                        // Dockerfile is nested within the analyzed subpath
+                        // dockerfile: "services/foo/nested/Dockerfile", context: "services/foo/nested"
+                        let context = format!("{}/{}", subpath, rel_dir);
+                        (format!("{}/{}", context, dockerfile_name), context)
+                    }
+                    (None, "") | (None, ".") => {
+                        // Dockerfile at repo root
+                        // dockerfile: "Dockerfile", context: "."
+                        (dockerfile_name, ".".to_string())
+                    }
+                    (None, rel_dir) => {
+                        // Dockerfile in subdirectory from repo root
+                        // dockerfile: "subdir/Dockerfile", context: "subdir"
+                        (format!("{}/{}", rel_dir, dockerfile_name), rel_dir.to_string())
+                    }
+                }
             })
             .unwrap_or_else(|| {
-                // No dockerfile found - use subpath if provided, else defaults
+                // No dockerfile found - construct path from subpath if provided
                 if let Some(ref subpath) = args.path {
                     (format!("{}/Dockerfile", subpath), subpath.clone())
                 } else {
