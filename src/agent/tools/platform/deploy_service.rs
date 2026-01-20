@@ -13,13 +13,14 @@ use std::str::FromStr;
 use crate::agent::tools::error::{ErrorCategory, format_error_for_llm};
 use crate::analyzer::{AnalysisConfig, TechnologyCategory, analyze_project_with_config};
 use crate::platform::api::types::{
-    CloudProvider, CreateDeploymentConfigRequest, build_cloud_runner_config,
+    CloudProvider, CreateDeploymentConfigRequest, ProjectRepository, build_cloud_runner_config,
 };
 use crate::platform::api::{PlatformApiClient, PlatformApiError, TriggerDeploymentRequest};
 use crate::platform::PlatformSession;
 use crate::wizard::{
     RecommendationInput, recommend_deployment, get_provider_deployment_statuses,
 };
+use std::process::Command;
 
 /// Arguments for the deploy service tool
 #[derive(Debug, Deserialize)]
@@ -534,7 +535,8 @@ User: "deploy this service"
             }
         };
 
-        let repo = match repositories.repositories.first() {
+        // Smart repository selection: match local git remote or find non-gitops repo
+        let repo = match find_matching_repository(&repositories.repositories, &self.project_path) {
             Some(r) => r,
             None => {
                 return Ok(format_error_for_llm(
@@ -548,6 +550,13 @@ User: "deploy this service"
                 ));
             }
         };
+
+        tracing::info!(
+            "Deploy service: Using repository {} (id: {}), default_branch: {:?}",
+            repo.repository_full_name,
+            repo.repository_id,
+            repo.default_branch
+        );
 
         // Use resolved environment ID from earlier
         if resolved_env_id.is_empty() {
@@ -724,6 +733,83 @@ fn get_service_name(path: &PathBuf) -> String {
         .and_then(|n| n.to_str())
         .map(|n| n.to_lowercase().replace(['_', ' '], "-"))
         .unwrap_or_else(|| "service".to_string())
+}
+
+/// Detect the git remote URL from a directory
+fn detect_git_remote(project_path: &PathBuf) -> Option<String> {
+    let output = Command::new("git")
+        .args(["remote", "get-url", "origin"])
+        .current_dir(project_path)
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        let url = String::from_utf8(output.stdout).ok()?;
+        Some(url.trim().to_string())
+    } else {
+        None
+    }
+}
+
+/// Parse repository full name from git remote URL
+/// Handles both SSH (git@github.com:owner/repo.git) and HTTPS (https://github.com/owner/repo.git)
+fn parse_repo_from_url(url: &str) -> Option<String> {
+    let url = url.trim();
+
+    // SSH format: git@github.com:owner/repo.git
+    if url.starts_with("git@") {
+        let parts: Vec<&str> = url.split(':').collect();
+        if parts.len() == 2 {
+            let path = parts[1].trim_end_matches(".git");
+            return Some(path.to_string());
+        }
+    }
+
+    // HTTPS format: https://github.com/owner/repo.git
+    if url.starts_with("https://") || url.starts_with("http://") {
+        if let Some(path) = url.split('/').skip(3).collect::<Vec<_>>().join("/").strip_suffix(".git") {
+            return Some(path.to_string());
+        }
+        // Without .git suffix
+        let path: String = url.split('/').skip(3).collect::<Vec<_>>().join("/");
+        if !path.is_empty() {
+            return Some(path);
+        }
+    }
+
+    None
+}
+
+/// Find repository matching local git remote, or fall back to non-gitops repo
+fn find_matching_repository<'a>(
+    repositories: &'a [ProjectRepository],
+    project_path: &PathBuf,
+) -> Option<&'a ProjectRepository> {
+    // First, try to detect from local git remote
+    if let Some(detected_name) = detect_git_remote(project_path).and_then(|url| parse_repo_from_url(&url)) {
+        tracing::debug!("Detected local git remote: {}", detected_name);
+
+        if let Some(repo) = repositories.iter().find(|r| {
+            r.repository_full_name.eq_ignore_ascii_case(&detected_name)
+        }) {
+            tracing::debug!("Matched detected repo: {}", repo.repository_full_name);
+            return Some(repo);
+        }
+    }
+
+    // Fall back: find first non-GitOps repository
+    // GitOps repos are typically infrastructure/config repos, not application repos
+    if let Some(repo) = repositories.iter().find(|r| {
+        r.is_primary_git_ops != Some(true) &&
+        !r.repository_full_name.to_lowercase().contains("infrastructure") &&
+        !r.repository_full_name.to_lowercase().contains("gitops")
+    }) {
+        tracing::debug!("Using non-gitops repo: {}", repo.repository_full_name);
+        return Some(repo);
+    }
+
+    // Last resort: first repo
+    repositories.first()
 }
 
 /// Format a PlatformApiError for LLM consumption
