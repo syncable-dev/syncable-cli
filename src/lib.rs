@@ -9,6 +9,7 @@ pub mod error;
 pub mod generator;
 pub mod handlers;
 pub mod platform; // Platform session state for project/org context
+pub mod server; // AG-UI server for frontend connectivity
 pub mod telemetry; // Add telemetry module
 pub mod wizard; // Interactive deployment wizard
 
@@ -166,6 +167,8 @@ pub async fn run_command(command: Commands) -> Result<()> {
             query,
             resume,
             list_sessions: _, // Handled in main.rs
+            ag_ui: _,         // Handled in main.rs
+            ag_ui_port: _,    // Handled in main.rs
         } => {
             use agent::ProviderType;
             use cli::ChatProvider;
