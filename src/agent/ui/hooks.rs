@@ -43,6 +43,8 @@ pub struct ToolCallState {
     pub is_expanded: bool,
     pub is_collapsible: bool,
     pub status_ok: bool,
+    /// AG-UI tool call ID for event correlation
+    pub ag_ui_tool_call_id: Option<ag_ui_core::ToolCallId>,
 }
 
 /// Accumulated usage from API responses
@@ -68,7 +70,6 @@ impl AccumulatedUsage {
 }
 
 /// Shared state for the display
-#[derive(Default)]
 pub struct DisplayState {
     pub tool_calls: Vec<ToolCallState>,
     pub agent_messages: Vec<String>,
@@ -80,6 +81,23 @@ pub struct DisplayState {
     pub progress_state: Option<std::sync::Arc<crate::agent::ui::progress::ProgressState>>,
     /// Cancel signal from rig - stored for external cancellation trigger
     pub cancel_signal: Option<CancelSignal>,
+    /// Optional AG-UI EventBridge for streaming tool events to frontends
+    pub event_bridge: Option<crate::server::EventBridge>,
+}
+
+impl Default for DisplayState {
+    fn default() -> Self {
+        Self {
+            tool_calls: Vec::new(),
+            agent_messages: Vec::new(),
+            current_tool_index: None,
+            last_expandable_index: None,
+            usage: AccumulatedUsage::default(),
+            progress_state: None,
+            cancel_signal: None,
+            event_bridge: None,
+        }
+    }
 }
 
 /// A hook that shows Claude Code style tool execution
@@ -140,6 +158,18 @@ impl ToolDisplayHook {
     pub async fn can_cancel(&self) -> bool {
         let state = self.state.lock().await;
         state.cancel_signal.is_some()
+    }
+
+    /// Set the AG-UI EventBridge for streaming tool events to frontends
+    pub async fn set_event_bridge(&self, bridge: crate::server::EventBridge) {
+        let mut state = self.state.lock().await;
+        state.event_bridge = Some(bridge);
+    }
+
+    /// Clear the AG-UI EventBridge
+    pub async fn clear_event_bridge(&self) {
+        let mut state = self.state.lock().await;
+        state.event_bridge = None;
     }
 }
 
@@ -203,6 +233,19 @@ where
                 }
             }
 
+            // Emit AG-UI ToolCallStart event if bridge is connected
+            let ag_ui_tool_call_id = {
+                let s = state.lock().await;
+                if let Some(ref bridge) = s.event_bridge {
+                    // Parse args as JSON for the event
+                    let args_json: serde_json::Value = serde_json::from_str(&args_str)
+                        .unwrap_or_else(|_| serde_json::json!({"raw": args_str}));
+                    Some(bridge.start_tool_call(&name, &args_json).await)
+                } else {
+                    None
+                }
+            };
+
             // Store in state
             let mut s = state.lock().await;
             let idx = s.tool_calls.len();
@@ -215,6 +258,7 @@ where
                 is_expanded: false,
                 is_collapsible: false,
                 status_ok: true,
+                ag_ui_tool_call_id,
             });
             s.current_tool_index = Some(idx);
         }
@@ -238,9 +282,13 @@ where
             let (status_ok, output_lines, is_collapsible) =
                 print_tool_result(&name, &args_str, &result_str);
 
-            // Update state
+            // Update state and emit AG-UI ToolCallEnd event
             let mut s = state.lock().await;
             if let Some(idx) = s.current_tool_index {
+                // Get tool call ID before mutating
+                let ag_ui_tool_call_id = s.tool_calls.get(idx)
+                    .and_then(|t| t.ag_ui_tool_call_id.clone());
+
                 if let Some(tool) = s.tool_calls.get_mut(idx) {
                     tool.output = Some(result_str);
                     tool.output_lines = output_lines;
@@ -251,6 +299,11 @@ where
                 // Track last expandable output
                 if is_collapsible {
                     s.last_expandable_index = Some(idx);
+                }
+
+                // Emit AG-UI ToolCallEnd event if bridge is connected
+                if let (Some(bridge), Some(tool_call_id)) = (&s.event_bridge, &ag_ui_tool_call_id) {
+                    bridge.end_tool_call(tool_call_id).await;
                 }
             }
             s.current_tool_index = None;

@@ -679,13 +679,13 @@ async fn run() -> syncable_cli::Result<()> {
                 telemetry_client.track_event("chat", properties.clone());
             }
 
-            // Start AG-UI server if requested
-            if ag_ui {
+            // Start AG-UI server if requested and get the event bridge
+            let event_bridge = if ag_ui {
                 use syncable_cli::server::{AgUiServer, AgUiConfig};
 
                 let config = AgUiConfig::new().port(ag_ui_port);
                 let server = AgUiServer::new(config);
-                let _event_bridge = server.event_bridge();
+                let bridge = server.event_bridge();
 
                 // Spawn server in background
                 tokio::spawn(async move {
@@ -698,31 +698,38 @@ async fn run() -> syncable_cli::Result<()> {
                 println!("  SSE endpoint:       /sse");
                 println!("  WebSocket endpoint: /ws");
                 println!("  Health check:       /health\n");
-            }
 
-            syncable_cli::run_command(Commands::Chat {
-                path,
-                provider,
-                model,
-                query,
-                resume,
-                list_sessions,
-                ag_ui,
-                ag_ui_port,
-            })
+                Some(bridge)
+            } else {
+                None
+            };
+
+            syncable_cli::run_command(
+                Commands::Chat {
+                    path,
+                    provider,
+                    model,
+                    query,
+                    resume,
+                    list_sessions,
+                    ag_ui,
+                    ag_ui_port,
+                },
+                event_bridge,
+            )
             .await
         }
         Commands::Auth { command } => {
             // Auth commands are handled by lib.rs
-            syncable_cli::run_command(Commands::Auth { command }).await
+            syncable_cli::run_command(Commands::Auth { command }, None).await
         }
         Commands::Project { command } => {
             // Project commands are handled by lib.rs
-            syncable_cli::run_command(Commands::Project { command }).await
+            syncable_cli::run_command(Commands::Project { command }, None).await
         }
         Commands::Org { command } => {
             // Org commands are handled by lib.rs
-            syncable_cli::run_command(Commands::Org { command }).await
+            syncable_cli::run_command(Commands::Org { command }, None).await
         }
         Commands::Env { command } => {
             use syncable_cli::auth::credentials;
@@ -1113,17 +1120,20 @@ async fn run() -> syncable_cli::Result<()> {
                                 "\n{} Starting agent to help create Dockerfile...\n",
                                 "→".cyan()
                             );
-                            // Transition to chat mode with the prompt
-                            syncable_cli::run_command(Commands::Chat {
-                                path: wizard_path,
-                                provider: ChatProvider::Auto,
-                                model: None,
-                                query: Some(prompt),
-                                resume: None,
-                                list_sessions: false,
-                                ag_ui: false,
-                                ag_ui_port: 9090,
-                            })
+                            // Transition to chat mode with the prompt (no AG-UI in wizard mode)
+                            syncable_cli::run_command(
+                                Commands::Chat {
+                                    path: wizard_path,
+                                    provider: ChatProvider::Auto,
+                                    model: None,
+                                    query: Some(prompt),
+                                    resume: None,
+                                    list_sessions: false,
+                                    ag_ui: false,
+                                    ag_ui_port: 9090,
+                                },
+                                None,
+                            )
                             .await
                         }
                         WizardResult::Cancelled => {
@@ -1214,17 +1224,20 @@ async fn run() -> syncable_cli::Result<()> {
                                 "\n{} Starting agent to help create Dockerfile...\n",
                                 "→".cyan()
                             );
-                            // Transition to chat mode with the prompt
-                            syncable_cli::run_command(Commands::Chat {
-                                path: path.clone(),
-                                provider: ChatProvider::Auto,
-                                model: None,
-                                query: Some(prompt),
-                                resume: None,
-                                list_sessions: false,
-                                ag_ui: false,
-                                ag_ui_port: 9090,
-                            })
+                            // Transition to chat mode with the prompt (no AG-UI in wizard mode)
+                            syncable_cli::run_command(
+                                Commands::Chat {
+                                    path: path.clone(),
+                                    provider: ChatProvider::Auto,
+                                    model: None,
+                                    query: Some(prompt),
+                                    resume: None,
+                                    list_sessions: false,
+                                    ag_ui: false,
+                                    ag_ui_port: 9090,
+                                },
+                                None,
+                            )
                             .await
                         }
                         WizardResult::Cancelled => {

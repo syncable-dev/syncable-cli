@@ -130,10 +130,14 @@ pub async fn run_interactive(
     project_path: &Path,
     provider: ProviderType,
     model: Option<String>,
+    event_bridge: Option<crate::server::EventBridge>,
 ) -> AgentResult<()> {
     use tools::*;
 
     let mut session = ChatSession::new(project_path, provider, model);
+
+    // Store event bridge for use in tool hooks
+    let event_bridge = event_bridge;
 
     // Shared background process manager for Prometheus port-forwards
     let bg_manager = Arc::new(BackgroundProcessManager::new());
@@ -523,6 +527,11 @@ pub async fn run_interactive(
             // Layout connection disabled - using inline progress mode
             // progress.state().set_layout(layout_state.clone());
             hook.set_progress_state(progress.state()).await;
+
+            // Connect AG-UI EventBridge if provided (for streaming tool events to frontends)
+            if let Some(ref bridge) = event_bridge {
+                hook.set_event_bridge(bridge.clone()).await;
+            }
 
             let project_path_buf = session.project_path.clone();
             // Select prompt based on query type (analysis vs generation) and plan mode
@@ -2218,11 +2227,13 @@ fn build_continuation_prompt(
 }
 
 /// Run a single query and return the response
+/// Note: event_bridge is accepted for API consistency but not used in single-query mode
 pub async fn run_query(
     project_path: &Path,
     query: &str,
     provider: ProviderType,
     model: Option<String>,
+    _event_bridge: Option<crate::server::EventBridge>,
 ) -> AgentResult<String> {
     use tools::*;
 
