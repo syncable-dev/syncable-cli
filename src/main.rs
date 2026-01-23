@@ -619,6 +619,8 @@ async fn run() -> syncable_cli::Result<()> {
             query,
             resume,
             list_sessions,
+            ag_ui,
+            ag_ui_port,
         } => {
             // Handle --list-sessions flag first (before starting chat)
             if list_sessions {
@@ -677,6 +679,27 @@ async fn run() -> syncable_cli::Result<()> {
                 telemetry_client.track_event("chat", properties.clone());
             }
 
+            // Start AG-UI server if requested
+            if ag_ui {
+                use syncable_cli::server::{AgUiServer, AgUiConfig};
+
+                let config = AgUiConfig::new().port(ag_ui_port);
+                let server = AgUiServer::new(config);
+                let _event_bridge = server.event_bridge();
+
+                // Spawn server in background
+                tokio::spawn(async move {
+                    if let Err(e) = server.run().await {
+                        eprintln!("AG-UI server error: {}", e);
+                    }
+                });
+
+                println!("AG-UI server started on http://127.0.0.1:{}", ag_ui_port);
+                println!("  SSE endpoint:       /sse");
+                println!("  WebSocket endpoint: /ws");
+                println!("  Health check:       /health\n");
+            }
+
             syncable_cli::run_command(Commands::Chat {
                 path,
                 provider,
@@ -684,6 +707,8 @@ async fn run() -> syncable_cli::Result<()> {
                 query,
                 resume,
                 list_sessions,
+                ag_ui,
+                ag_ui_port,
             })
             .await
         }
@@ -1096,6 +1121,8 @@ async fn run() -> syncable_cli::Result<()> {
                                 query: Some(prompt),
                                 resume: None,
                                 list_sessions: false,
+                                ag_ui: false,
+                                ag_ui_port: 9090,
                             })
                             .await
                         }
@@ -1195,6 +1222,8 @@ async fn run() -> syncable_cli::Result<()> {
                                 query: Some(prompt),
                                 resume: None,
                                 list_sessions: false,
+                                ag_ui: false,
+                                ag_ui_port: 9090,
                             })
                             .await
                         }

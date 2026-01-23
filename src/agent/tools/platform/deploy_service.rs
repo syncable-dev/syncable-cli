@@ -950,6 +950,7 @@ mod tests {
             machine_type: None,
             region: None,
             port: None,
+            is_public: false,
             preview_only: true,
         };
 

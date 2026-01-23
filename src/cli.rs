@@ -339,6 +339,14 @@ pub enum Commands {
         /// List available sessions for this project and exit
         #[arg(long)]
         list_sessions: bool,
+
+        /// Start AG-UI server for frontend connectivity (SSE/WebSocket)
+        #[arg(long)]
+        ag_ui: bool,
+
+        /// AG-UI server port (default: 9090)
+        #[arg(long, default_value = "9090", requires = "ag_ui")]
+        ag_ui_port: u16,
     },
 
     /// Authenticate with the Syncable platform
