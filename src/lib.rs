@@ -24,7 +24,10 @@ pub use telemetry::{TelemetryClient, TelemetryConfig, UserId}; // Re-export tele
 /// The current version of the CLI tool
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-pub async fn run_command(command: Commands) -> Result<()> {
+pub async fn run_command(
+    command: Commands,
+    event_bridge: Option<server::EventBridge>,
+) -> Result<()> {
     match command {
         Commands::Analyze {
             path,
@@ -274,11 +277,11 @@ pub async fn run_command(command: Commands) -> Result<()> {
 
             if let Some(q) = query {
                 let response =
-                    agent::run_query(&project_path, &q, provider_type, effective_model).await?;
+                    agent::run_query(&project_path, &q, provider_type, effective_model, event_bridge).await?;
                 println!("{}", response);
                 Ok(())
             } else {
-                agent::run_interactive(&project_path, provider_type, effective_model).await?;
+                agent::run_interactive(&project_path, provider_type, effective_model, event_bridge).await?;
                 Ok(())
             }
         }
