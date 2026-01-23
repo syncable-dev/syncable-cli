@@ -106,6 +106,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.34.2](https://github.com/syncable-dev/syncable-cli/compare/v0.34.1...v0.34.2) - 2026-01-23
+
+### Other
+
+- release v0.34.1
+
 ## [0.34.1](https://github.com/syncable-dev/syncable-cli/releases/tag/v0.34.1) - 2026-01-22
 
 ### Other
