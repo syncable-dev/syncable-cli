@@ -119,6 +119,7 @@ async fn run() -> syncable_cli::Result<()> {
         Commands::Org { .. } => "org",
         Commands::Env { .. } => "env",
         Commands::Deploy { .. } => "deploy",
+        Commands::Agent { .. } => "agent",
     };
 
     log::debug!("Command name: {}", command_name);
@@ -862,6 +863,26 @@ async fn run() -> syncable_cli::Result<()> {
                     }
                 }
             }
+        }
+        Commands::Agent {
+            path,
+            port,
+            host,
+            provider,
+            model,
+        } => {
+            // Agent command is handled by lib.rs
+            syncable_cli::run_command(
+                Commands::Agent {
+                    path,
+                    port,
+                    host,
+                    provider,
+                    model,
+                },
+                None,
+            )
+            .await
         }
         Commands::Deploy { path, command } => {
             use syncable_cli::auth::credentials;
