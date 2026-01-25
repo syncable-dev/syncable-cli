@@ -39,6 +39,7 @@
 //! ```
 
 pub mod bridge;
+pub mod processor;
 pub mod routes;
 
 use std::net::SocketAddr;
@@ -49,6 +50,7 @@ use axum::{routing::{get, post}, Router};
 use tokio::sync::{broadcast, mpsc, RwLock};
 
 pub use bridge::EventBridge;
+pub use processor::{AgentProcessor, ProcessorConfig, ThreadSession};
 
 // Re-export types needed for message handling
 pub use ag_ui_core::types::{Context, Message as AgUiMessage, RunAgentInput, Tool};
