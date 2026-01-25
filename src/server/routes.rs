@@ -34,6 +34,43 @@ pub async fn health() -> Json<serde_json::Value> {
     }))
 }
 
+/// POST endpoint for receiving messages via HTTP.
+///
+/// Alternative to WebSocket for clients that prefer REST.
+/// Accepts RunAgentInput JSON body and routes to agent processor.
+pub async fn post_message(
+    State(state): State<ServerState>,
+    Json(input): Json<RunAgentInput>,
+) -> Json<serde_json::Value> {
+    let thread_id = input.thread_id.to_string();
+    let run_id = input.run_id.to_string();
+
+    debug!(
+        thread_id = %thread_id,
+        run_id = %run_id,
+        message_count = input.messages.len(),
+        "Received RunAgentInput via POST"
+    );
+
+    let message_tx = state.message_sender();
+    let agent_msg = AgentMessage::new(input);
+
+    match message_tx.send(agent_msg).await {
+        Ok(_) => Json(json!({
+            "status": "accepted",
+            "thread_id": thread_id,
+            "run_id": run_id
+        })),
+        Err(e) => {
+            warn!("Failed to route message to agent processor: {}", e);
+            Json(json!({
+                "status": "error",
+                "message": "Failed to route message to agent processor"
+            }))
+        }
+    }
+}
+
 /// SSE endpoint for streaming AG-UI events.
 pub async fn sse_handler(
     State(state): State<ServerState>,
@@ -138,11 +175,40 @@ async fn handle_websocket(socket: WebSocket, state: ServerState) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ag_ui_core::types::Message as AgUiProtocolMessage;
+    use ag_ui_core::{RunId, ThreadId};
+    use axum::extract::State;
 
     #[tokio::test]
     async fn test_health_endpoint() {
         let response = health().await;
         assert_eq!(response.0["status"], "ok");
         assert_eq!(response.0["protocol"], "ag-ui");
+    }
+
+    #[tokio::test]
+    async fn test_post_message_accepted() {
+        use crate::server::ServerState;
+
+        let state = ServerState::new();
+        let mut msg_rx = state.take_message_receiver().await.expect("Should get receiver");
+
+        // Create RunAgentInput
+        let thread_id = ThreadId::random();
+        let run_id = RunId::random();
+        let input = RunAgentInput::new(thread_id.clone(), run_id.clone())
+            .with_messages(vec![AgUiProtocolMessage::new_user("Hello from POST")]);
+
+        // Call post_message handler
+        let response = post_message(State(state), Json(input)).await;
+
+        // Verify response
+        assert_eq!(response.0["status"], "accepted");
+        assert_eq!(response.0["thread_id"], thread_id.to_string());
+        assert_eq!(response.0["run_id"], run_id.to_string());
+
+        // Verify message was routed
+        let received = msg_rx.recv().await.expect("Should receive message");
+        assert_eq!(received.input.messages.len(), 1);
     }
 }

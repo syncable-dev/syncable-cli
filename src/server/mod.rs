@@ -213,6 +213,7 @@ impl AgUiServer {
             .route("/", get(routes::health))
             .route("/sse", get(routes::sse_handler))
             .route("/ws", get(routes::ws_handler))
+            .route("/message", post(routes::post_message))
             .route("/health", get(routes::health))
             .with_state(self.state);
 
