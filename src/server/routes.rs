@@ -21,8 +21,9 @@ use axum::{
 use futures_util::{SinkExt, Stream, StreamExt};
 use serde_json::json;
 use tokio_stream::wrappers::BroadcastStream;
+use tracing::{debug, warn};
 
-use super::ServerState;
+use super::{AgentMessage, RunAgentInput, ServerState};
 
 /// Health check endpoint.
 pub async fn health() -> Json<serde_json::Value> {
@@ -70,8 +71,9 @@ pub async fn ws_handler(
 async fn handle_websocket(socket: WebSocket, state: ServerState) {
     let (mut sender, mut receiver) = socket.split();
     let mut event_rx = state.subscribe();
+    let message_tx = state.message_sender();
 
-    // Spawn task to send events
+    // Spawn task to send events to client
     let send_task = tokio::spawn(async move {
         while let Ok(event) = event_rx.recv().await {
             if let Ok(json) = serde_json::to_string(&event) {
@@ -82,7 +84,7 @@ async fn handle_websocket(socket: WebSocket, state: ServerState) {
         }
     });
 
-    // Handle incoming messages (for future bidirectional support)
+    // Handle incoming messages from client
     let recv_task = tokio::spawn(async move {
         while let Some(msg) = receiver.next().await {
             match msg {
@@ -90,11 +92,38 @@ async fn handle_websocket(socket: WebSocket, state: ServerState) {
                 Ok(Message::Ping(_)) => {
                     // Pong is handled automatically by axum
                 }
-                Ok(_) => {
-                    // For now, ignore incoming messages
-                    // Future: handle user input for human-in-the-loop
+                Ok(Message::Text(text)) => {
+                    // Parse as RunAgentInput and route to agent processor
+                    match serde_json::from_str::<RunAgentInput>(&text) {
+                        Ok(input) => {
+                            debug!(
+                                thread_id = %input.thread_id,
+                                run_id = %input.run_id,
+                                message_count = input.messages.len(),
+                                "Received RunAgentInput via WebSocket"
+                            );
+                            let agent_msg = AgentMessage::new(input);
+                            if let Err(e) = message_tx.send(agent_msg).await {
+                                warn!("Failed to send message to agent processor: {}", e);
+                            }
+                        }
+                        Err(e) => {
+                            warn!("Failed to parse WebSocket message as RunAgentInput: {}", e);
+                            // Log but continue - don't crash the connection
+                        }
+                    }
                 }
-                Err(_) => break,
+                Ok(Message::Binary(_)) => {
+                    // Binary messages not supported yet
+                    debug!("Received binary WebSocket message, ignoring");
+                }
+                Ok(Message::Pong(_)) => {
+                    // Pong response, ignore
+                }
+                Err(e) => {
+                    warn!("WebSocket error: {}", e);
+                    break;
+                }
             }
         }
     });
