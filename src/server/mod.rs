@@ -79,6 +79,10 @@ pub struct AgUiConfig {
     pub host: String,
     /// Maximum number of concurrent connections.
     pub max_connections: usize,
+    /// Whether to start the agent processor.
+    pub enable_processor: bool,
+    /// Configuration for the agent processor (if enabled).
+    pub processor_config: Option<ProcessorConfig>,
 }
 
 impl Default for AgUiConfig {
@@ -87,6 +91,8 @@ impl Default for AgUiConfig {
             port: 9090,
             host: "127.0.0.1".to_string(),
             max_connections: 100,
+            enable_processor: false,
+            processor_config: None,
         }
     }
 }
@@ -106,6 +112,25 @@ impl AgUiConfig {
     /// Sets the host address.
     pub fn host(mut self, host: impl Into<String>) -> Self {
         self.host = host.into();
+        self
+    }
+
+    /// Enables or disables the agent processor.
+    ///
+    /// When enabled, the server will spawn an AgentProcessor that
+    /// consumes messages from the message channel and processes them.
+    pub fn with_processor(mut self, enable: bool) -> Self {
+        self.enable_processor = enable;
+        if enable && self.processor_config.is_none() {
+            self.processor_config = Some(ProcessorConfig::default());
+        }
+        self
+    }
+
+    /// Sets the processor configuration.
+    pub fn with_processor_config(mut self, config: ProcessorConfig) -> Self {
+        self.processor_config = Some(config);
+        self.enable_processor = true;
         self
     }
 }
@@ -206,10 +231,29 @@ impl AgUiServer {
     /// Runs the AG-UI server.
     ///
     /// This method blocks until the server is shut down.
+    /// If the processor is enabled in config, it will be spawned as a background task.
     pub async fn run(self) -> Result<(), std::io::Error> {
         let addr: SocketAddr = format!("{}:{}", self.config.host, self.config.port)
             .parse()
             .expect("Invalid address");
+
+        // Optionally start the agent processor
+        if self.config.enable_processor {
+            let processor_config = self.config.processor_config.clone()
+                .unwrap_or_default();
+
+            if let Some(msg_rx) = self.state.take_message_receiver().await {
+                let event_bridge = self.state.event_sender();
+                let mut processor = AgentProcessor::new(msg_rx, event_bridge, processor_config);
+
+                // Spawn processor in background
+                tokio::spawn(async move {
+                    processor.run().await;
+                });
+
+                println!("Agent processor started");
+            }
+        }
 
         let app = Router::new()
             .route("/", get(routes::health))
@@ -327,5 +371,72 @@ mod tests {
         // Second take fails
         let rx2 = state.take_message_receiver().await;
         assert!(rx2.is_none());
+    }
+
+    #[test]
+    fn test_config_with_processor() {
+        let config = AgUiConfig::new().with_processor(true);
+        assert!(config.enable_processor);
+        assert!(config.processor_config.is_some());
+    }
+
+    #[test]
+    fn test_config_with_processor_config() {
+        let processor_config = ProcessorConfig::new()
+            .with_provider("anthropic")
+            .with_model("claude-3-sonnet");
+
+        let config = AgUiConfig::new()
+            .with_processor_config(processor_config);
+
+        assert!(config.enable_processor);
+        let proc_config = config.processor_config.unwrap();
+        assert_eq!(proc_config.provider, "anthropic");
+        assert_eq!(proc_config.model, "claude-3-sonnet");
+    }
+
+    #[tokio::test]
+    async fn test_processor_integration_with_state() {
+        use ag_ui_core::types::{Message, RunAgentInput};
+        use ag_ui_core::Event;
+
+        // Create state and get components
+        let state = ServerState::new();
+        let msg_tx = state.message_sender();
+        let mut event_rx = state.subscribe();
+        let msg_rx = state.take_message_receiver().await.expect("Should get receiver");
+
+        // Create and spawn processor
+        let event_bridge = state.event_sender();
+        let mut processor = AgentProcessor::with_defaults(msg_rx, event_bridge);
+
+        let handle = tokio::spawn(async move {
+            processor.run().await;
+        });
+
+        // Send a message
+        let thread_id = ThreadId::random();
+        let run_id = RunId::random();
+        let input = RunAgentInput::new(thread_id.clone(), run_id.clone())
+            .with_messages(vec![Message::new_user("Integration test message")]);
+
+        msg_tx.send(AgentMessage::new(input)).await.expect("Should send");
+
+        // Verify events are emitted
+        let event = tokio::time::timeout(
+            std::time::Duration::from_millis(200),
+            event_rx.recv()
+        ).await.expect("Should receive in time").expect("Should have event");
+
+        assert!(matches!(event, Event::RunStarted(_)));
+
+        // Stop processor by dropping sender
+        drop(msg_tx);
+
+        // Wait for processor to finish
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_millis(200),
+            handle
+        ).await;
     }
 }
