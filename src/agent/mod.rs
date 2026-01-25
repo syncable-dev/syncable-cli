@@ -601,6 +601,11 @@ pub async fn run_interactive(
         let mut current_input = input.clone();
         let mut succeeded = false;
 
+        // Emit AG-UI step event for processing
+        if let Some(ref bridge) = event_bridge {
+            bridge.start_step("processing").await;
+        }
+
         while retry_attempt < MAX_RETRIES && continuation_count < MAX_CONTINUATIONS && !succeeded {
             // Log if this is a continuation attempt
             if continuation_count > 0 {
@@ -640,6 +645,11 @@ pub async fn run_interactive(
             // Use tokio::select! to race the API call against Ctrl+C
             // This allows immediate cancellation, not just between tool calls
             let mut user_interrupted = false;
+
+            // Emit AG-UI thinking event before LLM call
+            if let Some(ref bridge) = event_bridge {
+                bridge.start_thinking(Some("Generating response")).await;
+            }
 
             // API call with Ctrl+C interrupt support
             let response = tokio::select! {
@@ -981,6 +991,11 @@ pub async fn run_interactive(
 
             // Stop the progress indicator before handling the response
             progress.stop().await;
+
+            // End AG-UI thinking event
+            if let Some(ref bridge) = event_bridge {
+                bridge.end_thinking().await;
+            }
 
             // Suppress unused variable warnings
             let _ = (&progress_state, user_interrupted);
@@ -1538,6 +1553,12 @@ pub async fn run_interactive(
                 }
             }
         }
+
+        // End AG-UI step event for this turn
+        if let Some(ref bridge) = event_bridge {
+            bridge.end_step().await;
+        }
+
         println!();
     }
 
