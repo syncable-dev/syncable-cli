@@ -29,8 +29,8 @@
 use std::sync::Arc;
 
 use ag_ui_core::{
-    BaseEvent, Event, JsonValue, MessageId, Role, RunFinishedEvent, RunFinishedOutcome,
-    RunId, RunStartedEvent, TextMessageContentEvent, TextMessageEndEvent,
+    BaseEvent, Event, InterruptInfo, JsonValue, MessageId, Role, RunFinishedEvent,
+    RunFinishedOutcome, RunId, RunStartedEvent, TextMessageContentEvent, TextMessageEndEvent,
     TextMessageStartEvent, ThreadId, ToolCallArgsEvent, ToolCallEndEvent, ToolCallId,
     ToolCallStartEvent,
 };
@@ -119,6 +119,77 @@ impl EventBridge {
             base: BaseEvent::with_current_timestamp(),
             message: message.to_string(),
             code: None,
+        }));
+    }
+
+    // =========================================================================
+    // Human-in-the-Loop Interrupts
+    // =========================================================================
+
+    /// Interrupt the current run for human-in-the-loop interaction.
+    ///
+    /// This emits a `RunFinished` event with `outcome: Interrupt`, signaling
+    /// that the frontend should show approval UI and resume with user input.
+    ///
+    /// # Arguments
+    /// * `reason` - Optional interrupt reason (e.g., "file_write", "deployment")
+    /// * `payload` - Optional JSON payload with context for the approval UI
+    pub async fn interrupt(&self, reason: Option<&str>, payload: Option<serde_json::Value>) {
+        let thread_id = self.thread_id.read().await.clone();
+        let run_id = self.run_id.write().await.take();
+        let Some(run_id) = run_id else {
+            return; // No active run
+        };
+
+        let mut info = InterruptInfo::new();
+        if let Some(r) = reason {
+            info = info.with_reason(r);
+        }
+        if let Some(p) = payload {
+            info = info.with_payload(p);
+        }
+
+        self.emit(Event::RunFinished(RunFinishedEvent {
+            base: BaseEvent::with_current_timestamp(),
+            thread_id,
+            run_id,
+            outcome: Some(RunFinishedOutcome::Interrupt),
+            result: None,
+            interrupt: Some(info),
+        }));
+    }
+
+    /// Interrupt with a tracking ID for correlation.
+    ///
+    /// The interrupt ID can be used by the client to correlate the resume
+    /// request with the original interrupt.
+    pub async fn interrupt_with_id(
+        &self,
+        id: &str,
+        reason: Option<&str>,
+        payload: Option<serde_json::Value>,
+    ) {
+        let thread_id = self.thread_id.read().await.clone();
+        let run_id = self.run_id.write().await.take();
+        let Some(run_id) = run_id else {
+            return; // No active run
+        };
+
+        let mut info = InterruptInfo::new().with_id(id);
+        if let Some(r) = reason {
+            info = info.with_reason(r);
+        }
+        if let Some(p) = payload {
+            info = info.with_payload(p);
+        }
+
+        self.emit(Event::RunFinished(RunFinishedEvent {
+            base: BaseEvent::with_current_timestamp(),
+            thread_id,
+            run_id,
+            outcome: Some(RunFinishedOutcome::Interrupt),
+            result: None,
+            interrupt: Some(info),
         }));
     }
 
@@ -357,5 +428,50 @@ mod tests {
         bridge.emit_tool_args_chunk(&tool_id, "more args").await;
         bridge.end_tool_call(&tool_id).await;
         // Should not panic
+    }
+
+    #[tokio::test]
+    async fn test_interrupt() {
+        let bridge = create_bridge();
+
+        bridge.start_run().await;
+        assert!(bridge.run_id.read().await.is_some());
+
+        bridge.interrupt(Some("file_write"), None).await;
+        // Run ID should be cleared after interrupt
+        assert!(bridge.run_id.read().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_interrupt_with_payload() {
+        let bridge = create_bridge();
+
+        bridge.start_run().await;
+        bridge
+            .interrupt(
+                Some("deployment"),
+                Some(serde_json::json!({"file": "main.rs", "action": "write"})),
+            )
+            .await;
+        assert!(bridge.run_id.read().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_interrupt_with_id() {
+        let bridge = create_bridge();
+
+        bridge.start_run().await;
+        bridge
+            .interrupt_with_id("int-123", Some("deployment"), None)
+            .await;
+        assert!(bridge.run_id.read().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_interrupt_without_run() {
+        let bridge = create_bridge();
+
+        // Interrupt without an active run should do nothing (not panic)
+        bridge.interrupt(Some("test"), None).await;
     }
 }
