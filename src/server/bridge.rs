@@ -474,4 +474,110 @@ mod tests {
         // Interrupt without an active run should do nothing (not panic)
         bridge.interrupt(Some("test"), None).await;
     }
+
+    #[tokio::test]
+    async fn test_events_received_by_subscriber() {
+        let (tx, mut rx) = broadcast::channel(100);
+        let bridge = EventBridge::new(
+            tx,
+            Arc::new(RwLock::new(ThreadId::random())),
+            Arc::new(RwLock::new(None)),
+        );
+
+        // Start a run
+        bridge.start_run().await;
+
+        // Receive the RunStarted event
+        let event = rx.recv().await.expect("Should receive event");
+        match event {
+            Event::RunStarted(_) => {}
+            _ => panic!("Expected RunStarted event"),
+        }
+
+        // Emit a message
+        bridge.emit_message("Hello").await;
+
+        // Should receive TextMessageStart, TextMessageContent, TextMessageEnd
+        let event = rx.recv().await.expect("Should receive event");
+        match event {
+            Event::TextMessageStart(_) => {}
+            _ => panic!("Expected TextMessageStart"),
+        }
+
+        let event = rx.recv().await.expect("Should receive event");
+        match event {
+            Event::TextMessageContent(_) => {}
+            _ => panic!("Expected TextMessageContent"),
+        }
+
+        let event = rx.recv().await.expect("Should receive event");
+        match event {
+            Event::TextMessageEnd(_) => {}
+            _ => panic!("Expected TextMessageEnd"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_step_and_thinking_events() {
+        let (tx, mut rx) = broadcast::channel(100);
+        let bridge = EventBridge::new(
+            tx,
+            Arc::new(RwLock::new(ThreadId::random())),
+            Arc::new(RwLock::new(None)),
+        );
+
+        bridge.start_step("processing").await;
+        let event = rx.recv().await.expect("Should receive event");
+        match event {
+            Event::StepStarted(_) => {}
+            _ => panic!("Expected StepStarted"),
+        }
+
+        bridge.start_thinking(Some("Analyzing")).await;
+        let event = rx.recv().await.expect("Should receive event");
+        match event {
+            Event::ThinkingStart(_) => {}
+            _ => panic!("Expected ThinkingStart"),
+        }
+
+        bridge.end_thinking().await;
+        let event = rx.recv().await.expect("Should receive event");
+        match event {
+            Event::ThinkingEnd(_) => {}
+            _ => panic!("Expected ThinkingEnd"),
+        }
+
+        bridge.end_step().await;
+        let event = rx.recv().await.expect("Should receive event");
+        match event {
+            Event::StepFinished(_) => {}
+            _ => panic!("Expected StepFinished"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_state_snapshot_event() {
+        let (tx, mut rx) = broadcast::channel(100);
+        let bridge = EventBridge::new(
+            tx,
+            Arc::new(RwLock::new(ThreadId::random())),
+            Arc::new(RwLock::new(None)),
+        );
+
+        let state = serde_json::json!({
+            "model": "gpt-4",
+            "turn_count": 5
+        });
+
+        bridge.emit_state_snapshot(state).await;
+
+        let event = rx.recv().await.expect("Should receive event");
+        match event {
+            Event::StateSnapshot(e) => {
+                assert_eq!(e.snapshot["model"], "gpt-4");
+                assert_eq!(e.snapshot["turn_count"], 5);
+            }
+            _ => panic!("Expected StateSnapshot"),
+        }
+    }
 }

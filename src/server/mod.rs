@@ -222,4 +222,35 @@ mod tests {
         let server = AgUiServer::with_defaults();
         assert_eq!(server.addr(), "127.0.0.1:9090");
     }
+
+    #[test]
+    fn test_event_bridge_from_state() {
+        let state = ServerState::new();
+        let bridge1 = state.event_sender();
+        let bridge2 = state.event_sender();
+
+        // Both bridges should share the same channel
+        // (they'll both send to the same subscribers)
+        let _ = state.subscribe();
+
+        // Just verify we can create multiple bridges without panic
+        drop(bridge1);
+        drop(bridge2);
+    }
+
+    #[tokio::test]
+    async fn test_server_event_flow() {
+        use ag_ui_core::Event;
+
+        let state = ServerState::new();
+        let bridge = state.event_sender();
+        let mut rx = state.subscribe();
+
+        // Start a run
+        bridge.start_run().await;
+
+        // Receive the event
+        let event = rx.recv().await.expect("Should receive RunStarted");
+        assert!(matches!(event, Event::RunStarted(_)));
+    }
 }
