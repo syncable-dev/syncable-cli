@@ -1,0 +1,67 @@
+# =============================================================================
+# Syncable CLI Agent - Docker Compose Configuration
+# =============================================================================
+# Runs the AG-UI agent server for frontend connectivity. Mount your project
+# directory and provide API keys via environment variables.
+#
+# Usage:
+#   docker compose -f docker-compose.agent.yml up --build
+#
+# Environment:
+#   OPENAI_API_KEY       - OpenAI API key (for GPT models)
+#   ANTHROPIC_API_KEY    - Anthropic API key (for Claude models)
+#   AWS_ACCESS_KEY_ID    - AWS credentials (for Bedrock)
+#   AWS_SECRET_ACCESS_KEY
+#   AWS_REGION
+#
+# =============================================================================
+
+services:
+  syncable-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    container_name: syncable-agent
+    ports:
+      - "9090:9090"
+    environment:
+      # LLM Provider API Keys (set in .env or environment)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # AWS Bedrock credentials (optional)
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      # Rust logging
+      - RUST_LOG=${RUST_LOG:-info}
+    volumes:
+      # Mount project directory for analysis (read-only)
+      - ${PROJECT_PATH:-.}:/project:ro
+    command:
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "9090"
+      - "--provider"
+      - "${PROVIDER:-auto}"
+      - "/project"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Optional: Frontend development server
+  # Uncomment to run a frontend alongside the agent
+  # frontend:
+  #   image: node:20-alpine
+  #   working_dir: /app
+  #   volumes:
+  #     - ./frontend:/app
+  #   ports:
+  #     - "3000:3000"
+  #   command: npm run dev
+  #   depends_on:
+  #     - syncable-agent

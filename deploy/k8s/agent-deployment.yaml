@@ -1,0 +1,144 @@
+# =============================================================================
+# Syncable Agent - Kubernetes Deployment
+# =============================================================================
+# Deploys the AG-UI agent server as a Kubernetes deployment with service.
+#
+# Prerequisites:
+#   - Create secret with API keys:
+#     kubectl create secret generic syncable-api-keys \
+#       --from-literal=OPENAI_API_KEY=sk-... \
+#       --from-literal=ANTHROPIC_API_KEY=sk-ant-...
+#
+# Apply:
+#   kubectl apply -f agent-deployment.yaml
+#
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: syncable
+  labels:
+    app.kubernetes.io/name: syncable
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: syncable-agent
+  namespace: syncable
+  labels:
+    app.kubernetes.io/name: syncable-agent
+    app.kubernetes.io/component: agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: syncable-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: syncable-agent
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: agent
+          image: syncable-agent:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 9090
+              protocol: TCP
+          args:
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "9090"
+            - "--provider"
+            - "auto"
+            - "/project"
+          env:
+            - name: RUST_LOG
+              value: "info"
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: syncable-api-keys
+                  key: OPENAI_API_KEY
+                  optional: true
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: syncable-api-keys
+                  key: ANTHROPIC_API_KEY
+                  optional: true
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: project
+              mountPath: /project
+              readOnly: true
+      volumes:
+        - name: project
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: syncable-agent
+  namespace: syncable
+  labels:
+    app.kubernetes.io/name: syncable-agent
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 9090
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: syncable-agent
+---
+# Optional: Ingress for external access
+# Uncomment and configure for your ingress controller
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: syncable-agent
+#   namespace: syncable
+#   annotations:
+#     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+#     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+# spec:
+#   ingressClassName: nginx
+#   rules:
+#     - host: agent.syncable.example.com
+#       http:
+#         paths:
+#           - path: /
+#             pathType: Prefix
+#             backend:
+#               service:
+#                 name: syncable-agent
+#                 port:
+#                   name: http
