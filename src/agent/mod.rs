@@ -190,6 +190,42 @@ fn get_system_prompt(project_path: &Path, query: Option<&str>, plan_mode: PlanMo
     prompts::get_analysis_prompt(project_path)
 }
 
+/// Run the agent as a dedicated AG-UI server (headless mode for containers/deployments).
+///
+/// This starts the AG-UI server without interactive stdin, accepting connections
+/// from frontends via SSE or WebSocket. The agent processes messages received
+/// through the AG-UI protocol.
+///
+/// # Arguments
+///
+/// * `project_path` - Path to the project directory
+/// * `provider` - LLM provider to use
+/// * `model` - Optional model override
+/// * `host` - Host address to bind to
+/// * `port` - Port number to listen on
+pub async fn run_agent_server(
+    _project_path: &Path,
+    _provider: ProviderType,
+    _model: Option<String>,
+    host: &str,
+    port: u16,
+) -> AgentResult<()> {
+    use crate::server::{AgUiConfig, AgUiServer};
+
+    let config = AgUiConfig::new().port(port).host(host);
+    let server = AgUiServer::new(config);
+
+    println!("AG-UI agent server listening on http://{}:{}", host, port);
+    println!("Connect frontends via SSE (/sse) or WebSocket (/ws)");
+    println!("Press Ctrl+C to stop the server");
+
+    // Run server (blocks until shutdown signal)
+    server
+        .run()
+        .await
+        .map_err(|e| AgentError::ProviderError(e.to_string()))
+}
+
 /// Run the agent in interactive mode with custom REPL supporting /model and /provider commands
 pub async fn run_interactive(
     project_path: &Path,

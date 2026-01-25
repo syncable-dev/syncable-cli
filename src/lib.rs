@@ -632,6 +632,41 @@ pub async fn run_command(
                 },
             }
         }
+        Commands::Agent {
+            path,
+            port,
+            host,
+            provider,
+            model,
+        } => {
+            use agent::ProviderType;
+            use cli::ChatProvider;
+
+            // Determine provider type
+            let provider_type = match provider {
+                ChatProvider::Openai => ProviderType::OpenAI,
+                ChatProvider::Anthropic => ProviderType::Anthropic,
+                ChatProvider::Bedrock => ProviderType::Bedrock,
+                ChatProvider::Ollama => {
+                    eprintln!("Ollama support coming soon. Using OpenAI as fallback.");
+                    ProviderType::OpenAI
+                }
+                ChatProvider::Auto => {
+                    // Load from saved config
+                    let agent_config = config::load_agent_config();
+                    match agent_config.default_provider.as_str() {
+                        "openai" => ProviderType::OpenAI,
+                        "anthropic" => ProviderType::Anthropic,
+                        "bedrock" => ProviderType::Bedrock,
+                        _ => ProviderType::OpenAI,
+                    }
+                }
+            };
+
+            let project_path = path.canonicalize().unwrap_or(path);
+            agent::run_agent_server(&project_path, provider_type, model, &host, port).await?;
+            Ok(())
+        }
         Commands::Deploy { .. } => {
             // Deploy commands are handled in main.rs directly
             unreachable!("Deploy commands should be handled in main.rs")
