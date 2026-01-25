@@ -45,10 +45,28 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use ag_ui_core::{Event, JsonValue, RunId, ThreadId};
-use axum::{routing::get, Router};
-use tokio::sync::{broadcast, RwLock};
+use axum::{routing::{get, post}, Router};
+use tokio::sync::{broadcast, mpsc, RwLock};
 
 pub use bridge::EventBridge;
+
+// Re-export types needed for message handling
+pub use ag_ui_core::types::{Context, Message as AgUiMessage, RunAgentInput, Tool};
+
+/// Message from frontend to agent processor.
+/// Wraps RunAgentInput with optional response channel for acknowledgments.
+#[derive(Debug, Clone)]
+pub struct AgentMessage {
+    /// The AG-UI protocol input from the frontend.
+    pub input: RunAgentInput,
+}
+
+impl AgentMessage {
+    /// Creates a new agent message from RunAgentInput.
+    pub fn new(input: RunAgentInput) -> Self {
+        Self { input }
+    }
+}
 
 /// Configuration for the AG-UI server.
 #[derive(Debug, Clone)]
@@ -93,8 +111,12 @@ impl AgUiConfig {
 /// Shared state for the AG-UI server.
 #[derive(Clone)]
 pub struct ServerState {
-    /// Broadcast channel for events.
+    /// Broadcast channel for events (outgoing to clients).
     event_tx: broadcast::Sender<Event<JsonValue>>,
+    /// Channel for incoming messages from frontends.
+    message_tx: mpsc::Sender<AgentMessage>,
+    /// Receiver stored in Arc for extraction (only one consumer).
+    message_rx: Arc<RwLock<Option<mpsc::Receiver<AgentMessage>>>>,
     /// Current thread ID for the session.
     thread_id: Arc<RwLock<ThreadId>>,
     /// Current run ID (if agent is running).
@@ -105,8 +127,11 @@ impl ServerState {
     /// Creates new server state.
     pub fn new() -> Self {
         let (event_tx, _) = broadcast::channel(1000);
+        let (message_tx, message_rx) = mpsc::channel(100);
         Self {
             event_tx,
+            message_tx,
+            message_rx: Arc::new(RwLock::new(Some(message_rx))),
             thread_id: Arc::new(RwLock::new(ThreadId::random())),
             run_id: Arc::new(RwLock::new(None)),
         }
@@ -124,6 +149,19 @@ impl ServerState {
     /// Subscribes to the event stream.
     pub fn subscribe(&self) -> broadcast::Receiver<Event<JsonValue>> {
         self.event_tx.subscribe()
+    }
+
+    /// Gets the message sender for routing incoming messages.
+    pub fn message_sender(&self) -> mpsc::Sender<AgentMessage> {
+        self.message_tx.clone()
+    }
+
+    /// Takes the message receiver (can only be called once).
+    ///
+    /// This is used by the agent processor to receive messages from frontends.
+    /// Returns None if the receiver has already been taken.
+    pub async fn take_message_receiver(&self) -> Option<mpsc::Receiver<AgentMessage>> {
+        self.message_rx.write().await.take()
     }
 }
 
@@ -252,5 +290,39 @@ mod tests {
         // Receive the event
         let event = rx.recv().await.expect("Should receive RunStarted");
         assert!(matches!(event, Event::RunStarted(_)));
+    }
+
+    #[tokio::test]
+    async fn test_message_channel() {
+        use ag_ui_core::types::{RunAgentInput, Message};
+
+        let state = ServerState::new();
+        let msg_tx = state.message_sender();
+        let mut msg_rx = state.take_message_receiver().await.expect("Should get receiver");
+
+        // Create a RunAgentInput using builder pattern
+        let input = RunAgentInput::new(ThreadId::random(), RunId::random())
+            .with_messages(vec![Message::new_user("Hello agent")]);
+
+        // Send message
+        let agent_msg = AgentMessage::new(input);
+        msg_tx.send(agent_msg).await.expect("Should send");
+
+        // Receive message
+        let received = msg_rx.recv().await.expect("Should receive message");
+        assert_eq!(received.input.messages.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_message_receiver_only_once() {
+        let state = ServerState::new();
+
+        // First take succeeds
+        let rx1 = state.take_message_receiver().await;
+        assert!(rx1.is_some());
+
+        // Second take fails
+        let rx2 = state.take_message_receiver().await;
+        assert!(rx2.is_none());
     }
 }
