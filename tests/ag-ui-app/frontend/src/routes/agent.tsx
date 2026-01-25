@@ -43,14 +43,14 @@ function AgentChat() {
   return (
     <main className="min-h-screen bg-slate-950 relative overflow-hidden">
       {/* Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950" />
+      <div className="absolute inset-0 bg-linear-to-br from-slate-950 via-slate-900 to-slate-950" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(34,211,238,0.1),transparent_50%)]" />
 
       <div className="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 py-12">
         {/* Header */}
         <header className="flex flex-col items-center text-center mb-8">
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-3 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-cyan-600/20 border border-emerald-500/30 shadow-[0_0_30px_rgba(16,185,129,0.15)]">
+            <div className="p-3 rounded-2xl bg-linear-to-br from-emerald-500/20 to-cyan-600/20 border border-emerald-500/30 shadow-[0_0_30px_rgba(16,185,129,0.15)]">
               <Bot className="w-8 h-8 text-emerald-400" />
             </div>
             <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent">
