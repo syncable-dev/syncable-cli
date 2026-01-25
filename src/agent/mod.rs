@@ -221,6 +221,14 @@ pub async fn run_interactive(
     // Initialize session recorder for conversation persistence
     let mut session_recorder = persistence::SessionRecorder::new(project_path);
 
+    // Track if we exit due to an error (for AG-UI error events)
+    let mut exit_error: Option<String> = None;
+
+    // Emit AG-UI RunStarted event for connected frontends
+    if let Some(ref bridge) = event_bridge {
+        bridge.start_run().await;
+    }
+
     loop {
         // Show conversation status if we have history
         if !conversation_history.is_empty() {
@@ -899,6 +907,11 @@ pub async fn run_interactive(
 
             match response {
                 Ok(text) => {
+                    // Emit AG-UI text message event (for connected frontends)
+                    if let Some(ref bridge) = event_bridge {
+                        bridge.emit_message(&text).await;
+                    }
+
                     // Show final response
                     println!();
                     ResponseFormatter::print_response(&text);
@@ -1383,6 +1396,7 @@ pub async fn run_interactive(
                                 "{}",
                                 "Try breaking your request into smaller parts.".dimmed()
                             );
+                            exit_error = Some(e.to_string());
                             break;
                         }
                     } else if err_str.contains("timeout") || err_str.contains("Timeout") {
@@ -1400,6 +1414,7 @@ pub async fn run_interactive(
                             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                         } else {
                             eprintln!("{}", "Request timed out. Please try again.".red());
+                            exit_error = Some("Request timed out".to_string());
                             break;
                         }
                     } else {
@@ -1429,12 +1444,22 @@ pub async fn run_interactive(
                             )
                             .dimmed()
                         );
+                        exit_error = Some(e.to_string());
                         break;
                     }
                 }
             }
         }
         println!();
+    }
+
+    // Emit AG-UI run completion event for connected frontends
+    if let Some(ref bridge) = event_bridge {
+        if let Some(error_msg) = exit_error {
+            bridge.finish_run_with_error(&error_msg).await;
+        } else {
+            bridge.finish_run().await;
+        }
     }
 
     // Clean up terminal layout before exiting (disabled - layout not initialized)
