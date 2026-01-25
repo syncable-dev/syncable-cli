@@ -188,6 +188,47 @@ impl AgentProcessor {
             .and_then(|m| m.content().map(|s| s.to_string()))
     }
 
+    /// Runs the message processing loop.
+    ///
+    /// This method consumes messages from the channel and processes each one
+    /// through the agent. It runs until the channel is closed.
+    pub async fn run(&mut self) {
+        info!("AgentProcessor starting message processing loop");
+
+        while let Some(msg) = self.message_rx.recv().await {
+            let input = msg.input;
+            let thread_id = input.thread_id.clone();
+            let run_id = input.run_id.clone();
+
+            debug!(
+                thread_id = %thread_id,
+                run_id = %run_id,
+                message_count = input.messages.len(),
+                "Received message from frontend"
+            );
+
+            // Extract user input from messages
+            match self.extract_user_input(&input.messages) {
+                Some(user_input) => {
+                    self.process_message(thread_id, run_id, user_input).await;
+                }
+                None => {
+                    debug!(
+                        thread_id = %thread_id,
+                        "No user message found in input, skipping"
+                    );
+                    // Emit error event
+                    self.event_bridge.start_run().await;
+                    self.event_bridge
+                        .finish_run_with_error("No user message found in input")
+                        .await;
+                }
+            }
+        }
+
+        info!("AgentProcessor message channel closed, shutting down");
+    }
+
     /// Processes a single message through the agent.
     ///
     /// This is the core processing method that:
@@ -359,5 +400,104 @@ mod tests {
         let session = processor.sessions.get(&thread_id).unwrap();
         assert_eq!(session.turn_count, 1);
         assert_eq!(session.history.len(), 2); // user + assistant
+    }
+
+    #[tokio::test]
+    async fn test_run_processes_messages() {
+        use ag_ui_core::types::{Message as AgUiProtocolMessage, RunAgentInput};
+        use ag_ui_core::Event;
+        use tokio::sync::broadcast;
+
+        let (msg_tx, msg_rx) = mpsc::channel(100);
+        let (event_tx, mut event_rx) = broadcast::channel(100);
+
+        let bridge = EventBridge::new(
+            event_tx,
+            Arc::new(RwLock::new(ThreadId::random())),
+            Arc::new(RwLock::new(None)),
+        );
+
+        let mut processor = AgentProcessor::with_defaults(msg_rx, bridge);
+
+        // Spawn processor in background
+        let handle = tokio::spawn(async move {
+            processor.run().await;
+        });
+
+        // Send a message
+        let thread_id = ThreadId::random();
+        let run_id = RunId::random();
+        let input = RunAgentInput::new(thread_id.clone(), run_id.clone())
+            .with_messages(vec![AgUiProtocolMessage::new_user("Hello from test")]);
+
+        let agent_msg = super::super::AgentMessage::new(input);
+        msg_tx.send(agent_msg).await.expect("Should send");
+
+        // Verify we receive RunStarted event
+        let event = tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            event_rx.recv()
+        ).await.expect("Should receive event in time").expect("Should have event");
+
+        assert!(matches!(event, Event::RunStarted(_)));
+
+        // Drop sender to close channel and stop processor
+        drop(msg_tx);
+
+        // Wait for processor to finish
+        tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            handle
+        ).await.expect("Processor should finish").expect("Should not panic");
+    }
+
+    #[tokio::test]
+    async fn test_run_handles_empty_messages() {
+        use ag_ui_core::types::RunAgentInput;
+        use ag_ui_core::Event;
+        use tokio::sync::broadcast;
+
+        let (msg_tx, msg_rx) = mpsc::channel(100);
+        let (event_tx, mut event_rx) = broadcast::channel(100);
+
+        let bridge = EventBridge::new(
+            event_tx,
+            Arc::new(RwLock::new(ThreadId::random())),
+            Arc::new(RwLock::new(None)),
+        );
+
+        let mut processor = AgentProcessor::with_defaults(msg_rx, bridge);
+
+        // Spawn processor in background
+        let handle = tokio::spawn(async move {
+            processor.run().await;
+        });
+
+        // Send a message with no user content
+        let thread_id = ThreadId::random();
+        let run_id = RunId::random();
+        let input = RunAgentInput::new(thread_id.clone(), run_id.clone());
+        // Note: no messages added
+
+        let agent_msg = super::super::AgentMessage::new(input);
+        msg_tx.send(agent_msg).await.expect("Should send");
+
+        // Should receive RunStarted then RunError
+        let event = tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            event_rx.recv()
+        ).await.expect("Should receive event").expect("Should have event");
+
+        assert!(matches!(event, Event::RunStarted(_)));
+
+        let event = tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            event_rx.recv()
+        ).await.expect("Should receive event").expect("Should have event");
+
+        assert!(matches!(event, Event::RunError(_)));
+
+        drop(msg_tx);
+        let _ = tokio::time::timeout(std::time::Duration::from_millis(100), handle).await;
     }
 }
