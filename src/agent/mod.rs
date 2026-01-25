@@ -104,6 +104,71 @@ pub enum AgentError {
 
 pub type AgentResult<T> = Result<T, AgentError>;
 
+// =============================================================================
+// AG-UI State Types
+// =============================================================================
+
+/// Agent state for AG-UI state synchronization
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AgentState {
+    /// Project being analyzed
+    pub project_path: String,
+    /// LLM provider name
+    pub provider: String,
+    /// Model being used
+    pub model: String,
+    /// Whether plan mode is active
+    pub plan_mode: bool,
+    /// Token usage statistics
+    pub token_usage: TokenUsageState,
+    /// Conversation state
+    pub conversation: ConversationState,
+}
+
+/// Token usage state for AG-UI
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TokenUsageState {
+    /// Estimated input tokens
+    pub input_tokens: usize,
+    /// Estimated output tokens
+    pub output_tokens: usize,
+    /// Total tokens
+    pub total_tokens: usize,
+}
+
+/// Conversation state for AG-UI
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ConversationState {
+    /// Number of conversation turns
+    pub turn_count: usize,
+    /// Whether history has been compacted
+    pub has_compacted: bool,
+}
+
+/// Build AgentState from session and conversation history
+fn build_agent_state(session: &ChatSession, history: &ConversationHistory) -> AgentState {
+    // Check if history has been compacted (status contains "compacted")
+    let has_compacted = history.status().contains("compacted");
+    let input = session.token_usage.prompt_tokens as usize;
+    let output = session.token_usage.completion_tokens as usize;
+
+    AgentState {
+        project_path: session.project_path.display().to_string(),
+        provider: session.provider.to_string(),
+        model: session.model.clone(),
+        plan_mode: session.plan_mode.is_planning(),
+        token_usage: TokenUsageState {
+            input_tokens: input,
+            output_tokens: output,
+            total_tokens: input + output,
+        },
+        conversation: ConversationState {
+            turn_count: history.turn_count(),
+            has_compacted,
+        },
+    }
+}
+
 /// Get the system prompt for the agent based on query type and plan mode
 fn get_system_prompt(project_path: &Path, query: Option<&str>, plan_mode: PlanMode) -> String {
     // In planning mode, use the read-only exploration prompt
@@ -224,9 +289,14 @@ pub async fn run_interactive(
     // Track if we exit due to an error (for AG-UI error events)
     let mut exit_error: Option<String> = None;
 
-    // Emit AG-UI RunStarted event for connected frontends
+    // Emit AG-UI RunStarted event and initial state for connected frontends
     if let Some(ref bridge) = event_bridge {
         bridge.start_run().await;
+        // Emit initial agent state snapshot
+        let state = build_agent_state(&session, &conversation_history);
+        if let Ok(state_json) = serde_json::to_value(&state) {
+            bridge.emit_state_snapshot(state_json).await;
+        }
     }
 
     loop {
@@ -264,6 +334,16 @@ pub async fn run_interactive(
                         println!("{}", "★ plan mode".yellow());
                     } else {
                         println!("{}", "▶ standard mode".green());
+                    }
+                    // Emit AG-UI state delta for plan mode change
+                    if let Some(ref bridge) = event_bridge {
+                        bridge
+                            .emit_state_delta(vec![serde_json::json!({
+                                "op": "replace",
+                                "path": "/plan_mode",
+                                "value": new_mode.is_planning()
+                            })])
+                            .await;
                     }
                     continue;
                 }
@@ -951,6 +1031,14 @@ pub async fn run_interactive(
                         session.token_usage.format_compact(),
                         ui::colors::ansi::RESET
                     );
+
+                    // Emit AG-UI state update with new token counts
+                    if let Some(ref bridge) = event_bridge {
+                        let state = build_agent_state(&session, &conversation_history);
+                        if let Ok(state_json) = serde_json::to_value(&state) {
+                            bridge.emit_state_snapshot(state_json).await;
+                        }
+                    }
 
                     // Extract tool calls from the hook state for history tracking
                     let tool_calls = extract_tool_calls_from_hook(&hook).await;
