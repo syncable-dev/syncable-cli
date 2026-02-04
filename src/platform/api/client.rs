@@ -852,6 +852,82 @@ impl PlatformApiClient {
     }
 
     // =========================================================================
+    // Hetzner Availability API methods (Dynamic Resource Fetching)
+    // =========================================================================
+
+    /// Get Hetzner locations with real-time availability information
+    ///
+    /// Returns all Hetzner locations with the server types currently available
+    /// at each location. Uses the customer's Hetzner API token stored in their
+    /// cloud credentials to query the Hetzner API.
+    ///
+    /// This enables dynamic resource selection instead of relying on hardcoded values.
+    ///
+    /// Endpoint: GET /api/deployments/availability/locations?projectId=:projectId
+    pub async fn get_hetzner_locations(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<super::types::LocationWithAvailability>> {
+        let response: super::types::LocationsAvailabilityResponse = self
+            .get(&format!(
+                "/api/deployments/availability/locations?projectId={}",
+                urlencoding::encode(project_id)
+            ))
+            .await?;
+        Ok(response.data)
+    }
+
+    /// Get Hetzner server types with pricing and availability
+    ///
+    /// Returns all non-deprecated Hetzner server types sorted by monthly price,
+    /// with availability information showing which locations have capacity.
+    ///
+    /// Use this to dynamically populate server type selection UI and enable
+    /// smart resource recommendations based on real pricing data.
+    ///
+    /// Endpoint: GET /api/deployments/availability/server-types?projectId=:projectId&preferredLocation=:location
+    pub async fn get_hetzner_server_types(
+        &self,
+        project_id: &str,
+        preferred_location: Option<&str>,
+    ) -> Result<Vec<super::types::ServerTypeSummary>> {
+        let mut path = format!(
+            "/api/deployments/availability/server-types?projectId={}",
+            urlencoding::encode(project_id)
+        );
+        if let Some(location) = preferred_location {
+            path.push_str(&format!("&preferredLocation={}", urlencoding::encode(location)));
+        }
+        let response: super::types::ServerTypesResponse = self.get(&path).await?;
+        Ok(response.data)
+    }
+
+    /// Check if a specific server type is available at a location
+    ///
+    /// Returns availability status with:
+    /// - Whether the server type is available
+    /// - Reason if unavailable (capacity vs unsupported)
+    /// - Alternative locations where it IS available
+    ///
+    /// Use this before deployment to detect capacity issues early and suggest alternatives.
+    ///
+    /// Endpoint: GET /api/deployments/availability/check?projectId=:projectId&location=:location&serverType=:serverType
+    pub async fn check_hetzner_availability(
+        &self,
+        project_id: &str,
+        location: &str,
+        server_type: &str,
+    ) -> Result<super::types::AvailabilityCheckResult> {
+        self.get(&format!(
+            "/api/deployments/availability/check?projectId={}&location={}&serverType={}",
+            urlencoding::encode(project_id),
+            urlencoding::encode(location),
+            urlencoding::encode(server_type)
+        ))
+        .await
+    }
+
+    // =========================================================================
     // Health Check API methods
     // =========================================================================
 

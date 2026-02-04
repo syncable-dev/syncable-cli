@@ -1219,6 +1219,94 @@ pub struct InitializeGitOpsResponse {
     pub installation_id: i64,
 }
 
+// =============================================================================
+// Hetzner Availability Types (Dynamic Resource Fetching)
+// =============================================================================
+
+/// Hetzner location with geographic metadata (from Hetzner API)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HetznerLocation {
+    /// Location ID (e.g., 1)
+    pub id: i64,
+    /// Location code (e.g., "fsn1", "nbg1")
+    pub name: String,
+    /// Location description
+    pub description: String,
+    /// Country code
+    pub country: String,
+    /// City name
+    pub city: String,
+    /// Geographic latitude
+    pub latitude: f64,
+    /// Geographic longitude
+    pub longitude: f64,
+    /// Network zone (e.g., "eu-central")
+    pub network_zone: String,
+}
+
+/// Location with available server types (from availability API)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocationWithAvailability {
+    /// Location details
+    pub location: HetznerLocation,
+    /// Server type names available at this location
+    pub available_server_types: Vec<String>,
+}
+
+/// Server type summary with availability and pricing (from availability API)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerTypeSummary {
+    /// Server type ID
+    pub id: i64,
+    /// Server type name (e.g., "cx22", "cx32")
+    pub name: String,
+    /// Number of vCPUs
+    pub cores: i32,
+    /// Memory in GB
+    pub memory_gb: f64,
+    /// Disk size in GB
+    pub disk_gb: i64,
+    /// Hourly price in EUR (gross)
+    pub price_hourly: f64,
+    /// Monthly price in EUR (gross)
+    pub price_monthly: f64,
+    /// Locations where this server type is currently available
+    pub available_in: Vec<String>,
+}
+
+/// Availability check result for a specific server type at a location
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AvailabilityCheckResult {
+    /// Whether the server type is available
+    pub available: bool,
+    /// The location that was checked
+    pub location: String,
+    /// The server type that was checked
+    pub server_type: String,
+    /// Reason if unavailable: "capacity" or "unsupported"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    /// Alternative locations where this server type IS available
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alternative_locations: Option<Vec<String>>,
+}
+
+/// Response wrapper for locations with availability
+#[derive(Debug, Clone, Deserialize)]
+pub struct LocationsAvailabilityResponse {
+    pub data: Vec<LocationWithAvailability>,
+}
+
+/// Response wrapper for server types
+#[derive(Debug, Clone, Deserialize)]
+pub struct ServerTypesResponse {
+    pub data: Vec<ServerTypeSummary>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
