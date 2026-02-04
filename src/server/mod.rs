@@ -47,6 +47,7 @@ use std::sync::Arc;
 
 use ag_ui_core::{Event, JsonValue, RunId, ThreadId};
 use axum::{routing::{get, post}, Router};
+use tower_http::cors::{Any, CorsLayer};
 use tokio::sync::{broadcast, mpsc, RwLock};
 
 pub use bridge::EventBridge;
@@ -255,12 +256,20 @@ impl AgUiServer {
             }
         }
 
+        // Configure CORS to allow requests from any origin (for development)
+        let cors = CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any);
+
         let app = Router::new()
-            .route("/", get(routes::health))
+            .route("/", get(routes::health).post(routes::post_message))
+            .route("/info", get(routes::info))
             .route("/sse", get(routes::sse_handler))
             .route("/ws", get(routes::ws_handler))
             .route("/message", post(routes::post_message))
             .route("/health", get(routes::health))
+            .layer(cors)
             .with_state(self.state);
 
         println!("AG-UI server listening on http://{}", addr);
@@ -438,5 +447,213 @@ mod tests {
             std::time::Duration::from_millis(200),
             handle
         ).await;
+    }
+
+    // =============================================================================
+    // E2E Integration Tests (Phase 25)
+    // =============================================================================
+
+    /// Helper to collect events until RunFinished or RunError
+    async fn collect_until_finished(rx: &mut tokio::sync::broadcast::Receiver<ag_ui_core::Event>) -> Vec<ag_ui_core::Event> {
+        use ag_ui_core::Event;
+        let mut events = Vec::new();
+        loop {
+            match tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv()).await {
+                Ok(Ok(event)) => {
+                    let is_finished = matches!(&event, Event::RunFinished(_) | Event::RunError(_));
+                    events.push(event);
+                    if is_finished { break; }
+                }
+                _ => break,
+            }
+        }
+        events
+    }
+
+    /// Helper to drain events until run is finished
+    async fn drain_events_until_run_finished(rx: &mut tokio::sync::broadcast::Receiver<ag_ui_core::Event>) {
+        use ag_ui_core::Event;
+        loop {
+            match tokio::time::timeout(std::time::Duration::from_secs(30), rx.recv()).await {
+                Ok(Ok(Event::RunFinished(_))) => break,
+                Ok(Ok(Event::RunError(_))) => break,
+                Ok(Ok(_)) => continue,
+                _ => panic!("Timeout or error waiting for RunFinished"),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_multi_turn_conversation() {
+        use ag_ui_core::types::{Message, RunAgentInput};
+
+        // Create state and components
+        let state = ServerState::new();
+        let msg_tx = state.message_sender();
+        let mut event_rx = state.subscribe();
+        let msg_rx = state.take_message_receiver().await.expect("Should get receiver");
+
+        // Create processor
+        let event_bridge = state.event_sender();
+        let mut processor = AgentProcessor::with_defaults(msg_rx, event_bridge);
+
+        let handle = tokio::spawn(async move {
+            processor.run().await;
+        });
+
+        let thread_id = ThreadId::random();
+
+        // Send first message
+        let input1 = RunAgentInput::new(thread_id.clone(), RunId::random())
+            .with_messages(vec![Message::new_user("Hello")]);
+        msg_tx.send(AgentMessage::new(input1)).await.expect("Should send");
+
+        // Wait for first response
+        drain_events_until_run_finished(&mut event_rx).await;
+
+        // Send follow-up message (same thread)
+        let input2 = RunAgentInput::new(thread_id.clone(), RunId::random())
+            .with_messages(vec![Message::new_user("Follow up message")]);
+        msg_tx.send(AgentMessage::new(input2)).await.expect("Should send");
+
+        // Verify second run completes
+        drain_events_until_run_finished(&mut event_rx).await;
+
+        drop(msg_tx);
+        let _ = tokio::time::timeout(std::time::Duration::from_millis(200), handle).await;
+    }
+
+    #[tokio::test]
+    async fn test_event_sequence() {
+        use ag_ui_core::types::{Message, RunAgentInput};
+        use ag_ui_core::Event;
+
+        // Setup server state
+        let state = ServerState::new();
+        let msg_tx = state.message_sender();
+        let mut event_rx = state.subscribe();
+        let msg_rx = state.take_message_receiver().await.expect("receiver");
+        let event_bridge = state.event_sender();
+        let mut processor = AgentProcessor::with_defaults(msg_rx, event_bridge);
+
+        tokio::spawn(async move { processor.run().await; });
+
+        // Send message
+        let thread_id = ThreadId::random();
+        let input = RunAgentInput::new(thread_id, RunId::random())
+            .with_messages(vec![Message::new_user("Test event sequence")]);
+        msg_tx.send(AgentMessage::new(input)).await.unwrap();
+
+        // Collect events
+        let events = collect_until_finished(&mut event_rx).await;
+
+        // Verify sequence
+        assert!(!events.is_empty(), "Should receive at least one event");
+        assert!(matches!(events[0], Event::RunStarted(_)), "First event should be RunStarted");
+
+        // Should end with RunFinished or RunError
+        assert!(
+            matches!(events.last(), Some(Event::RunFinished(_) | Event::RunError(_))),
+            "Last event should be RunFinished or RunError"
+        );
+
+        // When successful (API key available), we expect at least:
+        // RunStarted -> StepStarted -> StepFinished -> TextMessageStart -> TextMessageContent* -> TextMessageEnd -> RunFinished
+        // Without API key, we get: RunStarted -> StepStarted -> StepFinished -> RunError
+        // Either way, verify we have multiple events
+        assert!(events.len() >= 2, "Should have at least RunStarted and terminal event");
+
+        drop(msg_tx);
+    }
+
+    #[tokio::test]
+    async fn test_empty_message_error() {
+        use ag_ui_core::types::RunAgentInput;
+        use ag_ui_core::Event;
+
+        let state = ServerState::new();
+        let msg_tx = state.message_sender();
+        let mut event_rx = state.subscribe();
+        let msg_rx = state.take_message_receiver().await.expect("receiver");
+        let event_bridge = state.event_sender();
+        let mut processor = AgentProcessor::with_defaults(msg_rx, event_bridge);
+
+        tokio::spawn(async move { processor.run().await; });
+
+        // Send message with no user content
+        let input = RunAgentInput::new(ThreadId::random(), RunId::random());
+        msg_tx.send(AgentMessage::new(input)).await.unwrap();
+
+        // Collect events
+        let events = collect_until_finished(&mut event_rx).await;
+
+        // Should get RunStarted then RunError
+        assert!(matches!(events[0], Event::RunStarted(_)), "First should be RunStarted");
+        assert!(
+            matches!(events.last(), Some(Event::RunError(_))),
+            "Should end with RunError for empty message"
+        );
+
+        drop(msg_tx);
+    }
+
+    #[tokio::test]
+    async fn test_invalid_provider_error() {
+        use ag_ui_core::types::{Message, RunAgentInput};
+        use ag_ui_core::Event;
+
+        let state = ServerState::new();
+        let msg_tx = state.message_sender();
+        let mut event_rx = state.subscribe();
+        let msg_rx = state.take_message_receiver().await.expect("receiver");
+        let event_bridge = state.event_sender();
+
+        // Configure with invalid provider
+        let config = ProcessorConfig::new().with_provider("invalid_provider_xyz");
+        let mut processor = AgentProcessor::new(msg_rx, event_bridge, config);
+
+        tokio::spawn(async move { processor.run().await; });
+
+        let input = RunAgentInput::new(ThreadId::random(), RunId::random())
+            .with_messages(vec![Message::new_user("Test invalid provider")]);
+        msg_tx.send(AgentMessage::new(input)).await.unwrap();
+
+        // Collect events
+        let events = collect_until_finished(&mut event_rx).await;
+
+        // Should error due to unsupported provider
+        assert!(
+            matches!(events.last(), Some(Event::RunError(_))),
+            "Should end with RunError for invalid provider"
+        );
+
+        drop(msg_tx);
+    }
+
+    #[tokio::test]
+    async fn test_custom_system_prompt() {
+        use ag_ui_core::types::{Message, RunAgentInput};
+
+        let state = ServerState::new();
+        let msg_tx = state.message_sender();
+        let mut event_rx = state.subscribe();
+        let msg_rx = state.take_message_receiver().await.expect("receiver");
+        let event_bridge = state.event_sender();
+
+        // Configure with custom system prompt
+        let config = ProcessorConfig::new()
+            .with_system_prompt("You are a DevOps assistant. Always respond with deployment advice.");
+        let mut processor = AgentProcessor::new(msg_rx, event_bridge, config);
+
+        tokio::spawn(async move { processor.run().await; });
+
+        let input = RunAgentInput::new(ThreadId::random(), RunId::random())
+            .with_messages(vec![Message::new_user("Hello")]);
+        msg_tx.send(AgentMessage::new(input)).await.unwrap();
+
+        // Should complete (may error without API key, but should not panic)
+        drain_events_until_run_finished(&mut event_rx).await;
+
+        drop(msg_tx);
     }
 }

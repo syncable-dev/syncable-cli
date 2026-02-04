@@ -1,0 +1,47 @@
+# Dependencies
+node_modules
+
+# Build output
+.output
+dist
+.nitro
+.vinxi
+
+# TanStack generated files
+.tanstack
+
+# Development files
+.git
+.gitignore
+.vscode
+.idea
+*.md
+
+# Environment files (sensitive)
+.env
+.env.*
+!.env.example
+
+# Test files
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+__tests__
+coverage
+
+# Docker files
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Logs
+logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Cache
+.cache

@@ -88,6 +88,7 @@ rig-core = { version = "0.28", features = ["derive", "image"] }
 ag-ui-core = { path = "../ag-ui-sdk/crates/ag-ui-core" }
 ag-ui-server = { path = "../ag-ui-sdk/crates/ag-ui-server" }
 axum = { version = "0.8", features = ["ws"] }
+tower-http = { version = "0.6", features = ["cors"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 
 # AWS Bedrock dependencies (inlined bedrock module with extended thinking fixes)
