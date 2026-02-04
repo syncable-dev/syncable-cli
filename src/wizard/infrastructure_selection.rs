@@ -1,7 +1,11 @@
 //! Infrastructure selection step for the deployment wizard
 //!
 //! Handles region and machine type selection for Cloud Runner deployments.
-//! Uses dynamic fetching from Hetzner API with static fallback.
+//!
+//! For Hetzner: Uses DYNAMIC fetching from Hetzner API - no hardcoded fallback.
+//! The agent gets real-time availability and pricing for smart resource selection.
+//!
+//! For GCP: Uses static data (dynamic fetching not yet implemented).
 
 use crate::platform::api::client::PlatformApiClient;
 use crate::platform::api::types::CloudProvider;
@@ -9,7 +13,7 @@ use crate::wizard::cloud_provider_data::{
     get_default_machine_type, get_default_region,
     get_hetzner_regions_dynamic, get_hetzner_server_types_dynamic,
     get_machine_types_for_provider, get_regions_for_provider,
-    DynamicCloudRegion, DynamicMachineType,
+    DynamicCloudRegion, DynamicMachineType, HetznerFetchResult,
 };
 use crate::wizard::render::{display_step_header, wizard_render_config};
 use colored::Colorize;
@@ -141,17 +145,50 @@ async fn select_region(
         "Choose the geographic location for your deployment.",
     );
 
-    // Use dynamic fetching for Hetzner if we have client and project_id
+    // For Hetzner: REQUIRE dynamic fetching - no static fallback
     if *provider == CloudProvider::Hetzner {
         if let (Some(client), Some(project_id)) = (client, project_id) {
-            let regions = get_hetzner_regions_dynamic(client, project_id).await;
-            if !regions.is_empty() {
-                return select_region_from_dynamic(regions, provider);
+            match get_hetzner_regions_dynamic(client, project_id).await {
+                HetznerFetchResult::Success(regions) => {
+                    if regions.is_empty() {
+                        println!(
+                            "\n{} No Hetzner regions available. Please check your Hetzner account.",
+                            "✗".red()
+                        );
+                        return None;
+                    }
+                    return select_region_from_dynamic(regions, provider);
+                }
+                HetznerFetchResult::NoCredentials => {
+                    println!(
+                        "\n{} Hetzner credentials not configured for this project.",
+                        "✗".red()
+                    );
+                    println!(
+                        "  {} Please add your Hetzner API token in project settings.",
+                        "→".dimmed()
+                    );
+                    return None;
+                }
+                HetznerFetchResult::ApiError(err) => {
+                    println!(
+                        "\n{} Failed to fetch Hetzner regions: {}",
+                        "✗".red(),
+                        err
+                    );
+                    return None;
+                }
             }
+        } else {
+            println!(
+                "\n{} Cannot fetch Hetzner regions without authentication.",
+                "✗".red()
+            );
+            return None;
         }
     }
 
-    // Fallback to static data
+    // For other providers: Use static data
     select_region_static(provider, step_number)
 }
 
@@ -281,17 +318,50 @@ async fn select_machine_type(
         "Select the VM size for your deployment.".dimmed()
     );
 
-    // Use dynamic fetching for Hetzner if we have client and project_id
+    // For Hetzner: REQUIRE dynamic fetching - no static fallback
     if *provider == CloudProvider::Hetzner {
         if let (Some(client), Some(project_id)) = (client, project_id) {
-            let machine_types = get_hetzner_server_types_dynamic(client, project_id, Some(region)).await;
-            if !machine_types.is_empty() {
-                return select_machine_type_from_dynamic(machine_types, provider, region);
+            match get_hetzner_server_types_dynamic(client, project_id, Some(region)).await {
+                HetznerFetchResult::Success(machine_types) => {
+                    if machine_types.is_empty() {
+                        println!(
+                            "\n{} No Hetzner server types available. Please check your Hetzner account.",
+                            "✗".red()
+                        );
+                        return None;
+                    }
+                    return select_machine_type_from_dynamic(machine_types, provider, region);
+                }
+                HetznerFetchResult::NoCredentials => {
+                    println!(
+                        "\n{} Hetzner credentials not configured for this project.",
+                        "✗".red()
+                    );
+                    println!(
+                        "  {} Please add your Hetzner API token in project settings.",
+                        "→".dimmed()
+                    );
+                    return None;
+                }
+                HetznerFetchResult::ApiError(err) => {
+                    println!(
+                        "\n{} Failed to fetch Hetzner server types: {}",
+                        "✗".red(),
+                        err
+                    );
+                    return None;
+                }
             }
+        } else {
+            println!(
+                "\n{} Cannot fetch Hetzner server types without authentication.",
+                "✗".red()
+            );
+            return None;
         }
     }
 
-    // Fallback to static data
+    // For other providers: Use static data
     select_machine_type_static(provider)
 }
 

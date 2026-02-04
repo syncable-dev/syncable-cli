@@ -21,10 +21,11 @@ mod target_selection;
 pub use cloud_provider_data::{
     get_default_machine_type, get_default_region, get_machine_types_for_provider,
     get_regions_for_provider, CloudRegion, MachineType,
-    // Dynamic Hetzner availability functions
+    // Dynamic Hetzner availability functions for agent use
     get_hetzner_regions_dynamic, get_hetzner_server_types_dynamic,
     check_hetzner_availability, get_recommended_server_type,
-    DynamicCloudRegion, DynamicMachineType,
+    find_best_region, find_cheapest_available,
+    DynamicCloudRegion, DynamicMachineType, HetznerFetchResult,
 };
 pub use cluster_selection::{select_cluster, ClusterSelectionResult};
 pub use config_form::{collect_config, ConfigFormResult};
