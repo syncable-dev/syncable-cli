@@ -21,13 +21,19 @@ mod target_selection;
 pub use cloud_provider_data::{
     get_default_machine_type, get_default_region, get_machine_types_for_provider,
     get_regions_for_provider, CloudRegion, MachineType,
+    // Dynamic Hetzner availability functions
+    get_hetzner_regions_dynamic, get_hetzner_server_types_dynamic,
+    check_hetzner_availability, get_recommended_server_type,
+    DynamicCloudRegion, DynamicMachineType,
 };
 pub use cluster_selection::{select_cluster, ClusterSelectionResult};
 pub use config_form::{collect_config, ConfigFormResult};
 pub use dockerfile_selection::{select_dockerfile, DockerfileSelectionResult};
 pub use environment_creation::{create_environment_wizard, EnvironmentCreationResult};
 pub use environment_selection::{select_environment, EnvironmentSelectionResult};
-pub use infrastructure_selection::{select_infrastructure, InfrastructureSelectionResult};
+pub use infrastructure_selection::{
+    select_infrastructure, select_infrastructure_sync, InfrastructureSelectionResult,
+};
 pub use orchestrator::{run_wizard, WizardResult};
 pub use provider_selection::{
     get_provider_deployment_statuses, select_provider, ProviderSelectionResult,
