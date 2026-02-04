@@ -204,18 +204,35 @@ fn get_system_prompt(project_path: &Path, query: Option<&str>, plan_mode: PlanMo
 /// * `host` - Host address to bind to
 /// * `port` - Port number to listen on
 pub async fn run_agent_server(
-    _project_path: &Path,
-    _provider: ProviderType,
-    _model: Option<String>,
+    project_path: &Path,
+    provider: ProviderType,
+    model: Option<String>,
     host: &str,
     port: u16,
 ) -> AgentResult<()> {
-    use crate::server::{AgUiConfig, AgUiServer};
+    use crate::server::{AgUiConfig, AgUiServer, ProcessorConfig};
 
-    let config = AgUiConfig::new().port(port).host(host);
+    // Configure the agent processor with provider, model, and project path
+    // Use regional model IDs (no global. prefix) for wider availability
+    let default_model = match provider {
+        // Claude 3.5 Sonnet v2 is widely available across regions
+        ProviderType::Bedrock => "anthropic.claude-3-5-sonnet-20241022-v2:0".to_string(),
+        ProviderType::Anthropic => "claude-3-5-sonnet-20241022".to_string(),
+        ProviderType::OpenAI => "gpt-4o".to_string(),
+    };
+    let processor_config = ProcessorConfig::new()
+        .with_provider(&provider.to_string())
+        .with_model(&model.unwrap_or(default_model))
+        .with_project_path(project_path);
+
+    let config = AgUiConfig::new()
+        .port(port)
+        .host(host)
+        .with_processor_config(processor_config);
     let server = AgUiServer::new(config);
 
     println!("AG-UI agent server listening on http://{}:{}", host, port);
+    println!("Project path: {}", project_path.display());
     println!("Connect frontends via SSE (/sse) or WebSocket (/ws)");
     println!("Press Ctrl+C to stop the server");
 

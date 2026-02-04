@@ -9,8 +9,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@copilotkit/react-core": "^1.51.2",
-    "@copilotkit/react-ui": "^1.51.2",
+    "@copilotkit/react-core": "1.51.3-next.3",
+    "@copilotkit/react-ui": "1.51.3-next.3",
     "@tailwindcss/vite": "^4.0.6",
     "@tanstack/ai": "^0.2.2",
     "@tanstack/ai-openai": "^0.2.1",
