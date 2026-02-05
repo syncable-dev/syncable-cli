@@ -19,6 +19,7 @@ use crate::platform::api::{PlatformApiClient, PlatformApiError, TriggerDeploymen
 use crate::platform::PlatformSession;
 use crate::wizard::{
     RecommendationInput, recommend_deployment, get_provider_deployment_statuses,
+    get_hetzner_regions_dynamic, get_hetzner_server_types_dynamic, HetznerFetchResult,
 };
 use std::process::Command;
 
@@ -341,6 +342,97 @@ User: "deploy this service"
         };
 
         let recommendation = recommend_deployment(recommendation_input);
+
+        // 6.5. For Hetzner deployments, verify we can fetch dynamic availability
+        // We require real-time data - no static fallback allowed
+        let final_provider_for_check = args.provider
+            .as_ref()
+            .and_then(|p| CloudProvider::from_str(p).ok())
+            .unwrap_or(recommendation.provider.clone());
+
+        if final_provider_for_check == CloudProvider::Hetzner {
+            // Try to fetch Hetzner availability to validate credentials
+            match get_hetzner_regions_dynamic(&client, &project_id).await {
+                HetznerFetchResult::Success(regions) => {
+                    if regions.is_empty() {
+                        return Ok(format_error_for_llm(
+                            "deploy_service",
+                            ErrorCategory::ResourceUnavailable,
+                            "No Hetzner regions available",
+                            Some(vec![
+                                "Check your Hetzner account status",
+                                "Use list_hetzner_availability to see current availability",
+                            ]),
+                        ));
+                    }
+                    // Also verify server types are available
+                    match get_hetzner_server_types_dynamic(&client, &project_id, args.region.as_deref()).await {
+                        HetznerFetchResult::Success(types) if types.is_empty() => {
+                            return Ok(format_error_for_llm(
+                                "deploy_service",
+                                ErrorCategory::ResourceUnavailable,
+                                "No Hetzner server types available",
+                                Some(vec![
+                                    "Check your Hetzner account status",
+                                    "Use list_hetzner_availability to see current availability",
+                                ]),
+                            ));
+                        }
+                        HetznerFetchResult::NoCredentials => {
+                            return Ok(format_error_for_llm(
+                                "deploy_service",
+                                ErrorCategory::PermissionDenied,
+                                "Cannot recommend Hetzner deployment: Hetzner credentials not configured",
+                                Some(vec![
+                                    "Add your Hetzner API token in project settings",
+                                    "Use open_provider_settings to configure Hetzner",
+                                    "Or specify a different provider (e.g., provider='gcp')",
+                                    "Or manually provide: region and machine_type parameters",
+                                ]),
+                            ));
+                        }
+                        HetznerFetchResult::ApiError(err) => {
+                            return Ok(format_error_for_llm(
+                                "deploy_service",
+                                ErrorCategory::NetworkError,
+                                &format!("Cannot recommend Hetzner deployment: Failed to fetch availability - {}", err),
+                                Some(vec![
+                                    "Use list_hetzner_availability to check current status",
+                                    "Or manually provide: region and machine_type parameters",
+                                    "Or specify a different provider (e.g., provider='gcp')",
+                                ]),
+                            ));
+                        }
+                        _ => {} // Success with data - continue
+                    }
+                }
+                HetznerFetchResult::NoCredentials => {
+                    return Ok(format_error_for_llm(
+                        "deploy_service",
+                        ErrorCategory::PermissionDenied,
+                        "Cannot recommend Hetzner deployment: Hetzner credentials not configured",
+                        Some(vec![
+                            "Add your Hetzner API token in project settings",
+                            "Use open_provider_settings to configure Hetzner",
+                            "Or specify a different provider (e.g., provider='gcp')",
+                            "Or manually provide configuration: region and machine_type parameters",
+                        ]),
+                    ));
+                }
+                HetznerFetchResult::ApiError(err) => {
+                    return Ok(format_error_for_llm(
+                        "deploy_service",
+                        ErrorCategory::NetworkError,
+                        &format!("Cannot recommend Hetzner deployment: Failed to fetch availability - {}", err),
+                        Some(vec![
+                            "Use list_hetzner_availability to check current status",
+                            "Or manually provide configuration: region and machine_type parameters",
+                            "Or specify a different provider (e.g., provider='gcp')",
+                        ]),
+                    ));
+                }
+            }
+        }
 
         // 7. Extract analysis summary
         let primary_language = analysis.languages.first()
