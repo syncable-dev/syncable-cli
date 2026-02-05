@@ -195,6 +195,7 @@ fn server_type_to_dynamic(st: &ServerTypeSummary) -> DynamicMachineType {
 
 /// Fetch Hetzner regions dynamically with real-time availability
 ///
+/// Uses the /api/v1/cloud-runner/hetzner/options endpoint (same as frontend).
 /// Returns regions with availability info directly from Hetzner API.
 /// The agent uses this to make smart deployment decisions based on actual capacity.
 ///
@@ -204,13 +205,26 @@ pub async fn get_hetzner_regions_dynamic(
     client: &PlatformApiClient,
     project_id: &str,
 ) -> HetznerFetchResult<Vec<DynamicCloudRegion>> {
-    match client.get_hetzner_locations(project_id).await {
-        Ok(locations) => {
-            HetznerFetchResult::Success(locations.iter().map(location_to_dynamic_region).collect())
+    match client.get_hetzner_options(project_id).await {
+        Ok(options) => {
+            let regions: Vec<DynamicCloudRegion> = options.locations.iter().map(|loc| {
+                DynamicCloudRegion {
+                    id: loc.name.clone(),
+                    name: loc.city.clone(),
+                    location: loc.country.clone(),
+                    network_zone: loc.network_zone.clone(),
+                    // Find server types available at this location
+                    available_server_types: options.server_types.iter()
+                        .filter(|st| st.available_locations.contains(&loc.name))
+                        .map(|st| st.name.clone())
+                        .collect(),
+                }
+            }).collect();
+            HetznerFetchResult::Success(regions)
         }
         Err(e) => {
             let error_msg = e.to_string();
-            if error_msg.contains("credentials") || error_msg.contains("Unauthorized") {
+            if error_msg.contains("credentials") || error_msg.contains("Unauthorized") || error_msg.contains("token") {
                 HetznerFetchResult::NoCredentials
             } else {
                 HetznerFetchResult::ApiError(error_msg)
@@ -221,6 +235,7 @@ pub async fn get_hetzner_regions_dynamic(
 
 /// Fetch Hetzner server types dynamically with pricing and availability
 ///
+/// Uses the /api/v1/cloud-runner/hetzner/options endpoint (same as frontend).
 /// Returns server types sorted by monthly price (cheapest first) with
 /// real-time availability per region. The agent uses this for cost-optimized
 /// resource selection.
@@ -230,15 +245,30 @@ pub async fn get_hetzner_regions_dynamic(
 pub async fn get_hetzner_server_types_dynamic(
     client: &PlatformApiClient,
     project_id: &str,
-    preferred_location: Option<&str>,
+    _preferred_location: Option<&str>,
 ) -> HetznerFetchResult<Vec<DynamicMachineType>> {
-    match client.get_hetzner_server_types(project_id, preferred_location).await {
-        Ok(server_types) => {
-            HetznerFetchResult::Success(server_types.iter().map(server_type_to_dynamic).collect())
+    match client.get_hetzner_options(project_id).await {
+        Ok(options) => {
+            let mut server_types: Vec<DynamicMachineType> = options.server_types.iter()
+                .filter(|st| !st.deprecated)
+                .map(|st| DynamicMachineType {
+                    id: st.name.clone(),
+                    name: st.name.clone(),
+                    cores: st.cores,
+                    memory_gb: st.memory,
+                    disk_gb: st.disk,
+                    price_monthly: st.price_monthly,
+                    price_hourly: st.price_monthly / 730.0, // Approximate hourly from monthly
+                    available_in: st.available_locations.clone(),
+                })
+                .collect();
+            // Sort by price (cheapest first)
+            server_types.sort_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap());
+            HetznerFetchResult::Success(server_types)
         }
         Err(e) => {
             let error_msg = e.to_string();
-            if error_msg.contains("credentials") || error_msg.contains("Unauthorized") {
+            if error_msg.contains("credentials") || error_msg.contains("Unauthorized") || error_msg.contains("token") {
                 HetznerFetchResult::NoCredentials
             } else {
                 HetznerFetchResult::ApiError(error_msg)

@@ -1307,6 +1307,55 @@ pub struct ServerTypesResponse {
     pub data: Vec<ServerTypeSummary>,
 }
 
+// =============================================================================
+// Hetzner Options Types (from /api/v1/cloud-runner/hetzner/options)
+// =============================================================================
+
+/// Simple Hetzner location (from getHetznerOptions endpoint)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HetznerSimpleLocation {
+    pub id: i64,
+    pub name: String,
+    pub description: String,
+    pub city: String,
+    pub country: String,
+    pub network_zone: String,
+}
+
+/// Hetzner server type with pricing (from getHetznerOptions endpoint)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HetznerSimpleServerType {
+    pub id: i64,
+    pub name: String,
+    pub description: String,
+    pub cores: i32,
+    pub memory: f64,
+    pub disk: i64,
+    pub cpu_type: String,
+    pub architecture: String,
+    pub deprecated: bool,
+    #[serde(default)]
+    pub available_locations: Vec<String>,
+    #[serde(default)]
+    pub price_monthly: f64,
+}
+
+/// Combined Hetzner options response
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HetznerOptionsData {
+    pub locations: Vec<HetznerSimpleLocation>,
+    pub server_types: Vec<HetznerSimpleServerType>,
+}
+
+/// Wrapped response for getHetznerOptions
+#[derive(Debug, Clone, Deserialize)]
+pub struct HetznerOptionsResponse {
+    pub data: HetznerOptionsData,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
