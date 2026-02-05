@@ -1,0 +1,28 @@
+[package]
+name = "ag-ui-server"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+description = "Server-side AG-UI event producer for streaming to frontends"
+readme = "README.md"
+
+[dependencies]
+# Internal
+ag-ui-core = { version = "0.1.0", path = "../ag-ui-core" }
+
+# Error handling
+thiserror = "2"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Async runtime
+tokio = { version = "1", features = ["rt", "macros", "sync"] }
+tokio-stream = "0.1"
+async-trait = "0.1"
+futures = "0.3"
+
+# Web framework
+axum = { version = "0.8", features = ["ws"] }
