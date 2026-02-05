@@ -85,8 +85,8 @@ futures-util = "0.3"
 rig-core = { version = "0.28", features = ["derive", "image"] }
 
 # AG-UI Protocol - enables frontend connectivity for agent mode
-ag-ui-core = { path = "../ag-ui-sdk/crates/ag-ui-core" }
-ag-ui-server = { path = "../ag-ui-sdk/crates/ag-ui-server" }
+ag-ui-core = { path = "crates/ag-ui-core" }
+ag-ui-server = { path = "crates/ag-ui-server" }
 axum = { version = "0.8", features = ["ws"] }
 tower-http = { version = "0.6", features = ["cors"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
