@@ -855,6 +855,26 @@ impl PlatformApiClient {
     // Hetzner Availability API methods (Dynamic Resource Fetching)
     // =========================================================================
 
+    /// Get Hetzner options (locations and server types) with real-time data
+    ///
+    /// Uses the /api/v1/cloud-runner/hetzner/options endpoint which returns
+    /// both locations and server types in one call. This is the same endpoint
+    /// used by the frontend for Hetzner infrastructure selection.
+    ///
+    /// Endpoint: GET /api/v1/cloud-runner/hetzner/options?projectId=:projectId
+    pub async fn get_hetzner_options(
+        &self,
+        project_id: &str,
+    ) -> Result<super::types::HetznerOptionsData> {
+        let response: super::types::HetznerOptionsResponse = self
+            .get(&format!(
+                "/api/v1/cloud-runner/hetzner/options?projectId={}",
+                urlencoding::encode(project_id)
+            ))
+            .await?;
+        Ok(response.data)
+    }
+
     /// Get Hetzner locations with real-time availability information
     ///
     /// Returns all Hetzner locations with the server types currently available
