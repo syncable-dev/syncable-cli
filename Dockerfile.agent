@@ -1,0 +1,75 @@
+# =============================================================================
+# Syncable CLI Agent - Multi-stage Dockerfile
+# =============================================================================
+# Builds the sync-ctl binary and creates a minimal runtime image for the
+# AG-UI agent server. Used for containerized deployments where the agent
+# serves frontend connections via SSE/WebSocket.
+#
+# Build:
+#   docker build -f Dockerfile.agent -t syncable-agent:latest .
+#
+# Run:
+#   docker run -p 9090:9090 -e OPENAI_API_KEY=$OPENAI_API_KEY syncable-agent:latest
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Build stage - compile the Rust binary
+# -----------------------------------------------------------------------------
+FROM rust:1.83-slim-bookworm AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy manifests first for better layer caching
+COPY Cargo.toml Cargo.lock ./
+
+# Create dummy src to build dependencies
+RUN mkdir -p src && echo "fn main() {}" > src/main.rs
+
+# Build dependencies (this layer will be cached)
+RUN cargo build --release && rm -rf src target/release/sync-ctl*
+
+# Copy actual source code
+COPY src/ src/
+
+# Build the real binary
+RUN cargo build --release --bin sync-ctl
+
+# -----------------------------------------------------------------------------
+# Runtime stage - minimal image with just the binary
+# -----------------------------------------------------------------------------
+FROM debian:bookworm-slim AS runtime
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user for security
+RUN useradd -m -u 1000 syncable
+USER syncable
+
+# Copy the compiled binary
+COPY --from=builder /app/target/release/sync-ctl /usr/local/bin/sync-ctl
+
+# Working directory for project analysis
+WORKDIR /project
+
+# AG-UI server port
+EXPOSE 9090
+
+# Health check endpoint
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:9090/health || exit 1
+
+# Default entrypoint runs the agent server
+ENTRYPOINT ["sync-ctl", "agent"]
+
+# Default arguments (can be overridden)
+CMD ["--host", "0.0.0.0", "--port", "9090", "."]
