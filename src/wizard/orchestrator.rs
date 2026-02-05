@@ -178,7 +178,8 @@ pub async fn run_wizard(
     // Step 3: Infrastructure selection for Cloud Runner OR Cluster selection for K8s
     let (cluster_id, region, machine_type) = if target == DeploymentTarget::CloudRunner {
         // Cloud Runner: Select region and machine type
-        match select_infrastructure(&provider, 3) {
+        // Pass client and project_id for dynamic Hetzner availability fetching
+        match select_infrastructure(&provider, 3, Some(client), Some(project_id)).await {
             InfrastructureSelectionResult::Selected {
                 region,
                 machine_type,

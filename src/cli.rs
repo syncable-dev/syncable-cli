@@ -339,6 +339,14 @@ pub enum Commands {
         /// List available sessions for this project and exit
         #[arg(long)]
         list_sessions: bool,
+
+        /// Start AG-UI server for frontend connectivity (SSE/WebSocket)
+        #[arg(long)]
+        ag_ui: bool,
+
+        /// AG-UI server port (default: 9090)
+        #[arg(long, default_value = "9090", requires = "ag_ui")]
+        ag_ui_port: u16,
     },
 
     /// Authenticate with the Syncable platform
@@ -373,6 +381,29 @@ pub enum Commands {
 
         #[command(subcommand)]
         command: Option<DeployCommand>,
+    },
+
+    /// Run as dedicated AG-UI agent server (headless mode for containers)
+    Agent {
+        /// Path to the project directory
+        #[arg(value_name = "PROJECT_PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Port for AG-UI server
+        #[arg(long, short, default_value = "9090")]
+        port: u16,
+
+        /// Host address to bind to
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+
+        /// LLM provider to use
+        #[arg(long, value_enum, default_value = "auto")]
+        provider: ChatProvider,
+
+        /// Model to use
+        #[arg(long)]
+        model: Option<String>,
     },
 }
 

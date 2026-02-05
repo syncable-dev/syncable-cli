@@ -1,0 +1,42 @@
+# Dependencies
+node_modules
+
+# Build output
+dist
+
+# Development files
+.git
+.gitignore
+.vscode
+.idea
+*.md
+
+# Environment files (sensitive)
+.env
+.env.*
+!.env.example
+
+# Test files
+*.test.ts
+*.spec.ts
+__tests__
+coverage
+
+# Docker files
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# SQLite database files (will be created at runtime)
+*.db
+*.sqlite
+*.sqlite3
+data/
+
+# Logs
+logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

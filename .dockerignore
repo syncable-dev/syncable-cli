@@ -1,0 +1,41 @@
+# =============================================================================
+# Docker Build Context Exclusions
+# =============================================================================
+
+# Build artifacts
+target/
+*.rs.bk
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Documentation and planning
+.planning/
+*.md
+!README.md
+
+# CI/CD
+.github/
+
+# Test fixtures
+tests/test-*/
+
+# Local configuration
+.env
+.env.*
+*.local
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

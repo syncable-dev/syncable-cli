@@ -9,6 +9,7 @@ pub mod error;
 pub mod generator;
 pub mod handlers;
 pub mod platform; // Platform session state for project/org context
+pub mod server; // AG-UI server for frontend connectivity
 pub mod telemetry; // Add telemetry module
 pub mod wizard; // Interactive deployment wizard
 
@@ -23,7 +24,10 @@ pub use telemetry::{TelemetryClient, TelemetryConfig, UserId}; // Re-export tele
 /// The current version of the CLI tool
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-pub async fn run_command(command: Commands) -> Result<()> {
+pub async fn run_command(
+    command: Commands,
+    event_bridge: Option<server::EventBridge>,
+) -> Result<()> {
     match command {
         Commands::Analyze {
             path,
@@ -166,6 +170,8 @@ pub async fn run_command(command: Commands) -> Result<()> {
             query,
             resume,
             list_sessions: _, // Handled in main.rs
+            ag_ui: _,         // Handled in main.rs
+            ag_ui_port: _,    // Handled in main.rs
         } => {
             use agent::ProviderType;
             use cli::ChatProvider;
@@ -271,11 +277,11 @@ pub async fn run_command(command: Commands) -> Result<()> {
 
             if let Some(q) = query {
                 let response =
-                    agent::run_query(&project_path, &q, provider_type, effective_model).await?;
+                    agent::run_query(&project_path, &q, provider_type, effective_model, event_bridge).await?;
                 println!("{}", response);
                 Ok(())
             } else {
-                agent::run_interactive(&project_path, provider_type, effective_model).await?;
+                agent::run_interactive(&project_path, provider_type, effective_model, event_bridge).await?;
                 Ok(())
             }
         }
@@ -625,6 +631,41 @@ pub async fn run_command(command: Commands) -> Result<()> {
                     }
                 },
             }
+        }
+        Commands::Agent {
+            path,
+            port,
+            host,
+            provider,
+            model,
+        } => {
+            use agent::ProviderType;
+            use cli::ChatProvider;
+
+            // Determine provider type
+            let provider_type = match provider {
+                ChatProvider::Openai => ProviderType::OpenAI,
+                ChatProvider::Anthropic => ProviderType::Anthropic,
+                ChatProvider::Bedrock => ProviderType::Bedrock,
+                ChatProvider::Ollama => {
+                    eprintln!("Ollama support coming soon. Using OpenAI as fallback.");
+                    ProviderType::OpenAI
+                }
+                ChatProvider::Auto => {
+                    // Load from saved config
+                    let agent_config = config::load_agent_config();
+                    match agent_config.default_provider.as_str() {
+                        "openai" => ProviderType::OpenAI,
+                        "anthropic" => ProviderType::Anthropic,
+                        "bedrock" => ProviderType::Bedrock,
+                        _ => ProviderType::OpenAI,
+                    }
+                }
+            };
+
+            let project_path = path.canonicalize().unwrap_or(path);
+            agent::run_agent_server(&project_path, provider_type, model, &host, port).await?;
+            Ok(())
         }
         Commands::Deploy { .. } => {
             // Deploy commands are handled in main.rs directly

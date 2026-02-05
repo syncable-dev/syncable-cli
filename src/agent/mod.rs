@@ -104,6 +104,71 @@ pub enum AgentError {
 
 pub type AgentResult<T> = Result<T, AgentError>;
 
+// =============================================================================
+// AG-UI State Types
+// =============================================================================
+
+/// Agent state for AG-UI state synchronization
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AgentState {
+    /// Project being analyzed
+    pub project_path: String,
+    /// LLM provider name
+    pub provider: String,
+    /// Model being used
+    pub model: String,
+    /// Whether plan mode is active
+    pub plan_mode: bool,
+    /// Token usage statistics
+    pub token_usage: TokenUsageState,
+    /// Conversation state
+    pub conversation: ConversationState,
+}
+
+/// Token usage state for AG-UI
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TokenUsageState {
+    /// Estimated input tokens
+    pub input_tokens: usize,
+    /// Estimated output tokens
+    pub output_tokens: usize,
+    /// Total tokens
+    pub total_tokens: usize,
+}
+
+/// Conversation state for AG-UI
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ConversationState {
+    /// Number of conversation turns
+    pub turn_count: usize,
+    /// Whether history has been compacted
+    pub has_compacted: bool,
+}
+
+/// Build AgentState from session and conversation history
+fn build_agent_state(session: &ChatSession, history: &ConversationHistory) -> AgentState {
+    // Check if history has been compacted (status contains "compacted")
+    let has_compacted = history.status().contains("compacted");
+    let input = session.token_usage.prompt_tokens as usize;
+    let output = session.token_usage.completion_tokens as usize;
+
+    AgentState {
+        project_path: session.project_path.display().to_string(),
+        provider: session.provider.to_string(),
+        model: session.model.clone(),
+        plan_mode: session.plan_mode.is_planning(),
+        token_usage: TokenUsageState {
+            input_tokens: input,
+            output_tokens: output,
+            total_tokens: input + output,
+        },
+        conversation: ConversationState {
+            turn_count: history.turn_count(),
+            has_compacted,
+        },
+    }
+}
+
 /// Get the system prompt for the agent based on query type and plan mode
 fn get_system_prompt(project_path: &Path, query: Option<&str>, plan_mode: PlanMode) -> String {
     // In planning mode, use the read-only exploration prompt
@@ -125,15 +190,72 @@ fn get_system_prompt(project_path: &Path, query: Option<&str>, plan_mode: PlanMo
     prompts::get_analysis_prompt(project_path)
 }
 
+/// Run the agent as a dedicated AG-UI server (headless mode for containers/deployments).
+///
+/// This starts the AG-UI server without interactive stdin, accepting connections
+/// from frontends via SSE or WebSocket. The agent processes messages received
+/// through the AG-UI protocol.
+///
+/// # Arguments
+///
+/// * `project_path` - Path to the project directory
+/// * `provider` - LLM provider to use
+/// * `model` - Optional model override
+/// * `host` - Host address to bind to
+/// * `port` - Port number to listen on
+pub async fn run_agent_server(
+    project_path: &Path,
+    provider: ProviderType,
+    model: Option<String>,
+    host: &str,
+    port: u16,
+) -> AgentResult<()> {
+    use crate::server::{AgUiConfig, AgUiServer, ProcessorConfig};
+
+    // Configure the agent processor with provider, model, and project path
+    // Use regional model IDs (no global. prefix) for wider availability
+    let default_model = match provider {
+        // Claude 3.5 Sonnet v2 is widely available across regions
+        ProviderType::Bedrock => "anthropic.claude-3-5-sonnet-20241022-v2:0".to_string(),
+        ProviderType::Anthropic => "claude-3-5-sonnet-20241022".to_string(),
+        ProviderType::OpenAI => "gpt-4o".to_string(),
+    };
+    let processor_config = ProcessorConfig::new()
+        .with_provider(&provider.to_string())
+        .with_model(&model.unwrap_or(default_model))
+        .with_project_path(project_path);
+
+    let config = AgUiConfig::new()
+        .port(port)
+        .host(host)
+        .with_processor_config(processor_config);
+    let server = AgUiServer::new(config);
+
+    println!("AG-UI agent server listening on http://{}:{}", host, port);
+    println!("Project path: {}", project_path.display());
+    println!("Connect frontends via SSE (/sse) or WebSocket (/ws)");
+    println!("Press Ctrl+C to stop the server");
+
+    // Run server (blocks until shutdown signal)
+    server
+        .run()
+        .await
+        .map_err(|e| AgentError::ProviderError(e.to_string()))
+}
+
 /// Run the agent in interactive mode with custom REPL supporting /model and /provider commands
 pub async fn run_interactive(
     project_path: &Path,
     provider: ProviderType,
     model: Option<String>,
+    event_bridge: Option<crate::server::EventBridge>,
 ) -> AgentResult<()> {
     use tools::*;
 
     let mut session = ChatSession::new(project_path, provider, model);
+
+    // Store event bridge for use in tool hooks
+    let event_bridge = event_bridge;
 
     // Shared background process manager for Prometheus port-forwards
     let bg_manager = Arc::new(BackgroundProcessManager::new());
@@ -217,6 +339,19 @@ pub async fn run_interactive(
     // Initialize session recorder for conversation persistence
     let mut session_recorder = persistence::SessionRecorder::new(project_path);
 
+    // Track if we exit due to an error (for AG-UI error events)
+    let mut exit_error: Option<String> = None;
+
+    // Emit AG-UI RunStarted event and initial state for connected frontends
+    if let Some(ref bridge) = event_bridge {
+        bridge.start_run().await;
+        // Emit initial agent state snapshot
+        let state = build_agent_state(&session, &conversation_history);
+        if let Ok(state_json) = serde_json::to_value(&state) {
+            bridge.emit_state_snapshot(state_json).await;
+        }
+    }
+
     loop {
         // Show conversation status if we have history
         if !conversation_history.is_empty() {
@@ -252,6 +387,16 @@ pub async fn run_interactive(
                         println!("{}", "★ plan mode".yellow());
                     } else {
                         println!("{}", "▶ standard mode".green());
+                    }
+                    // Emit AG-UI state delta for plan mode change
+                    if let Some(ref bridge) = event_bridge {
+                        bridge
+                            .emit_state_delta(vec![serde_json::json!({
+                                "op": "replace",
+                                "path": "/plan_mode",
+                                "value": new_mode.is_planning()
+                            })])
+                            .await;
                     }
                     continue;
                 }
@@ -509,6 +654,11 @@ pub async fn run_interactive(
         let mut current_input = input.clone();
         let mut succeeded = false;
 
+        // Emit AG-UI step event for processing
+        if let Some(ref bridge) = event_bridge {
+            bridge.start_step("processing").await;
+        }
+
         while retry_attempt < MAX_RETRIES && continuation_count < MAX_CONTINUATIONS && !succeeded {
             // Log if this is a continuation attempt
             if continuation_count > 0 {
@@ -523,6 +673,11 @@ pub async fn run_interactive(
             // Layout connection disabled - using inline progress mode
             // progress.state().set_layout(layout_state.clone());
             hook.set_progress_state(progress.state()).await;
+
+            // Connect AG-UI EventBridge if provided (for streaming tool events to frontends)
+            if let Some(ref bridge) = event_bridge {
+                hook.set_event_bridge(bridge.clone()).await;
+            }
 
             let project_path_buf = session.project_path.clone();
             // Select prompt based on query type (analysis vs generation) and plan mode
@@ -543,6 +698,11 @@ pub async fn run_interactive(
             // Use tokio::select! to race the API call against Ctrl+C
             // This allows immediate cancellation, not just between tool calls
             let mut user_interrupted = false;
+
+            // Emit AG-UI thinking event before LLM call
+            if let Some(ref bridge) = event_bridge {
+                bridge.start_thinking(Some("Generating response")).await;
+            }
 
             // API call with Ctrl+C interrupt support
             let response = tokio::select! {
@@ -594,6 +754,7 @@ pub async fn run_interactive(
                         .tool(OpenProviderSettingsTool::new())
                         .tool(CheckProviderConnectionTool::new())
                         .tool(ListDeploymentCapabilitiesTool::new())
+                        .tool(ListHetznerAvailabilityTool::new())
                         // Deployment tools for service management
                         .tool(CreateDeploymentConfigTool::new())
                         .tool(DeployServiceTool::new(project_path_buf.clone()))
@@ -711,6 +872,7 @@ pub async fn run_interactive(
                         .tool(OpenProviderSettingsTool::new())
                         .tool(CheckProviderConnectionTool::new())
                         .tool(ListDeploymentCapabilitiesTool::new())
+                        .tool(ListHetznerAvailabilityTool::new())
                         // Deployment tools for service management
                         .tool(CreateDeploymentConfigTool::new())
                         .tool(DeployServiceTool::new(project_path_buf.clone()))
@@ -819,6 +981,7 @@ pub async fn run_interactive(
                         .tool(OpenProviderSettingsTool::new())
                         .tool(CheckProviderConnectionTool::new())
                         .tool(ListDeploymentCapabilitiesTool::new())
+                        .tool(ListHetznerAvailabilityTool::new())
                         // Deployment tools for service management
                         .tool(CreateDeploymentConfigTool::new())
                         .tool(DeployServiceTool::new(project_path_buf.clone()))
@@ -885,11 +1048,21 @@ pub async fn run_interactive(
             // Stop the progress indicator before handling the response
             progress.stop().await;
 
+            // End AG-UI thinking event
+            if let Some(ref bridge) = event_bridge {
+                bridge.end_thinking().await;
+            }
+
             // Suppress unused variable warnings
             let _ = (&progress_state, user_interrupted);
 
             match response {
                 Ok(text) => {
+                    // Emit AG-UI text message event (for connected frontends)
+                    if let Some(ref bridge) = event_bridge {
+                        bridge.emit_message(&text).await;
+                    }
+
                     // Show final response
                     println!();
                     ResponseFormatter::print_response(&text);
@@ -929,6 +1102,14 @@ pub async fn run_interactive(
                         session.token_usage.format_compact(),
                         ui::colors::ansi::RESET
                     );
+
+                    // Emit AG-UI state update with new token counts
+                    if let Some(ref bridge) = event_bridge {
+                        let state = build_agent_state(&session, &conversation_history);
+                        if let Ok(state_json) = serde_json::to_value(&state) {
+                            bridge.emit_state_snapshot(state_json).await;
+                        }
+                    }
 
                     // Extract tool calls from the hook state for history tracking
                     let tool_calls = extract_tool_calls_from_hook(&hook).await;
@@ -1374,6 +1555,7 @@ pub async fn run_interactive(
                                 "{}",
                                 "Try breaking your request into smaller parts.".dimmed()
                             );
+                            exit_error = Some(e.to_string());
                             break;
                         }
                     } else if err_str.contains("timeout") || err_str.contains("Timeout") {
@@ -1391,6 +1573,7 @@ pub async fn run_interactive(
                             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                         } else {
                             eprintln!("{}", "Request timed out. Please try again.".red());
+                            exit_error = Some("Request timed out".to_string());
                             break;
                         }
                     } else {
@@ -1420,12 +1603,28 @@ pub async fn run_interactive(
                             )
                             .dimmed()
                         );
+                        exit_error = Some(e.to_string());
                         break;
                     }
                 }
             }
         }
+
+        // End AG-UI step event for this turn
+        if let Some(ref bridge) = event_bridge {
+            bridge.end_step().await;
+        }
+
         println!();
+    }
+
+    // Emit AG-UI run completion event for connected frontends
+    if let Some(ref bridge) = event_bridge {
+        if let Some(error_msg) = exit_error {
+            bridge.finish_run_with_error(&error_msg).await;
+        } else {
+            bridge.finish_run().await;
+        }
     }
 
     // Clean up terminal layout before exiting (disabled - layout not initialized)
@@ -2218,11 +2417,13 @@ fn build_continuation_prompt(
 }
 
 /// Run a single query and return the response
+/// Note: event_bridge is accepted for API consistency but not used in single-query mode
 pub async fn run_query(
     project_path: &Path,
     query: &str,
     provider: ProviderType,
     model: Option<String>,
+    _event_bridge: Option<crate::server::EventBridge>,
 ) -> AgentResult<String> {
     use tools::*;
 
@@ -2275,6 +2476,7 @@ pub async fn run_query(
                         .tool(OpenProviderSettingsTool::new())
                         .tool(CheckProviderConnectionTool::new())
                         .tool(ListDeploymentCapabilitiesTool::new())
+                        .tool(ListHetznerAvailabilityTool::new())
                         // Deployment tools for service management
                         .tool(CreateDeploymentConfigTool::new())
                         .tool(DeployServiceTool::new(project_path_buf.clone()))
@@ -2360,6 +2562,7 @@ pub async fn run_query(
                         .tool(OpenProviderSettingsTool::new())
                         .tool(CheckProviderConnectionTool::new())
                         .tool(ListDeploymentCapabilitiesTool::new())
+                        .tool(ListHetznerAvailabilityTool::new())
                         // Deployment tools for service management
                         .tool(CreateDeploymentConfigTool::new())
                         .tool(DeployServiceTool::new(project_path_buf.clone()))
@@ -2434,6 +2637,7 @@ pub async fn run_query(
                         .tool(OpenProviderSettingsTool::new())
                         .tool(CheckProviderConnectionTool::new())
                         .tool(ListDeploymentCapabilitiesTool::new())
+                        .tool(ListHetznerAvailabilityTool::new())
                         // Deployment tools for service management
                         .tool(CreateDeploymentConfigTool::new())
                         .tool(DeployServiceTool::new(project_path_buf.clone()))
