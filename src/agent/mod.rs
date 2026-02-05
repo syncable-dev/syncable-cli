@@ -754,6 +754,7 @@ pub async fn run_interactive(
                         .tool(OpenProviderSettingsTool::new())
                         .tool(CheckProviderConnectionTool::new())
                         .tool(ListDeploymentCapabilitiesTool::new())
+                        .tool(ListHetznerAvailabilityTool::new())
                         // Deployment tools for service management
                         .tool(CreateDeploymentConfigTool::new())
                         .tool(DeployServiceTool::new(project_path_buf.clone()))
@@ -871,6 +872,7 @@ pub async fn run_interactive(
                         .tool(OpenProviderSettingsTool::new())
                         .tool(CheckProviderConnectionTool::new())
                         .tool(ListDeploymentCapabilitiesTool::new())
+                        .tool(ListHetznerAvailabilityTool::new())
                         // Deployment tools for service management
                         .tool(CreateDeploymentConfigTool::new())
                         .tool(DeployServiceTool::new(project_path_buf.clone()))
@@ -979,6 +981,7 @@ pub async fn run_interactive(
                         .tool(OpenProviderSettingsTool::new())
                         .tool(CheckProviderConnectionTool::new())
                         .tool(ListDeploymentCapabilitiesTool::new())
+                        .tool(ListHetznerAvailabilityTool::new())
                         // Deployment tools for service management
                         .tool(CreateDeploymentConfigTool::new())
                         .tool(DeployServiceTool::new(project_path_buf.clone()))
@@ -2473,6 +2476,7 @@ pub async fn run_query(
                         .tool(OpenProviderSettingsTool::new())
                         .tool(CheckProviderConnectionTool::new())
                         .tool(ListDeploymentCapabilitiesTool::new())
+                        .tool(ListHetznerAvailabilityTool::new())
                         // Deployment tools for service management
                         .tool(CreateDeploymentConfigTool::new())
                         .tool(DeployServiceTool::new(project_path_buf.clone()))
@@ -2558,6 +2562,7 @@ pub async fn run_query(
                         .tool(OpenProviderSettingsTool::new())
                         .tool(CheckProviderConnectionTool::new())
                         .tool(ListDeploymentCapabilitiesTool::new())
+                        .tool(ListHetznerAvailabilityTool::new())
                         // Deployment tools for service management
                         .tool(CreateDeploymentConfigTool::new())
                         .tool(DeployServiceTool::new(project_path_buf.clone()))
@@ -2632,6 +2637,7 @@ pub async fn run_query(
                         .tool(OpenProviderSettingsTool::new())
                         .tool(CheckProviderConnectionTool::new())
                         .tool(ListDeploymentCapabilitiesTool::new())
+                        .tool(ListHetznerAvailabilityTool::new())
                         // Deployment tools for service management
                         .tool(CreateDeploymentConfigTool::new())
                         .tool(DeployServiceTool::new(project_path_buf.clone()))

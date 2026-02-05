@@ -475,6 +475,7 @@ fn build_alternatives(selected_provider: &CloudProvider, available_providers: &[
         .collect();
 
     // Build machine type options for selected provider
+    // For Hetzner, returns empty - agent must use list_hetzner_availability tool
     let machine_types: Vec<MachineOption> = get_machine_types_for_provider(selected_provider)
         .iter()
         .map(|m| MachineOption {
@@ -486,6 +487,7 @@ fn build_alternatives(selected_provider: &CloudProvider, available_providers: &[
         .collect();
 
     // Build region options for selected provider
+    // For Hetzner, returns empty - agent must use list_hetzner_availability tool
     let regions: Vec<RegionOption> = get_regions_for_provider(selected_provider)
         .iter()
         .map(|r| RegionOption {
