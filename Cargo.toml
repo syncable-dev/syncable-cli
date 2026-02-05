@@ -77,7 +77,7 @@ bstr = "1.9"                      # Byte string utilities
 simdutf8 = "0.1"                  # SIMD UTF-8 validation
 
 # Telemetry dependencies
-uuid = { version = "1.0", features = ["v4"] }
+uuid = { version = "1.20", features = ["v4"] }
 rand = "0.9"
 futures-util = "0.3"
 
