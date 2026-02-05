@@ -20,8 +20,15 @@ use crate::platform::PlatformSession;
 use crate::wizard::{
     RecommendationInput, recommend_deployment, get_provider_deployment_statuses,
     get_hetzner_regions_dynamic, get_hetzner_server_types_dynamic, HetznerFetchResult,
+    DynamicCloudRegion, DynamicMachineType,
 };
 use std::process::Command;
+
+/// Cached Hetzner availability data for smart recommendations
+struct HetznerAvailabilityData {
+    regions: Vec<DynamicCloudRegion>,
+    server_types: Vec<DynamicMachineType>,
+}
 
 /// Arguments for the deploy service tool
 #[derive(Debug, Deserialize)]
@@ -343,68 +350,30 @@ User: "deploy this service"
 
         let recommendation = recommend_deployment(recommendation_input);
 
-        // 6.5. For Hetzner deployments, verify we can fetch dynamic availability
+        // 6.5. For Hetzner deployments, fetch real-time availability and update recommendations
         // We require real-time data - no static fallback allowed
         let final_provider_for_check = args.provider
             .as_ref()
             .and_then(|p| CloudProvider::from_str(p).ok())
             .unwrap_or(recommendation.provider.clone());
 
+        // Store Hetzner availability data for smart recommendations
+        let mut hetzner_availability: Option<HetznerAvailabilityData> = None;
+
         if final_provider_for_check == CloudProvider::Hetzner {
-            // Try to fetch Hetzner availability to validate credentials
-            match get_hetzner_regions_dynamic(&client, &project_id).await {
-                HetznerFetchResult::Success(regions) => {
-                    if regions.is_empty() {
-                        return Ok(format_error_for_llm(
-                            "deploy_service",
-                            ErrorCategory::ResourceUnavailable,
-                            "No Hetzner regions available",
-                            Some(vec![
-                                "Check your Hetzner account status",
-                                "Use list_hetzner_availability to see current availability",
-                            ]),
-                        ));
-                    }
-                    // Also verify server types are available
-                    match get_hetzner_server_types_dynamic(&client, &project_id, args.region.as_deref()).await {
-                        HetznerFetchResult::Success(types) if types.is_empty() => {
-                            return Ok(format_error_for_llm(
-                                "deploy_service",
-                                ErrorCategory::ResourceUnavailable,
-                                "No Hetzner server types available",
-                                Some(vec![
-                                    "Check your Hetzner account status",
-                                    "Use list_hetzner_availability to see current availability",
-                                ]),
-                            ));
-                        }
-                        HetznerFetchResult::NoCredentials => {
-                            return Ok(format_error_for_llm(
-                                "deploy_service",
-                                ErrorCategory::PermissionDenied,
-                                "Cannot recommend Hetzner deployment: Hetzner credentials not configured",
-                                Some(vec![
-                                    "Add your Hetzner API token in project settings",
-                                    "Use open_provider_settings to configure Hetzner",
-                                    "Or specify a different provider (e.g., provider='gcp')",
-                                    "Or manually provide: region and machine_type parameters",
-                                ]),
-                            ));
-                        }
-                        HetznerFetchResult::ApiError(err) => {
-                            return Ok(format_error_for_llm(
-                                "deploy_service",
-                                ErrorCategory::NetworkError,
-                                &format!("Cannot recommend Hetzner deployment: Failed to fetch availability - {}", err),
-                                Some(vec![
-                                    "Use list_hetzner_availability to check current status",
-                                    "Or manually provide: region and machine_type parameters",
-                                    "Or specify a different provider (e.g., provider='gcp')",
-                                ]),
-                            ));
-                        }
-                        _ => {} // Success with data - continue
-                    }
+            // Fetch real-time Hetzner regions and server types
+            let regions = match get_hetzner_regions_dynamic(&client, &project_id).await {
+                HetznerFetchResult::Success(r) if !r.is_empty() => r,
+                HetznerFetchResult::Success(_) => {
+                    return Ok(format_error_for_llm(
+                        "deploy_service",
+                        ErrorCategory::ResourceUnavailable,
+                        "No Hetzner regions available",
+                        Some(vec![
+                            "Check your Hetzner account status",
+                            "Use list_hetzner_availability to see current availability",
+                        ]),
+                    ));
                 }
                 HetznerFetchResult::NoCredentials => {
                     return Ok(format_error_for_llm(
@@ -415,7 +384,6 @@ User: "deploy this service"
                             "Add your Hetzner API token in project settings",
                             "Use open_provider_settings to configure Hetzner",
                             "Or specify a different provider (e.g., provider='gcp')",
-                            "Or manually provide configuration: region and machine_type parameters",
                         ]),
                     ));
                 }
@@ -426,12 +394,49 @@ User: "deploy this service"
                         &format!("Cannot recommend Hetzner deployment: Failed to fetch availability - {}", err),
                         Some(vec![
                             "Use list_hetzner_availability to check current status",
-                            "Or manually provide configuration: region and machine_type parameters",
                             "Or specify a different provider (e.g., provider='gcp')",
                         ]),
                     ));
                 }
-            }
+            };
+
+            // Fetch server types with optional location filter
+            let server_types = match get_hetzner_server_types_dynamic(&client, &project_id, args.region.as_deref()).await {
+                HetznerFetchResult::Success(s) if !s.is_empty() => s,
+                HetznerFetchResult::Success(_) => {
+                    return Ok(format_error_for_llm(
+                        "deploy_service",
+                        ErrorCategory::ResourceUnavailable,
+                        "No Hetzner server types available",
+                        Some(vec![
+                            "Check your Hetzner account status",
+                            "Use list_hetzner_availability to see current availability",
+                        ]),
+                    ));
+                }
+                HetznerFetchResult::NoCredentials => {
+                    return Ok(format_error_for_llm(
+                        "deploy_service",
+                        ErrorCategory::PermissionDenied,
+                        "Cannot recommend Hetzner deployment: Hetzner credentials not configured",
+                        Some(vec![
+                            "Add your Hetzner API token in project settings",
+                            "Use open_provider_settings to configure Hetzner",
+                        ]),
+                    ));
+                }
+                HetznerFetchResult::ApiError(err) => {
+                    return Ok(format_error_for_llm(
+                        "deploy_service",
+                        ErrorCategory::NetworkError,
+                        &format!("Cannot recommend Hetzner deployment: Failed to fetch server types - {}", err),
+                        Some(vec!["Use list_hetzner_availability to check current status"]),
+                    ));
+                }
+            };
+
+            // Store for later use in recommendations
+            hetzner_availability = Some(HetznerAvailabilityData { regions, server_types });
         }
 
         // 7. Extract analysis summary
@@ -480,7 +485,7 @@ User: "deploy this service"
                     vec![
                         "To deploy with these settings: call deploy_service with preview_only=false".to_string(),
                         "To customize: specify provider, machine_type, region, or port parameters".to_string(),
-                        "To see more options: check the alternatives section above".to_string(),
+                        "To see more options: check the hetzner_availability section for current pricing".to_string(),
                     ]
                 )
             };
@@ -491,6 +496,128 @@ User: "deploy this service"
             } else {
                 None
             };
+
+            // For Hetzner, use real-time availability to select best options
+            let (final_machine_type, final_region, machine_reasoning, region_reasoning, price_monthly) =
+                if let Some(ref hetzner) = hetzner_availability {
+                    // SMART SELECTION: Find the best region + machine combination
+                    // Strategy: Find cheapest machine with 4GB+ that's actually available somewhere
+
+                    // First, find all server types that are actually available (non-empty available_in)
+                    let available_types: Vec<_> = hetzner.server_types.iter()
+                        .filter(|st| !st.available_in.is_empty())
+                        .collect();
+
+                    // If user specified a region, check if anything is available there
+                    let user_region = args.region.as_deref();
+
+                    // Find best machine: cheapest with 4GB+ that's available
+                    let best_machine_with_region = if let Some(region) = user_region {
+                        // User specified region - find best machine for that region
+                        available_types.iter()
+                            .filter(|st| st.memory_gb >= 4.0 && st.available_in.contains(&region.to_string()))
+                            .min_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap())
+                            .map(|st| (*st, region.to_string()))
+                            .or_else(|| {
+                                // No 4GB+ available in that region, try any machine
+                                available_types.iter()
+                                    .filter(|st| st.available_in.contains(&region.to_string()))
+                                    .min_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap())
+                                    .map(|st| (*st, region.to_string()))
+                            })
+                    } else {
+                        // No region specified - find globally cheapest 4GB+ machine and use its best region
+                        available_types.iter()
+                            .filter(|st| st.memory_gb >= 4.0)
+                            .min_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap())
+                            .map(|st| {
+                                // Pick the first available region for this machine
+                                let region = st.available_in.first()
+                                    .cloned()
+                                    .unwrap_or_else(|| "nbg1".to_string());
+                                (*st, region)
+                            })
+                            .or_else(|| {
+                                // No 4GB+ available anywhere, find any cheapest machine
+                                available_types.iter()
+                                    .min_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap())
+                                    .map(|st| {
+                                        let region = st.available_in.first()
+                                            .cloned()
+                                            .unwrap_or_else(|| "nbg1".to_string());
+                                        (*st, region)
+                                    })
+                            })
+                    };
+
+                    if let Some((machine, region_id)) = best_machine_with_region {
+                        let region_name = hetzner.regions.iter()
+                            .find(|r| r.id == region_id)
+                            .map(|r| format!("{}, {}", r.name, r.location))
+                            .unwrap_or_else(|| region_id.clone());
+
+                        let available_count = hetzner.regions.iter()
+                            .find(|r| r.id == region_id)
+                            .map(|r| r.available_server_types.len())
+                            .unwrap_or(0);
+
+                        (
+                            args.machine_type.clone().unwrap_or_else(|| machine.id.clone()),
+                            region_id.clone(),
+                            format!(
+                                "Selected {} ({} vCPU, {:.0} GB RAM) - cheapest AVAILABLE option at €{:.2}/mo",
+                                machine.id, machine.cores, machine.memory_gb, machine.price_monthly
+                            ),
+                            format!("Selected {} ({}) - {} server types available", region_id, region_name, available_count),
+                            Some(machine.price_monthly),
+                        )
+                    } else {
+                        // No server types available anywhere - this shouldn't happen if we passed validation
+                        (
+                            args.machine_type.clone().unwrap_or_else(|| recommendation.machine_type.clone()),
+                            args.region.clone().unwrap_or_else(|| recommendation.region.clone()),
+                            "WARNING: No server types currently available - using fallback".to_string(),
+                            "Using fallback region".to_string(),
+                            None,
+                        )
+                    }
+                } else {
+                    // Non-Hetzner provider - use static recommendation
+                    (
+                        args.machine_type.clone().unwrap_or_else(|| recommendation.machine_type.clone()),
+                        args.region.clone().unwrap_or_else(|| recommendation.region.clone()),
+                        recommendation.machine_reasoning.clone(),
+                        recommendation.region_reasoning.clone(),
+                        None,
+                    )
+                };
+
+            // Build availability info for response
+            let hetzner_availability_info = hetzner_availability.as_ref().map(|h| {
+                json!({
+                    "regions": h.regions.iter().map(|r| json!({
+                        "id": r.id,
+                        "name": r.name,
+                        "country": r.location,
+                        "available_server_types_count": r.available_server_types.len(),
+                    })).collect::<Vec<_>>(),
+                    "server_types": h.server_types.iter().take(10).map(|st| json!({
+                        "id": st.id,
+                        "cores": st.cores,
+                        "memory_gb": st.memory_gb,
+                        "price_monthly_eur": st.price_monthly,
+                        "available_in": st.available_in,
+                    })).collect::<Vec<_>>(),
+                    "cheapest_4gb": h.server_types.iter()
+                        .filter(|st| st.memory_gb >= 4.0)
+                        .min_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap())
+                        .map(|st| json!({
+                            "id": st.id,
+                            "specs": format!("{} vCPU, {:.0} GB RAM", st.cores, st.memory_gb),
+                            "price_monthly_eur": st.price_monthly,
+                        })),
+                })
+            });
 
             let response = json!({
                 "status": "recommendation",
@@ -526,10 +653,11 @@ User: "deploy this service"
                     "provider_reasoning": recommendation.provider_reasoning,
                     "target": recommendation.target.as_str(),
                     "target_reasoning": recommendation.target_reasoning,
-                    "machine_type": recommendation.machine_type,
-                    "machine_reasoning": recommendation.machine_reasoning,
-                    "region": recommendation.region,
-                    "region_reasoning": recommendation.region_reasoning,
+                    "machine_type": final_machine_type,
+                    "machine_reasoning": machine_reasoning,
+                    "region": final_region,
+                    "region_reasoning": region_reasoning,
+                    "price_monthly_eur": price_monthly,
                     "port": recommendation.port,
                     "health_check_path": recommendation.health_check_path,
                     "is_public": args.is_public,
@@ -539,23 +667,45 @@ User: "deploy this service"
                         "Service will be INTERNAL only (not accessible from internet)"
                     },
                     "confidence": recommendation.confidence,
+                    "availability_source": if hetzner_availability.is_some() { "real-time" } else { "static" },
                 },
+                "hetzner_availability": hetzner_availability_info,
                 "alternatives": {
                     "providers": recommendation.alternatives.providers.iter().map(|p| json!({
                         "provider": p.provider.as_str(),
                         "available": p.available,
                         "reason_if_unavailable": p.reason_if_unavailable,
                     })).collect::<Vec<_>>(),
-                    "machine_types": recommendation.alternatives.machine_types.iter().map(|m| json!({
-                        "machine_type": m.machine_type,
-                        "vcpu": m.vcpu,
-                        "memory_gb": m.memory_gb,
-                        "description": m.description,
-                    })).collect::<Vec<_>>(),
-                    "regions": recommendation.alternatives.regions.iter().map(|r| json!({
-                        "region": r.region,
-                        "display_name": r.display_name,
-                    })).collect::<Vec<_>>(),
+                    "machine_types": if hetzner_availability.is_some() {
+                        // Use real-time data for Hetzner
+                        hetzner_availability.as_ref().unwrap().server_types.iter().take(6).map(|st| json!({
+                            "machine_type": st.id,
+                            "vcpu": st.cores,
+                            "memory_gb": st.memory_gb,
+                            "price_monthly_eur": st.price_monthly,
+                            "available_in": st.available_in,
+                        })).collect::<Vec<_>>()
+                    } else {
+                        recommendation.alternatives.machine_types.iter().map(|m| json!({
+                            "machine_type": m.machine_type,
+                            "vcpu": m.vcpu,
+                            "memory_gb": m.memory_gb,
+                            "description": m.description,
+                        })).collect::<Vec<_>>()
+                    },
+                    "regions": if hetzner_availability.is_some() {
+                        // Use real-time data for Hetzner
+                        hetzner_availability.as_ref().unwrap().regions.iter().map(|r| json!({
+                            "region": r.id,
+                            "display_name": format!("{}, {}", r.name, r.location),
+                            "available_server_types_count": r.available_server_types.len(),
+                        })).collect::<Vec<_>>()
+                    } else {
+                        recommendation.alternatives.regions.iter().map(|r| json!({
+                            "region": r.region,
+                            "display_name": r.display_name,
+                        })).collect::<Vec<_>>()
+                    },
                 },
                 "service_name": service_name,
                 "next_steps": next_steps,
@@ -567,13 +717,15 @@ User: "deploy this service"
                         if is_production { " ⚠️  (PRODUCTION)" } else { "" }
                     )
                 } else {
+                    let price_info = price_monthly.map(|p| format!(" (€{:.2}/mo)", p)).unwrap_or_default();
                     format!(
-                        "Deploy NEW service '{}' to {} ({}) with {} in {} on {} environment?{}",
+                        "Deploy NEW service '{}' to {} ({}) with {}{} in {} on {} environment?{}",
                         service_name,
                         recommendation.provider.display_name(),
                         recommendation.target.display_name(),
-                        recommendation.machine_type,
-                        recommendation.region,
+                        final_machine_type,
+                        price_info,
+                        final_region,
                         resolved_env_name,
                         if is_production { " ⚠️  (PRODUCTION)" } else { "" }
                     )
@@ -630,13 +782,73 @@ User: "deploy this service"
             .and_then(|p| CloudProvider::from_str(p).ok())
             .unwrap_or(recommendation.provider.clone());
 
-        let final_machine = args.machine_type
-            .clone()
-            .unwrap_or(recommendation.machine_type.clone());
+        // For Hetzner, use real-time availability data to select best options
+        let (final_machine, final_region) = if let Some(ref hetzner) = hetzner_availability {
+            // SMART SELECTION: Same logic as preview
 
-        let final_region = args.region
-            .clone()
-            .unwrap_or(recommendation.region.clone());
+            // Find all server types that are actually available (non-empty available_in)
+            let available_types: Vec<_> = hetzner.server_types.iter()
+                .filter(|st| !st.available_in.is_empty())
+                .collect();
+
+            let user_region = args.region.as_deref();
+
+            // Find best machine: cheapest with 4GB+ that's available
+            let best_machine_with_region = if let Some(region) = user_region {
+                // User specified region - find best machine for that region
+                available_types.iter()
+                    .filter(|st| st.memory_gb >= 4.0 && st.available_in.contains(&region.to_string()))
+                    .min_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap())
+                    .map(|st| (st.id.clone(), region.to_string()))
+                    .or_else(|| {
+                        available_types.iter()
+                            .filter(|st| st.available_in.contains(&region.to_string()))
+                            .min_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap())
+                            .map(|st| (st.id.clone(), region.to_string()))
+                    })
+            } else {
+                // No region specified - find globally cheapest 4GB+ machine
+                available_types.iter()
+                    .filter(|st| st.memory_gb >= 4.0)
+                    .min_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap())
+                    .map(|st| {
+                        let region = st.available_in.first()
+                            .cloned()
+                            .unwrap_or_else(|| "nbg1".to_string());
+                        (st.id.clone(), region)
+                    })
+                    .or_else(|| {
+                        available_types.iter()
+                            .min_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap())
+                            .map(|st| {
+                                let region = st.available_in.first()
+                                    .cloned()
+                                    .unwrap_or_else(|| "nbg1".to_string());
+                                (st.id.clone(), region)
+                            })
+                    })
+            };
+
+            if let Some((machine, region)) = best_machine_with_region {
+                (
+                    args.machine_type.clone().unwrap_or(machine),
+                    args.region.clone().unwrap_or(region),
+                )
+            } else {
+                // Fallback to static defaults
+                (
+                    args.machine_type.clone().unwrap_or_else(|| recommendation.machine_type.clone()),
+                    args.region.clone().unwrap_or_else(|| recommendation.region.clone()),
+                )
+            }
+        } else {
+            // Non-Hetzner or no availability data - use static defaults
+            let machine = args.machine_type.clone()
+                .unwrap_or_else(|| recommendation.machine_type.clone());
+            let region = args.region.clone()
+                .unwrap_or_else(|| recommendation.region.clone());
+            (machine, region)
+        };
 
         let final_port = args.port
             .unwrap_or(recommendation.port);

@@ -1224,8 +1224,8 @@ pub struct InitializeGitOpsResponse {
 // =============================================================================
 
 /// Hetzner location with geographic metadata (from Hetzner API)
+/// NOTE: Backend returns snake_case for this type (network_zone), not camelCase
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct HetznerLocation {
     /// Location ID (e.g., 1)
     pub id: i64,
@@ -1312,8 +1312,8 @@ pub struct ServerTypesResponse {
 // =============================================================================
 
 /// Simple Hetzner location (from getHetznerOptions endpoint)
+/// NOTE: Backend returns snake_case for network_zone field
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct HetznerSimpleLocation {
     pub id: i64,
     pub name: String,
