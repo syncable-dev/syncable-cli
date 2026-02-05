@@ -106,6 +106,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.35.0](https://github.com/syncable-dev/syncable-cli/compare/v0.34.1...v0.35.0) - 2026-02-05
+
+### Added
+
+- vendor ag-ui-core and ag-ui-server crates
+- new availability feature for hetzner deployment through agent. automatically searching available regions/machine types dynamically
+- *(agent)* add list_hetzner_availability tool, require dynamic data for Hetzner
+- early ag-ui implementation with test along
+- *(hetzner)* remove hardcoded data, require dynamic API fetching
+- *(wizard)* integrate dynamic Hetzner availability into deployment wizard
+- *(hetzner)* add dynamic availability API for smart resource selection
+- *(23-01)* wire CopilotKit provider and navigation
+- *(23-01)* create agent chat route with CopilotKit
+- *(23-01)* create CopilotKit provider wrapper
+- *(22-01)* wire processor to server startup
+- *(22-01)* implement message processing loop
+- *(22-01)* create AgentProcessor module with session management
+- *(21-01)* add POST /message endpoint
+- *(21-01)* handle WebSocket incoming messages
+- *(21-01)* add message channel to ServerState
+- *(19-01)* add container deployment configurations
+- *(18-01)* add agent command for headless AG-UI server mode
+- *(17-01)* emit step/thinking events during agent processing
+- *(16-01)* add interrupt methods to EventBridge for human-in-the-loop
+- *(15-01)* add AG-UI state synchronization
+- *(14-01)* wire LLM response handling to AG-UI EventBridge
+- *(13-01)* connect ToolDisplayHook to EventBridge for tool events
+- *(12-01)* add --ag-ui flag for frontend connectivity
+
+### Fixed
+
+- *(hetzner)* use availability API for real-time capacity data
+- *(hetzner)* use /api/v1/cloud-runner/hetzner/options endpoint
+- *(23-01)* use CopilotChat component instead of headless API
+
+### Other
+
+- Merge pull request #287 from syncable-dev/develop
+- Merge branch 'develop' of github.com:syncable-dev/syncable-cli into develop
+- *(23-01)* add CopilotKit dependencies
+- *(20-01)* add AG-UI server integration tests
+
 ## [0.34.1](https://github.com/syncable-dev/syncable-cli/releases/tag/v0.34.1) - 2026-01-22
 
 ### Other
