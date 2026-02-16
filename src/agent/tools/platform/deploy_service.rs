@@ -5,22 +5,27 @@
 
 use rig::completion::ToolDefinition;
 use rig::tool::Tool;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use crate::agent::tools::ExecutionContext;
 use crate::agent::tools::error::{ErrorCategory, format_error_for_llm};
 use crate::analyzer::{AnalysisConfig, TechnologyCategory, analyze_project_with_config};
 use crate::platform::api::types::{
-    CloudProvider, CreateDeploymentConfigRequest, ProjectRepository, build_cloud_runner_config,
+    CloudProvider, CloudRunnerConfigInput, CreateDeploymentConfigRequest, DeploymentSecretInput,
+    ProjectRepository, build_cloud_runner_config_v2,
 };
+
+use super::set_secrets::{SecretPromptResult, default_true, prompt_secret_value};
 use crate::platform::api::{PlatformApiClient, PlatformApiError, TriggerDeploymentRequest};
 use crate::platform::PlatformSession;
 use crate::wizard::{
     RecommendationInput, recommend_deployment, get_provider_deployment_statuses,
     get_hetzner_regions_dynamic, get_hetzner_server_types_dynamic, HetznerFetchResult,
-    DynamicCloudRegion, DynamicMachineType,
+    DynamicCloudRegion, DynamicMachineType, discover_env_files, parse_env_file,
+    get_available_endpoints, filter_endpoints_for_provider, match_env_vars_to_services,
 };
 use std::process::Command;
 
@@ -30,12 +35,24 @@ struct HetznerAvailabilityData {
     server_types: Vec<DynamicMachineType>,
 }
 
+/// A single secret/env var key input for the deploy tool
+#[derive(Debug, Deserialize)]
+pub struct SecretKeyInput {
+    /// Environment variable name
+    pub key: String,
+    /// Value to set. OMIT for secrets — user will be prompted in terminal.
+    pub value: Option<String>,
+    /// Whether this is a secret (default: true for safety)
+    #[serde(default = "default_true")]
+    pub is_secret: bool,
+}
+
 /// Arguments for the deploy service tool
 #[derive(Debug, Deserialize)]
 pub struct DeployServiceArgs {
     /// Optional: specific subdirectory/service to deploy (for monorepos)
     pub path: Option<String>,
-    /// Optional: override recommended provider (gcp, hetzner)
+    /// Optional: override recommended provider (gcp, hetzner, azure)
     pub provider: Option<String>,
     /// Optional: override machine type selection
     pub machine_type: Option<String>,
@@ -47,10 +64,22 @@ pub struct DeployServiceArgs {
     /// Internal services can only be accessed within the cluster/network
     #[serde(default)]
     pub is_public: bool,
+    /// Optional: CPU allocation (for GCP Cloud Run / Azure ACA)
+    pub cpu: Option<String>,
+    /// Optional: Memory allocation (for GCP Cloud Run / Azure ACA)
+    pub memory: Option<String>,
+    /// Optional: min instances/replicas
+    pub min_instances: Option<i32>,
+    /// Optional: max instances/replicas
+    pub max_instances: Option<i32>,
     /// If true (default), show recommendation but don't deploy yet
     /// If false with settings, deploy immediately
     #[serde(default = "default_preview")]
     pub preview_only: bool,
+    /// Optional: environment variable keys to set during deployment.
+    /// For secrets (is_secret=true), values are collected via terminal prompt.
+    /// For non-secrets, include the value directly.
+    pub secret_keys: Option<Vec<SecretKeyInput>>,
 }
 
 fn default_preview() -> bool {
@@ -70,15 +99,27 @@ pub struct DeployServiceError(String);
 /// 3. Generates smart recommendations with reasoning
 /// 4. Shows a preview for user confirmation
 /// 5. Creates deployment config and triggers deployment
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct DeployServiceTool {
     project_path: PathBuf,
+    execution_context: ExecutionContext,
 }
 
 impl DeployServiceTool {
-    /// Create a new DeployServiceTool
+    /// Create a new DeployServiceTool (defaults to InteractiveCli)
     pub fn new(project_path: PathBuf) -> Self {
-        Self { project_path }
+        Self {
+            project_path,
+            execution_context: ExecutionContext::InteractiveCli,
+        }
+    }
+
+    /// Create with explicit execution context
+    pub fn with_context(project_path: PathBuf, ctx: ExecutionContext) -> Self {
+        Self {
+            project_path,
+            execution_context: ctx,
+        }
     }
 }
 
@@ -109,7 +150,7 @@ Uses provided overrides or recommendation defaults to deploy immediately.
 
 **Parameters:**
 - path: Optional subdirectory for monorepo services
-- provider: Override recommendation (gcp, hetzner)
+- provider: Override recommendation (gcp, hetzner, azure)
 - machine_type: Override machine selection (e.g., cx22, e2-small)
 - region: Override region selection (e.g., nbg1, us-central1)
 - port: Override detected port
@@ -146,6 +187,28 @@ User: "deploy this service"
 - Only deploy after user explicitly confirms the final settings with "yes", "deploy", "confirm"
 - A change request is NOT a deployment confirmation
 
+**Multiple cloud providers:**
+- The response includes connected_providers listing ALL connected providers (e.g. Hetzner AND Azure)
+- ALWAYS mention all connected providers to the user, not just the recommended one
+- The user can override the provider with the provider parameter
+- If deploying related services, consider whether they should be on the same provider for private networking
+
+**Deployed service endpoints:**
+- The response includes deployed_service_endpoints showing services already running in the project
+- Services may have public URLs (reachable from anywhere) or private IPs (only reachable from the same cloud provider network)
+- endpoint_suggestions maps detected env vars to deployed services (e.g. SENTIMENT_SERVICE_URL -> sentiment-analysis)
+- Private endpoints are pre-filtered to only show services on the same provider network
+- ALWAYS mention available endpoints when deploying services that have env vars matching deployed services
+
+**Environment variables (secret_keys) and .env files:**
+- The preview response includes parsed_env_files: discovered .env files with their parsed keys/values
+- If .env files are found, ALWAYS ask the user: "I found a .env file with N variables. Should I inject these into the deployment?"
+- For non-secret vars from .env files, pass them as secret_keys with is_secret=false and include the value
+- For secret vars (API keys, tokens, passwords), pass them as secret_keys with is_secret=true and omit the value — the user is prompted securely in the terminal
+- Secret values from .env files are NEVER included in parsed_env_files or this conversation
+- If no .env files found but detected_env_vars exist, mention those and ask user how to provide them
+- NEVER ask the user to type secret values in chat
+
 **Prerequisites:**
 - User must be authenticated (sync-ctl auth login)
 - A project must be selected (use select_project first)
@@ -160,7 +223,7 @@ User: "deploy this service"
                     },
                     "provider": {
                         "type": "string",
-                        "enum": ["gcp", "hetzner"],
+                        "enum": ["gcp", "hetzner", "azure"],
                         "description": "Override: cloud provider"
                     },
                     "machine_type": {
@@ -182,6 +245,29 @@ User: "deploy this service"
                     "preview_only": {
                         "type": "boolean",
                         "description": "If true (default), show recommendation only. If false, deploy."
+                    },
+                    "secret_keys": {
+                        "type": "array",
+                        "description": "Env vars to include in deployment. For secrets, omit value \u{2014} user is prompted in terminal.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "key": {
+                                    "type": "string",
+                                    "description": "Environment variable name"
+                                },
+                                "value": {
+                                    "type": "string",
+                                    "description": "Omit for secrets \u{2014} user will be prompted securely in terminal."
+                                },
+                                "is_secret": {
+                                    "type": "boolean",
+                                    "description": "Whether this is a secret (default: true). Secrets are prompted in terminal.",
+                                    "default": true
+                                }
+                            },
+                            "required": ["key"]
+                        }
                     }
                 }
             }),
@@ -331,7 +417,7 @@ User: "deploy this service"
                 ErrorCategory::ResourceUnavailable,
                 "No cloud providers connected",
                 Some(vec![
-                    "Connect GCP or Hetzner in platform settings",
+                    "Connect a cloud provider (GCP, Hetzner, or Azure) in platform settings",
                     "Use open_provider_settings to configure a provider",
                 ]),
             ));
@@ -485,6 +571,7 @@ User: "deploy this service"
                     vec![
                         "To deploy with these settings: call deploy_service with preview_only=false".to_string(),
                         "To customize: specify provider, machine_type, region, or port parameters".to_string(),
+                        "Check parsed_env_files — if .env files were found, ask user whether to inject them as secret_keys".to_string(),
                         "To see more options: check the hetzner_availability section for current pricing".to_string(),
                     ]
                 )
@@ -619,6 +706,67 @@ User: "deploy this service"
                 })
             });
 
+            // Discover .env files and parse their contents for agent surfacing
+            let discovered_env_files_raw = discover_env_files(&analysis_path);
+            let discovered_env_file_paths: Vec<String> = discovered_env_files_raw
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect();
+
+            // Parse each .env file so the LLM can present keys to the user
+            let parsed_env_files: Vec<serde_json::Value> = discovered_env_files_raw
+                .iter()
+                .filter_map(|rel_path| {
+                    let abs_path = analysis_path.join(rel_path);
+                    match parse_env_file(&abs_path) {
+                        Ok(entries) if !entries.is_empty() => Some(json!({
+                            "file": rel_path.display().to_string(),
+                            "variable_count": entries.len(),
+                            "variables": entries.iter().map(|e| json!({
+                                "key": e.key,
+                                "is_secret": e.is_secret,
+                                // Only include values for non-secret vars — secrets are
+                                // never exposed to the LLM conversation.
+                                "value": if e.is_secret { None } else { Some(&e.value) },
+                            })).collect::<Vec<_>>(),
+                        })),
+                        Ok(_) => None, // empty file
+                        Err(e) => {
+                            tracing::debug!("Could not parse env file {:?}: {}", rel_path, e);
+                            None
+                        }
+                    }
+                })
+                .collect();
+
+            // Fetch deployed services and compute endpoint suggestions
+            let deployed_endpoints = match client.list_deployments(&project_id, Some(50)).await {
+                Ok(paginated) => get_available_endpoints(&paginated.data),
+                Err(e) => {
+                    tracing::debug!("Could not fetch deployments for endpoint matching: {}", e);
+                    Vec::new()
+                }
+            };
+            let deployed_endpoints: Vec<_> = deployed_endpoints
+                .into_iter()
+                .filter(|ep| ep.service_name != service_name)
+                .collect();
+            // Only show private endpoints from the same cloud provider — private
+            // IPs are not reachable across different provider networks.
+            let deployed_endpoints = filter_endpoints_for_provider(
+                deployed_endpoints,
+                final_provider_for_check.as_str(),
+            );
+
+            let detected_env_var_names: Vec<String> = analysis
+                .environment_variables
+                .iter()
+                .map(|e| e.name.clone())
+                .collect();
+
+            let endpoint_suggestions =
+                match_env_vars_to_services(&detected_env_var_names, &deployed_endpoints);
+
             let response = json!({
                 "status": "recommendation",
                 "deployment_mode": deployment_mode,
@@ -628,6 +776,17 @@ User: "deploy this service"
                     "name": resolved_env_name,
                     "is_production": is_production,
                 },
+                "connected_providers": capabilities.iter()
+                    .filter(|s| s.provider.is_available() && s.is_connected)
+                    .map(|s| json!({
+                        "provider": s.provider.as_str(),
+                        "display_name": s.provider.display_name(),
+                        "cloud_runner_available": s.cloud_runner_available,
+                        "clusters": s.clusters.len(),
+                        "registries": s.registries.len(),
+                        "summary": s.summary,
+                    }))
+                    .collect::<Vec<_>>(),
                 "production_warning": production_warning,
                 "existing_config": existing_config.map(|c| json!({
                     "id": c.id,
@@ -647,6 +806,12 @@ User: "deploy this service"
                     "health_endpoint": recommendation.health_check_path,
                     "has_dockerfile": has_dockerfile,
                     "has_kubernetes": has_k8s,
+                    "detected_env_vars": analysis.environment_variables.iter().map(|e| json!({
+                        "name": e.name,
+                        "required": e.required,
+                        "has_default": e.default_value.is_some(),
+                        "description": e.description,
+                    })).collect::<Vec<_>>(),
                 },
                 "recommendation": {
                     "provider": recommendation.provider.as_str(),
@@ -708,6 +873,22 @@ User: "deploy this service"
                     },
                 },
                 "service_name": service_name,
+                "discovered_env_files": discovered_env_file_paths,
+                "parsed_env_files": parsed_env_files,
+                "deployed_service_endpoints": deployed_endpoints.iter().map(|ep| json!({
+                    "service_name": ep.service_name,
+                    "url": ep.url,
+                    "is_private": ep.is_private,
+                    "status": ep.status,
+                })).collect::<Vec<_>>(),
+                "endpoint_suggestions": endpoint_suggestions.iter().map(|s| json!({
+                    "env_var": s.env_var_name,
+                    "service_name": s.service.service_name,
+                    "url": s.service.url,
+                    "is_private": s.service.is_private,
+                    "confidence": format!("{:?}", s.confidence),
+                    "reason": s.reason,
+                })).collect::<Vec<_>>(),
                 "next_steps": next_steps,
                 "confirmation_prompt": if existing_config.is_some() {
                     format!(
@@ -975,13 +1156,81 @@ User: "deploy this service"
             args.path
         );
 
-        let cloud_runner_config = build_cloud_runner_config(
-            &final_provider,
-            &final_region,
-            &final_machine,
-            args.is_public,
-            recommendation.health_check_path.as_deref(),
-        );
+        // Fetch provider_account_id from credentials for GCP/Azure
+        let mut gcp_project_id = None;
+        let mut subscription_id = None;
+        if matches!(final_provider, CloudProvider::Gcp | CloudProvider::Azure) {
+            if let Ok(Some(cred)) = client.check_provider_connection(&final_provider, &project_id).await {
+                match final_provider {
+                    CloudProvider::Gcp => gcp_project_id = cred.provider_account_id,
+                    CloudProvider::Azure => subscription_id = cred.provider_account_id,
+                    _ => {}
+                }
+            }
+        }
+
+        // Determine CPU/memory from args or recommendation
+        let final_cpu = args.cpu.clone()
+            .or_else(|| recommendation.cpu.clone());
+        let final_memory = args.memory.clone()
+            .or_else(|| recommendation.memory.clone());
+
+        let config_input = CloudRunnerConfigInput {
+            provider: Some(final_provider.clone()),
+            region: Some(final_region.clone()),
+            server_type: if final_provider == CloudProvider::Hetzner { Some(final_machine.clone()) } else { None },
+            gcp_project_id,
+            cpu: final_cpu.clone(),
+            memory: final_memory.clone(),
+            min_instances: args.min_instances,
+            max_instances: args.max_instances,
+            allow_unauthenticated: Some(args.is_public),
+            subscription_id,
+            is_public: Some(args.is_public),
+            health_check_path: recommendation.health_check_path.clone(),
+            ..Default::default()
+        };
+        let cloud_runner_config = build_cloud_runner_config_v2(&config_input);
+
+        // Resolve secrets if provided
+        let secrets = if let Some(ref keys) = args.secret_keys {
+            let mut resolved = Vec::new();
+            for sk in keys {
+                let value = match &sk.value {
+                    Some(v) => v.clone(),
+                    None if self.execution_context.has_terminal() => {
+                        match prompt_secret_value(&sk.key) {
+                            SecretPromptResult::Value(v) => v,
+                            SecretPromptResult::Skipped => continue,
+                            SecretPromptResult::Cancelled => {
+                                return Ok(format_error_for_llm(
+                                    "deploy_service",
+                                    ErrorCategory::ValidationFailed,
+                                    "Secret entry cancelled by user",
+                                    Some(vec!["The user cancelled secret input. Try again when ready."]),
+                                ));
+                            }
+                        }
+                    }
+                    None => continue, // server mode, skip secrets without values
+                };
+                resolved.push(DeploymentSecretInput {
+                    key: sk.key.clone(),
+                    value,
+                    is_secret: sk.is_secret,
+                });
+            }
+            if resolved.is_empty() { None } else { Some(resolved) }
+        } else {
+            None
+        };
+
+        // SECURITY: Pre-compute response info (keys only, no values) before moving secrets
+        let secrets_set_info = secrets.as_ref().map(|s| {
+            s.iter()
+                .map(|si| json!({"key": si.key, "is_secret": si.is_secret}))
+                .collect::<Vec<_>>()
+        });
 
         let config_request = CreateDeploymentConfigRequest {
             project_id: project_id.clone(),
@@ -1002,6 +1251,7 @@ User: "deploy this service"
             auto_deploy_enabled: true,
             is_public: Some(args.is_public),
             cloud_runner_config: Some(cloud_runner_config),
+            secrets,
         };
 
         // Create config
@@ -1040,6 +1290,7 @@ User: "deploy this service"
                         "dockerfile_path": dockerfile_path,
                         "build_context": build_context,
                     },
+                    "secrets_set": secrets_set_info,
                     "message": format!(
                         "NEW deployment started for '{}' on {} environment. Task ID: {}",
                         service_name, resolved_env_name, response.backstage_task_id
@@ -1255,7 +1506,12 @@ mod tests {
             region: None,
             port: None,
             is_public: false,
+            cpu: None,
+            memory: None,
+            min_instances: None,
+            max_instances: None,
             preview_only: true,
+            secret_keys: None,
         };
 
         let result = tool.call(args).await.unwrap();

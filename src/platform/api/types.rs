@@ -158,10 +158,10 @@ impl CloudProvider {
 
     /// Returns whether this provider is currently available for deployment
     ///
-    /// Returns `true` for GCP and Hetzner (currently supported).
-    /// Returns `false` for AWS, Azure, Scaleway, Cyso (coming soon).
+    /// Returns `true` for GCP, Hetzner, and Azure (currently supported).
+    /// Returns `false` for AWS, Scaleway, Cyso (coming soon).
     pub fn is_available(&self) -> bool {
-        matches!(self, CloudProvider::Gcp | CloudProvider::Hetzner)
+        matches!(self, CloudProvider::Gcp | CloudProvider::Hetzner | CloudProvider::Azure)
     }
 }
 
@@ -203,6 +203,10 @@ pub struct CloudCredentialStatus {
     pub id: String,
     /// The cloud provider this credential is for (lowercase: gcp, aws, azure, hetzner)
     pub provider: String,
+    /// Provider account identifier (GCP project ID or Azure subscription ID)
+    /// Used to pass to cloud runner config without prompting user
+    #[serde(default)]
+    pub provider_account_id: Option<String>,
     // NOTE: Never include tokens/secrets here - this is intentionally minimal
 }
 
@@ -243,10 +247,38 @@ pub struct Environment {
     /// When the environment was last updated
     #[serde(default)]
     pub updated_at: Option<String>,
+    /// Per-provider default regions (e.g., { "gcp": "us-central1", "azure": "eastus" })
+    #[serde(default)]
+    pub provider_regions: Option<std::collections::HashMap<String, String>>,
 }
 
 fn default_true() -> bool {
     true
+}
+
+// =============================================================================
+// Deployment Secret Types
+// =============================================================================
+
+/// Environment variable / secret for a deployment config
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeploymentSecretInput {
+    /// Environment variable name (e.g., "DATABASE_URL")
+    pub key: String,
+    /// Environment variable value
+    pub value: String,
+    /// If true, value is masked in API responses and passed as a Terraform -var secret
+    #[serde(default)]
+    pub is_secret: bool,
+}
+
+/// Request to update secrets on an existing deployment config
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkUpdateSecretsRequest {
+    pub config_id: String,
+    pub secrets: Vec<DeploymentSecretInput>,
 }
 
 // =============================================================================
@@ -361,6 +393,12 @@ pub struct DeployedService {
     pub commit_sha: Option<String>,
     /// Public URL of the deployed service
     pub public_url: Option<String>,
+    /// Private IP of the deployed service (for internal/private network access)
+    #[serde(default)]
+    pub private_ip: Option<String>,
+    /// Cloud provider this service is deployed on (e.g. "hetzner", "gcp", "azure")
+    #[serde(default)]
+    pub cloud_provider: Option<String>,
     /// When this deployment was created
     pub created_at: DateTime<Utc>,
 }
@@ -708,10 +746,17 @@ pub struct WizardDeploymentConfig {
     pub region: Option<String>,
     /// Machine/Instance type for Cloud Runner (e.g., "cx22" for Hetzner, "e2-small" for GCP)
     pub machine_type: Option<String>,
+    /// CPU allocation for Cloud Run / ACA (e.g., "2", "0.5")
+    pub cpu: Option<String>,
+    /// Memory allocation for Cloud Run / ACA (e.g., "2Gi", "1.0Gi")
+    pub memory: Option<String>,
     /// Whether the service should be publicly accessible
     pub is_public: bool,
     /// Health check endpoint path (optional, e.g., "/health" or "/healthz")
     pub health_check_path: Option<String>,
+    /// Environment variables and secrets for the deployment
+    #[serde(default)]
+    pub secrets: Vec<DeploymentSecretInput>,
 }
 
 impl WizardDeploymentConfig {
@@ -914,6 +959,166 @@ pub fn build_cloud_runner_config(
     }
 }
 
+/// Input for building provider-specific cloud runner config (v2)
+///
+/// Replaces the old positional-argument function with a struct that
+/// supports all three providers (GCP Cloud Run, Azure ACA, Hetzner).
+#[derive(Debug, Clone, Default)]
+pub struct CloudRunnerConfigInput {
+    /// Cloud provider
+    pub provider: Option<CloudProvider>,
+    /// Region/location for deployment
+    pub region: Option<String>,
+    /// Server type (Hetzner only)
+    pub server_type: Option<String>,
+    /// GCP project ID (from credentials API)
+    pub gcp_project_id: Option<String>,
+    /// CPU allocation (GCP Cloud Run / Azure ACA)
+    pub cpu: Option<String>,
+    /// Memory allocation (GCP Cloud Run / Azure ACA)
+    pub memory: Option<String>,
+    /// Min instances/replicas (GCP Cloud Run / Azure ACA)
+    pub min_instances: Option<i32>,
+    /// Max instances/replicas (GCP Cloud Run / Azure ACA)
+    pub max_instances: Option<i32>,
+    /// Concurrency (GCP Cloud Run only)
+    pub concurrency: Option<i32>,
+    /// Timeout in seconds (GCP Cloud Run only)
+    pub timeout_seconds: Option<i32>,
+    /// Ingress settings (GCP Cloud Run only)
+    pub ingress_settings: Option<String>,
+    /// Allow unauthenticated access (GCP Cloud Run)
+    pub allow_unauthenticated: Option<bool>,
+    /// CPU boost on startup (GCP Cloud Run only)
+    pub cpu_boost: Option<bool>,
+    /// VPC connector (GCP Cloud Run only)
+    pub vpc_connector: Option<String>,
+    /// Azure subscription ID (from credentials API)
+    pub subscription_id: Option<String>,
+    /// Whether the service is publicly accessible
+    pub is_public: Option<bool>,
+    /// Health check endpoint path
+    pub health_check_path: Option<String>,
+}
+
+/// Build the cloud runner config in the provider-nested structure expected by backend (v2).
+///
+/// Supports all three providers with full configuration:
+/// - **GCP Cloud Run**: `{ "gcp": { region, projectId, cpu, memory, minInstances, ... } }`
+/// - **Azure ACA**: `{ "azure": { location, subscriptionId, deploymentType, cpu, memory, ... }, "cpu": "...", "memory": "..." }`
+/// - **Hetzner**: `{ "hetzner": { location, serverType } }` (unchanged)
+pub fn build_cloud_runner_config_v2(input: &CloudRunnerConfigInput) -> serde_json::Value {
+    let provider = match &input.provider {
+        Some(p) => p,
+        None => return serde_json::json!({}),
+    };
+
+    match provider {
+        CloudProvider::Gcp => {
+            let mut gcp_config = serde_json::Map::new();
+
+            if let Some(ref region) = input.region {
+                gcp_config.insert("region".to_string(), serde_json::json!(region));
+            }
+            if let Some(ref project_id) = input.gcp_project_id {
+                gcp_config.insert("projectId".to_string(), serde_json::json!(project_id));
+            }
+            if let Some(ref cpu) = input.cpu {
+                gcp_config.insert("cpu".to_string(), serde_json::json!(cpu));
+            }
+            if let Some(ref memory) = input.memory {
+                gcp_config.insert("memory".to_string(), serde_json::json!(memory));
+            }
+            if let Some(min) = input.min_instances {
+                gcp_config.insert("minInstances".to_string(), serde_json::json!(min));
+            }
+            if let Some(max) = input.max_instances {
+                gcp_config.insert("maxInstances".to_string(), serde_json::json!(max));
+            }
+            if let Some(conc) = input.concurrency {
+                gcp_config.insert("concurrency".to_string(), serde_json::json!(conc));
+            }
+            if let Some(timeout) = input.timeout_seconds {
+                gcp_config.insert("timeoutSeconds".to_string(), serde_json::json!(timeout));
+            }
+            if let Some(ref ingress) = input.ingress_settings {
+                gcp_config.insert("ingressSettings".to_string(), serde_json::json!(ingress));
+            }
+            if let Some(allow) = input.allow_unauthenticated {
+                gcp_config.insert("allowUnauthenticated".to_string(), serde_json::json!(allow));
+            } else if let Some(is_pub) = input.is_public {
+                gcp_config.insert("allowUnauthenticated".to_string(), serde_json::json!(is_pub));
+            }
+            if let Some(boost) = input.cpu_boost {
+                gcp_config.insert("cpuBoost".to_string(), serde_json::json!(boost));
+            }
+            if let Some(ref vpc) = input.vpc_connector {
+                gcp_config.insert("vpcConnector".to_string(), serde_json::json!(vpc));
+            }
+            if let Some(ref path) = input.health_check_path {
+                gcp_config.insert("healthCheckPath".to_string(), serde_json::json!(path));
+            }
+
+            serde_json::json!({ "gcp": serde_json::Value::Object(gcp_config) })
+        }
+        CloudProvider::Azure => {
+            let mut azure_config = serde_json::Map::new();
+
+            if let Some(ref region) = input.region {
+                azure_config.insert("location".to_string(), serde_json::json!(region));
+            }
+            if let Some(ref sub_id) = input.subscription_id {
+                azure_config.insert("subscriptionId".to_string(), serde_json::json!(sub_id));
+            }
+            azure_config.insert("deploymentType".to_string(), serde_json::json!("azure_container_app"));
+            if let Some(ref cpu) = input.cpu {
+                azure_config.insert("cpu".to_string(), serde_json::json!(cpu));
+            }
+            if let Some(ref memory) = input.memory {
+                azure_config.insert("memory".to_string(), serde_json::json!(memory));
+            }
+            if let Some(is_pub) = input.is_public {
+                azure_config.insert("isPublic".to_string(), serde_json::json!(is_pub));
+            }
+            if let Some(min) = input.min_instances {
+                azure_config.insert("minReplicas".to_string(), serde_json::json!(min));
+            }
+            if let Some(max) = input.max_instances {
+                azure_config.insert("maxReplicas".to_string(), serde_json::json!(max));
+            }
+
+            // Hoist cpu/memory to top level (matching frontend behavior)
+            let mut top_level = serde_json::Map::new();
+            top_level.insert("azure".to_string(), serde_json::Value::Object(azure_config));
+            if let Some(ref cpu) = input.cpu {
+                top_level.insert("cpu".to_string(), serde_json::json!(cpu));
+            }
+            if let Some(ref memory) = input.memory {
+                top_level.insert("memory".to_string(), serde_json::json!(memory));
+            }
+
+            serde_json::Value::Object(top_level)
+        }
+        CloudProvider::Hetzner => {
+            serde_json::json!({
+                "hetzner": {
+                    "location": input.region.as_deref().unwrap_or(""),
+                    "serverType": input.server_type.as_deref().unwrap_or("")
+                }
+            })
+        }
+        // For other providers, use a generic structure
+        _ => {
+            serde_json::json!({
+                provider.as_str(): {
+                    "region": input.region.as_deref().unwrap_or(""),
+                    "isPublic": input.is_public.unwrap_or(false)
+                }
+            })
+        }
+    }
+}
+
 /// Request body for creating a new deployment configuration
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -966,6 +1171,9 @@ pub struct CreateDeploymentConfigRequest {
     /// Backend expects: `{ "gcp": {...} }` or `{ "hetzner": {...} }`
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cloud_runner_config: Option<serde_json::Value>,
+    /// Environment variables and secrets for the deployment
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secrets: Option<Vec<DeploymentSecretInput>>,
 }
 
 /// Provider deployment availability status for the wizard
@@ -1427,10 +1635,10 @@ mod tests {
         // Available providers
         assert!(CloudProvider::Gcp.is_available());
         assert!(CloudProvider::Hetzner.is_available());
+        assert!(CloudProvider::Azure.is_available());
 
         // Coming soon providers
         assert!(!CloudProvider::Aws.is_available());
-        assert!(!CloudProvider::Azure.is_available());
         assert!(!CloudProvider::Scaleway.is_available());
         assert!(!CloudProvider::Cyso.is_available());
     }
@@ -1440,15 +1648,25 @@ mod tests {
         let status = CloudCredentialStatus {
             id: "cred-123".to_string(),
             provider: "gcp".to_string(),
+            provider_account_id: Some("my-gcp-project".to_string()),
         };
 
         let json = serde_json::to_string(&status).unwrap();
         assert!(json.contains("\"id\":\"cred-123\""));
         assert!(json.contains("\"provider\":\"gcp\""));
+        assert!(json.contains("\"providerAccountId\":\"my-gcp-project\""));
         // Verify no tokens/secrets in serialized output
         assert!(!json.contains("token"));
         assert!(!json.contains("secret"));
-        assert!(!json.contains("key"));
+    }
+
+    #[test]
+    fn test_cloud_credential_status_deserialization_without_account_id() {
+        let json = r#"{"id":"cred-456","provider":"azure"}"#;
+        let status: CloudCredentialStatus = serde_json::from_str(json).unwrap();
+        assert_eq!(status.id, "cred-456");
+        assert_eq!(status.provider, "azure");
+        assert!(status.provider_account_id.is_none());
     }
 
     // =========================================================================
@@ -1576,6 +1794,7 @@ mod tests {
             is_active: true,
             created_at: Some("2024-01-01T00:00:00Z".to_string()),
             updated_at: Some("2024-01-01T00:00:00Z".to_string()),
+            provider_regions: None,
         };
 
         let json = serde_json::to_string(&env).unwrap();
@@ -1643,6 +1862,7 @@ mod tests {
             auto_deploy_enabled: true,
             is_public: None,
             cloud_runner_config: None,
+            secrets: None,
         };
 
         let json = serde_json::to_string(&request).unwrap();
@@ -1651,6 +1871,7 @@ mod tests {
         // Optional None fields should be skipped
         assert!(!json.contains("clusterId"));
         assert!(!json.contains("isPublic"));
+        assert!(!json.contains("secrets"));
     }
 
     // =========================================================================
@@ -1715,5 +1936,111 @@ mod tests {
         assert_eq!(hetzner.get("location").and_then(|v| v.as_str()), Some("fsn1"));
         assert_eq!(hetzner.get("serverType").and_then(|v| v.as_str()), Some("cx32"));
         // Hetzner config doesn't include health check path in current implementation
+    }
+
+    // =========================================================================
+    // Cloud Runner Config V2 Builder Tests
+    // =========================================================================
+
+    #[test]
+    fn test_build_cloud_runner_config_v2_gcp() {
+        let input = CloudRunnerConfigInput {
+            provider: Some(CloudProvider::Gcp),
+            region: Some("us-central1".to_string()),
+            gcp_project_id: Some("my-project".to_string()),
+            cpu: Some("2".to_string()),
+            memory: Some("2Gi".to_string()),
+            min_instances: Some(0),
+            max_instances: Some(10),
+            allow_unauthenticated: Some(true),
+            health_check_path: Some("/health".to_string()),
+            ..Default::default()
+        };
+        let config = build_cloud_runner_config_v2(&input);
+        let gcp = config.get("gcp").expect("should have gcp key");
+        assert_eq!(gcp.get("region").and_then(|v| v.as_str()), Some("us-central1"));
+        assert_eq!(gcp.get("projectId").and_then(|v| v.as_str()), Some("my-project"));
+        assert_eq!(gcp.get("cpu").and_then(|v| v.as_str()), Some("2"));
+        assert_eq!(gcp.get("memory").and_then(|v| v.as_str()), Some("2Gi"));
+        assert_eq!(gcp.get("minInstances").and_then(|v| v.as_i64()), Some(0));
+        assert_eq!(gcp.get("maxInstances").and_then(|v| v.as_i64()), Some(10));
+        assert_eq!(gcp.get("allowUnauthenticated").and_then(|v| v.as_bool()), Some(true));
+        assert_eq!(gcp.get("healthCheckPath").and_then(|v| v.as_str()), Some("/health"));
+    }
+
+    #[test]
+    fn test_build_cloud_runner_config_v2_azure() {
+        let input = CloudRunnerConfigInput {
+            provider: Some(CloudProvider::Azure),
+            region: Some("eastus".to_string()),
+            subscription_id: Some("sub-123".to_string()),
+            cpu: Some("0.5".to_string()),
+            memory: Some("1.0Gi".to_string()),
+            is_public: Some(true),
+            min_instances: Some(0),
+            max_instances: Some(5),
+            ..Default::default()
+        };
+        let config = build_cloud_runner_config_v2(&input);
+        let azure = config.get("azure").expect("should have azure key");
+        assert_eq!(azure.get("location").and_then(|v| v.as_str()), Some("eastus"));
+        assert_eq!(azure.get("subscriptionId").and_then(|v| v.as_str()), Some("sub-123"));
+        assert_eq!(azure.get("deploymentType").and_then(|v| v.as_str()), Some("azure_container_app"));
+        assert_eq!(azure.get("cpu").and_then(|v| v.as_str()), Some("0.5"));
+        assert_eq!(azure.get("memory").and_then(|v| v.as_str()), Some("1.0Gi"));
+        assert_eq!(azure.get("isPublic").and_then(|v| v.as_bool()), Some(true));
+        assert_eq!(azure.get("minReplicas").and_then(|v| v.as_i64()), Some(0));
+        assert_eq!(azure.get("maxReplicas").and_then(|v| v.as_i64()), Some(5));
+        // Top-level hoisted cpu/memory
+        assert_eq!(config.get("cpu").and_then(|v| v.as_str()), Some("0.5"));
+        assert_eq!(config.get("memory").and_then(|v| v.as_str()), Some("1.0Gi"));
+    }
+
+    #[test]
+    fn test_build_cloud_runner_config_v2_hetzner() {
+        let input = CloudRunnerConfigInput {
+            provider: Some(CloudProvider::Hetzner),
+            region: Some("nbg1".to_string()),
+            server_type: Some("cx22".to_string()),
+            ..Default::default()
+        };
+        let config = build_cloud_runner_config_v2(&input);
+        let hetzner = config.get("hetzner").expect("should have hetzner key");
+        assert_eq!(hetzner.get("location").and_then(|v| v.as_str()), Some("nbg1"));
+        assert_eq!(hetzner.get("serverType").and_then(|v| v.as_str()), Some("cx22"));
+    }
+
+    #[test]
+    fn test_build_cloud_runner_config_v2_no_provider() {
+        let input = CloudRunnerConfigInput::default();
+        let config = build_cloud_runner_config_v2(&input);
+        assert_eq!(config, serde_json::json!({}));
+    }
+
+    #[test]
+    fn test_environment_provider_regions() {
+        let json = r#"{
+            "id": "env-1",
+            "name": "staging",
+            "projectId": "proj-1",
+            "environmentType": "cloud",
+            "providerRegions": {"gcp": "us-central1", "azure": "eastus"}
+        }"#;
+        let env: Environment = serde_json::from_str(json).unwrap();
+        let regions = env.provider_regions.unwrap();
+        assert_eq!(regions.get("gcp"), Some(&"us-central1".to_string()));
+        assert_eq!(regions.get("azure"), Some(&"eastus".to_string()));
+    }
+
+    #[test]
+    fn test_environment_without_provider_regions() {
+        let json = r#"{
+            "id": "env-1",
+            "name": "staging",
+            "projectId": "proj-1",
+            "environmentType": "cloud"
+        }"#;
+        let env: Environment = serde_json::from_str(json).unwrap();
+        assert!(env.provider_regions.is_none());
     }
 }

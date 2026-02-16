@@ -757,12 +757,13 @@ pub async fn run_interactive(
                         .tool(ListHetznerAvailabilityTool::new())
                         // Deployment tools for service management
                         .tool(CreateDeploymentConfigTool::new())
-                        .tool(DeployServiceTool::new(project_path_buf.clone()))
+                        .tool(DeployServiceTool::with_context(project_path_buf.clone(), ExecutionContext::InteractiveCli))
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
                         .tool(GetDeploymentStatusTool::new())
                         .tool(ListDeploymentsTool::new())
-                        .tool(GetServiceLogsTool::new());
+                        .tool(GetServiceLogsTool::new())
+                        .tool(SetDeploymentSecretsTool::with_context(ExecutionContext::InteractiveCli));
 
                     // Add tools based on mode
                     if is_planning {
@@ -875,12 +876,13 @@ pub async fn run_interactive(
                         .tool(ListHetznerAvailabilityTool::new())
                         // Deployment tools for service management
                         .tool(CreateDeploymentConfigTool::new())
-                        .tool(DeployServiceTool::new(project_path_buf.clone()))
+                        .tool(DeployServiceTool::with_context(project_path_buf.clone(), ExecutionContext::InteractiveCli))
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
                         .tool(GetDeploymentStatusTool::new())
                         .tool(ListDeploymentsTool::new())
-                        .tool(GetServiceLogsTool::new());
+                        .tool(GetServiceLogsTool::new())
+                        .tool(SetDeploymentSecretsTool::with_context(ExecutionContext::InteractiveCli));
 
                     // Add tools based on mode
                     if is_planning {
@@ -984,12 +986,13 @@ pub async fn run_interactive(
                         .tool(ListHetznerAvailabilityTool::new())
                         // Deployment tools for service management
                         .tool(CreateDeploymentConfigTool::new())
-                        .tool(DeployServiceTool::new(project_path_buf.clone()))
+                        .tool(DeployServiceTool::with_context(project_path_buf.clone(), ExecutionContext::InteractiveCli))
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
                         .tool(GetDeploymentStatusTool::new())
                         .tool(ListDeploymentsTool::new())
-                        .tool(GetServiceLogsTool::new());
+                        .tool(GetServiceLogsTool::new())
+                        .tool(SetDeploymentSecretsTool::with_context(ExecutionContext::InteractiveCli));
 
                     // Add tools based on mode
                     if is_planning {
@@ -2479,12 +2482,13 @@ pub async fn run_query(
                         .tool(ListHetznerAvailabilityTool::new())
                         // Deployment tools for service management
                         .tool(CreateDeploymentConfigTool::new())
-                        .tool(DeployServiceTool::new(project_path_buf.clone()))
+                        .tool(DeployServiceTool::with_context(project_path_buf.clone(), ExecutionContext::InteractiveCli))
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
                         .tool(GetDeploymentStatusTool::new())
                         .tool(ListDeploymentsTool::new())
-                        .tool(GetServiceLogsTool::new());
+                        .tool(GetServiceLogsTool::new())
+                        .tool(SetDeploymentSecretsTool::with_context(ExecutionContext::InteractiveCli));
 
             // Add generation tools if this is a generation query
             if is_generation {
@@ -2565,12 +2569,13 @@ pub async fn run_query(
                         .tool(ListHetznerAvailabilityTool::new())
                         // Deployment tools for service management
                         .tool(CreateDeploymentConfigTool::new())
-                        .tool(DeployServiceTool::new(project_path_buf.clone()))
+                        .tool(DeployServiceTool::with_context(project_path_buf.clone(), ExecutionContext::InteractiveCli))
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
                         .tool(GetDeploymentStatusTool::new())
                         .tool(ListDeploymentsTool::new())
-                        .tool(GetServiceLogsTool::new());
+                        .tool(GetServiceLogsTool::new())
+                        .tool(SetDeploymentSecretsTool::with_context(ExecutionContext::InteractiveCli));
 
             // Add generation tools if this is a generation query
             if is_generation {
@@ -2640,12 +2645,13 @@ pub async fn run_query(
                         .tool(ListHetznerAvailabilityTool::new())
                         // Deployment tools for service management
                         .tool(CreateDeploymentConfigTool::new())
-                        .tool(DeployServiceTool::new(project_path_buf.clone()))
+                        .tool(DeployServiceTool::with_context(project_path_buf.clone(), ExecutionContext::InteractiveCli))
                         .tool(ListDeploymentConfigsTool::new())
                         .tool(TriggerDeploymentTool::new())
                         .tool(GetDeploymentStatusTool::new())
                         .tool(ListDeploymentsTool::new())
-                        .tool(GetServiceLogsTool::new());
+                        .tool(GetServiceLogsTool::new())
+                        .tool(SetDeploymentSecretsTool::with_context(ExecutionContext::InteractiveCli));
 
             // Add generation tools if this is a generation query
             if is_generation {

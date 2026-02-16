@@ -14,6 +14,7 @@ use crate::wizard::cloud_provider_data::{
     get_hetzner_regions_dynamic, get_hetzner_server_types_dynamic,
     get_machine_types_for_provider, get_regions_for_provider,
     DynamicCloudRegion, DynamicMachineType, HetznerFetchResult,
+    ACA_RESOURCE_PAIRS, CLOUD_RUN_CPU_MEMORY,
 };
 use crate::wizard::render::{display_step_header, wizard_render_config};
 use colored::Colorize;
@@ -27,6 +28,8 @@ pub enum InfrastructureSelectionResult {
     Selected {
         region: String,
         machine_type: String,
+        cpu: Option<String>,
+        memory: Option<String>,
     },
     /// User wants to go back
     Back,
@@ -95,11 +98,13 @@ pub async fn select_infrastructure(
         None => return InfrastructureSelectionResult::Back,
     };
 
-    // Then select machine type
+    // Then select machine type (returns machine_type, optional cpu, optional memory)
     match select_machine_type(provider, &region, client, project_id).await {
-        Some(machine_type) => InfrastructureSelectionResult::Selected {
+        Some((machine_type, cpu, memory)) => InfrastructureSelectionResult::Selected {
             region,
             machine_type,
+            cpu,
+            memory,
         },
         None => InfrastructureSelectionResult::Back,
     }
@@ -121,6 +126,8 @@ pub fn select_infrastructure_sync(
         Some(machine_type) => InfrastructureSelectionResult::Selected {
             region,
             machine_type,
+            cpu: None,
+            memory: None,
         },
         None => InfrastructureSelectionResult::Back,
     }
@@ -302,12 +309,14 @@ fn select_region_static(provider: &CloudProvider, step_number: u8) -> Option<Str
 }
 
 /// Select machine/instance type for deployment with dynamic fetching
+///
+/// Returns (machine_type_id, optional_cpu, optional_memory)
 async fn select_machine_type(
     provider: &CloudProvider,
     region: &str,
     client: Option<&PlatformApiClient>,
     project_id: Option<&str>,
-) -> Option<String> {
+) -> Option<(String, Option<String>, Option<String>)> {
     println!();
     println!(
         "{}",
@@ -330,7 +339,8 @@ async fn select_machine_type(
                         );
                         return None;
                     }
-                    return select_machine_type_from_dynamic(machine_types, provider, region);
+                    return select_machine_type_from_dynamic(machine_types, provider, region)
+                        .map(|m| (m, None, None));
                 }
                 HetznerFetchResult::NoCredentials => {
                     println!(
@@ -361,8 +371,125 @@ async fn select_machine_type(
         }
     }
 
-    // For other providers: Use static data
-    select_machine_type_static(provider)
+    // Non-Hetzner providers: Azure ACA and GCP Cloud Run have custom selection UIs
+    match provider {
+        CloudProvider::Azure => select_aca_resource_pair()
+            .map(|(machine, cpu, mem)| (machine, Some(cpu), Some(mem))),
+        CloudProvider::Gcp => select_cloud_run_resources()
+            .map(|(machine, cpu, mem)| (machine, Some(cpu), Some(mem))),
+        _ => select_machine_type_static(provider).map(|m| (m, None, None)),
+    }
+}
+
+/// Select Azure Container Apps resource pair (CPU + memory combo)
+///
+/// Returns (machine_type_id, cpu, memory) e.g. ("0.5-cpu-1.0Gi-mem", "0.5", "1.0Gi")
+fn select_aca_resource_pair() -> Option<(String, String, String)> {
+    let pairs = ACA_RESOURCE_PAIRS;
+    if pairs.is_empty() {
+        println!(
+            "\n{} No Azure Container Apps resource options available.",
+            "⚠".yellow()
+        );
+        return None;
+    }
+
+    let labels: Vec<String> = pairs.iter().map(|p| p.label.to_string()).collect();
+    // Default to index 1 (0.5 vCPU / 1 GB)
+    let default_index = 1;
+
+    let selection = Select::new("Select resource allocation:", labels)
+        .with_render_config(wizard_render_config())
+        .with_starting_cursor(default_index)
+        .with_help_message("Azure Container Apps fixed CPU/memory pairs")
+        .prompt();
+
+    match selection {
+        Ok(selected_label) => {
+            let pair = pairs.iter().find(|p| p.label == selected_label)?;
+            let machine_type_id = format!("{}-cpu-{}-mem", pair.cpu, pair.memory);
+            println!(
+                "\n{} Selected: {} vCPU / {}",
+                "✓".green(),
+                pair.cpu.cyan(),
+                pair.memory.cyan()
+            );
+            Some((machine_type_id, pair.cpu.to_string(), pair.memory.to_string()))
+        }
+        Err(InquireError::OperationCanceled) => None,
+        Err(InquireError::OperationInterrupted) => None,
+        Err(_) => None,
+    }
+}
+
+/// Select GCP Cloud Run resources (two-step: CPU then memory)
+///
+/// Returns (machine_type_id, cpu, memory) e.g. ("2-cpu-2Gi-mem", "2", "2Gi")
+fn select_cloud_run_resources() -> Option<(String, String, String)> {
+    let cpu_levels = CLOUD_RUN_CPU_MEMORY;
+    if cpu_levels.is_empty() {
+        println!(
+            "\n{} No Cloud Run CPU options available.",
+            "⚠".yellow()
+        );
+        return None;
+    }
+
+    // Step 1: Select CPU
+    let cpu_labels: Vec<String> = cpu_levels
+        .iter()
+        .map(|c| format!("{} vCPU", c.cpu))
+        .collect();
+
+    let cpu_selection = Select::new("Select CPU allocation:", cpu_labels)
+        .with_render_config(wizard_render_config())
+        .with_starting_cursor(0) // Default to 1 vCPU
+        .with_help_message("Cloud Run CPU allocation")
+        .prompt();
+
+    let selected_cpu = match cpu_selection {
+        Ok(label) => {
+            let cpu_str = label.replace(" vCPU", "");
+            cpu_levels.iter().find(|c| c.cpu == cpu_str)?
+        }
+        Err(InquireError::OperationCanceled) => return None,
+        Err(InquireError::OperationInterrupted) => return None,
+        Err(_) => return None,
+    };
+
+    // Step 2: Select memory for that CPU level
+    let memory_options: Vec<String> = selected_cpu
+        .memory_options
+        .iter()
+        .map(|m| m.to_string())
+        .collect();
+
+    let default_mem_index = memory_options
+        .iter()
+        .position(|m| m == selected_cpu.default_memory)
+        .unwrap_or(0);
+
+    let mem_selection = Select::new("Select memory allocation:", memory_options)
+        .with_render_config(wizard_render_config())
+        .with_starting_cursor(default_mem_index)
+        .with_help_message("Memory must be compatible with selected CPU")
+        .prompt();
+
+    match mem_selection {
+        Ok(selected_memory) => {
+            let machine_type_id = format!("{}-cpu-{}-mem", selected_cpu.cpu, selected_memory);
+            println!(
+                "\n{} Selected: {} vCPU / {}",
+                "✓".green(),
+                selected_cpu.cpu.cyan(),
+                selected_memory.cyan()
+            );
+            Some((machine_type_id, selected_cpu.cpu.to_string(), selected_memory))
+        }
+        Err(InquireError::OperationCanceled) => None,
+        Err(InquireError::OperationInterrupted) => None,
+        Err(_) => None,
+    }
 }
 
 /// Select machine type from dynamic data with pricing info
@@ -554,8 +681,18 @@ mod tests {
         let selected = InfrastructureSelectionResult::Selected {
             region: "nbg1".to_string(),
             machine_type: "cx22".to_string(),
+            cpu: None,
+            memory: None,
         };
         matches!(selected, InfrastructureSelectionResult::Selected { .. });
+
+        let selected_with_resources = InfrastructureSelectionResult::Selected {
+            region: "eastus".to_string(),
+            machine_type: "0.5-cpu-1.0Gi-mem".to_string(),
+            cpu: Some("0.5".to_string()),
+            memory: Some("1.0Gi".to_string()),
+        };
+        matches!(selected_with_resources, InfrastructureSelectionResult::Selected { .. });
 
         let _ = InfrastructureSelectionResult::Back;
         let _ = InfrastructureSelectionResult::Cancelled;
