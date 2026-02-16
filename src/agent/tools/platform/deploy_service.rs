@@ -26,6 +26,7 @@ use crate::wizard::{
     get_hetzner_regions_dynamic, get_hetzner_server_types_dynamic, HetznerFetchResult,
     DynamicCloudRegion, DynamicMachineType, discover_env_files, parse_env_file,
     get_available_endpoints, filter_endpoints_for_provider, match_env_vars_to_services,
+    extract_network_endpoints,
 };
 use std::process::Command;
 
@@ -199,6 +200,14 @@ User: "deploy this service"
 - endpoint_suggestions maps detected env vars to deployed services (e.g. SENTIMENT_SERVICE_URL -> sentiment-analysis)
 - Private endpoints are pre-filtered to only show services on the same provider network
 - ALWAYS mention available endpoints when deploying services that have env vars matching deployed services
+
+**Private networks (project_networks):**
+- The response includes project_networks showing provisioned VPCs/networks for the target provider
+- Each network includes connection_details with key/value pairs (VPC_ID, SUBNET_ID, DEFAULT_DOMAIN, etc.)
+- If networks have useful connection details (e.g., a default domain, VPC connector), mention them to the user
+- Ask the user if they want to inject any network details as environment variables
+- Network details are NOT secrets — they are infrastructure identifiers
+- Private networks enable service-to-service communication on the same provider
 
 **Environment variables (secret_keys) and .env files:**
 - The preview response includes parsed_env_files: discovered .env files with their parsed keys/values
@@ -767,6 +776,21 @@ User: "deploy this service"
             let endpoint_suggestions =
                 match_env_vars_to_services(&detected_env_var_names, &deployed_endpoints);
 
+            // Fetch project networks for the target provider
+            let project_networks = match client.list_project_networks(&project_id).await {
+                Ok(nets) => nets,
+                Err(e) => {
+                    tracing::debug!("Could not fetch project networks: {}", e);
+                    Vec::new()
+                }
+            };
+
+            let network_endpoints = extract_network_endpoints(
+                &project_networks,
+                final_provider_for_check.as_str(),
+                Some(&resolved_env_id),
+            );
+
             let response = json!({
                 "status": "recommendation",
                 "deployment_mode": deployment_mode,
@@ -888,6 +912,18 @@ User: "deploy this service"
                     "is_private": s.service.is_private,
                     "confidence": format!("{:?}", s.confidence),
                     "reason": s.reason,
+                })).collect::<Vec<_>>(),
+                "project_networks": network_endpoints.iter().map(|ne| json!({
+                    "network_id": ne.network_id,
+                    "cloud_provider": ne.cloud_provider,
+                    "region": ne.region,
+                    "status": ne.status,
+                    "environment_id": ne.environment_id,
+                    "connection_details": ne.connection_details.iter().map(|(k, v)| json!({
+                        "key": k,
+                        "value": v,
+                        "suggested_env_var": k,
+                    })).collect::<Vec<_>>(),
                 })).collect::<Vec<_>>(),
                 "next_steps": next_steps,
                 "confirmation_prompt": if existing_config.is_some() {
