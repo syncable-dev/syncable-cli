@@ -24,10 +24,15 @@ pub struct DeploymentRecommendation {
     /// Why this target was recommended
     pub target_reasoning: String,
 
-    /// Recommended machine type (provider-specific)
+    /// Recommended machine type (provider-specific, used for Hetzner)
     pub machine_type: String,
     /// Why this machine type was recommended
     pub machine_reasoning: String,
+
+    /// Recommended CPU allocation (for GCP Cloud Run / Azure ACA)
+    pub cpu: Option<String>,
+    /// Recommended memory allocation (for GCP Cloud Run / Azure ACA)
+    pub memory: Option<String>,
 
     /// Recommended region
     pub region: String,
@@ -99,7 +104,7 @@ pub fn recommend_deployment(input: RecommendationInput) -> DeploymentRecommendat
     let (target, target_reasoning) = select_target(&input);
 
     // 3. Select machine type based on detected framework
-    let (machine_type, machine_reasoning) = select_machine_type(&input.analysis, &provider);
+    let machine_result = select_machine_type(&input.analysis, &provider);
 
     // 4. Select region
     let (region, region_reasoning) = select_region(&provider, input.user_region_hint.as_deref());
@@ -121,8 +126,10 @@ pub fn recommend_deployment(input: RecommendationInput) -> DeploymentRecommendat
         provider_reasoning,
         target,
         target_reasoning,
-        machine_type,
-        machine_reasoning,
+        machine_type: machine_result.machine_type,
+        machine_reasoning: machine_result.reasoning,
+        cpu: machine_result.cpu,
+        memory: machine_result.memory,
         region,
         region_reasoning,
         port,
@@ -152,22 +159,59 @@ fn select_provider(input: &RecommendationInput) -> (CloudProvider, String) {
     // Check which providers are available
     let has_hetzner = input.available_providers.contains(&CloudProvider::Hetzner);
     let has_gcp = input.available_providers.contains(&CloudProvider::Gcp);
+    let has_azure = input.available_providers.contains(&CloudProvider::Azure);
+
+    // Build list of connected provider names for reasoning
+    let connected: Vec<&str> = input
+        .available_providers
+        .iter()
+        .filter(|p| p.is_available())
+        .map(|p| p.display_name())
+        .collect();
+    let also_available = if connected.len() > 1 {
+        format!(
+            ". Also connected: {}",
+            connected
+                .iter()
+                .copied()
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    } else {
+        String::new()
+    };
 
     if has_hetzner && has_gcp {
-        // Both available - prefer Hetzner for cost-effectiveness
         (
             CloudProvider::Hetzner,
-            "Hetzner recommended: Cost-effective for web services, European data centers".to_string(),
+            format!(
+                "Hetzner recommended: Cost-effective for web services, European data centers{}",
+                also_available
+            ),
         )
     } else if has_hetzner {
         (
             CloudProvider::Hetzner,
-            "Hetzner selected: Only available connected provider".to_string(),
+            format!(
+                "Hetzner recommended: Cost-effective dedicated servers with predictable pricing{}",
+                also_available
+            ),
         )
     } else if has_gcp {
         (
             CloudProvider::Gcp,
-            "GCP selected: Only available connected provider".to_string(),
+            format!(
+                "GCP recommended: Scalable serverless options with Cloud Run{}",
+                also_available
+            ),
+        )
+    } else if has_azure {
+        (
+            CloudProvider::Azure,
+            format!(
+                "Azure recommended: Container Apps with auto-scaling and scale-to-zero{}",
+                also_available
+            ),
         )
     } else {
         // Fallback - shouldn't happen in practice
@@ -197,14 +241,22 @@ fn select_target(input: &RecommendationInput) -> (DeploymentTarget, String) {
     )
 }
 
+/// Machine type selection result with optional CPU/memory for Cloud Run / ACA
+struct MachineTypeResult {
+    machine_type: String,
+    reasoning: String,
+    cpu: Option<String>,
+    memory: Option<String>,
+}
+
 /// Select machine type based on detected framework characteristics
-fn select_machine_type(analysis: &ProjectAnalysis, provider: &CloudProvider) -> (String, String) {
+fn select_machine_type(analysis: &ProjectAnalysis, provider: &CloudProvider) -> MachineTypeResult {
     // Detect framework type to determine resource needs
     let framework_info = get_framework_resource_hint(analysis);
 
-    let (machine_type, reasoning) = match provider {
+    match provider {
         CloudProvider::Hetzner => {
-            match framework_info.memory_requirement {
+            let (machine_type, reasoning) = match framework_info.memory_requirement {
                 MemoryRequirement::Low => (
                     "cx23".to_string(),
                     format!("cx23 (2 vCPU, 4GB) recommended: {} services are memory-efficient", framework_info.name),
@@ -217,34 +269,65 @@ fn select_machine_type(analysis: &ProjectAnalysis, provider: &CloudProvider) -> 
                     "cx43".to_string(),
                     format!("cx43 (8 vCPU, 16GB) recommended: {} requires significant memory (JVM, ML, etc.)", framework_info.name),
                 ),
-            }
+            };
+            MachineTypeResult { machine_type, reasoning, cpu: None, memory: None }
         }
         CloudProvider::Gcp => {
-            match framework_info.memory_requirement {
+            // Use Cloud Run CPU/memory instead of Compute Engine machine types
+            let (cpu, mem, reasoning) = match framework_info.memory_requirement {
                 MemoryRequirement::Low => (
-                    "e2-small".to_string(),
-                    format!("e2-small (0.5 vCPU, 2GB) recommended: {} services are lightweight", framework_info.name),
+                    "1", "512Mi",
+                    format!("Cloud Run 1 vCPU / 512Mi recommended: {} services are lightweight", framework_info.name),
                 ),
                 MemoryRequirement::Medium => (
-                    "e2-medium".to_string(),
-                    format!("e2-medium (1 vCPU, 4GB) recommended: {} may need moderate resources", framework_info.name),
+                    "2", "2Gi",
+                    format!("Cloud Run 2 vCPU / 2Gi recommended: {} may need moderate resources", framework_info.name),
                 ),
                 MemoryRequirement::High => (
-                    "e2-standard-2".to_string(),
-                    format!("e2-standard-2 (2 vCPU, 8GB) recommended: {} requires significant memory", framework_info.name),
+                    "4", "8Gi",
+                    format!("Cloud Run 4 vCPU / 8Gi recommended: {} requires significant memory", framework_info.name),
                 ),
+            };
+            MachineTypeResult {
+                machine_type: format!("{}-cpu-{}mem", cpu, mem),
+                reasoning,
+                cpu: Some(cpu.to_string()),
+                memory: Some(mem.to_string()),
+            }
+        }
+        CloudProvider::Azure => {
+            // Use Azure Container Apps resource pairs
+            let (cpu, mem, reasoning) = match framework_info.memory_requirement {
+                MemoryRequirement::Low => (
+                    "0.5", "1.0Gi",
+                    format!("ACA 0.5 vCPU / 1 GB recommended: {} services are lightweight", framework_info.name),
+                ),
+                MemoryRequirement::Medium => (
+                    "1.0", "2.0Gi",
+                    format!("ACA 1 vCPU / 2 GB recommended: {} may need moderate resources", framework_info.name),
+                ),
+                MemoryRequirement::High => (
+                    "2.0", "4.0Gi",
+                    format!("ACA 2 vCPU / 4 GB recommended: {} requires significant memory", framework_info.name),
+                ),
+            };
+            MachineTypeResult {
+                machine_type: format!("{}-cpu-{}mem", cpu, mem),
+                reasoning,
+                cpu: Some(cpu.to_string()),
+                memory: Some(mem.to_string()),
             }
         }
         _ => {
             // Fallback for unsupported providers
-            (
-                get_default_machine_type(provider).to_string(),
-                "Default machine type selected".to_string(),
-            )
+            MachineTypeResult {
+                machine_type: get_default_machine_type(provider).to_string(),
+                reasoning: "Default machine type selected".to_string(),
+                cpu: None,
+                memory: None,
+            }
         }
-    };
-
-    (machine_type, reasoning)
+    }
 }
 
 /// Memory requirement categories
@@ -352,9 +435,10 @@ fn get_framework_resource_hint(analysis: &ProjectAnalysis) -> FrameworkResourceH
 /// Select region based on user hint or defaults
 fn select_region(provider: &CloudProvider, user_hint: Option<&str>) -> (String, String) {
     if let Some(hint) = user_hint {
-        // Validate hint is a valid region for this provider
         let regions = get_regions_for_provider(provider);
-        if regions.iter().any(|r| r.id == hint) {
+        // For providers with dynamic regions (empty static list), accept the hint as-is.
+        // For providers with static region lists, validate against the list.
+        if regions.is_empty() || regions.iter().any(|r| r.id == hint) {
             return (
                 hint.to_string(),
                 format!("{} selected: User preference", hint),
@@ -366,6 +450,7 @@ fn select_region(provider: &CloudProvider, user_hint: Option<&str>) -> (String, 
     let reasoning = match provider {
         CloudProvider::Hetzner => format!("{} (Nuremberg) selected: Default EU region, low latency for European users", default_region),
         CloudProvider::Gcp => format!("{} (Iowa) selected: Default US region, good general-purpose choice", default_region),
+        CloudProvider::Azure => format!("{} (Virginia) selected: Default US region, broad service availability", default_region),
         _ => format!("{} selected: Default region for provider", default_region),
     };
 
@@ -580,7 +665,7 @@ mod tests {
         let rec = recommend_deployment(input);
 
         // Express should get a small machine
-        assert!(rec.machine_type == "cx23" || rec.machine_type == "e2-small");
+        assert!(rec.machine_type == "cx23" || rec.machine_type.contains("1-cpu") || rec.machine_type == "e2-small");
         assert_eq!(rec.port, 3000);
         assert!(rec.machine_reasoning.contains("Express"));
     }
@@ -712,9 +797,11 @@ mod tests {
     fn test_alternatives_populated() {
         let analysis = create_minimal_analysis();
 
+        // Use GCP-only so static machine types and regions are populated
+        // (Hetzner uses dynamic types/regions via API, so its alternatives are empty)
         let input = RecommendationInput {
             analysis,
-            available_providers: vec![CloudProvider::Hetzner, CloudProvider::Gcp],
+            available_providers: vec![CloudProvider::Gcp],
             has_existing_k8s: false,
             user_region_hint: None,
         };

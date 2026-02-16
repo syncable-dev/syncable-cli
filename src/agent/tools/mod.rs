@@ -112,6 +112,21 @@
 //!
 //! See `response.rs` for the complete response formatting infrastructure.
 
+/// Execution context for tools that behave differently in CLI vs server mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecutionContext {
+    /// Interactive CLI — terminal available, inquire prompts work
+    InteractiveCli,
+    /// AG-UI server — no terminal, prompts would hang
+    HeadlessServer,
+}
+
+impl ExecutionContext {
+    pub fn has_terminal(&self) -> bool {
+        matches!(self, Self::InteractiveCli)
+    }
+}
+
 mod analyze;
 pub mod background;
 pub mod compression;
@@ -175,7 +190,8 @@ pub use platform::{
     DeployServiceTool, GetDeploymentStatusTool, GetServiceLogsTool,
     ListDeploymentCapabilitiesTool, ListDeploymentConfigsTool, ListDeploymentsTool,
     ListHetznerAvailabilityTool, ListOrganizationsTool, ListProjectsTool,
-    OpenProviderSettingsTool, SelectProjectTool, TriggerDeploymentTool,
+    OpenProviderSettingsTool, SelectProjectTool, SetDeploymentSecretsTool,
+    TriggerDeploymentTool,
 };
 pub use prometheus_connect::PrometheusConnectTool;
 pub use prometheus_discover::PrometheusDiscoverTool;

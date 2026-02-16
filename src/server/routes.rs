@@ -471,6 +471,7 @@ mod tests {
     #[tokio::test]
     async fn test_post_message_accepted() {
         use crate::server::ServerState;
+        use http::StatusCode;
 
         let state = ServerState::new();
         let mut msg_rx = state.take_message_receiver().await.expect("Should get receiver");
@@ -495,10 +496,8 @@ mod tests {
         // Call post_message handler with raw JSON
         let response = post_message(State(state), Json(input_json)).await;
 
-        // Verify response
-        assert_eq!(response.0["status"], "accepted");
-        assert_eq!(response.0["thread_id"], thread_id.to_string());
-        assert_eq!(response.0["run_id"], run_id.to_string());
+        // Verify response is SSE stream (HTTP 200)
+        assert_eq!(response.status(), StatusCode::OK);
 
         // Verify message was routed
         let received = msg_rx.recv().await.expect("Should receive message");
@@ -508,6 +507,7 @@ mod tests {
     #[tokio::test]
     async fn test_post_message_copilotkit_envelope() {
         use crate::server::ServerState;
+        use http::StatusCode;
 
         let state = ServerState::new();
         let mut msg_rx = state.take_message_receiver().await.expect("Should get receiver");
@@ -529,9 +529,8 @@ mod tests {
         // Call post_message handler
         let response = post_message(State(state), Json(input_json)).await;
 
-        // Verify response
-        assert_eq!(response.0["status"], "accepted");
-        assert_eq!(response.0["thread_id"], "thread-123");
+        // Verify response is SSE stream (HTTP 200)
+        assert_eq!(response.status(), StatusCode::OK);
 
         // Verify message was routed
         let received = msg_rx.recv().await.expect("Should receive message");
