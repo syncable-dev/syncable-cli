@@ -4,11 +4,13 @@
 //! with target type selection (Kubernetes or Cloud Runner).
 
 use crate::platform::api::client::PlatformApiClient;
-use crate::platform::api::types::{ClusterSummary, Environment};
+use crate::platform::api::types::{CloudProvider, ClusterSummary, Environment};
+use crate::wizard::cloud_provider_data::{get_default_region, get_regions_for_provider};
 use crate::wizard::provider_selection::get_provider_deployment_statuses;
 use crate::wizard::render::{display_step_header, wizard_render_config};
 use colored::Colorize;
-use inquire::{InquireError, Select, Text};
+use inquire::{InquireError, MultiSelect, Select, Text};
+use std::collections::HashMap;
 
 /// Environment type for the API
 /// "cluster" = Kubernetes cluster
@@ -154,6 +156,13 @@ pub async fn create_environment_wizard(
         None
     };
 
+    // Step 4 (Cloud Runner only): Optional provider region defaults
+    let provider_regions = if env_type == EnvironmentType::Cloud {
+        select_provider_regions()
+    } else {
+        None
+    };
+
     // Create the environment via API
     println!("\n{}", "Creating environment...".dimmed());
 
@@ -163,6 +172,7 @@ pub async fn create_environment_wizard(
             &name,
             env_type.as_str(),
             cluster_id.as_deref(),
+            provider_regions.as_ref(),
         )
         .await
     {
@@ -271,6 +281,102 @@ async fn get_available_clusters_for_project(
     Ok(all_clusters)
 }
 
+/// Interactive provider region selection for Cloud Runner environments
+///
+/// Asks user which providers they want to set default regions for,
+/// then presents region list per provider.
+fn select_provider_regions() -> Option<HashMap<String, String>> {
+    display_step_header(
+        4,
+        "Provider Regions (Optional)",
+        "Set default regions for each cloud provider. Press Esc to skip.",
+    );
+
+    let available_providers = [
+        ("GCP", CloudProvider::Gcp),
+        ("Hetzner", CloudProvider::Hetzner),
+        ("Azure", CloudProvider::Azure),
+    ];
+
+    let provider_labels: Vec<String> = available_providers
+        .iter()
+        .map(|(label, _)| label.to_string())
+        .collect();
+
+    let selected = match MultiSelect::new(
+        "Select providers to set default regions for:",
+        provider_labels,
+    )
+    .with_render_config(wizard_render_config())
+    .with_help_message("Space to select, Enter to confirm, Esc to skip")
+    .prompt()
+    {
+        Ok(s) if !s.is_empty() => s,
+        _ => return None,
+    };
+
+    let mut regions = HashMap::new();
+
+    for provider_label in &selected {
+        let (_, provider) = available_providers
+            .iter()
+            .find(|(label, _)| label == provider_label)
+            .unwrap();
+
+        let provider_regions = get_regions_for_provider(provider);
+        let default_region = get_default_region(provider);
+
+        if provider_regions.is_empty() {
+            // For providers with dynamic regions (Hetzner), use a text input
+            let region = match Text::new(&format!("{} region:", provider_label))
+                .with_default(default_region)
+                .with_render_config(wizard_render_config())
+                .prompt()
+            {
+                Ok(r) => r,
+                Err(_) => continue,
+            };
+            regions.insert(provider.as_str().to_string(), region);
+        } else {
+            let region_labels: Vec<String> = provider_regions
+                .iter()
+                .map(|r| format!("{} - {} ({})", r.id, r.name, r.location))
+                .collect();
+
+            let default_idx = provider_regions
+                .iter()
+                .position(|r| r.id == default_region)
+                .unwrap_or(0);
+
+            let region = match Select::new(
+                &format!("{} region:", provider_label),
+                region_labels,
+            )
+            .with_render_config(wizard_render_config())
+            .with_starting_cursor(default_idx)
+            .prompt()
+            {
+                Ok(r) => {
+                    // Extract region ID from the display string (before first " - ")
+                    r.split(" - ").next().unwrap_or(default_region).to_string()
+                }
+                Err(_) => continue,
+            };
+            regions.insert(provider.as_str().to_string(), region);
+        }
+    }
+
+    if regions.is_empty() {
+        None
+    } else {
+        println!("\n{} Provider regions configured:", "✓".green());
+        for (provider, region) in &regions {
+            println!("  {}: {}", provider, region.bold());
+        }
+        Some(regions)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -288,6 +394,7 @@ mod tests {
             is_active: true,
             created_at: None,
             updated_at: None,
+            provider_regions: None,
         });
         assert!(matches!(created, EnvironmentCreationResult::Created(_)));
 

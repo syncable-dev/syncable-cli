@@ -77,6 +77,7 @@ mod list_projects;
 mod open_provider_settings;
 mod provision_registry;
 mod select_project;
+mod set_secrets;
 mod trigger_deployment;
 
 pub use analyze_codebase::AnalyzeCodebaseTool;
@@ -96,4 +97,5 @@ pub use list_projects::ListProjectsTool;
 pub use open_provider_settings::OpenProviderSettingsTool;
 pub use provision_registry::ProvisionRegistryTool;
 pub use select_project::SelectProjectTool;
+pub use set_secrets::SetDeploymentSecretsTool;
 pub use trigger_deployment::TriggerDeploymentTool;

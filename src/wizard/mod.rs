@@ -16,6 +16,7 @@ mod registry_provisioning;
 mod registry_selection;
 mod render;
 mod repository_selection;
+mod service_endpoints;
 mod target_selection;
 
 pub use cloud_provider_data::{
@@ -28,7 +29,10 @@ pub use cloud_provider_data::{
     DynamicCloudRegion, DynamicMachineType, HetznerFetchResult,
 };
 pub use cluster_selection::{select_cluster, ClusterSelectionResult};
-pub use config_form::{collect_config, ConfigFormResult};
+pub use config_form::{
+    collect_config, collect_env_vars, discover_env_files, parse_env_file, ConfigFormResult,
+    EnvFileEntry,
+};
 pub use dockerfile_selection::{select_dockerfile, DockerfileSelectionResult};
 pub use environment_creation::{create_environment_wizard, EnvironmentCreationResult};
 pub use environment_selection::{select_environment, EnvironmentSelectionResult};
@@ -47,4 +51,10 @@ pub use recommendations::{
     RecommendationAlternatives, RecommendationInput, RegionOption,
 };
 pub use render::{count_badge, display_step_header, status_indicator, wizard_render_config};
+pub use service_endpoints::{
+    collect_network_endpoint_env_vars, collect_service_endpoint_env_vars,
+    extract_network_endpoints, filter_endpoints_for_provider, get_available_endpoints,
+    match_env_vars_to_services, AvailableServiceEndpoint, EndpointSuggestion, MatchConfidence,
+    NetworkEndpointInfo,
+};
 pub use target_selection::{select_target, TargetSelectionResult};

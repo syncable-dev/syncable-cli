@@ -2,16 +2,20 @@
 
 use crate::analyzer::discover_dockerfiles_for_deployment;
 use crate::platform::api::types::{
-    build_cloud_runner_config, ConnectRepositoryRequest, CreateDeploymentConfigRequest,
-    DeploymentTarget, ProjectRepository, TriggerDeploymentRequest, WizardDeploymentConfig,
+    build_cloud_runner_config_v2, CloudProvider, CloudRunnerConfigInput,
+    ConnectRepositoryRequest, CreateDeploymentConfigRequest, DeploymentTarget,
+    ProjectRepository, TriggerDeploymentRequest, WizardDeploymentConfig,
 };
 use crate::platform::api::PlatformApiClient;
 use crate::wizard::{
-    collect_config, get_provider_deployment_statuses, provision_registry, select_cluster,
-    select_dockerfile, select_infrastructure, select_provider, select_registry, select_repository,
-    select_target, ClusterSelectionResult, ConfigFormResult, DockerfileSelectionResult,
-    InfrastructureSelectionResult, ProviderSelectionResult, RegistryProvisioningResult,
-    RegistrySelectionResult, RepositorySelectionResult, TargetSelectionResult,
+    collect_config, collect_env_vars, collect_service_endpoint_env_vars,
+    filter_endpoints_for_provider, get_available_endpoints,
+    get_provider_deployment_statuses, provision_registry,
+    select_cluster, select_dockerfile, select_infrastructure, select_provider, select_registry,
+    select_repository, select_target, ClusterSelectionResult, ConfigFormResult,
+    DockerfileSelectionResult, InfrastructureSelectionResult, ProviderSelectionResult,
+    RegistryProvisioningResult, RegistrySelectionResult, RepositorySelectionResult,
+    TargetSelectionResult,
 };
 use colored::Colorize;
 use inquire::{Confirm, InquireError};
@@ -176,14 +180,16 @@ pub async fn run_wizard(
     };
 
     // Step 3: Infrastructure selection for Cloud Runner OR Cluster selection for K8s
-    let (cluster_id, region, machine_type) = if target == DeploymentTarget::CloudRunner {
+    let (cluster_id, region, machine_type, cpu, memory) = if target == DeploymentTarget::CloudRunner {
         // Cloud Runner: Select region and machine type
         // Pass client and project_id for dynamic Hetzner availability fetching
         match select_infrastructure(&provider, 3, Some(client), Some(project_id)).await {
             InfrastructureSelectionResult::Selected {
                 region,
                 machine_type,
-            } => (None, Some(region), Some(machine_type)),
+                cpu,
+                memory,
+            } => (None, Some(region), Some(machine_type), cpu, memory),
             InfrastructureSelectionResult::Back => {
                 // Go back (restart wizard for simplicity)
                 return Box::pin(run_wizard(client, project_id, environment_id, project_path)).await;
@@ -193,7 +199,7 @@ pub async fn run_wizard(
     } else {
         // Kubernetes: Select cluster
         match select_cluster(&provider_status.clusters) {
-            ClusterSelectionResult::Selected(c) => (Some(c.id), None, None),
+            ClusterSelectionResult::Selected(c) => (Some(c.id), None, None, None, None),
             ClusterSelectionResult::Back => {
                 // Go back to target selection (restart wizard for simplicity)
                 return Box::pin(run_wizard(client, project_id, environment_id, project_path))
@@ -317,6 +323,8 @@ pub async fn run_wizard(
         &selected_dockerfile,
         region.clone(),
         machine_type.clone(),
+        cpu.clone(),
+        memory.clone(),
         6,
     ) {
         ConfigFormResult::Completed(config) => config,
@@ -326,6 +334,46 @@ pub async fn run_wizard(
         }
         ConfigFormResult::Cancelled => return WizardResult::Cancelled,
     };
+
+    // Step 6.5: Environment variables (optional)
+    let secrets = collect_env_vars(project_path);
+    let mut config = config;
+    config.secrets = secrets;
+
+    // Step 6.6: Offer deployed service endpoints as env vars
+    let available_endpoints = match client.list_deployments(project_id, Some(50)).await {
+        Ok(paginated) => {
+            log::debug!(
+                "Fetched {} deployment record(s) for endpoint discovery",
+                paginated.data.len()
+            );
+            get_available_endpoints(&paginated.data)
+        }
+        Err(e) => {
+            log::debug!("Could not fetch deployments for endpoint injection: {}", e);
+            Vec::new()
+        }
+    };
+
+    // Exclude the service being deployed
+    let service_being_deployed = config.service_name.as_deref().unwrap_or("");
+    let available_endpoints: Vec<_> = available_endpoints
+        .into_iter()
+        .filter(|ep| ep.service_name != service_being_deployed)
+        .collect();
+    // Only show private endpoints from the same cloud provider
+    let available_endpoints =
+        filter_endpoints_for_provider(available_endpoints, provider.as_str());
+
+    if !available_endpoints.is_empty() {
+        let endpoint_vars = collect_service_endpoint_env_vars(&available_endpoints);
+        for ep_var in endpoint_vars {
+            // Don't override vars already set by .env or manual entry
+            if !config.secrets.iter().any(|s| s.key == ep_var.key) {
+                config.secrets.push(ep_var);
+            }
+        }
+    }
 
     // Show summary
     display_summary(&config);
@@ -372,14 +420,45 @@ pub async fn run_wizard(
         registry_id: registry_id.clone(),
         auto_deploy_enabled: config.auto_deploy,
         is_public: Some(config.is_public),
+        secrets: if config.secrets.is_empty() {
+            None
+        } else {
+            Some(config.secrets.clone())
+        },
         cloud_runner_config: if target == DeploymentTarget::CloudRunner {
-            Some(build_cloud_runner_config(
-                &provider,
-                region.as_deref().unwrap_or(""),
-                machine_type.as_deref().unwrap_or(""),
-                config.is_public,
-                config.health_check_path.as_deref(),
-            ))
+            // Fetch provider credential for GCP project ID / Azure subscription ID
+            let (gcp_project_id, subscription_id) = match provider {
+                CloudProvider::Gcp | CloudProvider::Azure => {
+                    match client.check_provider_connection(&provider, project_id).await {
+                        Ok(Some(cred)) => match provider {
+                            CloudProvider::Gcp => (cred.provider_account_id, None),
+                            CloudProvider::Azure => (None, cred.provider_account_id),
+                            _ => (None, None),
+                        },
+                        _ => (None, None),
+                    }
+                }
+                _ => (None, None),
+            };
+
+            let config_input = CloudRunnerConfigInput {
+                provider: Some(provider.clone()),
+                region: region.clone(),
+                server_type: if provider == CloudProvider::Hetzner {
+                    machine_type.clone()
+                } else {
+                    None
+                },
+                gcp_project_id,
+                cpu: config.cpu.clone(),
+                memory: config.memory.clone(),
+                allow_unauthenticated: Some(config.is_public),
+                subscription_id,
+                is_public: Some(config.is_public),
+                health_check_path: config.health_check_path.clone(),
+                ..Default::default()
+            };
+            Some(build_cloud_runner_config_v2(&config_input))
         } else {
             None
         },
@@ -511,7 +590,11 @@ fn display_summary(config: &WizardDeploymentConfig) {
     if let Some(ref region) = config.region {
         println!("  Region:       {}", region.cyan());
     }
-    if let Some(ref machine) = config.machine_type {
+    if let Some(ref cpu) = config.cpu {
+        if let Some(ref mem) = config.memory {
+            println!("  Resources:    {} vCPU / {}", cpu.cyan(), mem.cyan());
+        }
+    } else if let Some(ref machine) = config.machine_type {
         println!("  Machine:      {}", machine.cyan());
     }
     if let Some(ref branch) = config.branch {
@@ -539,6 +622,15 @@ fn display_summary(config: &WizardDeploymentConfig) {
             "No".yellow()
         }
     );
+    if !config.secrets.is_empty() {
+        let secret_count = config.secrets.iter().filter(|s| s.is_secret).count();
+        let env_count = config.secrets.len() - secret_count;
+        println!(
+            "  Env vars:     {} env, {} secret",
+            env_count.to_string().cyan(),
+            secret_count.to_string().yellow()
+        );
+    }
 
     println!(
         "{}",

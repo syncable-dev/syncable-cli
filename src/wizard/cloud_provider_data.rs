@@ -36,6 +36,109 @@ pub struct MachineType {
 }
 
 // =============================================================================
+// Azure Container Apps - Resource Pairs
+// =============================================================================
+
+/// Azure Container Apps paired CPU/memory combo
+#[derive(Debug, Clone)]
+pub struct AcaResourcePair {
+    /// CPU allocation (e.g., "0.25")
+    pub cpu: &'static str,
+    /// Memory allocation (e.g., "0.5Gi")
+    pub memory: &'static str,
+    /// Display label (e.g., "0.25 vCPU, 0.5 GB")
+    pub label: &'static str,
+}
+
+/// Azure Container Apps resource pairs (fixed by Azure, 8 combos)
+pub static ACA_RESOURCE_PAIRS: &[AcaResourcePair] = &[
+    AcaResourcePair { cpu: "0.25", memory: "0.5Gi",  label: "0.25 vCPU, 0.5 GB" },
+    AcaResourcePair { cpu: "0.5",  memory: "1.0Gi",  label: "0.5 vCPU, 1 GB" },
+    AcaResourcePair { cpu: "0.75", memory: "1.5Gi",  label: "0.75 vCPU, 1.5 GB" },
+    AcaResourcePair { cpu: "1.0",  memory: "2.0Gi",  label: "1 vCPU, 2 GB" },
+    AcaResourcePair { cpu: "1.25", memory: "2.5Gi",  label: "1.25 vCPU, 2.5 GB" },
+    AcaResourcePair { cpu: "1.5",  memory: "3.0Gi",  label: "1.5 vCPU, 3 GB" },
+    AcaResourcePair { cpu: "1.75", memory: "3.5Gi",  label: "1.75 vCPU, 3.5 GB" },
+    AcaResourcePair { cpu: "2.0",  memory: "4.0Gi",  label: "2 vCPU, 4 GB" },
+];
+
+/// Azure regions (Container Apps supported regions)
+pub static AZURE_REGIONS: &[CloudRegion] = &[
+    // Americas
+    CloudRegion { id: "eastus", name: "East US", location: "Virginia" },
+    CloudRegion { id: "eastus2", name: "East US 2", location: "Virginia" },
+    CloudRegion { id: "westus", name: "West US", location: "California" },
+    CloudRegion { id: "westus2", name: "West US 2", location: "Washington" },
+    CloudRegion { id: "westus3", name: "West US 3", location: "Arizona" },
+    CloudRegion { id: "centralus", name: "Central US", location: "Iowa" },
+    CloudRegion { id: "canadacentral", name: "Canada Central", location: "Toronto" },
+    CloudRegion { id: "brazilsouth", name: "Brazil South", location: "São Paulo" },
+    // Europe
+    CloudRegion { id: "westeurope", name: "West Europe", location: "Netherlands" },
+    CloudRegion { id: "northeurope", name: "North Europe", location: "Ireland" },
+    CloudRegion { id: "uksouth", name: "UK South", location: "London" },
+    CloudRegion { id: "ukwest", name: "UK West", location: "Cardiff" },
+    CloudRegion { id: "germanywestcentral", name: "Germany West Central", location: "Frankfurt" },
+    CloudRegion { id: "francecentral", name: "France Central", location: "Paris" },
+    CloudRegion { id: "swedencentral", name: "Sweden Central", location: "Gävle" },
+    // Asia Pacific
+    CloudRegion { id: "eastasia", name: "East Asia", location: "Hong Kong" },
+    CloudRegion { id: "southeastasia", name: "Southeast Asia", location: "Singapore" },
+    CloudRegion { id: "japaneast", name: "Japan East", location: "Tokyo" },
+    CloudRegion { id: "japanwest", name: "Japan West", location: "Osaka" },
+    CloudRegion { id: "koreacentral", name: "Korea Central", location: "Seoul" },
+    CloudRegion { id: "australiaeast", name: "Australia East", location: "Sydney" },
+    CloudRegion { id: "centralindia", name: "Central India", location: "Pune" },
+];
+
+// =============================================================================
+// GCP Cloud Run - CPU/Memory Constraints
+// =============================================================================
+
+/// GCP Cloud Run CPU/memory constraint
+#[derive(Debug, Clone)]
+pub struct CloudRunCpuMemory {
+    /// CPU allocation (e.g., "1")
+    pub cpu: &'static str,
+    /// Available memory options for this CPU level
+    pub memory_options: &'static [&'static str],
+    /// Default memory for this CPU level
+    pub default_memory: &'static str,
+}
+
+/// GCP Cloud Run CPU/memory constraints (matching frontend CLOUD_RUN_MEMORY_CONSTRAINTS)
+pub static CLOUD_RUN_CPU_MEMORY: &[CloudRunCpuMemory] = &[
+    CloudRunCpuMemory { cpu: "1", memory_options: &["128Mi", "256Mi", "512Mi", "1Gi", "2Gi", "4Gi"], default_memory: "512Mi" },
+    CloudRunCpuMemory { cpu: "2", memory_options: &["256Mi", "512Mi", "1Gi", "2Gi", "4Gi", "8Gi"], default_memory: "2Gi" },
+    CloudRunCpuMemory { cpu: "4", memory_options: &["512Mi", "1Gi", "2Gi", "4Gi", "8Gi", "16Gi"], default_memory: "4Gi" },
+    CloudRunCpuMemory { cpu: "6", memory_options: &["1Gi", "2Gi", "4Gi", "8Gi", "16Gi", "24Gi"], default_memory: "8Gi" },
+    CloudRunCpuMemory { cpu: "8", memory_options: &["2Gi", "4Gi", "8Gi", "16Gi", "24Gi", "32Gi"], default_memory: "16Gi" },
+];
+
+// =============================================================================
+// Validation Helpers
+// =============================================================================
+
+/// Validate that a CPU/memory pair is valid for Azure Container Apps
+pub fn validate_aca_cpu_memory(cpu: &str, memory: &str) -> bool {
+    ACA_RESOURCE_PAIRS.iter().any(|p| p.cpu == cpu && p.memory == memory)
+}
+
+/// Validate that a CPU/memory pair is valid for GCP Cloud Run
+pub fn validate_cloud_run_cpu_memory(cpu: &str, memory: &str) -> bool {
+    CLOUD_RUN_CPU_MEMORY.iter().any(|c| c.cpu == cpu && c.memory_options.contains(&memory))
+}
+
+/// Get available memory options for a given GCP Cloud Run CPU level
+pub fn get_cloud_run_memory_for_cpu(cpu: &str) -> &'static [&'static str] {
+    CLOUD_RUN_CPU_MEMORY
+        .iter()
+        .find(|c| c.cpu == cpu)
+        .map(|c| c.memory_options)
+        .unwrap_or(&[])
+}
+
+// =============================================================================
 // GCP (Google Cloud Platform) - Static data
 // =============================================================================
 
@@ -85,7 +188,8 @@ pub fn get_regions_for_provider(provider: &CloudProvider) -> &'static [CloudRegi
     match provider {
         CloudProvider::Hetzner => &[], // Use dynamic fetching for Hetzner
         CloudProvider::Gcp => GCP_REGIONS,
-        _ => &[], // AWS, Azure not yet supported
+        CloudProvider::Azure => AZURE_REGIONS,
+        _ => &[], // AWS not yet supported
     }
 }
 
@@ -104,15 +208,18 @@ pub fn get_default_region(provider: &CloudProvider) -> &'static str {
     match provider {
         CloudProvider::Hetzner => "nbg1",
         CloudProvider::Gcp => "us-central1",
+        CloudProvider::Azure => "eastus",
         _ => "",
     }
 }
 
 /// Get default machine type for a provider
+/// For Azure, returns the default CPU value (used with ACA resource pairs)
 pub fn get_default_machine_type(provider: &CloudProvider) -> &'static str {
     match provider {
         CloudProvider::Hetzner => "cx22",
         CloudProvider::Gcp => "e2-small",
+        CloudProvider::Azure => "0.5",
         _ => "",
     }
 }
@@ -449,8 +556,68 @@ mod tests {
     fn test_defaults() {
         assert_eq!(get_default_region(&CloudProvider::Hetzner), "nbg1");
         assert_eq!(get_default_region(&CloudProvider::Gcp), "us-central1");
+        assert_eq!(get_default_region(&CloudProvider::Azure), "eastus");
         assert_eq!(get_default_machine_type(&CloudProvider::Hetzner), "cx22");
         assert_eq!(get_default_machine_type(&CloudProvider::Gcp), "e2-small");
+        assert_eq!(get_default_machine_type(&CloudProvider::Azure), "0.5");
+    }
+
+    #[test]
+    fn test_azure_regions() {
+        assert!(!AZURE_REGIONS.is_empty());
+        assert_eq!(AZURE_REGIONS.len(), 22);
+        assert!(AZURE_REGIONS.iter().any(|r| r.id == "eastus"));
+        assert!(AZURE_REGIONS.iter().any(|r| r.id == "westeurope"));
+    }
+
+    #[test]
+    fn test_azure_regions_via_provider() {
+        let regions = get_regions_for_provider(&CloudProvider::Azure);
+        assert!(!regions.is_empty());
+        assert_eq!(regions.len(), 22);
+    }
+
+    #[test]
+    fn test_aca_resource_pairs() {
+        assert_eq!(ACA_RESOURCE_PAIRS.len(), 8);
+        assert_eq!(ACA_RESOURCE_PAIRS[0].cpu, "0.25");
+        assert_eq!(ACA_RESOURCE_PAIRS[0].memory, "0.5Gi");
+        assert_eq!(ACA_RESOURCE_PAIRS[7].cpu, "2.0");
+        assert_eq!(ACA_RESOURCE_PAIRS[7].memory, "4.0Gi");
+    }
+
+    #[test]
+    fn test_validate_aca_cpu_memory() {
+        assert!(validate_aca_cpu_memory("0.5", "1.0Gi"));
+        assert!(validate_aca_cpu_memory("2.0", "4.0Gi"));
+        assert!(!validate_aca_cpu_memory("0.5", "4.0Gi")); // invalid pair
+        assert!(!validate_aca_cpu_memory("3.0", "8.0Gi")); // non-existent
+    }
+
+    #[test]
+    fn test_cloud_run_cpu_memory() {
+        assert_eq!(CLOUD_RUN_CPU_MEMORY.len(), 5);
+        assert_eq!(CLOUD_RUN_CPU_MEMORY[0].cpu, "1");
+        assert_eq!(CLOUD_RUN_CPU_MEMORY[0].default_memory, "512Mi");
+    }
+
+    #[test]
+    fn test_validate_cloud_run_cpu_memory() {
+        assert!(validate_cloud_run_cpu_memory("2", "4Gi"));
+        assert!(validate_cloud_run_cpu_memory("1", "512Mi"));
+        assert!(!validate_cloud_run_cpu_memory("1", "16Gi")); // too big for 1 CPU
+        assert!(!validate_cloud_run_cpu_memory("3", "4Gi")); // non-existent CPU
+    }
+
+    #[test]
+    fn test_get_cloud_run_memory_for_cpu() {
+        let options = get_cloud_run_memory_for_cpu("1");
+        assert_eq!(options.len(), 6);
+        assert!(options.contains(&"512Mi"));
+        assert!(options.contains(&"4Gi"));
+
+        let empty = get_cloud_run_memory_for_cpu("99");
+        assert!(empty.is_empty());
     }
 
     #[test]

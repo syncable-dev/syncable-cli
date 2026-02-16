@@ -71,8 +71,8 @@ targets are available (clusters, registries, Cloud Run).
   - summary: Human-readable status
 
 **Provider Availability:**
-- Available now: GCP, Hetzner
-- Coming soon: AWS, Azure, Scaleway, Cyso Cloud
+- Available now: GCP, Hetzner, Azure
+- Coming soon: AWS, Scaleway, Cyso Cloud
 
 **Use Cases:**
 - Before creating a deployment, check what options are available
@@ -173,7 +173,7 @@ targets are available (clusters, registries, Cloud Run).
 
                 // Build summary
                 let summary = if available_connected_count == 0 {
-                    "No available providers connected. Connect GCP or Hetzner in platform settings.".to_string()
+                    "No available providers connected. Connect GCP, Hetzner, or Azure in platform settings.".to_string()
                 } else {
                     let mut parts = vec![format!("{} provider{} ready", available_connected_count, if available_connected_count == 1 { "" } else { "s" })];
                     if total_clusters > 0 {
@@ -193,19 +193,19 @@ targets are available (clusters, registries, Cloud Run).
                     "available_connected_count": available_connected_count,
                     "total_clusters": total_clusters,
                     "total_registries": total_registries,
-                    "coming_soon_providers": ["AWS", "Azure", "Scaleway", "Cyso Cloud"],
+                    "coming_soon_providers": ["AWS", "Scaleway", "Cyso Cloud"],
                     "next_steps": if available_connected_count > 0 {
                         vec![
                             "Use analyze_project to discover Dockerfiles in the project",
                             "Use create_deployment_config to create a deployment configuration",
                             "For Cloud Run deployments, no cluster is needed",
-                            "Note: AWS, Azure, Scaleway, and Cyso Cloud are coming soon"
+                            "Note: AWS, Scaleway, and Cyso Cloud are coming soon"
                         ]
                     } else {
                         vec![
-                            "Use open_provider_settings to connect GCP or Hetzner",
+                            "Use open_provider_settings to connect GCP, Hetzner, or Azure",
                             "After connecting, run this tool again to see available options",
-                            "Note: AWS, Azure, Scaleway, and Cyso Cloud are coming soon"
+                            "Note: AWS, Scaleway, and Cyso Cloud are coming soon"
                         ]
                     }
                 });

@@ -6,11 +6,12 @@
 use super::error::{PlatformApiError, Result};
 use super::types::{
     ApiErrorResponse, ArtifactRegistry, AvailableRepositoriesResponse, CloudCredentialStatus,
-    CloudProvider, ClusterEntity, ConnectRepositoryRequest, ConnectRepositoryResponse,
-    CreateDeploymentConfigRequest, CreateDeploymentConfigResponse, CreateRegistryRequest,
-    CreateRegistryResponse, DeploymentConfig, DeploymentTaskStatus, Environment, GenericResponse,
-    GetLogsResponse, GitHubInstallationUrlResponse, GitHubInstallationsResponse,
-    InitializeGitOpsRequest, InitializeGitOpsResponse, Organization, PaginatedDeployments, Project,
+    CloudProvider, CloudRunnerNetwork, ClusterEntity, ConnectRepositoryRequest,
+    ConnectRepositoryResponse, CreateDeploymentConfigRequest, CreateDeploymentConfigResponse,
+    CreateRegistryRequest, CreateRegistryResponse, DeploymentConfig, DeploymentSecretInput,
+    DeploymentTaskStatus, Environment, GenericResponse, GetLogsResponse,
+    GitHubInstallationUrlResponse, GitHubInstallationsResponse, InitializeGitOpsRequest,
+    InitializeGitOpsResponse, Organization, PaginatedDeployments, Project,
     ProjectRepositoriesResponse, RegistryTaskStatus, TriggerDeploymentRequest,
     TriggerDeploymentResponse, UserProfile,
 };
@@ -254,6 +255,53 @@ impl PlatformApiClient {
             match result {
                 Ok(response) => {
                     // Got a response - don't retry POST even on server errors
+                    return self.handle_response(response).await;
+                }
+                Err(e) => {
+                    // Network error before request completed - safe to retry
+                    let platform_error = PlatformApiError::HttpError(e);
+                    if attempt < MAX_RETRIES {
+                        eprintln!(
+                            "Network error (attempt {}/{}), retrying in {}ms...",
+                            attempt + 1,
+                            MAX_RETRIES + 1,
+                            backoff_ms
+                        );
+                        last_error = Some(platform_error);
+                        tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+                        backoff_ms = (backoff_ms * 2).min(MAX_BACKOFF_MS);
+                    } else {
+                        return Err(platform_error);
+                    }
+                }
+            }
+        }
+
+        Err(last_error.expect("retry loop should have set last_error"))
+    }
+
+    /// Make an authenticated PUT request with a JSON body
+    /// Only retries on network errors (before request completes), not on server responses,
+    /// since PUT requests may not be idempotent.
+    async fn put<T: DeserializeOwned, B: Serialize>(&self, path: &str, body: &B) -> Result<T> {
+        let token = Self::get_auth_token()?;
+        let url = format!("{}{}", self.api_url, path);
+
+        let mut last_error = None;
+        let mut backoff_ms = INITIAL_BACKOFF_MS;
+
+        for attempt in 0..=MAX_RETRIES {
+            let result = self
+                .http_client
+                .put(&url)
+                .bearer_auth(&token)
+                .json(body)
+                .send()
+                .await;
+
+            match result {
+                Ok(response) => {
+                    // Got a response - don't retry PUT even on server errors
                     return self.handle_response(response).await;
                 }
                 Err(e) => {
@@ -546,6 +594,7 @@ impl PlatformApiClient {
         name: &str,
         environment_type: &str,
         cluster_id: Option<&str>,
+        provider_regions: Option<&std::collections::HashMap<String, String>>,
     ) -> Result<Environment> {
         let mut request = serde_json::json!({
             "projectId": project_id,
@@ -555,6 +604,10 @@ impl PlatformApiClient {
 
         if let Some(cid) = cluster_id {
             request["clusterId"] = serde_json::json!(cid);
+        }
+
+        if let Some(regions) = provider_regions {
+            request["providerRegions"] = serde_json::json!(regions);
         }
 
         let response: GenericResponse<Environment> =
@@ -653,6 +706,27 @@ impl PlatformApiClient {
         Ok(response.data.config)
     }
 
+    /// Update environment variables / secrets on a deployment config
+    ///
+    /// SECURITY NOTE: This sends secret values over HTTPS to the backend.
+    /// The backend stores them encrypted. API responses mask secret values.
+    ///
+    /// Endpoint: PUT /api/deployment-configs/:configId/secrets
+    pub async fn update_deployment_config_secrets(
+        &self,
+        config_id: &str,
+        secrets: &[DeploymentSecretInput],
+    ) -> Result<()> {
+        let body = serde_json::json!({
+            "configId": config_id,
+            "secrets": secrets,
+        });
+        let _response: GenericResponse<serde_json::Value> = self
+            .put(&format!("/api/deployment-configs/{}/secrets", config_id), &body)
+            .await?;
+        Ok(())
+    }
+
     /// Trigger a deployment using a deployment config
     ///
     /// Starts a new deployment for the specified config. Optionally specify
@@ -708,7 +782,8 @@ impl PlatformApiClient {
             Some(l) => format!("/api/deployments/project/{}?limit={}", project_id, l),
             None => format!("/api/deployments/project/{}", project_id),
         };
-        self.get(&path).await
+        let response: GenericResponse<PaginatedDeployments> = self.get(&path).await?;
+        Ok(response.data)
     }
 
     /// Get container logs for a deployed service
@@ -948,6 +1023,29 @@ impl PlatformApiClient {
     }
 
     // =========================================================================
+    // Cloud Runner Network API methods
+    // =========================================================================
+
+    /// List all cloud runner networks for a project
+    ///
+    /// Returns VPCs, subnets, Azure Container App Environments, GCP VPC Connectors, etc.
+    /// Use this to discover private networking infrastructure provisioned for the project.
+    ///
+    /// Endpoint: GET /api/v1/cloud-runner/projects/:projectId/networks
+    pub async fn list_project_networks(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<CloudRunnerNetwork>> {
+        let response: GenericResponse<Vec<CloudRunnerNetwork>> = self
+            .get(&format!(
+                "/api/v1/cloud-runner/projects/{}/networks",
+                project_id
+            ))
+            .await?;
+        Ok(response.data)
+    }
+
+    // =========================================================================
     // Health Check API methods
     // =========================================================================
 
@@ -1144,6 +1242,7 @@ mod tests {
         let name = "staging";
         let environment_type = "cloud";
         let cluster_id: Option<&str> = None;
+        let provider_regions: Option<&std::collections::HashMap<String, String>> = None;
 
         let mut request = serde_json::json!({
             "projectId": project_id,
@@ -1155,8 +1254,37 @@ mod tests {
             request["clusterId"] = serde_json::json!(cid);
         }
 
+        if let Some(regions) = provider_regions {
+            request["providerRegions"] = serde_json::json!(regions);
+        }
+
         let json_str = request.to_string();
         assert!(json_str.contains("\"environmentType\":\"cloud\""));
         assert!(!json_str.contains("clusterId"));
+        assert!(!json_str.contains("providerRegions"));
+    }
+
+    #[test]
+    fn test_create_environment_request_with_provider_regions() {
+        let project_id = "proj-123";
+        let name = "staging";
+        let environment_type = "cloud";
+
+        let mut provider_regions = std::collections::HashMap::new();
+        provider_regions.insert("gcp".to_string(), "us-central1".to_string());
+        provider_regions.insert("azure".to_string(), "eastus".to_string());
+
+        let mut request = serde_json::json!({
+            "projectId": project_id,
+            "name": name,
+            "environmentType": environment_type,
+        });
+
+        request["providerRegions"] = serde_json::json!(&provider_regions);
+
+        let json_str = request.to_string();
+        assert!(json_str.contains("\"providerRegions\""));
+        assert!(json_str.contains("\"gcp\":\"us-central1\""));
+        assert!(json_str.contains("\"azure\":\"eastus\""));
     }
 }

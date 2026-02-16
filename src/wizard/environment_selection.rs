@@ -140,6 +140,7 @@ mod tests {
             is_active: true,
             created_at: None,
             updated_at: None,
+            provider_regions: None,
         };
         let _ = EnvironmentSelectionResult::Selected(env);
         let _ = EnvironmentSelectionResult::CreateNew;
