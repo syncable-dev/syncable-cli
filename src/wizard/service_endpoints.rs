@@ -4,7 +4,7 @@
 //! already-deployed services, shows their public URLs, and offers to inject
 //! them as environment variables.
 
-use crate::platform::api::types::{DeployedService, DeploymentSecretInput};
+use crate::platform::api::types::{CloudRunnerNetwork, DeployedService, DeploymentSecretInput};
 use crate::wizard::render::wizard_render_config;
 use colored::Colorize;
 use inquire::{Confirm, InquireError, MultiSelect, Text};
@@ -448,6 +448,175 @@ pub fn collect_service_endpoint_env_vars(
 }
 
 // ---------------------------------------------------------------------------
+// Network endpoint discovery
+// ---------------------------------------------------------------------------
+
+/// A network resource with its connection-relevant details.
+///
+/// Extracted from `CloudRunnerNetwork` records, filtered for the target
+/// provider and environment. Contains key-value pairs of useful connection
+/// info (VPC_ID, DEFAULT_DOMAIN, etc.) that can be injected as env vars.
+#[derive(Debug, Clone)]
+pub struct NetworkEndpointInfo {
+    pub network_id: String,
+    pub cloud_provider: String,
+    pub region: String,
+    pub status: String,
+    pub environment_id: Option<String>,
+    /// Key-value pairs of useful connection info for this network
+    /// e.g., ("NETWORK_VPC_ID", "12345"), ("NETWORK_DEFAULT_DOMAIN", "my-app.azurecontainerapps.io")
+    pub connection_details: Vec<(String, String)>,
+}
+
+/// Extract useful connection details from cloud runner networks.
+///
+/// Returns only networks that are "ready" and on the target provider.
+/// Optionally filters by environment ID (shared/default networks with no
+/// environment_id are always included).
+pub fn extract_network_endpoints(
+    networks: &[CloudRunnerNetwork],
+    target_provider: &str,
+    target_environment_id: Option<&str>,
+) -> Vec<NetworkEndpointInfo> {
+    networks
+        .iter()
+        .filter(|n| {
+            n.status == "ready"
+                && n.cloud_provider.eq_ignore_ascii_case(target_provider)
+                && (target_environment_id.is_none()
+                    || n.environment_id.as_deref() == target_environment_id
+                    || n.environment_id.is_none()) // shared/default networks
+        })
+        .map(|n| {
+            let mut details = Vec::new();
+
+            // Provider-generic connection details
+            if let Some(ref vpc_id) = n.vpc_id {
+                details.push(("NETWORK_VPC_ID".to_string(), vpc_id.clone()));
+            }
+            if let Some(ref vpc_name) = n.vpc_name {
+                details.push(("NETWORK_VPC_NAME".to_string(), vpc_name.clone()));
+            }
+            if let Some(ref subnet_id) = n.subnet_id {
+                details.push(("NETWORK_SUBNET_ID".to_string(), subnet_id.clone()));
+            }
+            // Azure-specific
+            if let Some(ref cae_name) = n.container_app_environment_name {
+                details.push((
+                    "AZURE_CONTAINER_APP_ENV_NAME".to_string(),
+                    cae_name.clone(),
+                ));
+            }
+            if let Some(ref domain) = n.default_domain {
+                details.push(("NETWORK_DEFAULT_DOMAIN".to_string(), domain.clone()));
+            }
+            if let Some(ref rg) = n.resource_group_name {
+                details.push(("AZURE_RESOURCE_GROUP".to_string(), rg.clone()));
+            }
+            // GCP-specific
+            if let Some(ref connector_name) = n.vpc_connector_name {
+                details.push(("GCP_VPC_CONNECTOR".to_string(), connector_name.clone()));
+            }
+
+            NetworkEndpointInfo {
+                network_id: n.id.clone(),
+                cloud_provider: n.cloud_provider.clone(),
+                region: n.region.clone(),
+                status: n.status.clone(),
+                environment_id: n.environment_id.clone(),
+                connection_details: details,
+            }
+        })
+        .collect()
+}
+
+/// Interactive prompt to offer network connection details as env vars.
+///
+/// Shows discovered network info and lets the user select which to inject.
+/// Returns `DeploymentSecretInput` entries with `is_secret: false` (network
+/// identifiers are infrastructure metadata, not secrets).
+pub fn collect_network_endpoint_env_vars(
+    network_endpoints: &[NetworkEndpointInfo],
+) -> Vec<DeploymentSecretInput> {
+    if network_endpoints.is_empty() {
+        return Vec::new();
+    }
+
+    // Flatten all connection details across networks
+    let all_details: Vec<(&NetworkEndpointInfo, &str, &str)> = network_endpoints
+        .iter()
+        .flat_map(|ne| {
+            ne.connection_details
+                .iter()
+                .map(move |(k, v)| (ne, k.as_str(), v.as_str()))
+        })
+        .collect();
+
+    if all_details.is_empty() {
+        return Vec::new();
+    }
+
+    println!();
+    println!(
+        "{}",
+        "─── Private Network Resources ────────────────────".dimmed()
+    );
+    for ne in network_endpoints {
+        println!(
+            "  {} {} network in {} ({})",
+            "●".green(),
+            ne.cloud_provider.cyan(),
+            ne.region,
+            ne.status,
+        );
+        for (k, v) in &ne.connection_details {
+            println!("    {} = {}", k.dimmed(), v);
+        }
+    }
+    println!();
+
+    let wants_inject = match Confirm::new("Inject any network details as env vars?")
+        .with_default(false)
+        .with_help_message("Add network identifiers like VPC_ID, DEFAULT_DOMAIN as env vars")
+        .prompt()
+    {
+        Ok(v) => v,
+        Err(_) => return Vec::new(),
+    };
+
+    if !wants_inject {
+        return Vec::new();
+    }
+
+    let labels: Vec<String> = all_details
+        .iter()
+        .map(|(ne, k, v)| format!("{} = {} [{}]", k, v, ne.cloud_provider))
+        .collect();
+
+    let selected = match MultiSelect::new("Select network details to inject:", labels.clone())
+        .with_render_config(wizard_render_config())
+        .with_help_message("Space to toggle, Enter to confirm")
+        .prompt()
+    {
+        Ok(s) if !s.is_empty() => s,
+        _ => return Vec::new(),
+    };
+
+    selected
+        .iter()
+        .filter_map(|label| {
+            let idx = labels.iter().position(|l| l == label)?;
+            let (_, key, value) = &all_details[idx];
+            Some(DeploymentSecretInput {
+                key: key.to_string(),
+                value: value.to_string(),
+                is_secret: false,
+            })
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -817,5 +986,158 @@ mod tests {
         assert_eq!(filtered.len(), 2);
         assert_eq!(filtered[0].service_name, "azure-api"); // public
         assert_eq!(filtered[1].service_name, "azure-internal"); // same provider
+    }
+
+    // =========================================================================
+    // Network endpoint tests
+    // =========================================================================
+
+    fn make_network(
+        id: &str,
+        provider: &str,
+        region: &str,
+        status: &str,
+        env_id: Option<&str>,
+    ) -> CloudRunnerNetwork {
+        CloudRunnerNetwork {
+            id: id.to_string(),
+            project_id: "proj-1".to_string(),
+            organization_id: "org-1".to_string(),
+            environment_id: env_id.map(String::from),
+            cloud_provider: provider.to_string(),
+            region: region.to_string(),
+            vpc_id: None,
+            vpc_name: None,
+            subnet_id: None,
+            vpc_connector_id: None,
+            vpc_connector_name: None,
+            resource_group_name: None,
+            container_app_environment_id: None,
+            container_app_environment_name: None,
+            default_domain: None,
+            status: status.to_string(),
+            error_message: None,
+        }
+    }
+
+    #[test]
+    fn test_extract_network_endpoints_filters_by_provider_and_status() {
+        let networks = vec![
+            {
+                let mut n = make_network("n1", "hetzner", "nbg1", "ready", Some("env-1"));
+                n.vpc_id = Some("vpc-123".to_string());
+                n.subnet_id = Some("subnet-456".to_string());
+                n
+            },
+            // Different provider — should be excluded
+            {
+                let mut n = make_network("n2", "gcp", "us-central1", "ready", Some("env-1"));
+                n.vpc_connector_name = Some("my-connector".to_string());
+                n
+            },
+            // Same provider but not ready — should be excluded
+            {
+                let mut n = make_network("n3", "hetzner", "fsn1", "provisioning", Some("env-1"));
+                n.vpc_id = Some("vpc-789".to_string());
+                n
+            },
+        ];
+
+        let endpoints = extract_network_endpoints(&networks, "hetzner", Some("env-1"));
+        assert_eq!(endpoints.len(), 1);
+        assert_eq!(endpoints[0].network_id, "n1");
+        assert_eq!(endpoints[0].cloud_provider, "hetzner");
+        assert_eq!(endpoints[0].connection_details.len(), 2);
+        assert!(endpoints[0]
+            .connection_details
+            .iter()
+            .any(|(k, v)| k == "NETWORK_VPC_ID" && v == "vpc-123"));
+        assert!(endpoints[0]
+            .connection_details
+            .iter()
+            .any(|(k, v)| k == "NETWORK_SUBNET_ID" && v == "subnet-456"));
+    }
+
+    #[test]
+    fn test_extract_network_endpoints_azure() {
+        let networks = vec![{
+            let mut n = make_network("n1", "azure", "eastus", "ready", Some("env-1"));
+            n.container_app_environment_name = Some("my-cae".to_string());
+            n.default_domain = Some("my-app.azurecontainerapps.io".to_string());
+            n.resource_group_name = Some("rg-prod".to_string());
+            n
+        }];
+
+        let endpoints = extract_network_endpoints(&networks, "azure", Some("env-1"));
+        assert_eq!(endpoints.len(), 1);
+        assert!(endpoints[0]
+            .connection_details
+            .iter()
+            .any(|(k, v)| k == "AZURE_CONTAINER_APP_ENV_NAME" && v == "my-cae"));
+        assert!(endpoints[0]
+            .connection_details
+            .iter()
+            .any(|(k, v)| k == "NETWORK_DEFAULT_DOMAIN"
+                && v == "my-app.azurecontainerapps.io"));
+        assert!(endpoints[0]
+            .connection_details
+            .iter()
+            .any(|(k, v)| k == "AZURE_RESOURCE_GROUP" && v == "rg-prod"));
+    }
+
+    #[test]
+    fn test_extract_network_endpoints_hetzner() {
+        let networks = vec![{
+            let mut n = make_network("n1", "hetzner", "nbg1", "ready", None);
+            n.vpc_id = Some("hetz-vpc-1".to_string());
+            n.subnet_id = Some("hetz-sub-1".to_string());
+            n
+        }];
+
+        let endpoints = extract_network_endpoints(&networks, "hetzner", Some("env-1"));
+        // Shared network (no environment_id) should be included
+        assert_eq!(endpoints.len(), 1);
+        assert!(endpoints[0]
+            .connection_details
+            .iter()
+            .any(|(k, v)| k == "NETWORK_VPC_ID" && v == "hetz-vpc-1"));
+        assert!(endpoints[0]
+            .connection_details
+            .iter()
+            .any(|(k, v)| k == "NETWORK_SUBNET_ID" && v == "hetz-sub-1"));
+    }
+
+    #[test]
+    fn test_extract_network_endpoints_gcp() {
+        let networks = vec![{
+            let mut n = make_network("n1", "gcp", "us-central1", "ready", Some("env-1"));
+            n.vpc_connector_name = Some("projects/my-proj/locations/us-central1/connectors/vpc-conn".to_string());
+            n
+        }];
+
+        let endpoints = extract_network_endpoints(&networks, "gcp", Some("env-1"));
+        assert_eq!(endpoints.len(), 1);
+        assert!(endpoints[0].connection_details.iter().any(|(k, v)| k
+            == "GCP_VPC_CONNECTOR"
+            && v == "projects/my-proj/locations/us-central1/connectors/vpc-conn"));
+    }
+
+    #[test]
+    fn test_extract_network_endpoints_filters_non_ready() {
+        let networks = vec![
+            {
+                let mut n = make_network("n1", "hetzner", "nbg1", "error", Some("env-1"));
+                n.vpc_id = Some("vpc-err".to_string());
+                n
+            },
+            {
+                let mut n = make_network("n2", "hetzner", "nbg1", "provisioning", Some("env-1"));
+                n.vpc_id = Some("vpc-prov".to_string());
+                n
+            },
+        ];
+
+        let endpoints = extract_network_endpoints(&networks, "hetzner", Some("env-1"));
+        assert!(endpoints.is_empty());
     }
 }

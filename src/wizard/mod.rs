@@ -52,7 +52,9 @@ pub use recommendations::{
 };
 pub use render::{count_badge, display_step_header, status_indicator, wizard_render_config};
 pub use service_endpoints::{
-    collect_service_endpoint_env_vars, filter_endpoints_for_provider, get_available_endpoints,
+    collect_network_endpoint_env_vars, collect_service_endpoint_env_vars,
+    extract_network_endpoints, filter_endpoints_for_provider, get_available_endpoints,
     match_env_vars_to_services, AvailableServiceEndpoint, EndpointSuggestion, MatchConfidence,
+    NetworkEndpointInfo,
 };
 pub use target_selection::{select_target, TargetSelectionResult};

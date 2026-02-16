@@ -6,13 +6,14 @@
 use super::error::{PlatformApiError, Result};
 use super::types::{
     ApiErrorResponse, ArtifactRegistry, AvailableRepositoriesResponse, CloudCredentialStatus,
-    CloudProvider, ClusterEntity, ConnectRepositoryRequest, ConnectRepositoryResponse,
-    CreateDeploymentConfigRequest, CreateDeploymentConfigResponse, CreateRegistryRequest,
-    CreateRegistryResponse, DeploymentConfig, DeploymentSecretInput, DeploymentTaskStatus,
-    Environment, GenericResponse, GetLogsResponse, GitHubInstallationUrlResponse,
-    GitHubInstallationsResponse, InitializeGitOpsRequest, InitializeGitOpsResponse, Organization,
-    PaginatedDeployments, Project, ProjectRepositoriesResponse, RegistryTaskStatus,
-    TriggerDeploymentRequest, TriggerDeploymentResponse, UserProfile,
+    CloudProvider, CloudRunnerNetwork, ClusterEntity, ConnectRepositoryRequest,
+    ConnectRepositoryResponse, CreateDeploymentConfigRequest, CreateDeploymentConfigResponse,
+    CreateRegistryRequest, CreateRegistryResponse, DeploymentConfig, DeploymentSecretInput,
+    DeploymentTaskStatus, Environment, GenericResponse, GetLogsResponse,
+    GitHubInstallationUrlResponse, GitHubInstallationsResponse, InitializeGitOpsRequest,
+    InitializeGitOpsResponse, Organization, PaginatedDeployments, Project,
+    ProjectRepositoriesResponse, RegistryTaskStatus, TriggerDeploymentRequest,
+    TriggerDeploymentResponse, UserProfile,
 };
 use crate::auth::credentials;
 use reqwest::Client;
@@ -1019,6 +1020,29 @@ impl PlatformApiClient {
             urlencoding::encode(server_type)
         ))
         .await
+    }
+
+    // =========================================================================
+    // Cloud Runner Network API methods
+    // =========================================================================
+
+    /// List all cloud runner networks for a project
+    ///
+    /// Returns VPCs, subnets, Azure Container App Environments, GCP VPC Connectors, etc.
+    /// Use this to discover private networking infrastructure provisioned for the project.
+    ///
+    /// Endpoint: GET /api/v1/cloud-runner/projects/:projectId/networks
+    pub async fn list_project_networks(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<CloudRunnerNetwork>> {
+        let response: GenericResponse<Vec<CloudRunnerNetwork>> = self
+            .get(&format!(
+                "/api/v1/cloud-runner/projects/{}/networks",
+                project_id
+            ))
+            .await?;
+        Ok(response.data)
     }
 
     // =========================================================================

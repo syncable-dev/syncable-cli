@@ -1516,6 +1516,53 @@ pub struct ServerTypesResponse {
 }
 
 // =============================================================================
+// Cloud Runner Network Types
+// =============================================================================
+
+/// A provisioned cloud runner network (VPC/subnet/domain)
+///
+/// Represents infrastructure networking resources provisioned for a project,
+/// including VPCs, subnets, Azure Container App Environments, GCP VPC Connectors, etc.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CloudRunnerNetwork {
+    /// Unique network identifier
+    pub id: String,
+    /// Project this network belongs to
+    pub project_id: String,
+    /// Organization this network belongs to
+    pub organization_id: String,
+    /// Environment this network is scoped to (None for shared/default networks)
+    pub environment_id: Option<String>,
+    /// Cloud provider (e.g., "hetzner", "gcp", "azure")
+    pub cloud_provider: String,
+    /// Region where the network is provisioned
+    pub region: String,
+    /// VPC identifier (provider-specific)
+    pub vpc_id: Option<String>,
+    /// VPC display name
+    pub vpc_name: Option<String>,
+    /// Subnet identifier
+    pub subnet_id: Option<String>,
+    /// GCP VPC Connector identifier
+    pub vpc_connector_id: Option<String>,
+    /// GCP VPC Connector name
+    pub vpc_connector_name: Option<String>,
+    /// Azure resource group name
+    pub resource_group_name: Option<String>,
+    /// Azure Container App Environment identifier
+    pub container_app_environment_id: Option<String>,
+    /// Azure Container App Environment name
+    pub container_app_environment_name: Option<String>,
+    /// Default domain for services on this network (e.g., Azure ACA default domain)
+    pub default_domain: Option<String>,
+    /// Network status (e.g., "ready", "provisioning", "error")
+    pub status: String,
+    /// Error message if status is "error"
+    pub error_message: Option<String>,
+}
+
+// =============================================================================
 // Hetzner Options Types (from /api/v1/cloud-runner/hetzner/options)
 // =============================================================================
 
