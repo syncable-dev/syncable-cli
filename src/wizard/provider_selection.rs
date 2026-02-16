@@ -91,9 +91,9 @@ pub async fn get_provider_deployment_statuses(
         // Provider is connected if it has cloud credentials (NOT just resources)
         let is_connected = connected_providers.contains(provider.as_str());
 
-        // Cloud Runner available for GCP and Hetzner when connected
+        // Cloud Runner available for GCP, Hetzner, and Azure when connected
         let cloud_runner_available =
-            is_connected && matches!(provider, CloudProvider::Gcp | CloudProvider::Hetzner);
+            is_connected && matches!(provider, CloudProvider::Gcp | CloudProvider::Hetzner | CloudProvider::Azure);
 
         let summary = build_status_summary(&clusters, &registries, cloud_runner_available);
 
@@ -202,7 +202,7 @@ pub fn select_provider(statuses: &[ProviderDeploymentStatus]) -> ProviderSelecti
         );
         println!(
             "  {}",
-            "Note: GCP and Hetzner are currently available. AWS, Azure, Scaleway, and Cyso Cloud are coming soon.".dimmed()
+            "Note: GCP, Hetzner, and Azure are currently available. AWS, Scaleway, and Cyso Cloud are coming soon.".dimmed()
         );
         return ProviderSelectionResult::Cancelled;
     }
@@ -231,7 +231,7 @@ pub fn select_provider(statuses: &[ProviderDeploymentStatus]) -> ProviderSelecti
                 println!(
                     "\n{}",
                     format!(
-                        "{} is coming soon! Currently only GCP and Hetzner are available.",
+                        "{} is coming soon! Currently only GCP, Hetzner, and Azure are available.",
                         selected_status.provider.display_name()
                     )
                     .yellow()

@@ -8,8 +8,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::agent::tools::error::{ErrorCategory, format_error_for_llm};
-use crate::platform::api::types::CreateDeploymentConfigRequest;
+use crate::platform::api::types::{CloudProvider, CloudRunnerConfigInput, CreateDeploymentConfigRequest, build_cloud_runner_config_v2};
 use crate::platform::api::{PlatformApiClient, PlatformApiError};
+use std::str::FromStr;
 
 /// Arguments for the create deployment config tool
 #[derive(Debug, Deserialize)]
@@ -28,7 +29,7 @@ pub struct CreateDeploymentConfigArgs {
     pub branch: String,
     /// Target type: "kubernetes" or "cloud_runner"
     pub target_type: String,
-    /// Cloud provider: "gcp" or "hetzner"
+    /// Cloud provider: "gcp", "hetzner", or "azure"
     pub provider: String,
     /// Environment ID for deployment
     pub environment_id: String,
@@ -43,6 +44,16 @@ pub struct CreateDeploymentConfigArgs {
     /// Enable auto-deploy on push (defaults to true)
     #[serde(default = "default_auto_deploy")]
     pub auto_deploy_enabled: bool,
+    /// CPU allocation (for GCP Cloud Run or Azure Container Apps)
+    pub cpu: Option<String>,
+    /// Memory allocation (for GCP Cloud Run or Azure Container Apps)
+    pub memory: Option<String>,
+    /// Minimum instances/replicas
+    pub min_instances: Option<i32>,
+    /// Maximum instances/replicas
+    pub max_instances: Option<i32>,
+    /// Whether the service should be publicly accessible
+    pub is_public: Option<bool>,
 }
 
 fn default_auto_deploy() -> bool {
@@ -84,6 +95,7 @@ A deployment config defines how to build and deploy a service, including:
 - Dockerfile location and build context
 - Target (Cloud Runner or Kubernetes)
 - Port configuration
+- CPU/memory allocation (for Cloud Runner deployments)
 - Auto-deploy settings
 
 **Required Parameters:**
@@ -94,7 +106,7 @@ A deployment config defines how to build and deploy a service, including:
 - port: Port the service listens on
 - branch: Git branch to deploy from (e.g., "main")
 - target_type: "kubernetes" or "cloud_runner"
-- provider: "gcp" or "hetzner"
+- provider: "gcp", "hetzner", or "azure"
 - environment_id: Environment to deploy to
 
 **Optional Parameters:**
@@ -103,6 +115,11 @@ A deployment config defines how to build and deploy a service, including:
 - cluster_id: Required for kubernetes target
 - registry_id: Container registry ID (provisions new if not provided)
 - auto_deploy_enabled: Enable auto-deploy on push (default: true)
+- cpu: CPU allocation (e.g., "1" for GCP Cloud Run, "0.5" for Azure ACA)
+- memory: Memory allocation (e.g., "512Mi" for GCP, "1.0Gi" for Azure)
+- min_instances: Minimum instances/replicas (default: 0)
+- max_instances: Maximum instances/replicas (default: 10)
+- is_public: Whether the service should be publicly accessible (default: true)
 
 **Prerequisites:**
 - User must be authenticated
@@ -149,7 +166,7 @@ A deployment config defines how to build and deploy a service, including:
                     },
                     "provider": {
                         "type": "string",
-                        "enum": ["gcp", "hetzner"],
+                        "enum": ["gcp", "hetzner", "azure"],
                         "description": "Cloud provider"
                     },
                     "environment_id": {
@@ -175,6 +192,26 @@ A deployment config defines how to build and deploy a service, including:
                     "auto_deploy_enabled": {
                         "type": "boolean",
                         "description": "Enable auto-deploy on push (default: true)"
+                    },
+                    "cpu": {
+                        "type": "string",
+                        "description": "CPU allocation (e.g., '1' for GCP Cloud Run, '0.5' for Azure ACA)"
+                    },
+                    "memory": {
+                        "type": "string",
+                        "description": "Memory allocation (e.g., '512Mi' for GCP, '1.0Gi' for Azure)"
+                    },
+                    "min_instances": {
+                        "type": "integer",
+                        "description": "Minimum instances/replicas (default: 0)"
+                    },
+                    "max_instances": {
+                        "type": "integer",
+                        "description": "Maximum instances/replicas (default: 10)"
+                    },
+                    "is_public": {
+                        "type": "boolean",
+                        "description": "Whether the service should be publicly accessible (default: true)"
                     }
                 },
                 "required": [
@@ -222,20 +259,20 @@ A deployment config defines how to build and deploy a service, including:
                     args.target_type
                 ),
                 Some(vec![
-                    "Use 'cloud_runner' for GCP Cloud Run or Hetzner containers",
+                    "Use 'cloud_runner' for GCP Cloud Run, Hetzner containers, or Azure Container Apps",
                     "Use 'kubernetes' for deploying to a K8s cluster",
                 ]),
             ));
         }
 
         // Validate provider
-        let valid_providers = ["gcp", "hetzner"];
+        let valid_providers = ["gcp", "hetzner", "azure"];
         if !valid_providers.contains(&args.provider.as_str()) {
             return Ok(format_error_for_llm(
                 "create_deployment_config",
                 ErrorCategory::ValidationFailed,
                 &format!(
-                    "Invalid provider '{}'. Must be 'gcp' or 'hetzner'",
+                    "Invalid provider '{}'. Must be 'gcp', 'hetzner', or 'azure'",
                     args.provider
                 ),
                 Some(vec![
@@ -266,6 +303,44 @@ A deployment config defines how to build and deploy a service, including:
             }
         };
 
+        // Build cloud runner config if deploying to cloud_runner
+        let cloud_runner_config = if args.target_type == "cloud_runner" {
+            let provider_enum = CloudProvider::from_str(&args.provider).ok();
+
+            // Fetch provider_account_id from credentials when provider is azure or gcp
+            let mut gcp_project_id = None;
+            let mut subscription_id = None;
+            if let Some(ref provider) = provider_enum {
+                if matches!(provider, CloudProvider::Gcp | CloudProvider::Azure) {
+                    if let Ok(credential) = client.check_provider_connection(provider, &args.project_id).await {
+                        if let Some(cred) = credential {
+                            match provider {
+                                CloudProvider::Gcp => gcp_project_id = cred.provider_account_id,
+                                CloudProvider::Azure => subscription_id = cred.provider_account_id,
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+
+            let config_input = CloudRunnerConfigInput {
+                provider: provider_enum,
+                region: None, // Region is set at environment level or by deploy_service
+                gcp_project_id,
+                cpu: args.cpu.clone(),
+                memory: args.memory.clone(),
+                min_instances: args.min_instances,
+                max_instances: args.max_instances,
+                is_public: args.is_public,
+                subscription_id,
+                ..Default::default()
+            };
+            Some(build_cloud_runner_config_v2(&config_input))
+        } else {
+            None
+        };
+
         // Build the request
         // Note: Send both field name variants (dockerfile/dockerfilePath, context/buildContext)
         // for backend compatibility - different endpoints may expect different field names
@@ -286,8 +361,9 @@ A deployment config defines how to build and deploy a service, including:
             cluster_id: args.cluster_id.clone(),
             registry_id: args.registry_id.clone(),
             auto_deploy_enabled: args.auto_deploy_enabled,
-            is_public: None,
-            cloud_runner_config: None,
+            is_public: args.is_public,
+            cloud_runner_config,
+            secrets: None,
         };
 
         // Create the deployment config
