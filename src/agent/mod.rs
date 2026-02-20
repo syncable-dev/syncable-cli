@@ -310,7 +310,11 @@ pub async fn run_interactive(
     if session.platform_session.is_project_selected() {
         println!(
             "{}",
-            format!("Platform context: {}", session.platform_session.display_context()).dimmed()
+            format!(
+                "Platform context: {}",
+                session.platform_session.display_context()
+            )
+            .dimmed()
         );
     }
 

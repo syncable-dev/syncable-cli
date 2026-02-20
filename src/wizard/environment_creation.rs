@@ -348,13 +348,10 @@ fn select_provider_regions() -> Option<HashMap<String, String>> {
                 .position(|r| r.id == default_region)
                 .unwrap_or(0);
 
-            let region = match Select::new(
-                &format!("{} region:", provider_label),
-                region_labels,
-            )
-            .with_render_config(wizard_render_config())
-            .with_starting_cursor(default_idx)
-            .prompt()
+            let region = match Select::new(&format!("{} region:", provider_label), region_labels)
+                .with_render_config(wizard_render_config())
+                .with_starting_cursor(default_idx)
+                .prompt()
             {
                 Ok(r) => {
                     // Extract region ID from the display string (before first " - ")

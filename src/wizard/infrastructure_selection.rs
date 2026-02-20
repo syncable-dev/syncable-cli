@@ -10,11 +10,9 @@
 use crate::platform::api::client::PlatformApiClient;
 use crate::platform::api::types::CloudProvider;
 use crate::wizard::cloud_provider_data::{
-    get_default_machine_type, get_default_region,
-    get_hetzner_regions_dynamic, get_hetzner_server_types_dynamic,
-    get_machine_types_for_provider, get_regions_for_provider,
-    DynamicCloudRegion, DynamicMachineType, HetznerFetchResult,
-    ACA_RESOURCE_PAIRS, CLOUD_RUN_CPU_MEMORY,
+    ACA_RESOURCE_PAIRS, CLOUD_RUN_CPU_MEMORY, DynamicCloudRegion, DynamicMachineType,
+    HetznerFetchResult, get_default_machine_type, get_default_region, get_hetzner_regions_dynamic,
+    get_hetzner_server_types_dynamic, get_machine_types_for_provider, get_regions_for_provider,
 };
 use crate::wizard::render::{display_step_header, wizard_render_config};
 use colored::Colorize;
@@ -45,7 +43,10 @@ struct DynamicRegionOption {
 impl fmt::Display for DynamicRegionOption {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let availability = if !self.region.available_server_types.is_empty() {
-            format!(" · {} types available", self.region.available_server_types.len())
+            format!(
+                " · {} types available",
+                self.region.available_server_types.len()
+            )
         } else {
             String::new()
         };
@@ -66,7 +67,10 @@ struct DynamicMachineTypeOption {
 
 impl fmt::Display for DynamicMachineTypeOption {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let specs = format!("{} vCPU · {:.0} GB", self.machine.cores, self.machine.memory_gb);
+        let specs = format!(
+            "{} vCPU · {:.0} GB",
+            self.machine.cores, self.machine.memory_gb
+        );
         let price = if self.machine.price_monthly > 0.0 {
             format!(" · €{:.2}/mo", self.machine.price_monthly)
         } else {
@@ -178,11 +182,7 @@ async fn select_region(
                     return None;
                 }
                 HetznerFetchResult::ApiError(err) => {
-                    println!(
-                        "\n{} Failed to fetch Hetzner regions: {}",
-                        "✗".red(),
-                        err
-                    );
+                    println!("\n{} Failed to fetch Hetzner regions: {}", "✗".red(), err);
                     return None;
                 }
             }
@@ -205,10 +205,7 @@ fn select_region_from_dynamic(
     provider: &CloudProvider,
 ) -> Option<String> {
     if regions.is_empty() {
-        println!(
-            "\n{} No regions available for this provider.",
-            "⚠".yellow()
-        );
+        println!("\n{} No regions available for this provider.", "⚠".yellow());
         return None;
     }
 
@@ -249,20 +246,20 @@ fn select_region_from_dynamic(
 fn select_region_static(provider: &CloudProvider, step_number: u8) -> Option<String> {
     display_step_header(
         step_number,
-        &format!("Select {} Region", match provider {
-            CloudProvider::Hetzner => "Hetzner",
-            CloudProvider::Gcp => "GCP",
-            _ => "Cloud",
-        }),
+        &format!(
+            "Select {} Region",
+            match provider {
+                CloudProvider::Hetzner => "Hetzner",
+                CloudProvider::Gcp => "GCP",
+                _ => "Cloud",
+            }
+        ),
         "Choose the geographic location for your deployment.",
     );
 
     let regions = get_regions_for_provider(provider);
     if regions.is_empty() {
-        println!(
-            "\n{} No regions available for this provider.",
-            "⚠".yellow()
-        );
+        println!("\n{} No regions available for this provider.", "⚠".yellow());
         return None;
     }
 
@@ -322,10 +319,7 @@ async fn select_machine_type(
         "{}",
         "─── Machine Type ────────────────────────────".dimmed()
     );
-    println!(
-        "  {}",
-        "Select the VM size for your deployment.".dimmed()
-    );
+    println!("  {}", "Select the VM size for your deployment.".dimmed());
 
     // For Hetzner: REQUIRE dynamic fetching - no static fallback
     if *provider == CloudProvider::Hetzner {
@@ -373,10 +367,12 @@ async fn select_machine_type(
 
     // Non-Hetzner providers: Azure ACA and GCP Cloud Run have custom selection UIs
     match provider {
-        CloudProvider::Azure => select_aca_resource_pair()
-            .map(|(machine, cpu, mem)| (machine, Some(cpu), Some(mem))),
-        CloudProvider::Gcp => select_cloud_run_resources()
-            .map(|(machine, cpu, mem)| (machine, Some(cpu), Some(mem))),
+        CloudProvider::Azure => {
+            select_aca_resource_pair().map(|(machine, cpu, mem)| (machine, Some(cpu), Some(mem)))
+        }
+        CloudProvider::Gcp => {
+            select_cloud_run_resources().map(|(machine, cpu, mem)| (machine, Some(cpu), Some(mem)))
+        }
         _ => select_machine_type_static(provider).map(|m| (m, None, None)),
     }
 }
@@ -414,7 +410,11 @@ fn select_aca_resource_pair() -> Option<(String, String, String)> {
                 pair.cpu.cyan(),
                 pair.memory.cyan()
             );
-            Some((machine_type_id, pair.cpu.to_string(), pair.memory.to_string()))
+            Some((
+                machine_type_id,
+                pair.cpu.to_string(),
+                pair.memory.to_string(),
+            ))
         }
         Err(InquireError::OperationCanceled) => None,
         Err(InquireError::OperationInterrupted) => None,
@@ -428,10 +428,7 @@ fn select_aca_resource_pair() -> Option<(String, String, String)> {
 fn select_cloud_run_resources() -> Option<(String, String, String)> {
     let cpu_levels = CLOUD_RUN_CPU_MEMORY;
     if cpu_levels.is_empty() {
-        println!(
-            "\n{} No Cloud Run CPU options available.",
-            "⚠".yellow()
-        );
+        println!("\n{} No Cloud Run CPU options available.", "⚠".yellow());
         return None;
     }
 
@@ -484,7 +481,11 @@ fn select_cloud_run_resources() -> Option<(String, String, String)> {
                 selected_cpu.cpu.cyan(),
                 selected_memory.cyan()
             );
-            Some((machine_type_id, selected_cpu.cpu.to_string(), selected_memory))
+            Some((
+                machine_type_id,
+                selected_cpu.cpu.to_string(),
+                selected_memory,
+            ))
         }
         Err(InquireError::OperationCanceled) => None,
         Err(InquireError::OperationInterrupted) => None,
@@ -692,7 +693,10 @@ mod tests {
             cpu: Some("0.5".to_string()),
             memory: Some("1.0Gi".to_string()),
         };
-        matches!(selected_with_resources, InfrastructureSelectionResult::Selected { .. });
+        matches!(
+            selected_with_resources,
+            InfrastructureSelectionResult::Selected { .. }
+        );
 
         let _ = InfrastructureSelectionResult::Back;
         let _ = InfrastructureSelectionResult::Cancelled;

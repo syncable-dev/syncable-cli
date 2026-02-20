@@ -18,13 +18,13 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Instant;
 
-use ag_ui_core::{Role, RunId, ThreadId};
 use rig::client::{CompletionClient, ProviderClient};
-use rig::completion::message::{AssistantContent, UserContent};
 use rig::completion::Message as RigMessage;
 use rig::completion::Prompt;
+use rig::completion::message::{AssistantContent, UserContent};
 use rig::one_or_many::OneOrMany;
 use rig::providers::{anthropic, openai};
+use syncable_ag_ui_core::{Role, RunId, ThreadId};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
@@ -32,25 +32,39 @@ use super::{AgentMessage, EventBridge};
 use crate::agent::prompts;
 use crate::agent::tools::{
     // Core analysis tools
-    AnalyzeTool, ListDirectoryTool, ReadFileTool, SecurityScanTool, VulnerabilitiesTool,
+    AnalyzeTool,
+    DclintTool,
     // Linting tools
-    HadolintTool, DclintTool, KubelintTool, HelmlintTool,
+    HadolintTool,
+    HelmlintTool,
+    K8sCostsTool,
+    K8sDriftTool,
     // K8s tools
-    K8sOptimizeTool, K8sCostsTool, K8sDriftTool,
+    K8sOptimizeTool,
+    KubelintTool,
+    ListDirectoryTool,
+    ListOutputsTool,
+    ReadFileTool,
+    RetrieveOutputTool,
+    SecurityScanTool,
+    ShellTool,
     // Terraform tools
-    TerraformFmtTool, TerraformValidateTool, TerraformInstallTool,
+    TerraformFmtTool,
+    TerraformInstallTool,
+    TerraformValidateTool,
+    VulnerabilitiesTool,
     // Web and retrieval tools
-    WebFetchTool, RetrieveOutputTool, ListOutputsTool,
+    WebFetchTool,
     // Write tools for generation
-    WriteFileTool, WriteFilesTool, ShellTool,
+    WriteFileTool,
+    WriteFilesTool,
 };
 
-use ag_ui_core::ToolCallId;
-use ag_ui_core::state::StateManager;
 use rig::agent::CancelSignal;
 use rig::completion::{CompletionModel, CompletionResponse, Message as RigPromptMessage};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use syncable_ag_ui_core::ToolCallId;
 use tokio::sync::Mutex;
 
 /// Step status for generative UI progress display.
@@ -138,7 +152,13 @@ impl AgentUiState {
     }
 
     /// Adds a tool result for rich UI rendering.
-    pub fn add_tool_result(&mut self, tool_name: String, args: serde_json::Value, result: serde_json::Value, is_error: bool) {
+    pub fn add_tool_result(
+        &mut self,
+        tool_name: String,
+        args: serde_json::Value,
+        result: serde_json::Value,
+        is_error: bool,
+    ) {
         self.tool_results.push(ToolResult {
             tool_name,
             args,
@@ -241,8 +261,20 @@ where
                 let description = match name.as_str() {
                     // Core analysis tools
                     "analyze_project" => "Analyzing project structure...".to_string(),
-                    "read_file" => format!("Reading file: {}", args_json.get("path").and_then(|v| v.as_str()).unwrap_or("...")),
-                    "list_directory" => format!("Listing directory: {}", args_json.get("path").and_then(|v| v.as_str()).unwrap_or("...")),
+                    "read_file" => format!(
+                        "Reading file: {}",
+                        args_json
+                            .get("path")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("...")
+                    ),
+                    "list_directory" => format!(
+                        "Listing directory: {}",
+                        args_json
+                            .get("path")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("...")
+                    ),
                     // Security tools
                     "security_scan" => "Running security scan...".to_string(),
                     "check_vulnerabilities" => "Checking for vulnerabilities...".to_string(),
@@ -260,15 +292,38 @@ where
                     "terraform_validate" => "Validating Terraform configuration...".to_string(),
                     "terraform_install" => "Installing Terraform...".to_string(),
                     // Web tools
-                    "web_fetch" => format!("Fetching: {}", args_json.get("url").and_then(|v| v.as_str()).unwrap_or("...")),
+                    "web_fetch" => format!(
+                        "Fetching: {}",
+                        args_json
+                            .get("url")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("...")
+                    ),
                     // Retrieval tools
                     "retrieve_output" => "Retrieving stored output...".to_string(),
                     "list_outputs" => "Listing available outputs...".to_string(),
                     // Write tools
-                    "write_file" => format!("Writing file: {}", args_json.get("path").and_then(|v| v.as_str()).unwrap_or("...")),
+                    "write_file" => format!(
+                        "Writing file: {}",
+                        args_json
+                            .get("path")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("...")
+                    ),
                     "write_files" => "Writing multiple files...".to_string(),
                     // Shell tool
-                    "shell" => format!("Running command: {}", args_json.get("command").and_then(|v| v.as_str()).map(|s| if s.len() > 50 { format!("{}...", &s[..50]) } else { s.to_string() }).unwrap_or("...".to_string())),
+                    "shell" => format!(
+                        "Running command: {}",
+                        args_json
+                            .get("command")
+                            .and_then(|v| v.as_str())
+                            .map(|s| if s.len() > 50 {
+                                format!("{}...", &s[..50])
+                            } else {
+                                s.to_string()
+                            })
+                            .unwrap_or("...".to_string())
+                    ),
                     _ => format!("Running {}...", name.replace('_', " ")),
                 };
                 s.add_step(description);
@@ -581,7 +636,7 @@ impl AgentProcessor {
     /// Returns the last user message content, or None if no user messages.
     fn extract_user_input(
         &self,
-        messages: &[ag_ui_core::types::Message],
+        messages: &[syncable_ag_ui_core::types::Message],
     ) -> Option<String> {
         // Find the last user message and extract its content
         messages
@@ -662,11 +717,15 @@ impl AgentProcessor {
                         "openai" => {
                             debug!("Setting OPENAI_API_KEY from forwardedProps");
                             // SAFETY: Single-threaded CLI context
-                            unsafe { std::env::set_var("OPENAI_API_KEY", api_key); }
+                            unsafe {
+                                std::env::set_var("OPENAI_API_KEY", api_key);
+                            }
                         }
                         "anthropic" => {
                             debug!("Setting ANTHROPIC_API_KEY from forwardedProps");
-                            unsafe { std::env::set_var("ANTHROPIC_API_KEY", api_key); }
+                            unsafe {
+                                std::env::set_var("ANTHROPIC_API_KEY", api_key);
+                            }
                         }
                         _ => {}
                     }
@@ -677,7 +736,9 @@ impl AgentProcessor {
             if let Some(region) = obj.get("awsRegion").and_then(|v| v.as_str()) {
                 if !region.is_empty() {
                     debug!(region = %region, "Setting AWS_REGION from forwardedProps");
-                    unsafe { std::env::set_var("AWS_REGION", region); }
+                    unsafe {
+                        std::env::set_var("AWS_REGION", region);
+                    }
                 }
             }
         }
@@ -691,12 +752,7 @@ impl AgentProcessor {
     /// 3. Emits TextMessage events
     /// 4. Updates session history
     /// 5. Emits RunFinished
-    async fn process_message(
-        &mut self,
-        thread_id: ThreadId,
-        _run_id: RunId,
-        user_input: String,
-    ) {
+    async fn process_message(&mut self, thread_id: ThreadId, _run_id: RunId, user_input: String) {
         info!(
             thread_id = %thread_id,
             input_len = user_input.len(),
@@ -753,7 +809,9 @@ impl AgentProcessor {
                     error = %e,
                     "LLM call failed"
                 );
-                self.event_bridge.finish_run_with_error(&e.to_string()).await;
+                self.event_bridge
+                    .finish_run_with_error(&e.to_string())
+                    .await;
             }
         }
     }
@@ -842,7 +900,9 @@ impl AgentProcessor {
                 // Check for API key
                 if std::env::var("ANTHROPIC_API_KEY").is_err() {
                     warn!("ANTHROPIC_API_KEY not set");
-                    return Err(ProcessorError::MissingApiKey("ANTHROPIC_API_KEY".to_string()));
+                    return Err(ProcessorError::MissingApiKey(
+                        "ANTHROPIC_API_KEY".to_string(),
+                    ));
                 }
 
                 // Need fresh hook for anthropic (hook may be consumed by openai path)
@@ -937,9 +997,7 @@ impl AgentProcessor {
                     .await
                     .map_err(|e| ProcessorError::CompletionFailed(e.to_string()))
             }
-            _ => {
-                Err(ProcessorError::UnsupportedProvider(provider.to_string()))
-            }
+            _ => Err(ProcessorError::UnsupportedProvider(provider.to_string())),
         }
     }
 }
@@ -947,9 +1005,9 @@ impl AgentProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::sync::broadcast;
     use std::sync::Arc;
     use tokio::sync::RwLock;
+    use tokio::sync::broadcast;
 
     fn create_test_processor() -> (AgentProcessor, mpsc::Sender<AgentMessage>) {
         let (msg_tx, msg_rx) = mpsc::channel(100);
@@ -988,13 +1046,22 @@ mod tests {
         let config = ProcessorConfig::default();
         assert!(config.system_prompt.is_none());
         // Analysis prompt contains agent identity section
-        assert!(config.effective_system_prompt(None).contains("DevOps/Platform Engineer"));
+        assert!(
+            config
+                .effective_system_prompt(None)
+                .contains("DevOps/Platform Engineer")
+        );
 
         // Custom system prompt overrides auto-generated
-        let config = ProcessorConfig::new()
-            .with_system_prompt("You are a DevOps expert.");
-        assert_eq!(config.system_prompt, Some("You are a DevOps expert.".to_string()));
-        assert_eq!(config.effective_system_prompt(None), "You are a DevOps expert.");
+        let config = ProcessorConfig::new().with_system_prompt("You are a DevOps expert.");
+        assert_eq!(
+            config.system_prompt,
+            Some("You are a DevOps expert.".to_string())
+        );
+        assert_eq!(
+            config.effective_system_prompt(None),
+            "You are a DevOps expert."
+        );
     }
 
     #[test]
@@ -1072,18 +1139,19 @@ mod tests {
         let thread_id = ThreadId::random();
         let run_id = RunId::random();
 
-        processor.process_message(
-            thread_id.clone(),
-            run_id,
-            "Hello, agent!".to_string(),
-        ).await;
+        processor
+            .process_message(thread_id.clone(), run_id, "Hello, agent!".to_string())
+            .await;
 
         // Check session was created and user message was added
         assert_eq!(processor.session_count(), 1);
         let session = processor.sessions.get(&thread_id).unwrap();
 
         // User message should always be added
-        assert!(session.history.len() >= 1, "User message should be in history");
+        assert!(
+            session.history.len() >= 1,
+            "User message should be in history"
+        );
 
         // If API keys are available, turn_count and history should include assistant response
         // If not, the LLM call fails gracefully and only user message is present
@@ -1100,8 +1168,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_run_processes_messages() {
-        use ag_ui_core::types::{Message as AgUiProtocolMessage, RunAgentInput};
-        use ag_ui_core::Event;
+        use syncable_ag_ui_core::Event;
+        use syncable_ag_ui_core::types::{Message as AgUiProtocolMessage, RunAgentInput};
         use tokio::sync::broadcast;
 
         let (msg_tx, msg_rx) = mpsc::channel(100);
@@ -1130,10 +1198,10 @@ mod tests {
         msg_tx.send(agent_msg).await.expect("Should send");
 
         // Verify we receive RunStarted event
-        let event = tokio::time::timeout(
-            std::time::Duration::from_millis(100),
-            event_rx.recv()
-        ).await.expect("Should receive event in time").expect("Should have event");
+        let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv())
+            .await
+            .expect("Should receive event in time")
+            .expect("Should have event");
 
         assert!(matches!(event, Event::RunStarted(_)));
 
@@ -1141,16 +1209,16 @@ mod tests {
         drop(msg_tx);
 
         // Wait for processor to finish
-        tokio::time::timeout(
-            std::time::Duration::from_millis(100),
-            handle
-        ).await.expect("Processor should finish").expect("Should not panic");
+        tokio::time::timeout(std::time::Duration::from_millis(100), handle)
+            .await
+            .expect("Processor should finish")
+            .expect("Should not panic");
     }
 
     #[tokio::test]
     async fn test_run_handles_empty_messages() {
-        use ag_ui_core::types::RunAgentInput;
-        use ag_ui_core::Event;
+        use syncable_ag_ui_core::Event;
+        use syncable_ag_ui_core::types::RunAgentInput;
         use tokio::sync::broadcast;
 
         let (msg_tx, msg_rx) = mpsc::channel(100);
@@ -1179,17 +1247,17 @@ mod tests {
         msg_tx.send(agent_msg).await.expect("Should send");
 
         // Should receive RunStarted then RunError
-        let event = tokio::time::timeout(
-            std::time::Duration::from_millis(100),
-            event_rx.recv()
-        ).await.expect("Should receive event").expect("Should have event");
+        let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv())
+            .await
+            .expect("Should receive event")
+            .expect("Should have event");
 
         assert!(matches!(event, Event::RunStarted(_)));
 
-        let event = tokio::time::timeout(
-            std::time::Duration::from_millis(100),
-            event_rx.recv()
-        ).await.expect("Should receive event").expect("Should have event");
+        let event = tokio::time::timeout(std::time::Duration::from_millis(100), event_rx.recv())
+            .await
+            .expect("Should receive event")
+            .expect("Should have event");
 
         assert!(matches!(event, Event::RunError(_)));
 

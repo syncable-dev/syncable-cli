@@ -206,8 +206,7 @@ pub fn print_banner(session: &ChatSession) {
     // Show platform context (selected project/organization)
     if session.platform_session.is_project_selected() {
         println!(
-            "  {} {}: {}/{}",
-            "📦",
+            "  📦 {}: {}/{}",
             "Project".white(),
             session
                 .platform_session
@@ -223,17 +222,8 @@ pub fn print_banner(session: &ChatSession) {
                 .cyan()
         );
     } else {
-        println!(
-            "  {} {} {}",
-            "📦",
-            "Project:".white(),
-            "(none selected)".dimmed()
-        );
-        println!(
-            "     {} {}",
-            "→".cyan(),
-            "sync-ctl org list".dimmed()
-        );
+        println!("  📦 {} {}", "Project:".white(), "(none selected)".dimmed());
+        println!("     {} {}", "→".cyan(), "sync-ctl org list".dimmed());
     }
 
     // Check for incomplete plans and show a hint

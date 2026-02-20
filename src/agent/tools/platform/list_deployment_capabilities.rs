@@ -175,12 +175,28 @@ targets are available (clusters, registries, Cloud Run).
                 let summary = if available_connected_count == 0 {
                     "No available providers connected. Connect GCP, Hetzner, or Azure in platform settings.".to_string()
                 } else {
-                    let mut parts = vec![format!("{} provider{} ready", available_connected_count, if available_connected_count == 1 { "" } else { "s" })];
+                    let mut parts = vec![format!(
+                        "{} provider{} ready",
+                        available_connected_count,
+                        if available_connected_count == 1 {
+                            ""
+                        } else {
+                            "s"
+                        }
+                    )];
                     if total_clusters > 0 {
-                        parts.push(format!("{} cluster{}", total_clusters, if total_clusters == 1 { "" } else { "s" }));
+                        parts.push(format!(
+                            "{} cluster{}",
+                            total_clusters,
+                            if total_clusters == 1 { "" } else { "s" }
+                        ));
                     }
                     if total_registries > 0 {
-                        parts.push(format!("{} registr{}", total_registries, if total_registries == 1 { "y" } else { "ies" }));
+                        parts.push(format!(
+                            "{} registr{}",
+                            total_registries,
+                            if total_registries == 1 { "y" } else { "ies" }
+                        ));
                     }
                     parts.join(", ")
                 };
@@ -210,8 +226,9 @@ targets are available (clusters, registries, Cloud Run).
                     }
                 });
 
-                serde_json::to_string_pretty(&result)
-                    .map_err(|e| ListDeploymentCapabilitiesError(format!("Failed to serialize: {}", e)))
+                serde_json::to_string_pretty(&result).map_err(|e| {
+                    ListDeploymentCapabilitiesError(format!("Failed to serialize: {}", e))
+                })
             }
             Err(e) => Ok(format_api_error("list_deployment_capabilities", e)),
         }
@@ -302,7 +319,10 @@ mod tests {
 
     #[test]
     fn test_tool_name() {
-        assert_eq!(ListDeploymentCapabilitiesTool::NAME, "list_deployment_capabilities");
+        assert_eq!(
+            ListDeploymentCapabilitiesTool::NAME,
+            "list_deployment_capabilities"
+        );
     }
 
     #[test]

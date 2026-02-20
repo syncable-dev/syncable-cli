@@ -2,7 +2,7 @@
 
 use crate::analyzer::display::{
     BoxDrawer, format_list_smart, format_ports_smart, get_color_adapter, get_terminal_width,
-    helpers::{add_confidence_bar_to_drawer, format_project_category, get_main_technologies},
+    helpers::{add_confidence_bar_to_drawer, format_project_category},
     smart_truncate, visual_width,
 };
 use crate::analyzer::{ArchitecturePattern, MonorepoAnalysis};

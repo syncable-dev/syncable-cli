@@ -363,17 +363,31 @@ pub struct InfrastructurePresence {
 impl InfrastructurePresence {
     /// Returns true if any infrastructure was detected
     pub fn has_any(&self) -> bool {
-        self.has_kubernetes || self.has_helm || self.has_docker_compose || self.has_terraform || self.has_deployment_config
+        self.has_kubernetes
+            || self.has_helm
+            || self.has_docker_compose
+            || self.has_terraform
+            || self.has_deployment_config
     }
 
     /// Returns a list of detected infrastructure types
     pub fn detected_types(&self) -> Vec<&'static str> {
         let mut types = Vec::new();
-        if self.has_kubernetes { types.push("Kubernetes"); }
-        if self.has_helm { types.push("Helm"); }
-        if self.has_docker_compose { types.push("Docker Compose"); }
-        if self.has_terraform { types.push("Terraform"); }
-        if self.has_deployment_config { types.push("Syncable Config"); }
+        if self.has_kubernetes {
+            types.push("Kubernetes");
+        }
+        if self.has_helm {
+            types.push("Helm");
+        }
+        if self.has_docker_compose {
+            types.push("Docker Compose");
+        }
+        if self.has_terraform {
+            types.push("Terraform");
+        }
+        if self.has_deployment_config {
+            types.push("Syncable Config");
+        }
         types
     }
 }
@@ -578,7 +592,8 @@ pub fn analyze_project_with_config(
     let context = context::analyze_context(&project_root, &languages, &frameworks, config)?;
 
     // Detect health check endpoints
-    let health_endpoints = context::detect_health_endpoints(&project_root, &frameworks, config.max_file_size);
+    let health_endpoints =
+        context::detect_health_endpoints(&project_root, &frameworks, config.max_file_size);
 
     // Detect infrastructure presence (K8s, Helm, Terraform, etc.)
     let infrastructure = context::detect_infrastructure(&project_root);

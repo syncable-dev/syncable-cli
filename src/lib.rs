@@ -276,12 +276,19 @@ pub async fn run_command(
             agent::session::ChatSession::load_api_key_to_env(provider_type);
 
             if let Some(q) = query {
-                let response =
-                    agent::run_query(&project_path, &q, provider_type, effective_model, event_bridge).await?;
+                let response = agent::run_query(
+                    &project_path,
+                    &q,
+                    provider_type,
+                    effective_model,
+                    event_bridge,
+                )
+                .await?;
                 println!("{}", response);
                 Ok(())
             } else {
-                agent::run_interactive(&project_path, provider_type, effective_model, event_bridge).await?;
+                agent::run_interactive(&project_path, provider_type, effective_model, event_bridge)
+                    .await?;
                 Ok(())
             }
         }
@@ -324,19 +331,29 @@ pub async fn run_command(
 
                             match format {
                                 OutputFormat::Json => {
-                                    println!("{}", serde_json::to_string_pretty(&projects).unwrap_or_default());
+                                    println!(
+                                        "{}",
+                                        serde_json::to_string_pretty(&projects).unwrap_or_default()
+                                    );
                                 }
                                 OutputFormat::Table => {
-                                    println!("\n{:<40} {:<30} {}", "ID", "NAME", "DESCRIPTION");
+                                    println!("\n{:<40} {:<30} DESCRIPTION", "ID", "NAME");
                                     println!("{}", "-".repeat(90));
                                     for project in projects {
-                                        let desc = if project.description.is_empty() { "-" } else { &project.description };
+                                        let desc = if project.description.is_empty() {
+                                            "-"
+                                        } else {
+                                            &project.description
+                                        };
                                         let desc_truncated = if desc.len() > 30 {
                                             format!("{}...", &desc[..27])
                                         } else {
                                             desc.to_string()
                                         };
-                                        println!("{:<40} {:<30} {}", project.id, project.name, desc_truncated);
+                                        println!(
+                                            "{:<40} {:<30} {}",
+                                            project.id, project.name, desc_truncated
+                                        );
                                     }
                                     println!();
                                 }
@@ -362,7 +379,10 @@ pub async fn run_command(
                         Ok(project) => {
                             // Get org info
                             let org = client.get_organization(&project.organization_id).await.ok();
-                            let org_name = org.as_ref().map(|o| o.name.clone()).unwrap_or_else(|| "Unknown".to_string());
+                            let org_name = org
+                                .as_ref()
+                                .map(|o| o.name.clone())
+                                .unwrap_or_else(|| "Unknown".to_string());
 
                             let session = PlatformSession::with_project(
                                 project.id.clone(),
@@ -408,10 +428,14 @@ pub async fn run_command(
                     if let (Some(org_name), Some(org_id)) = (&session.org_name, &session.org_id) {
                         println!("  Organization: {} ({})", org_name, org_id);
                     }
-                    if let (Some(project_name), Some(project_id)) = (&session.project_name, &session.project_id) {
+                    if let (Some(project_name), Some(project_id)) =
+                        (&session.project_name, &session.project_id)
+                    {
                         println!("  Project:      {} ({})", project_name, project_id);
                     }
-                    if let (Some(env_name), Some(env_id)) = (&session.environment_name, &session.environment_id) {
+                    if let (Some(env_name), Some(env_id)) =
+                        (&session.environment_name, &session.environment_id)
+                    {
                         println!("  Environment:  {} ({})", env_name, env_id);
                     } else {
                         println!("  Environment:  (none selected)");
@@ -420,7 +444,10 @@ pub async fn run_command(
                         println!("    sync-ctl env select <env-id>");
                     }
                     if let Some(updated) = session.last_updated {
-                        println!("  Last updated: {}", updated.format("%Y-%m-%d %H:%M:%S UTC"));
+                        println!(
+                            "  Last updated: {}",
+                            updated.format("%Y-%m-%d %H:%M:%S UTC")
+                        );
                     }
                     println!();
                     Ok(())
@@ -452,15 +479,25 @@ pub async fn run_command(
                         Ok(project) => {
                             // Get org info
                             let org = client.get_organization(&project.organization_id).await.ok();
-                            let org_name = org.as_ref().map(|o| o.name.clone()).unwrap_or_else(|| "Unknown".to_string());
+                            let org_name = org
+                                .as_ref()
+                                .map(|o| o.name.clone())
+                                .unwrap_or_else(|| "Unknown".to_string());
 
                             println!("\nProject Details:");
                             println!("  ID:           {}", project.id);
                             println!("  Name:         {}", project.name);
-                            let desc = if project.description.is_empty() { "-" } else { &project.description };
+                            let desc = if project.description.is_empty() {
+                                "-"
+                            } else {
+                                &project.description
+                            };
                             println!("  Description:  {}", desc);
                             println!("  Organization: {} ({})", org_name, project.organization_id);
-                            println!("  Created:      {}", project.created_at.format("%Y-%m-%d %H:%M:%S UTC"));
+                            println!(
+                                "  Created:      {}",
+                                project.created_at.format("%Y-%m-%d %H:%M:%S UTC")
+                            );
                             println!();
                         }
                         Err(platform::api::error::PlatformApiError::Unauthorized) => {
@@ -478,7 +515,7 @@ pub async fn run_command(
             }
         }
         Commands::Org { command } => {
-            use cli::{OutputFormat, OrgCommand};
+            use cli::{OrgCommand, OutputFormat};
             use platform::api::client::PlatformApiClient;
             use platform::session::PlatformSession;
 
@@ -499,13 +536,17 @@ pub async fn run_command(
 
                             match format {
                                 OutputFormat::Json => {
-                                    println!("{}", serde_json::to_string_pretty(&orgs).unwrap_or_default());
+                                    println!(
+                                        "{}",
+                                        serde_json::to_string_pretty(&orgs).unwrap_or_default()
+                                    );
                                 }
                                 OutputFormat::Table => {
-                                    println!("\n{:<40} {:<30} {}", "ID", "NAME", "SLUG");
+                                    println!("\n{:<40} {:<30} SLUG", "ID", "NAME");
                                     println!("{}", "-".repeat(90));
                                     for org in orgs {
-                                        let slug = if org.slug.is_empty() { "-" } else { &org.slug };
+                                        let slug =
+                                            if org.slug.is_empty() { "-" } else { &org.slug };
                                         println!("{:<40} {:<30} {}", org.id, org.name, slug);
                                     }
                                     println!();

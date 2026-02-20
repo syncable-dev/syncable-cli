@@ -186,12 +186,11 @@ pub use k8s_optimize::K8sOptimizeTool;
 pub use kubelint::KubelintTool;
 pub use plan::{PlanCreateTool, PlanListTool, PlanNextTool, PlanUpdateTool};
 pub use platform::{
-    CheckProviderConnectionTool, CreateDeploymentConfigTool, CurrentContextTool,
-    DeployServiceTool, GetDeploymentStatusTool, GetServiceLogsTool,
-    ListDeploymentCapabilitiesTool, ListDeploymentConfigsTool, ListDeploymentsTool,
-    ListHetznerAvailabilityTool, ListOrganizationsTool, ListProjectsTool,
-    OpenProviderSettingsTool, SelectProjectTool, SetDeploymentSecretsTool,
-    TriggerDeploymentTool,
+    CheckProviderConnectionTool, CreateDeploymentConfigTool, CurrentContextTool, DeployServiceTool,
+    GetDeploymentStatusTool, GetServiceLogsTool, ListDeploymentCapabilitiesTool,
+    ListDeploymentConfigsTool, ListDeploymentsTool, ListHetznerAvailabilityTool,
+    ListOrganizationsTool, ListProjectsTool, OpenProviderSettingsTool, SelectProjectTool,
+    SetDeploymentSecretsTool, TriggerDeploymentTool,
 };
 pub use prometheus_connect::PrometheusConnectTool;
 pub use prometheus_discover::PrometheusDiscoverTool;
