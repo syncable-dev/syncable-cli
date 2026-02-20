@@ -116,7 +116,8 @@ pub fn recommend_deployment(input: RecommendationInput) -> DeploymentRecommendat
     let health_check_path = select_health_endpoint(&input.analysis);
 
     // 7. Calculate confidence
-    let confidence = calculate_confidence(&input.analysis, &port_source, health_check_path.is_some());
+    let confidence =
+        calculate_confidence(&input.analysis, &port_source, health_check_path.is_some());
 
     // 8. Build alternatives
     let alternatives = build_alternatives(&provider, &input.available_providers);
@@ -171,11 +172,7 @@ fn select_provider(input: &RecommendationInput) -> (CloudProvider, String) {
     let also_available = if connected.len() > 1 {
         format!(
             ". Also connected: {}",
-            connected
-                .iter()
-                .copied()
-                .collect::<Vec<_>>()
-                .join(", ")
+            connected.iter().copied().collect::<Vec<_>>().join(", ")
         )
     } else {
         String::new()
@@ -229,7 +226,8 @@ fn select_target(input: &RecommendationInput) -> (DeploymentTarget, String) {
         if infra.has_kubernetes && input.has_existing_k8s {
             return (
                 DeploymentTarget::Kubernetes,
-                "Kubernetes recommended: Existing K8s manifests detected and clusters available".to_string(),
+                "Kubernetes recommended: Existing K8s manifests detected and clusters available"
+                    .to_string(),
             );
         }
     }
@@ -259,33 +257,59 @@ fn select_machine_type(analysis: &ProjectAnalysis, provider: &CloudProvider) -> 
             let (machine_type, reasoning) = match framework_info.memory_requirement {
                 MemoryRequirement::Low => (
                     "cx23".to_string(),
-                    format!("cx23 (2 vCPU, 4GB) recommended: {} services are memory-efficient", framework_info.name),
+                    format!(
+                        "cx23 (2 vCPU, 4GB) recommended: {} services are memory-efficient",
+                        framework_info.name
+                    ),
                 ),
                 MemoryRequirement::Medium => (
                     "cx33".to_string(),
-                    format!("cx33 (4 vCPU, 8GB) recommended: {} may benefit from more resources", framework_info.name),
+                    format!(
+                        "cx33 (4 vCPU, 8GB) recommended: {} may benefit from more resources",
+                        framework_info.name
+                    ),
                 ),
                 MemoryRequirement::High => (
                     "cx43".to_string(),
-                    format!("cx43 (8 vCPU, 16GB) recommended: {} requires significant memory (JVM, ML, etc.)", framework_info.name),
+                    format!(
+                        "cx43 (8 vCPU, 16GB) recommended: {} requires significant memory (JVM, ML, etc.)",
+                        framework_info.name
+                    ),
                 ),
             };
-            MachineTypeResult { machine_type, reasoning, cpu: None, memory: None }
+            MachineTypeResult {
+                machine_type,
+                reasoning,
+                cpu: None,
+                memory: None,
+            }
         }
         CloudProvider::Gcp => {
             // Use Cloud Run CPU/memory instead of Compute Engine machine types
             let (cpu, mem, reasoning) = match framework_info.memory_requirement {
                 MemoryRequirement::Low => (
-                    "1", "512Mi",
-                    format!("Cloud Run 1 vCPU / 512Mi recommended: {} services are lightweight", framework_info.name),
+                    "1",
+                    "512Mi",
+                    format!(
+                        "Cloud Run 1 vCPU / 512Mi recommended: {} services are lightweight",
+                        framework_info.name
+                    ),
                 ),
                 MemoryRequirement::Medium => (
-                    "2", "2Gi",
-                    format!("Cloud Run 2 vCPU / 2Gi recommended: {} may need moderate resources", framework_info.name),
+                    "2",
+                    "2Gi",
+                    format!(
+                        "Cloud Run 2 vCPU / 2Gi recommended: {} may need moderate resources",
+                        framework_info.name
+                    ),
                 ),
                 MemoryRequirement::High => (
-                    "4", "8Gi",
-                    format!("Cloud Run 4 vCPU / 8Gi recommended: {} requires significant memory", framework_info.name),
+                    "4",
+                    "8Gi",
+                    format!(
+                        "Cloud Run 4 vCPU / 8Gi recommended: {} requires significant memory",
+                        framework_info.name
+                    ),
                 ),
             };
             MachineTypeResult {
@@ -299,16 +323,28 @@ fn select_machine_type(analysis: &ProjectAnalysis, provider: &CloudProvider) -> 
             // Use Azure Container Apps resource pairs
             let (cpu, mem, reasoning) = match framework_info.memory_requirement {
                 MemoryRequirement::Low => (
-                    "0.5", "1.0Gi",
-                    format!("ACA 0.5 vCPU / 1 GB recommended: {} services are lightweight", framework_info.name),
+                    "0.5",
+                    "1.0Gi",
+                    format!(
+                        "ACA 0.5 vCPU / 1 GB recommended: {} services are lightweight",
+                        framework_info.name
+                    ),
                 ),
                 MemoryRequirement::Medium => (
-                    "1.0", "2.0Gi",
-                    format!("ACA 1 vCPU / 2 GB recommended: {} may need moderate resources", framework_info.name),
+                    "1.0",
+                    "2.0Gi",
+                    format!(
+                        "ACA 1 vCPU / 2 GB recommended: {} may need moderate resources",
+                        framework_info.name
+                    ),
                 ),
                 MemoryRequirement::High => (
-                    "2.0", "4.0Gi",
-                    format!("ACA 2 vCPU / 4 GB recommended: {} requires significant memory", framework_info.name),
+                    "2.0",
+                    "4.0Gi",
+                    format!(
+                        "ACA 2 vCPU / 4 GB recommended: {} requires significant memory",
+                        framework_info.name
+                    ),
                 ),
             };
             MachineTypeResult {
@@ -352,8 +388,11 @@ fn get_framework_resource_hint(analysis: &ProjectAnalysis) -> FrameworkResourceH
             let name_lower = tech.name.to_lowercase();
 
             // JVM frameworks - high memory
-            if name_lower.contains("spring") || name_lower.contains("quarkus")
-                || name_lower.contains("micronaut") || name_lower.contains("ktor") {
+            if name_lower.contains("spring")
+                || name_lower.contains("quarkus")
+                || name_lower.contains("micronaut")
+                || name_lower.contains("ktor")
+            {
                 return FrameworkResourceHint {
                     name: tech.name.clone(),
                     memory_requirement: MemoryRequirement::High,
@@ -361,10 +400,14 @@ fn get_framework_resource_hint(analysis: &ProjectAnalysis) -> FrameworkResourceH
             }
 
             // Go, Rust frameworks - low memory
-            if name_lower.contains("gin") || name_lower.contains("echo")
-                || name_lower.contains("fiber") || name_lower.contains("chi")
-                || name_lower.contains("actix") || name_lower.contains("axum")
-                || name_lower.contains("rocket") {
+            if name_lower.contains("gin")
+                || name_lower.contains("echo")
+                || name_lower.contains("fiber")
+                || name_lower.contains("chi")
+                || name_lower.contains("actix")
+                || name_lower.contains("axum")
+                || name_lower.contains("rocket")
+            {
                 return FrameworkResourceHint {
                     name: tech.name.clone(),
                     memory_requirement: MemoryRequirement::Low,
@@ -372,9 +415,13 @@ fn get_framework_resource_hint(analysis: &ProjectAnalysis) -> FrameworkResourceH
             }
 
             // Node.js frameworks - low memory
-            if name_lower.contains("express") || name_lower.contains("fastify")
-                || name_lower.contains("koa") || name_lower.contains("hono")
-                || name_lower.contains("elysia") || name_lower.contains("nest") {
+            if name_lower.contains("express")
+                || name_lower.contains("fastify")
+                || name_lower.contains("koa")
+                || name_lower.contains("hono")
+                || name_lower.contains("elysia")
+                || name_lower.contains("nest")
+            {
                 return FrameworkResourceHint {
                     name: tech.name.clone(),
                     memory_requirement: MemoryRequirement::Low,
@@ -382,8 +429,10 @@ fn get_framework_resource_hint(analysis: &ProjectAnalysis) -> FrameworkResourceH
             }
 
             // Python frameworks - medium memory
-            if name_lower.contains("fastapi") || name_lower.contains("flask")
-                || name_lower.contains("django") {
+            if name_lower.contains("fastapi")
+                || name_lower.contains("flask")
+                || name_lower.contains("django")
+            {
                 return FrameworkResourceHint {
                     name: tech.name.clone(),
                     memory_requirement: MemoryRequirement::Medium,
@@ -396,7 +445,10 @@ fn get_framework_resource_hint(analysis: &ProjectAnalysis) -> FrameworkResourceH
     for lang in &analysis.languages {
         let name_lower = lang.name.to_lowercase();
 
-        if name_lower.contains("java") || name_lower.contains("kotlin") || name_lower.contains("scala") {
+        if name_lower.contains("java")
+            || name_lower.contains("kotlin")
+            || name_lower.contains("scala")
+        {
             return FrameworkResourceHint {
                 name: lang.name.clone(),
                 memory_requirement: MemoryRequirement::High,
@@ -448,9 +500,18 @@ fn select_region(provider: &CloudProvider, user_hint: Option<&str>) -> (String, 
 
     let default_region = get_default_region(provider);
     let reasoning = match provider {
-        CloudProvider::Hetzner => format!("{} (Nuremberg) selected: Default EU region, low latency for European users", default_region),
-        CloudProvider::Gcp => format!("{} (Iowa) selected: Default US region, good general-purpose choice", default_region),
-        CloudProvider::Azure => format!("{} (Virginia) selected: Default US region, broad service availability", default_region),
+        CloudProvider::Hetzner => format!(
+            "{} (Nuremberg) selected: Default EU region, low latency for European users",
+            default_region
+        ),
+        CloudProvider::Gcp => format!(
+            "{} (Iowa) selected: Default US region, good general-purpose choice",
+            default_region
+        ),
+        CloudProvider::Azure => format!(
+            "{} (Virginia) selected: Default US region, broad service availability",
+            default_region
+        ),
         _ => format!("{} selected: Default region for provider", default_region),
     };
 
@@ -474,7 +535,9 @@ fn select_port(analysis: &ProjectAnalysis) -> (u16, String) {
     };
 
     // Find the highest priority port
-    let best_port = analysis.ports.iter()
+    let best_port = analysis
+        .ports
+        .iter()
         .max_by_key(|p| port_priority(&p.source));
 
     if let Some(port) = best_port {
@@ -484,11 +547,22 @@ fn select_port(analysis: &ProjectAnalysis) -> (u16, String) {
             Some(PortSource::ConfigFile) => "Detected from configuration file",
             Some(PortSource::FrameworkDefault) => {
                 // Try to get framework name
-                let framework_name = analysis.technologies.iter()
-                    .find(|t| matches!(t.category, TechnologyCategory::BackendFramework | TechnologyCategory::MetaFramework))
+                let framework_name = analysis
+                    .technologies
+                    .iter()
+                    .find(|t| {
+                        matches!(
+                            t.category,
+                            TechnologyCategory::BackendFramework
+                                | TechnologyCategory::MetaFramework
+                        )
+                    })
                     .map(|t| t.name.as_str())
                     .unwrap_or("framework");
-                return (port.number, format!("Framework default ({}: {})", framework_name, port.number));
+                return (
+                    port.number,
+                    format!("Framework default ({}: {})", framework_name, port.number),
+                );
             }
             Some(PortSource::Dockerfile) => "Detected from Dockerfile EXPOSE",
             Some(PortSource::DockerCompose) => "Detected from docker-compose.yml",
@@ -499,19 +573,32 @@ fn select_port(analysis: &ProjectAnalysis) -> (u16, String) {
     }
 
     // Fallback to 8080
-    (8080, "Default port 8080: No port detected in project".to_string())
+    (
+        8080,
+        "Default port 8080: No port detected in project".to_string(),
+    )
 }
 
 /// Select the best health endpoint from analysis
 fn select_health_endpoint(analysis: &ProjectAnalysis) -> Option<String> {
     // Find highest confidence health endpoint
-    analysis.health_endpoints.iter()
-        .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap_or(std::cmp::Ordering::Equal))
+    analysis
+        .health_endpoints
+        .iter()
+        .max_by(|a, b| {
+            a.confidence
+                .partial_cmp(&b.confidence)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
         .map(|e| e.path.clone())
 }
 
 /// Calculate overall confidence in the recommendation
-fn calculate_confidence(analysis: &ProjectAnalysis, port_source: &str, has_health_endpoint: bool) -> f32 {
+fn calculate_confidence(
+    analysis: &ProjectAnalysis,
+    port_source: &str,
+    has_health_endpoint: bool,
+) -> f32 {
     let mut confidence: f32 = 0.5; // Base confidence
 
     // Boost for detected port from reliable source
@@ -522,8 +609,12 @@ fn calculate_confidence(analysis: &ProjectAnalysis, port_source: &str, has_healt
     }
 
     // Boost for detected framework
-    let has_framework = analysis.technologies.iter()
-        .any(|t| matches!(t.category, TechnologyCategory::BackendFramework | TechnologyCategory::MetaFramework));
+    let has_framework = analysis.technologies.iter().any(|t| {
+        matches!(
+            t.category,
+            TechnologyCategory::BackendFramework | TechnologyCategory::MetaFramework
+        )
+    });
     if has_framework {
         confidence += 0.15;
     }
@@ -542,7 +633,10 @@ fn calculate_confidence(analysis: &ProjectAnalysis, port_source: &str, has_healt
 }
 
 /// Build alternative options for user customization
-fn build_alternatives(selected_provider: &CloudProvider, available_providers: &[CloudProvider]) -> RecommendationAlternatives {
+fn build_alternatives(
+    selected_provider: &CloudProvider,
+    available_providers: &[CloudProvider],
+) -> RecommendationAlternatives {
     // Build provider options
     let providers: Vec<ProviderOption> = CloudProvider::all()
         .iter()
@@ -592,8 +686,8 @@ fn build_alternatives(selected_provider: &CloudProvider, available_providers: &[
 mod tests {
     use super::*;
     use crate::analyzer::{
-        AnalysisMetadata, ArchitectureType, DetectedLanguage, DetectedTechnology,
-        HealthEndpoint, InfrastructurePresence, Port, ProjectType, TechnologyCategory,
+        AnalysisMetadata, ArchitectureType, DetectedLanguage, DetectedTechnology, HealthEndpoint,
+        InfrastructurePresence, Port, ProjectType, TechnologyCategory,
     };
     use std::collections::HashMap;
     use std::path::PathBuf;
@@ -665,7 +759,11 @@ mod tests {
         let rec = recommend_deployment(input);
 
         // Express should get a small machine
-        assert!(rec.machine_type == "cx23" || rec.machine_type.contains("1-cpu") || rec.machine_type == "e2-small");
+        assert!(
+            rec.machine_type == "cx23"
+                || rec.machine_type.contains("1-cpu")
+                || rec.machine_type == "e2-small"
+        );
         assert_eq!(rec.port, 3000);
         assert!(rec.machine_reasoning.contains("Express"));
     }
@@ -769,7 +867,9 @@ mod tests {
 
         let rec = recommend_deployment(input);
         assert_eq!(rec.port, 8080);
-        assert!(rec.port_source.contains("No port detected") || rec.port_source.contains("Default"));
+        assert!(
+            rec.port_source.contains("No port detected") || rec.port_source.contains("Default")
+        );
     }
 
     #[test]
@@ -853,6 +953,9 @@ mod tests {
         let rec = recommend_deployment(input);
         // Go services should get small machine
         assert_eq!(rec.machine_type, "cx23");
-        assert!(rec.machine_reasoning.contains("memory-efficient") || rec.machine_reasoning.contains("Gin"));
+        assert!(
+            rec.machine_reasoning.contains("memory-efficient")
+                || rec.machine_reasoning.contains("Gin")
+        );
     }
 }

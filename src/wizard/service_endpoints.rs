@@ -253,9 +253,9 @@ pub fn match_hint_to_service(hint: &str, service_name: &str) -> Option<MatchConf
     let overlap = hint_tokens
         .iter()
         .filter(|ht| {
-            svc_tokens.iter().any(|st| {
-                st == *ht || st.starts_with(ht.as_str()) || ht.starts_with(st.as_str())
-            })
+            svc_tokens
+                .iter()
+                .any(|st| st == *ht || st.starts_with(ht.as_str()) || ht.starts_with(st.as_str()))
         })
         .count();
 
@@ -320,9 +320,7 @@ pub fn match_env_vars_to_services(
 ///
 /// `"sentiment-analysis"` -> `"SENTIMENT_ANALYSIS_URL"`
 pub fn suggest_env_var_name(service_name: &str) -> String {
-    let base = service_name
-        .to_uppercase()
-        .replace('-', "_");
+    let base = service_name.to_uppercase().replace('-', "_");
     format!("{}_URL", base)
 }
 
@@ -352,7 +350,11 @@ pub fn collect_service_endpoint_env_vars(
         endpoints.len().to_string().cyan()
     );
     for ep in endpoints {
-        let access_label = if ep.is_private { " (private network)" } else { "" };
+        let access_label = if ep.is_private {
+            " (private network)"
+        } else {
+            ""
+        };
         println!(
             "    {} {:<30} {}{}",
             "●".green(),
@@ -428,7 +430,11 @@ pub fn collect_service_endpoint_env_vars(
             continue;
         }
 
-        let private_note = if ep.is_private { " (private network)" } else { "" };
+        let private_note = if ep.is_private {
+            " (private network)"
+        } else {
+            ""
+        };
         println!(
             "  {} {} = {}{}",
             "✓".green(),
@@ -502,10 +508,7 @@ pub fn extract_network_endpoints(
             }
             // Azure-specific
             if let Some(ref cae_name) = n.container_app_environment_name {
-                details.push((
-                    "AZURE_CONTAINER_APP_ENV_NAME".to_string(),
-                    cae_name.clone(),
-                ));
+                details.push(("AZURE_CONTAINER_APP_ENV_NAME".to_string(), cae_name.clone()));
             }
             if let Some(ref domain) = n.default_domain {
                 details.push(("NETWORK_DEFAULT_DOMAIN".to_string(), domain.clone()));
@@ -630,10 +633,7 @@ mod tests {
             extract_service_hint("SENTIMENT_SERVICE_URL"),
             Some("sentiment".to_string())
         );
-        assert_eq!(
-            extract_service_hint("API_BASE"),
-            Some("api".to_string())
-        );
+        assert_eq!(extract_service_hint("API_BASE"), Some("api".to_string()));
         assert_eq!(extract_service_hint("NODE_ENV"), None);
         assert_eq!(
             extract_service_hint("CONTACTS_API_URL"),
@@ -727,7 +727,7 @@ mod tests {
         let env_vars = vec![
             "SENTIMENT_SERVICE_URL".to_string(),
             "CONTACTS_API_URL".to_string(),
-            "NODE_ENV".to_string(), // not a URL var
+            "NODE_ENV".to_string(),     // not a URL var
             "DATABASE_URL".to_string(), // no matching service
         ];
 
@@ -749,9 +749,7 @@ mod tests {
         assert_eq!(cont.unwrap().service.service_name, "contact-intelligence");
 
         // NODE_ENV should not be in suggestions (not a URL var)
-        assert!(suggestions
-            .iter()
-            .all(|s| s.env_var_name != "NODE_ENV"));
+        assert!(suggestions.iter().all(|s| s.env_var_name != "NODE_ENV"));
     }
 
     #[test]
@@ -1048,14 +1046,18 @@ mod tests {
         assert_eq!(endpoints[0].network_id, "n1");
         assert_eq!(endpoints[0].cloud_provider, "hetzner");
         assert_eq!(endpoints[0].connection_details.len(), 2);
-        assert!(endpoints[0]
-            .connection_details
-            .iter()
-            .any(|(k, v)| k == "NETWORK_VPC_ID" && v == "vpc-123"));
-        assert!(endpoints[0]
-            .connection_details
-            .iter()
-            .any(|(k, v)| k == "NETWORK_SUBNET_ID" && v == "subnet-456"));
+        assert!(
+            endpoints[0]
+                .connection_details
+                .iter()
+                .any(|(k, v)| k == "NETWORK_VPC_ID" && v == "vpc-123")
+        );
+        assert!(
+            endpoints[0]
+                .connection_details
+                .iter()
+                .any(|(k, v)| k == "NETWORK_SUBNET_ID" && v == "subnet-456")
+        );
     }
 
     #[test]
@@ -1070,19 +1072,24 @@ mod tests {
 
         let endpoints = extract_network_endpoints(&networks, "azure", Some("env-1"));
         assert_eq!(endpoints.len(), 1);
-        assert!(endpoints[0]
-            .connection_details
-            .iter()
-            .any(|(k, v)| k == "AZURE_CONTAINER_APP_ENV_NAME" && v == "my-cae"));
-        assert!(endpoints[0]
-            .connection_details
-            .iter()
-            .any(|(k, v)| k == "NETWORK_DEFAULT_DOMAIN"
-                && v == "my-app.azurecontainerapps.io"));
-        assert!(endpoints[0]
-            .connection_details
-            .iter()
-            .any(|(k, v)| k == "AZURE_RESOURCE_GROUP" && v == "rg-prod"));
+        assert!(
+            endpoints[0]
+                .connection_details
+                .iter()
+                .any(|(k, v)| k == "AZURE_CONTAINER_APP_ENV_NAME" && v == "my-cae")
+        );
+        assert!(
+            endpoints[0]
+                .connection_details
+                .iter()
+                .any(|(k, v)| k == "NETWORK_DEFAULT_DOMAIN" && v == "my-app.azurecontainerapps.io")
+        );
+        assert!(
+            endpoints[0]
+                .connection_details
+                .iter()
+                .any(|(k, v)| k == "AZURE_RESOURCE_GROUP" && v == "rg-prod")
+        );
     }
 
     #[test]
@@ -1097,29 +1104,38 @@ mod tests {
         let endpoints = extract_network_endpoints(&networks, "hetzner", Some("env-1"));
         // Shared network (no environment_id) should be included
         assert_eq!(endpoints.len(), 1);
-        assert!(endpoints[0]
-            .connection_details
-            .iter()
-            .any(|(k, v)| k == "NETWORK_VPC_ID" && v == "hetz-vpc-1"));
-        assert!(endpoints[0]
-            .connection_details
-            .iter()
-            .any(|(k, v)| k == "NETWORK_SUBNET_ID" && v == "hetz-sub-1"));
+        assert!(
+            endpoints[0]
+                .connection_details
+                .iter()
+                .any(|(k, v)| k == "NETWORK_VPC_ID" && v == "hetz-vpc-1")
+        );
+        assert!(
+            endpoints[0]
+                .connection_details
+                .iter()
+                .any(|(k, v)| k == "NETWORK_SUBNET_ID" && v == "hetz-sub-1")
+        );
     }
 
     #[test]
     fn test_extract_network_endpoints_gcp() {
         let networks = vec![{
             let mut n = make_network("n1", "gcp", "us-central1", "ready", Some("env-1"));
-            n.vpc_connector_name = Some("projects/my-proj/locations/us-central1/connectors/vpc-conn".to_string());
+            n.vpc_connector_name =
+                Some("projects/my-proj/locations/us-central1/connectors/vpc-conn".to_string());
             n
         }];
 
         let endpoints = extract_network_endpoints(&networks, "gcp", Some("env-1"));
         assert_eq!(endpoints.len(), 1);
-        assert!(endpoints[0].connection_details.iter().any(|(k, v)| k
-            == "GCP_VPC_CONNECTOR"
-            && v == "projects/my-proj/locations/us-central1/connectors/vpc-conn"));
+        assert!(
+            endpoints[0]
+                .connection_details
+                .iter()
+                .any(|(k, v)| k == "GCP_VPC_CONNECTOR"
+                    && v == "projects/my-proj/locations/us-central1/connectors/vpc-conn")
+        );
     }
 
     #[test]

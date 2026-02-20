@@ -17,10 +17,10 @@ use super::types::{
 };
 use crate::auth::credentials;
 use reqwest::Client;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
-use urlencoding;
+use serde::de::DeserializeOwned;
 use std::time::Duration;
+use urlencoding;
 
 /// Production API URL
 const SYNCABLE_API_URL_PROD: &str = "https://syncable.dev";
@@ -98,31 +98,24 @@ impl PlatformApiClient {
         let mut backoff_ms = INITIAL_BACKOFF_MS;
 
         for attempt in 0..=MAX_RETRIES {
-            let result = self
-                .http_client
-                .get(&url)
-                .bearer_auth(&token)
-                .send()
-                .await;
+            let result = self.http_client.get(&url).bearer_auth(&token).send().await;
 
             match result {
-                Ok(response) => {
-                    match self.handle_response(response).await {
-                        Ok(data) => return Ok(data),
-                        Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
-                            eprintln!(
-                                "Request failed (attempt {}/{}), retrying in {}ms...",
-                                attempt + 1,
-                                MAX_RETRIES + 1,
-                                backoff_ms
-                            );
-                            last_error = Some(e);
-                            tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
-                            backoff_ms = (backoff_ms * 2).min(MAX_BACKOFF_MS);
-                        }
-                        Err(e) => return Err(e),
+                Ok(response) => match self.handle_response(response).await {
+                    Ok(data) => return Ok(data),
+                    Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
+                        eprintln!(
+                            "Request failed (attempt {}/{}), retrying in {}ms...",
+                            attempt + 1,
+                            MAX_RETRIES + 1,
+                            backoff_ms
+                        );
+                        last_error = Some(e);
+                        tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+                        backoff_ms = (backoff_ms * 2).min(MAX_BACKOFF_MS);
                     }
-                }
+                    Err(e) => return Err(e),
+                },
                 Err(e) => {
                     let platform_error = PlatformApiError::HttpError(e);
                     if is_retryable_error(&platform_error) && attempt < MAX_RETRIES {
@@ -156,12 +149,7 @@ impl PlatformApiClient {
         let mut backoff_ms = INITIAL_BACKOFF_MS;
 
         for attempt in 0..=MAX_RETRIES {
-            let result = self
-                .http_client
-                .get(&url)
-                .bearer_auth(&token)
-                .send()
-                .await;
+            let result = self.http_client.get(&url).bearer_auth(&token).send().await;
 
             match result {
                 Ok(response) => {
@@ -328,10 +316,7 @@ impl PlatformApiClient {
     }
 
     /// Handle the HTTP response, converting errors appropriately
-    async fn handle_response<T: DeserializeOwned>(
-        &self,
-        response: reqwest::Response,
-    ) -> Result<T> {
+    async fn handle_response<T: DeserializeOwned>(&self, response: reqwest::Response) -> Result<T> {
         let status = response.status();
 
         if status.is_success() {
@@ -416,8 +401,7 @@ impl PlatformApiClient {
     ///
     /// Endpoint: GET /api/projects/:id
     pub async fn get_project(&self, id: &str) -> Result<Project> {
-        let response: GenericResponse<Project> =
-            self.get(&format!("/api/projects/{}", id)).await?;
+        let response: GenericResponse<Project> = self.get(&format!("/api/projects/{}", id)).await?;
         Ok(response.data)
     }
 
@@ -462,10 +446,7 @@ impl PlatformApiClient {
         project_id: &str,
     ) -> Result<ProjectRepositoriesResponse> {
         let response: GenericResponse<ProjectRepositoriesResponse> = self
-            .get(&format!(
-                "/api/github/projects/{}/repositories",
-                project_id
-            ))
+            .get(&format!("/api/github/projects/{}/repositories", project_id))
             .await?;
         Ok(response.data)
     }
@@ -722,7 +703,10 @@ impl PlatformApiClient {
             "secrets": secrets,
         });
         let _response: GenericResponse<serde_json::Value> = self
-            .put(&format!("/api/deployment-configs/{}/secrets", config_id), &body)
+            .put(
+                &format!("/api/deployment-configs/{}/secrets", config_id),
+                &body,
+            )
             .await?;
         Ok(())
     }
@@ -991,7 +975,10 @@ impl PlatformApiClient {
             urlencoding::encode(project_id)
         );
         if let Some(location) = preferred_location {
-            path.push_str(&format!("&preferredLocation={}", urlencoding::encode(location)));
+            path.push_str(&format!(
+                "&preferredLocation={}",
+                urlencoding::encode(location)
+            ));
         }
         let response: super::types::ServerTypesResponse = self.get(&path).await?;
         Ok(response.data)
@@ -1032,10 +1019,7 @@ impl PlatformApiClient {
     /// Use this to discover private networking infrastructure provisioned for the project.
     ///
     /// Endpoint: GET /api/v1/cloud-runner/projects/:projectId/networks
-    pub async fn list_project_networks(
-        &self,
-        project_id: &str,
-    ) -> Result<Vec<CloudRunnerNetwork>> {
+    pub async fn list_project_networks(&self, project_id: &str) -> Result<Vec<CloudRunnerNetwork>> {
         let response: GenericResponse<Vec<CloudRunnerNetwork>> = self
             .get(&format!(
                 "/api/v1/cloud-runner/projects/{}/networks",
@@ -1106,7 +1090,10 @@ mod tests {
 
         // Test path concatenation logic (implicitly tested through api_url)
         let expected_path = format!("{}/api/organizations/123", client.api_url());
-        assert_eq!(expected_path, "https://api.example.com/api/organizations/123");
+        assert_eq!(
+            expected_path,
+            "https://api.example.com/api/organizations/123"
+        );
     }
 
     #[test]
@@ -1125,8 +1112,7 @@ mod tests {
         assert!(api_error.to_string().contains("400"));
         assert!(api_error.to_string().contains("Bad request"));
 
-        let permission_denied =
-            PlatformApiError::PermissionDenied("Access denied".to_string());
+        let permission_denied = PlatformApiError::PermissionDenied("Access denied".to_string());
         assert!(permission_denied.to_string().contains("Permission denied"));
 
         let rate_limited = PlatformApiError::RateLimited;
@@ -1176,7 +1162,10 @@ mod tests {
             provider.as_str(),
             project_id
         );
-        assert_eq!(expected_path, "/api/cloud-credentials/provider/gcp?projectId=proj-123");
+        assert_eq!(
+            expected_path,
+            "/api/cloud-credentials/provider/gcp?projectId=proj-123"
+        );
     }
 
     #[test]
@@ -1199,7 +1188,10 @@ mod tests {
             service_id,
             query_params.join("&")
         );
-        assert_eq!(path, "/api/deployments/services/svc-123/logs?start=2024-01-01T00:00:00Z&limit=50");
+        assert_eq!(
+            path,
+            "/api/deployments/services/svc-123/logs?start=2024-01-01T00:00:00Z&limit=50"
+        );
     }
 
     #[test]

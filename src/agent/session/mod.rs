@@ -262,10 +262,7 @@ impl ChatSession {
 
         // Build prompt with platform context if project is selected
         let prompt = if self.platform_session.is_project_selected() {
-            format!(
-                "{} >",
-                self.platform_session.display_context()
-            )
+            format!("{} >", self.platform_session.display_context())
         } else {
             ">".to_string()
         };

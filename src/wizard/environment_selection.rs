@@ -2,8 +2,8 @@
 //!
 //! Prompts user to select an environment or create a new one.
 
-use crate::platform::api::types::Environment;
 use crate::platform::api::PlatformApiClient;
+use crate::platform::api::types::Environment;
 use crate::wizard::render::{display_step_header, wizard_render_config};
 use colored::Colorize;
 use inquire::{InquireError, Select};

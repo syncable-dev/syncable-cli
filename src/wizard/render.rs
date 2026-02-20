@@ -26,25 +26,19 @@ pub fn display_step_header(step_number: u8, step_name: &str, description: &str) 
         "{}{}{}",
         "┌".bright_cyan(),
         header.bright_cyan(),
-        "─".repeat(inner_width.saturating_sub(header.len())).bright_cyan()
+        "─"
+            .repeat(inner_width.saturating_sub(header.len()))
+            .bright_cyan()
     );
 
     // Description
     let desc_lines = textwrap::wrap(description, inner_width - 2);
     for line in &desc_lines {
-        println!(
-            "{}  {}",
-            "│".dimmed(),
-            line.white()
-        );
+        println!("{}  {}", "│".dimmed(), line.white());
     }
 
     // Bottom border
-    println!(
-        "{}{}",
-        "└".dimmed(),
-        "─".repeat(box_width - 1).dimmed()
-    );
+    println!("{}{}", "└".dimmed(), "─".repeat(box_width - 1).dimmed());
     println!();
 }
 

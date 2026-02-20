@@ -108,7 +108,10 @@ This tool NEVER returns actual credentials - only connection status.
                 return Ok(format_error_for_llm(
                     "check_provider_connection",
                     ErrorCategory::ValidationFailed,
-                    &format!("Invalid provider: '{}'. Must be one of: gcp, aws, azure, hetzner", args.provider),
+                    &format!(
+                        "Invalid provider: '{}'. Must be one of: gcp, aws, azure, hetzner",
+                        args.provider
+                    ),
                     Some(vec![
                         "Use 'gcp' for Google Cloud Platform",
                         "Use 'aws' for Amazon Web Services",
@@ -128,7 +131,10 @@ This tool NEVER returns actual credentials - only connection status.
         };
 
         // Check the connection status
-        match client.check_provider_connection(&provider, &args.project_id).await {
+        match client
+            .check_provider_connection(&provider, &args.project_id)
+            .await
+        {
             Ok(Some(status)) => {
                 // Provider is connected
                 let result = json!({
@@ -141,8 +147,9 @@ This tool NEVER returns actual credentials - only connection status.
                     // NOTE: We intentionally do NOT include any credential values here
                 });
 
-                serde_json::to_string_pretty(&result)
-                    .map_err(|e| CheckProviderConnectionError(format!("Failed to serialize: {}", e)))
+                serde_json::to_string_pretty(&result).map_err(|e| {
+                    CheckProviderConnectionError(format!("Failed to serialize: {}", e))
+                })
             }
             Ok(None) => {
                 // Provider is NOT connected
@@ -159,8 +166,9 @@ This tool NEVER returns actual credentials - only connection status.
                     ]
                 });
 
-                serde_json::to_string_pretty(&result)
-                    .map_err(|e| CheckProviderConnectionError(format!("Failed to serialize: {}", e)))
+                serde_json::to_string_pretty(&result).map_err(|e| {
+                    CheckProviderConnectionError(format!("Failed to serialize: {}", e))
+                })
             }
             Err(e) => Ok(format_api_error("check_provider_connection", e)),
         }
@@ -251,7 +259,10 @@ mod tests {
 
     #[test]
     fn test_tool_name() {
-        assert_eq!(CheckProviderConnectionTool::NAME, "check_provider_connection");
+        assert_eq!(
+            CheckProviderConnectionTool::NAME,
+            "check_provider_connection"
+        );
     }
 
     #[test]

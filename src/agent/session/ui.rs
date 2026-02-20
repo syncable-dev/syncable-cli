@@ -229,11 +229,7 @@ pub fn print_banner(session: &ChatSession) {
             "Project:".white(),
             "(none selected)".dimmed()
         );
-        println!(
-            "     {} {}",
-            "→".cyan(),
-            "sync-ctl org list".dimmed()
-        );
+        println!("     {} {}", "→".cyan(), "sync-ctl org list".dimmed());
     }
 
     // Check for incomplete plans and show a hint

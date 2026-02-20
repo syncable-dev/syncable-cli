@@ -5,7 +5,9 @@
 //! - Framework conventions (Spring Actuator, etc.)
 //! - Configuration files (K8s manifests)
 
-use crate::analyzer::{DetectedTechnology, HealthEndpoint, HealthEndpointSource, TechnologyCategory};
+use crate::analyzer::{
+    DetectedTechnology, HealthEndpoint, HealthEndpointSource, TechnologyCategory,
+};
 use crate::common::file_utils::{is_readable_file, read_file_safe};
 use crate::error::Result;
 use regex::Regex;
@@ -58,7 +60,11 @@ pub fn detect_health_endpoints(
     }
 
     // Sort by confidence (highest first)
-    endpoints.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal));
+    endpoints.sort_by(|a, b| {
+        b.confidence
+            .partial_cmp(&a.confidence)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     endpoints
 }
@@ -67,8 +73,14 @@ pub fn detect_health_endpoints(
 fn get_framework_health_endpoint(tech: &DetectedTechnology) -> Option<HealthEndpoint> {
     match tech.name.as_str() {
         // Java frameworks
-        "Spring Boot" => Some(HealthEndpoint::from_framework("/actuator/health", "Spring Boot Actuator")),
-        "Quarkus" => Some(HealthEndpoint::from_framework("/q/health", "Quarkus SmallRye Health")),
+        "Spring Boot" => Some(HealthEndpoint::from_framework(
+            "/actuator/health",
+            "Spring Boot Actuator",
+        )),
+        "Quarkus" => Some(HealthEndpoint::from_framework(
+            "/q/health",
+            "Quarkus SmallRye Health",
+        )),
         "Micronaut" => Some(HealthEndpoint::from_framework("/health", "Micronaut")),
 
         // Node.js frameworks - no standard, but common patterns
@@ -127,10 +139,17 @@ fn scan_for_health_routes(
 
     // Determine which file types to scan based on detected technologies
     let has_js = technologies.iter().any(|t| {
-        matches!(t.category, TechnologyCategory::BackendFramework | TechnologyCategory::MetaFramework)
-            && (t.name.contains("Express") || t.name.contains("Fastify") || t.name.contains("Koa")
-                || t.name.contains("Hono") || t.name.contains("Elysia") || t.name.contains("NestJS")
-                || t.name.contains("Next") || t.name.contains("Nuxt"))
+        matches!(
+            t.category,
+            TechnologyCategory::BackendFramework | TechnologyCategory::MetaFramework
+        ) && (t.name.contains("Express")
+            || t.name.contains("Fastify")
+            || t.name.contains("Koa")
+            || t.name.contains("Hono")
+            || t.name.contains("Elysia")
+            || t.name.contains("NestJS")
+            || t.name.contains("Next")
+            || t.name.contains("Nuxt"))
     });
 
     let has_python = technologies.iter().any(|t| {
@@ -140,7 +159,10 @@ fn scan_for_health_routes(
 
     let has_go = technologies.iter().any(|t| {
         matches!(t.category, TechnologyCategory::BackendFramework)
-            && (t.name.contains("Gin") || t.name.contains("Echo") || t.name.contains("Fiber") || t.name.contains("Chi"))
+            && (t.name.contains("Gin")
+                || t.name.contains("Echo")
+                || t.name.contains("Fiber")
+                || t.name.contains("Chi"))
     });
 
     let has_rust = technologies.iter().any(|t| {
@@ -150,7 +172,9 @@ fn scan_for_health_routes(
 
     let has_java = technologies.iter().any(|t| {
         matches!(t.category, TechnologyCategory::BackendFramework)
-            && (t.name.contains("Spring") || t.name.contains("Quarkus") || t.name.contains("Micronaut"))
+            && (t.name.contains("Spring")
+                || t.name.contains("Quarkus")
+                || t.name.contains("Micronaut"))
     });
 
     // Common locations to check
@@ -169,26 +193,65 @@ fn scan_for_health_routes(
         let dir = project_root.join(location);
         if dir.is_dir() {
             if has_js {
-                scan_directory_for_patterns(&dir, &["js", "ts", "mjs"], &js_health_patterns(), max_file_size, &mut endpoints);
+                scan_directory_for_patterns(
+                    &dir,
+                    &["js", "ts", "mjs"],
+                    &js_health_patterns(),
+                    max_file_size,
+                    &mut endpoints,
+                );
             }
             if has_python {
-                scan_directory_for_patterns(&dir, &["py"], &python_health_patterns(), max_file_size, &mut endpoints);
+                scan_directory_for_patterns(
+                    &dir,
+                    &["py"],
+                    &python_health_patterns(),
+                    max_file_size,
+                    &mut endpoints,
+                );
             }
             if has_go {
-                scan_directory_for_patterns(&dir, &["go"], &go_health_patterns(), max_file_size, &mut endpoints);
+                scan_directory_for_patterns(
+                    &dir,
+                    &["go"],
+                    &go_health_patterns(),
+                    max_file_size,
+                    &mut endpoints,
+                );
             }
             if has_rust {
-                scan_directory_for_patterns(&dir, &["rs"], &rust_health_patterns(), max_file_size, &mut endpoints);
+                scan_directory_for_patterns(
+                    &dir,
+                    &["rs"],
+                    &rust_health_patterns(),
+                    max_file_size,
+                    &mut endpoints,
+                );
             }
             if has_java {
-                scan_directory_for_patterns(&dir, &["java", "kt"], &java_health_patterns(), max_file_size, &mut endpoints);
+                scan_directory_for_patterns(
+                    &dir,
+                    &["java", "kt"],
+                    &java_health_patterns(),
+                    max_file_size,
+                    &mut endpoints,
+                );
             }
         }
     }
 
     // Also check root-level files
     if has_js {
-        for entry in ["index.js", "index.ts", "app.js", "app.ts", "server.js", "server.ts", "main.js", "main.ts"] {
+        for entry in [
+            "index.js",
+            "index.ts",
+            "app.js",
+            "app.ts",
+            "server.js",
+            "server.ts",
+            "main.js",
+            "main.ts",
+        ] {
             let path = project_root.join(entry);
             if is_readable_file(&path) {
                 scan_file_for_patterns(&path, &js_health_patterns(), max_file_size, &mut endpoints);
@@ -199,20 +262,35 @@ fn scan_for_health_routes(
         for entry in ["main.py", "app.py", "wsgi.py", "asgi.py"] {
             let path = project_root.join(entry);
             if is_readable_file(&path) {
-                scan_file_for_patterns(&path, &python_health_patterns(), max_file_size, &mut endpoints);
+                scan_file_for_patterns(
+                    &path,
+                    &python_health_patterns(),
+                    max_file_size,
+                    &mut endpoints,
+                );
             }
         }
     }
     if has_go {
         let main_go = project_root.join("main.go");
         if is_readable_file(&main_go) {
-            scan_file_for_patterns(&main_go, &go_health_patterns(), max_file_size, &mut endpoints);
+            scan_file_for_patterns(
+                &main_go,
+                &go_health_patterns(),
+                max_file_size,
+                &mut endpoints,
+            );
         }
     }
     if has_rust {
         let main_rs = project_root.join("src/main.rs");
         if is_readable_file(&main_rs) {
-            scan_file_for_patterns(&main_rs, &rust_health_patterns(), max_file_size, &mut endpoints);
+            scan_file_for_patterns(
+                &main_rs,
+                &rust_health_patterns(),
+                max_file_size,
+                &mut endpoints,
+            );
         }
     }
 
@@ -238,9 +316,29 @@ fn scan_directory_for_patterns(
                 }
             } else if path.is_dir() {
                 // Skip common non-source directories
-                let dir_name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-                if !["node_modules", ".git", "target", "build", "dist", "__pycache__", ".next", "vendor"].contains(&dir_name.as_str()) {
-                    scan_directory_for_patterns(&path, extensions, patterns, max_file_size, endpoints);
+                let dir_name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                if ![
+                    "node_modules",
+                    ".git",
+                    "target",
+                    "build",
+                    "dist",
+                    "__pycache__",
+                    ".next",
+                    "vendor",
+                ]
+                .contains(&dir_name.as_str())
+                {
+                    scan_directory_for_patterns(
+                        &path,
+                        extensions,
+                        patterns,
+                        max_file_size,
+                        endpoints,
+                    );
                 }
             }
         }
@@ -261,7 +359,10 @@ fn scan_file_for_patterns(
                     if let Some(path_match) = cap.get(1) {
                         let health_path = path_match.as_str().to_string();
                         // Only add if it looks like a health endpoint
-                        if COMMON_HEALTH_PATHS.iter().any(|p| health_path.contains(p) || p.contains(&health_path)) {
+                        if COMMON_HEALTH_PATHS
+                            .iter()
+                            .any(|p| health_path.contains(p) || p.contains(&health_path))
+                        {
                             if !endpoints.iter().any(|e| e.path == health_path) {
                                 endpoints.push(HealthEndpoint {
                                     path: health_path,
@@ -282,11 +383,20 @@ fn scan_file_for_patterns(
 fn js_health_patterns() -> Vec<(&'static str, f32)> {
     vec![
         // Express/Fastify/Koa style: app.get('/health', ...)
-        (r#"\.(?:get|route)\s*\(\s*['"]([^'"]*(?:health|ready|live|status|ping)[^'"]*)['"]"#, 0.9),
+        (
+            r#"\.(?:get|route)\s*\(\s*['"]([^'"]*(?:health|ready|live|status|ping)[^'"]*)['"]"#,
+            0.9,
+        ),
         // NestJS style: @Get('health')
-        (r#"@Get\s*\(\s*['"]([^'"]*(?:health|ready|live|status|ping)[^'"]*)['"]"#, 0.9),
+        (
+            r#"@Get\s*\(\s*['"]([^'"]*(?:health|ready|live|status|ping)[^'"]*)['"]"#,
+            0.9,
+        ),
         // Hono/Elysia style: .get('/health', ...)
-        (r#"\.get\s*\(\s*['"]([^'"]*(?:health|ready|live|status|ping)[^'"]*)['"]"#, 0.9),
+        (
+            r#"\.get\s*\(\s*['"]([^'"]*(?:health|ready|live|status|ping)[^'"]*)['"]"#,
+            0.9,
+        ),
     ]
 }
 
@@ -294,9 +404,15 @@ fn js_health_patterns() -> Vec<(&'static str, f32)> {
 fn python_health_patterns() -> Vec<(&'static str, f32)> {
     vec![
         // FastAPI/Flask style: @app.get("/health")
-        (r#"@\w+\.(?:get|route)\s*\(\s*['"]([^'"]*(?:health|ready|live|status|ping)[^'"]*)['"]"#, 0.9),
+        (
+            r#"@\w+\.(?:get|route)\s*\(\s*['"]([^'"]*(?:health|ready|live|status|ping)[^'"]*)['"]"#,
+            0.9,
+        ),
         // Django URL patterns: path('health/', ...)
-        (r#"path\s*\(\s*['"]([^'"]*(?:health|ready|live|status|ping)[^'"]*)['"]"#, 0.85),
+        (
+            r#"path\s*\(\s*['"]([^'"]*(?:health|ready|live|status|ping)[^'"]*)['"]"#,
+            0.85,
+        ),
     ]
 }
 
@@ -304,9 +420,15 @@ fn python_health_patterns() -> Vec<(&'static str, f32)> {
 fn go_health_patterns() -> Vec<(&'static str, f32)> {
     vec![
         // http.HandleFunc("/health", ...)
-        (r#"HandleFunc\s*\(\s*"([^"]*(?:health|ready|live|status|ping)[^"]*)"#, 0.9),
+        (
+            r#"HandleFunc\s*\(\s*"([^"]*(?:health|ready|live|status|ping)[^"]*)"#,
+            0.9,
+        ),
         // Gin/Echo: r.GET("/health", ...)
-        (r#"\.(?:GET|Handle)\s*\(\s*"([^"]*(?:health|ready|live|status|ping)[^"]*)"#, 0.9),
+        (
+            r#"\.(?:GET|Handle)\s*\(\s*"([^"]*(?:health|ready|live|status|ping)[^"]*)"#,
+            0.9,
+        ),
     ]
 }
 
@@ -314,9 +436,15 @@ fn go_health_patterns() -> Vec<(&'static str, f32)> {
 fn rust_health_patterns() -> Vec<(&'static str, f32)> {
     vec![
         // Actix: .route("/health", ...)
-        (r#"\.route\s*\(\s*"([^"]*(?:health|ready|live|status|ping)[^"]*)"#, 0.9),
+        (
+            r#"\.route\s*\(\s*"([^"]*(?:health|ready|live|status|ping)[^"]*)"#,
+            0.9,
+        ),
         // Axum: .route("/health", get(...))
-        (r#"\.route\s*\(\s*"([^"]*(?:health|ready|live|status|ping)[^"]*)"#, 0.9),
+        (
+            r#"\.route\s*\(\s*"([^"]*(?:health|ready|live|status|ping)[^"]*)"#,
+            0.9,
+        ),
     ]
 }
 
@@ -324,7 +452,10 @@ fn rust_health_patterns() -> Vec<(&'static str, f32)> {
 fn java_health_patterns() -> Vec<(&'static str, f32)> {
     vec![
         // Spring: @GetMapping("/health")
-        (r#"@(?:Get|Request)Mapping\s*\(\s*(?:value\s*=\s*)?["']([^"']*(?:health|ready|live|status|ping)[^"']*)["']"#, 0.9),
+        (
+            r#"@(?:Get|Request)Mapping\s*\(\s*(?:value\s*=\s*)?["']([^"']*(?:health|ready|live|status|ping)[^"']*)["']"#,
+            0.9,
+        ),
     ]
 }
 

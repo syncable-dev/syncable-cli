@@ -144,18 +144,18 @@ fn handle_single_dockerfile(
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|_| dockerfile.path.to_string_lossy().to_string());
 
-    println!(
-        "\n{} Found: {}",
-        "✓".green(),
-        relative_path.cyan()
-    );
+    println!("\n{} Found: {}", "✓".green(), relative_path.cyan());
 
     // Show additional info if available
     if let Some(ref base) = dockerfile.base_image {
         println!("  {} Base image: {}", "│".dimmed(), base.dimmed());
     }
     if let Some(port) = dockerfile.suggested_port {
-        println!("  {} Suggested port: {}", "│".dimmed(), port.to_string().dimmed());
+        println!(
+            "  {} Suggested port: {}",
+            "│".dimmed(),
+            port.to_string().dimmed()
+        );
     }
 
     // Proceed to build context selection

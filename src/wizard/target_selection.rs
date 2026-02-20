@@ -37,24 +37,26 @@ pub fn select_target(provider_status: &ProviderDeploymentStatus) -> TargetSelect
     // Build options with descriptions
     let mut options: Vec<String> = available_targets
         .iter()
-        .map(|t| {
-            match t {
-                DeploymentTarget::CloudRunner => {
-                    format!(
-                        "{}  {}",
-                        "Cloud Runner".cyan(),
-                        "Fully managed, auto-scaling containers".dimmed()
-                    )
-                }
-                DeploymentTarget::Kubernetes => {
-                    let cluster_count = provider_status.clusters.iter().filter(|c| c.is_healthy).count();
-                    format!(
-                        "{}  {} cluster{} available",
-                        "Kubernetes".cyan(),
-                        cluster_count,
-                        if cluster_count == 1 { "" } else { "s" }
-                    )
-                }
+        .map(|t| match t {
+            DeploymentTarget::CloudRunner => {
+                format!(
+                    "{}  {}",
+                    "Cloud Runner".cyan(),
+                    "Fully managed, auto-scaling containers".dimmed()
+                )
+            }
+            DeploymentTarget::Kubernetes => {
+                let cluster_count = provider_status
+                    .clusters
+                    .iter()
+                    .filter(|c| c.is_healthy)
+                    .count();
+                format!(
+                    "{}  {} cluster{} available",
+                    "Kubernetes".cyan(),
+                    cluster_count,
+                    if cluster_count == 1 { "" } else { "s" }
+                )
             }
         })
         .collect();

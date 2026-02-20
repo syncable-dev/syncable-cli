@@ -1,9 +1,9 @@
 //! Registry provisioning step for deployment wizard
 
+use crate::platform::api::PlatformApiClient;
 use crate::platform::api::types::{
     CloudProvider, CreateRegistryRequest, RegistrySummary, RegistryTaskState,
 };
-use crate::platform::api::PlatformApiClient;
 use crate::wizard::render::{display_step_header, wizard_render_config};
 use colored::Colorize;
 use inquire::{InquireError, Text};
@@ -102,10 +102,7 @@ pub async fn provision_registry(
         let progress = status.progress.unwrap_or(0);
         if progress > last_progress {
             let bar = progress_bar(progress);
-            let message = status
-                .overall_message
-                .as_deref()
-                .unwrap_or("Processing...");
+            let message = status.overall_message.as_deref().unwrap_or("Processing...");
             print!(
                 "\r  {} {} {}",
                 bar,
@@ -163,7 +160,13 @@ fn progress_bar(percent: u8) -> String {
 fn sanitize_registry_name(name: &str) -> String {
     name.to_lowercase()
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '-' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect::<String>()
         .trim_matches('-')
         .to_string()
