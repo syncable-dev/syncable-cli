@@ -18,13 +18,13 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Instant;
 
-use syncable_ag_ui_core::{Role, RunId, ThreadId};
 use rig::client::{CompletionClient, ProviderClient};
 use rig::completion::Message as RigMessage;
 use rig::completion::Prompt;
 use rig::completion::message::{AssistantContent, UserContent};
 use rig::one_or_many::OneOrMany;
 use rig::providers::{anthropic, openai};
+use syncable_ag_ui_core::{Role, RunId, ThreadId};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
@@ -60,12 +60,12 @@ use crate::agent::tools::{
     WriteFilesTool,
 };
 
-use syncable_ag_ui_core::ToolCallId;
-use syncable_ag_ui_core::state::StateManager;
 use rig::agent::CancelSignal;
 use rig::completion::{CompletionModel, CompletionResponse, Message as RigPromptMessage};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use syncable_ag_ui_core::ToolCallId;
+use syncable_ag_ui_core::state::StateManager;
 use tokio::sync::Mutex;
 
 /// Step status for generative UI progress display.
@@ -635,7 +635,10 @@ impl AgentProcessor {
     /// Extracts the user message content from RunAgentInput messages.
     ///
     /// Returns the last user message content, or None if no user messages.
-    fn extract_user_input(&self, messages: &[syncable_ag_ui_core::types::Message]) -> Option<String> {
+    fn extract_user_input(
+        &self,
+        messages: &[syncable_ag_ui_core::types::Message],
+    ) -> Option<String> {
         // Find the last user message and extract its content
         messages
             .iter()

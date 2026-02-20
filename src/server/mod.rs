@@ -45,11 +45,11 @@ pub mod routes;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use syncable_ag_ui_core::{Event, JsonValue, RunId, ThreadId};
 use axum::{
     Router,
     routing::{get, post},
 };
+use syncable_ag_ui_core::{Event, JsonValue, RunId, ThreadId};
 use tokio::sync::{RwLock, broadcast, mpsc};
 use tower_http::cors::{Any, CorsLayer};
 
