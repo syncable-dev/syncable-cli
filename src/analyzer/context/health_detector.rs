@@ -9,7 +9,6 @@ use crate::analyzer::{
     DetectedTechnology, HealthEndpoint, HealthEndpointSource, TechnologyCategory,
 };
 use crate::common::file_utils::{is_readable_file, read_file_safe};
-use crate::error::Result;
 use regex::Regex;
 use std::path::Path;
 

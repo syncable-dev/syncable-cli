@@ -337,7 +337,7 @@ pub async fn run_command(
                                     );
                                 }
                                 OutputFormat::Table => {
-                                    println!("\n{:<40} {:<30} {}", "ID", "NAME", "DESCRIPTION");
+                                    println!("\n{:<40} {:<30} DESCRIPTION", "ID", "NAME");
                                     println!("{}", "-".repeat(90));
                                     for project in projects {
                                         let desc = if project.description.is_empty() {
@@ -542,7 +542,7 @@ pub async fn run_command(
                                     );
                                 }
                                 OutputFormat::Table => {
-                                    println!("\n{:<40} {:<30} {}", "ID", "NAME", "SLUG");
+                                    println!("\n{:<40} {:<30} SLUG", "ID", "NAME");
                                     println!("{}", "-".repeat(90));
                                     for org in orgs {
                                         let slug =

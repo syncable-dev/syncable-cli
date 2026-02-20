@@ -170,10 +170,7 @@ fn select_provider(input: &RecommendationInput) -> (CloudProvider, String) {
         .map(|p| p.display_name())
         .collect();
     let also_available = if connected.len() > 1 {
-        format!(
-            ". Also connected: {}",
-            connected.iter().copied().collect::<Vec<_>>().join(", ")
-        )
+        format!(". Also connected: {}", connected.to_vec().join(", "))
     } else {
         String::new()
     };
