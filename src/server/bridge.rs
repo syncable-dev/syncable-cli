@@ -364,10 +364,12 @@ impl EventBridge {
             .await
             .take()
             .unwrap_or_else(|| "unknown".to_string());
-        self.emit(Event::StepFinished(syncable_ag_ui_core::StepFinishedEvent {
-            base: BaseEvent::with_current_timestamp(),
-            step_name,
-        }));
+        self.emit(Event::StepFinished(
+            syncable_ag_ui_core::StepFinishedEvent {
+                base: BaseEvent::with_current_timestamp(),
+                step_name,
+            },
+        ));
     }
 
     // =========================================================================

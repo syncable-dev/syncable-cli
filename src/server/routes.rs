@@ -367,7 +367,9 @@ fn convert_tools(raw_tools: Vec<serde_json::Value>) -> Vec<syncable_ag_ui_core::
 }
 
 /// Convert JSON context to AG-UI Context type
-fn convert_context(raw_context: Vec<serde_json::Value>) -> Vec<syncable_ag_ui_core::types::Context> {
+fn convert_context(
+    raw_context: Vec<serde_json::Value>,
+) -> Vec<syncable_ag_ui_core::types::Context> {
     raw_context
         .into_iter()
         .filter_map(|ctx| {
@@ -477,9 +479,9 @@ async fn handle_websocket(socket: WebSocket, state: ServerState) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::extract::State;
     use syncable_ag_ui_core::types::Message as AgUiProtocolMessage;
     use syncable_ag_ui_core::{RunId, ThreadId};
-    use axum::extract::State;
 
     #[tokio::test]
     async fn test_health_endpoint() {
