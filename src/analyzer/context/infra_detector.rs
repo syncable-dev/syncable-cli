@@ -262,7 +262,11 @@ mod tests {
     #[test]
     fn test_detect_docker_compose() {
         let temp_dir = TempDir::new().unwrap();
-        fs::write(temp_dir.path().join("docker-compose.yml"), "version: '3'\nservices:\n  app:\n    build: .").unwrap();
+        fs::write(
+            temp_dir.path().join("docker-compose.yml"),
+            "version: '3'\nservices:\n  app:\n    build: .",
+        )
+        .unwrap();
 
         let infra = detect_infrastructure(temp_dir.path());
         assert!(infra.has_docker_compose);
@@ -274,7 +278,11 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let k8s_dir = temp_dir.path().join("k8s");
         fs::create_dir(&k8s_dir).unwrap();
-        fs::write(k8s_dir.join("deployment.yaml"), "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: test").unwrap();
+        fs::write(
+            k8s_dir.join("deployment.yaml"),
+            "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: test",
+        )
+        .unwrap();
 
         let infra = detect_infrastructure(temp_dir.path());
         assert!(infra.has_kubernetes);
@@ -286,7 +294,11 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let helm_dir = temp_dir.path().join("charts").join("myapp");
         fs::create_dir_all(&helm_dir).unwrap();
-        fs::write(helm_dir.join("Chart.yaml"), "apiVersion: v2\nname: myapp\nversion: 1.0.0").unwrap();
+        fs::write(
+            helm_dir.join("Chart.yaml"),
+            "apiVersion: v2\nname: myapp\nversion: 1.0.0",
+        )
+        .unwrap();
 
         let infra = detect_infrastructure(temp_dir.path());
         assert!(infra.has_helm);
@@ -298,7 +310,11 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let tf_dir = temp_dir.path().join("terraform");
         fs::create_dir(&tf_dir).unwrap();
-        fs::write(tf_dir.join("main.tf"), "provider \"aws\" {\n  region = \"us-east-1\"\n}").unwrap();
+        fs::write(
+            tf_dir.join("main.tf"),
+            "provider \"aws\" {\n  region = \"us-east-1\"\n}",
+        )
+        .unwrap();
 
         let infra = detect_infrastructure(temp_dir.path());
         assert!(infra.has_terraform);

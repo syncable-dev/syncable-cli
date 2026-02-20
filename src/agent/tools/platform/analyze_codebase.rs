@@ -12,8 +12,7 @@ use std::path::Path;
 
 use crate::agent::tools::error::{ErrorCategory, format_error_for_llm};
 use crate::analyzer::{
-    AnalysisConfig, ProjectAnalysis, ProjectType, TechnologyCategory,
-    analyze_project_with_config,
+    AnalysisConfig, ProjectAnalysis, ProjectType, TechnologyCategory, analyze_project_with_config,
 };
 
 /// Arguments for the analyze codebase tool
@@ -373,7 +372,11 @@ fn infer_dockerfile_base(analysis: &ProjectAnalysis) -> Option<String> {
         match lang.name.to_lowercase().as_str() {
             "javascript" | "typescript" => {
                 // Check for Bun
-                if analysis.technologies.iter().any(|t| t.name.to_lowercase() == "bun") {
+                if analysis
+                    .technologies
+                    .iter()
+                    .any(|t| t.name.to_lowercase() == "bun")
+                {
                     return Some("oven/bun:1-alpine".to_string());
                 }
                 return Some("node:20-alpine".to_string());
@@ -402,15 +405,26 @@ fn determine_next_steps(analysis: &ProjectAnalysis) -> Vec<String> {
 
     if has_dockerfile {
         steps.push("Use analyze_project to get specific Dockerfile details".to_string());
-        steps.push("Use list_deployment_capabilities to see available deployment targets".to_string());
+        steps.push(
+            "Use list_deployment_capabilities to see available deployment targets".to_string(),
+        );
         steps.push("Use create_deployment_config to create a deployment configuration".to_string());
     } else {
-        steps.push("Create a Dockerfile for your application (recommended base image in deployment_hints)".to_string());
-        steps.push("After creating Dockerfile, use analyze_project to verify it's detected".to_string());
+        steps.push(
+            "Create a Dockerfile for your application (recommended base image in deployment_hints)"
+                .to_string(),
+        );
+        steps.push(
+            "After creating Dockerfile, use analyze_project to verify it's detected".to_string(),
+        );
     }
 
     if !analysis.environment_variables.is_empty() {
-        let required_count = analysis.environment_variables.iter().filter(|e| e.required).count();
+        let required_count = analysis
+            .environment_variables
+            .iter()
+            .filter(|e| e.required)
+            .count();
         if required_count > 0 {
             steps.push(format!(
                 "Configure {} required environment variable{} before deployment",

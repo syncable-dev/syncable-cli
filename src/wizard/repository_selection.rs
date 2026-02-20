@@ -2,8 +2,8 @@
 //!
 //! Detects the repository from local git remote or asks user to select.
 
-use crate::platform::api::types::{AvailableRepository, ProjectRepository};
 use crate::platform::api::PlatformApiClient;
+use crate::platform::api::types::{AvailableRepository, ProjectRepository};
 use crate::wizard::render::{display_step_header, wizard_render_config};
 use colored::Colorize;
 use inquire::{Confirm, InquireError, Select};
@@ -88,7 +88,13 @@ fn parse_repo_from_url(url: &str) -> Option<String> {
 
     // HTTPS format: https://github.com/owner/repo.git
     if url.starts_with("https://") || url.starts_with("http://") {
-        if let Some(path) = url.split('/').skip(3).collect::<Vec<_>>().join("/").strip_suffix(".git") {
+        if let Some(path) = url
+            .split('/')
+            .skip(3)
+            .collect::<Vec<_>>()
+            .join("/")
+            .strip_suffix(".git")
+        {
             return Some(path.to_string());
         }
         // Without .git suffix
@@ -221,7 +227,9 @@ async fn prompt_github_app_install(
                 org_name: org_name.to_string(),
             }
         }
-        Err(e) => RepositorySelectionResult::Error(format!("Failed to get installation URL: {}", e)),
+        Err(e) => {
+            RepositorySelectionResult::Error(format!("Failed to get installation URL: {}", e))
+        }
     }
 }
 
@@ -251,10 +259,7 @@ pub async fn select_repository(
 
     // If no installations, prompt to install GitHub App
     if installations.is_empty() {
-        println!(
-            "\n{} No GitHub App installations found.",
-            "⚠".yellow()
-        );
+        println!("\n{} No GitHub App installations found.", "⚠".yellow());
         match client.get_github_installation_url().await {
             Ok(response) => {
                 println!("Install the Syncable GitHub App to connect repositories.");
@@ -314,7 +319,8 @@ pub async fn select_repository(
     let connected_ids = available_response.connected_repositories;
 
     // Try to auto-detect from git remote
-    let detected_repo_name = detect_git_remote(project_path).and_then(|url| parse_repo_from_url(&url));
+    let detected_repo_name =
+        detect_git_remote(project_path).and_then(|url| parse_repo_from_url(&url));
 
     if let Some(ref local_repo_name) = detected_repo_name {
         // Check if already connected to this project
@@ -364,10 +370,7 @@ pub async fn select_repository(
 
     // No local repo detected or couldn't match - show selection UI
     if connected_repos.is_empty() && available_repos.is_empty() {
-        println!(
-            "\n{} No repositories available.",
-            "⚠".yellow()
-        );
+        println!("\n{} No repositories available.", "⚠".yellow());
         println!(
             "{}",
             "Connect a repository using the GitHub App installation.".dimmed()
@@ -423,7 +426,9 @@ pub async fn select_repository(
 
         match selection {
             Ok(selected_name) => {
-                if let Some(available) = available_repos.iter().find(|r| r.full_name == selected_name)
+                if let Some(available) = available_repos
+                    .iter()
+                    .find(|r| r.full_name == selected_name)
                 {
                     return RepositorySelectionResult::ConnectNew(available.clone());
                 }

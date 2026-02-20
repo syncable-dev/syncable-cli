@@ -45,16 +45,19 @@ pub mod routes;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use ag_ui_core::{Event, JsonValue, RunId, ThreadId};
-use axum::{routing::{get, post}, Router};
+use axum::{
+    Router,
+    routing::{get, post},
+};
+use syncable_ag_ui_core::{Event, JsonValue, RunId, ThreadId};
+use tokio::sync::{RwLock, broadcast, mpsc};
 use tower_http::cors::{Any, CorsLayer};
-use tokio::sync::{broadcast, mpsc, RwLock};
 
 pub use bridge::EventBridge;
 pub use processor::{AgentProcessor, ProcessorConfig, ThreadSession};
 
 // Re-export types needed for message handling
-pub use ag_ui_core::types::{Context, Message as AgUiMessage, RunAgentInput, Tool};
+pub use syncable_ag_ui_core::types::{Context, Message as AgUiMessage, RunAgentInput, Tool};
 
 /// Message from frontend to agent processor.
 /// Wraps RunAgentInput with optional response channel for acknowledgments.
@@ -240,8 +243,7 @@ impl AgUiServer {
 
         // Optionally start the agent processor
         if self.config.enable_processor {
-            let processor_config = self.config.processor_config.clone()
-                .unwrap_or_default();
+            let processor_config = self.config.processor_config.clone().unwrap_or_default();
 
             if let Some(msg_rx) = self.state.take_message_receiver().await {
                 let event_bridge = self.state.event_sender();
@@ -297,9 +299,7 @@ mod tests {
 
     #[test]
     fn test_config_builder() {
-        let config = AgUiConfig::new()
-            .port(8080)
-            .host("0.0.0.0");
+        let config = AgUiConfig::new().port(8080).host("0.0.0.0");
         assert_eq!(config.port, 8080);
         assert_eq!(config.host, "0.0.0.0");
     }
@@ -334,7 +334,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_server_event_flow() {
-        use ag_ui_core::Event;
+        use syncable_ag_ui_core::Event;
 
         let state = ServerState::new();
         let bridge = state.event_sender();
@@ -350,11 +350,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_message_channel() {
-        use ag_ui_core::types::{RunAgentInput, Message};
+        use syncable_ag_ui_core::types::{Message, RunAgentInput};
 
         let state = ServerState::new();
         let msg_tx = state.message_sender();
-        let mut msg_rx = state.take_message_receiver().await.expect("Should get receiver");
+        let mut msg_rx = state
+            .take_message_receiver()
+            .await
+            .expect("Should get receiver");
 
         // Create a RunAgentInput using builder pattern
         let input = RunAgentInput::new(ThreadId::random(), RunId::random())
@@ -395,8 +398,7 @@ mod tests {
             .with_provider("anthropic")
             .with_model("claude-3-sonnet");
 
-        let config = AgUiConfig::new()
-            .with_processor_config(processor_config);
+        let config = AgUiConfig::new().with_processor_config(processor_config);
 
         assert!(config.enable_processor);
         let proc_config = config.processor_config.unwrap();
@@ -406,14 +408,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_processor_integration_with_state() {
-        use ag_ui_core::types::{Message, RunAgentInput};
-        use ag_ui_core::Event;
+        use syncable_ag_ui_core::Event;
+        use syncable_ag_ui_core::types::{Message, RunAgentInput};
 
         // Create state and get components
         let state = ServerState::new();
         let msg_tx = state.message_sender();
         let mut event_rx = state.subscribe();
-        let msg_rx = state.take_message_receiver().await.expect("Should get receiver");
+        let msg_rx = state
+            .take_message_receiver()
+            .await
+            .expect("Should get receiver");
 
         // Create and spawn processor
         let event_bridge = state.event_sender();
@@ -429,13 +434,16 @@ mod tests {
         let input = RunAgentInput::new(thread_id.clone(), run_id.clone())
             .with_messages(vec![Message::new_user("Integration test message")]);
 
-        msg_tx.send(AgentMessage::new(input)).await.expect("Should send");
+        msg_tx
+            .send(AgentMessage::new(input))
+            .await
+            .expect("Should send");
 
         // Verify events are emitted
-        let event = tokio::time::timeout(
-            std::time::Duration::from_millis(200),
-            event_rx.recv()
-        ).await.expect("Should receive in time").expect("Should have event");
+        let event = tokio::time::timeout(std::time::Duration::from_millis(200), event_rx.recv())
+            .await
+            .expect("Should receive in time")
+            .expect("Should have event");
 
         assert!(matches!(event, Event::RunStarted(_)));
 
@@ -443,10 +451,7 @@ mod tests {
         drop(msg_tx);
 
         // Wait for processor to finish
-        let _ = tokio::time::timeout(
-            std::time::Duration::from_millis(200),
-            handle
-        ).await;
+        let _ = tokio::time::timeout(std::time::Duration::from_millis(200), handle).await;
     }
 
     // =============================================================================
@@ -454,15 +459,19 @@ mod tests {
     // =============================================================================
 
     /// Helper to collect events until RunFinished or RunError
-    async fn collect_until_finished(rx: &mut tokio::sync::broadcast::Receiver<ag_ui_core::Event>) -> Vec<ag_ui_core::Event> {
-        use ag_ui_core::Event;
+    async fn collect_until_finished(
+        rx: &mut tokio::sync::broadcast::Receiver<syncable_ag_ui_core::Event>,
+    ) -> Vec<syncable_ag_ui_core::Event> {
+        use syncable_ag_ui_core::Event;
         let mut events = Vec::new();
         loop {
             match tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv()).await {
                 Ok(Ok(event)) => {
                     let is_finished = matches!(&event, Event::RunFinished(_) | Event::RunError(_));
                     events.push(event);
-                    if is_finished { break; }
+                    if is_finished {
+                        break;
+                    }
                 }
                 _ => break,
             }
@@ -471,8 +480,10 @@ mod tests {
     }
 
     /// Helper to drain events until run is finished
-    async fn drain_events_until_run_finished(rx: &mut tokio::sync::broadcast::Receiver<ag_ui_core::Event>) {
-        use ag_ui_core::Event;
+    async fn drain_events_until_run_finished(
+        rx: &mut tokio::sync::broadcast::Receiver<syncable_ag_ui_core::Event>,
+    ) {
+        use syncable_ag_ui_core::Event;
         loop {
             match tokio::time::timeout(std::time::Duration::from_secs(30), rx.recv()).await {
                 Ok(Ok(Event::RunFinished(_))) => break,
@@ -485,13 +496,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_multi_turn_conversation() {
-        use ag_ui_core::types::{Message, RunAgentInput};
+        use syncable_ag_ui_core::types::{Message, RunAgentInput};
 
         // Create state and components
         let state = ServerState::new();
         let msg_tx = state.message_sender();
         let mut event_rx = state.subscribe();
-        let msg_rx = state.take_message_receiver().await.expect("Should get receiver");
+        let msg_rx = state
+            .take_message_receiver()
+            .await
+            .expect("Should get receiver");
 
         // Create processor
         let event_bridge = state.event_sender();
@@ -506,7 +520,10 @@ mod tests {
         // Send first message
         let input1 = RunAgentInput::new(thread_id.clone(), RunId::random())
             .with_messages(vec![Message::new_user("Hello")]);
-        msg_tx.send(AgentMessage::new(input1)).await.expect("Should send");
+        msg_tx
+            .send(AgentMessage::new(input1))
+            .await
+            .expect("Should send");
 
         // Wait for first response
         drain_events_until_run_finished(&mut event_rx).await;
@@ -514,7 +531,10 @@ mod tests {
         // Send follow-up message (same thread)
         let input2 = RunAgentInput::new(thread_id.clone(), RunId::random())
             .with_messages(vec![Message::new_user("Follow up message")]);
-        msg_tx.send(AgentMessage::new(input2)).await.expect("Should send");
+        msg_tx
+            .send(AgentMessage::new(input2))
+            .await
+            .expect("Should send");
 
         // Verify second run completes
         drain_events_until_run_finished(&mut event_rx).await;
@@ -525,8 +545,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_event_sequence() {
-        use ag_ui_core::types::{Message, RunAgentInput};
-        use ag_ui_core::Event;
+        use syncable_ag_ui_core::Event;
+        use syncable_ag_ui_core::types::{Message, RunAgentInput};
 
         // Setup server state
         let state = ServerState::new();
@@ -536,7 +556,9 @@ mod tests {
         let event_bridge = state.event_sender();
         let mut processor = AgentProcessor::with_defaults(msg_rx, event_bridge);
 
-        tokio::spawn(async move { processor.run().await; });
+        tokio::spawn(async move {
+            processor.run().await;
+        });
 
         // Send message
         let thread_id = ThreadId::random();
@@ -549,11 +571,17 @@ mod tests {
 
         // Verify sequence
         assert!(!events.is_empty(), "Should receive at least one event");
-        assert!(matches!(events[0], Event::RunStarted(_)), "First event should be RunStarted");
+        assert!(
+            matches!(events[0], Event::RunStarted(_)),
+            "First event should be RunStarted"
+        );
 
         // Should end with RunFinished or RunError
         assert!(
-            matches!(events.last(), Some(Event::RunFinished(_) | Event::RunError(_))),
+            matches!(
+                events.last(),
+                Some(Event::RunFinished(_) | Event::RunError(_))
+            ),
             "Last event should be RunFinished or RunError"
         );
 
@@ -561,15 +589,18 @@ mod tests {
         // RunStarted -> StepStarted -> StepFinished -> TextMessageStart -> TextMessageContent* -> TextMessageEnd -> RunFinished
         // Without API key, we get: RunStarted -> StepStarted -> StepFinished -> RunError
         // Either way, verify we have multiple events
-        assert!(events.len() >= 2, "Should have at least RunStarted and terminal event");
+        assert!(
+            events.len() >= 2,
+            "Should have at least RunStarted and terminal event"
+        );
 
         drop(msg_tx);
     }
 
     #[tokio::test]
     async fn test_empty_message_error() {
-        use ag_ui_core::types::RunAgentInput;
-        use ag_ui_core::Event;
+        use syncable_ag_ui_core::Event;
+        use syncable_ag_ui_core::types::RunAgentInput;
 
         let state = ServerState::new();
         let msg_tx = state.message_sender();
@@ -578,7 +609,9 @@ mod tests {
         let event_bridge = state.event_sender();
         let mut processor = AgentProcessor::with_defaults(msg_rx, event_bridge);
 
-        tokio::spawn(async move { processor.run().await; });
+        tokio::spawn(async move {
+            processor.run().await;
+        });
 
         // Send message with no user content
         let input = RunAgentInput::new(ThreadId::random(), RunId::random());
@@ -588,7 +621,10 @@ mod tests {
         let events = collect_until_finished(&mut event_rx).await;
 
         // Should get RunStarted then RunError
-        assert!(matches!(events[0], Event::RunStarted(_)), "First should be RunStarted");
+        assert!(
+            matches!(events[0], Event::RunStarted(_)),
+            "First should be RunStarted"
+        );
         assert!(
             matches!(events.last(), Some(Event::RunError(_))),
             "Should end with RunError for empty message"
@@ -599,8 +635,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_invalid_provider_error() {
-        use ag_ui_core::types::{Message, RunAgentInput};
-        use ag_ui_core::Event;
+        use syncable_ag_ui_core::Event;
+        use syncable_ag_ui_core::types::{Message, RunAgentInput};
 
         let state = ServerState::new();
         let msg_tx = state.message_sender();
@@ -612,7 +648,9 @@ mod tests {
         let config = ProcessorConfig::new().with_provider("invalid_provider_xyz");
         let mut processor = AgentProcessor::new(msg_rx, event_bridge, config);
 
-        tokio::spawn(async move { processor.run().await; });
+        tokio::spawn(async move {
+            processor.run().await;
+        });
 
         let input = RunAgentInput::new(ThreadId::random(), RunId::random())
             .with_messages(vec![Message::new_user("Test invalid provider")]);
@@ -632,7 +670,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_custom_system_prompt() {
-        use ag_ui_core::types::{Message, RunAgentInput};
+        use syncable_ag_ui_core::types::{Message, RunAgentInput};
 
         let state = ServerState::new();
         let msg_tx = state.message_sender();
@@ -641,11 +679,14 @@ mod tests {
         let event_bridge = state.event_sender();
 
         // Configure with custom system prompt
-        let config = ProcessorConfig::new()
-            .with_system_prompt("You are a DevOps assistant. Always respond with deployment advice.");
+        let config = ProcessorConfig::new().with_system_prompt(
+            "You are a DevOps assistant. Always respond with deployment advice.",
+        );
         let mut processor = AgentProcessor::new(msg_rx, event_bridge, config);
 
-        tokio::spawn(async move { processor.run().await; });
+        tokio::spawn(async move {
+            processor.run().await;
+        });
 
         let input = RunAgentInput::new(ThreadId::random(), RunId::random())
             .with_messages(vec![Message::new_user("Hello")]);

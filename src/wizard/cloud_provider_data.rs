@@ -52,43 +52,163 @@ pub struct AcaResourcePair {
 
 /// Azure Container Apps resource pairs (fixed by Azure, 8 combos)
 pub static ACA_RESOURCE_PAIRS: &[AcaResourcePair] = &[
-    AcaResourcePair { cpu: "0.25", memory: "0.5Gi",  label: "0.25 vCPU, 0.5 GB" },
-    AcaResourcePair { cpu: "0.5",  memory: "1.0Gi",  label: "0.5 vCPU, 1 GB" },
-    AcaResourcePair { cpu: "0.75", memory: "1.5Gi",  label: "0.75 vCPU, 1.5 GB" },
-    AcaResourcePair { cpu: "1.0",  memory: "2.0Gi",  label: "1 vCPU, 2 GB" },
-    AcaResourcePair { cpu: "1.25", memory: "2.5Gi",  label: "1.25 vCPU, 2.5 GB" },
-    AcaResourcePair { cpu: "1.5",  memory: "3.0Gi",  label: "1.5 vCPU, 3 GB" },
-    AcaResourcePair { cpu: "1.75", memory: "3.5Gi",  label: "1.75 vCPU, 3.5 GB" },
-    AcaResourcePair { cpu: "2.0",  memory: "4.0Gi",  label: "2 vCPU, 4 GB" },
+    AcaResourcePair {
+        cpu: "0.25",
+        memory: "0.5Gi",
+        label: "0.25 vCPU, 0.5 GB",
+    },
+    AcaResourcePair {
+        cpu: "0.5",
+        memory: "1.0Gi",
+        label: "0.5 vCPU, 1 GB",
+    },
+    AcaResourcePair {
+        cpu: "0.75",
+        memory: "1.5Gi",
+        label: "0.75 vCPU, 1.5 GB",
+    },
+    AcaResourcePair {
+        cpu: "1.0",
+        memory: "2.0Gi",
+        label: "1 vCPU, 2 GB",
+    },
+    AcaResourcePair {
+        cpu: "1.25",
+        memory: "2.5Gi",
+        label: "1.25 vCPU, 2.5 GB",
+    },
+    AcaResourcePair {
+        cpu: "1.5",
+        memory: "3.0Gi",
+        label: "1.5 vCPU, 3 GB",
+    },
+    AcaResourcePair {
+        cpu: "1.75",
+        memory: "3.5Gi",
+        label: "1.75 vCPU, 3.5 GB",
+    },
+    AcaResourcePair {
+        cpu: "2.0",
+        memory: "4.0Gi",
+        label: "2 vCPU, 4 GB",
+    },
 ];
 
 /// Azure regions (Container Apps supported regions)
 pub static AZURE_REGIONS: &[CloudRegion] = &[
     // Americas
-    CloudRegion { id: "eastus", name: "East US", location: "Virginia" },
-    CloudRegion { id: "eastus2", name: "East US 2", location: "Virginia" },
-    CloudRegion { id: "westus", name: "West US", location: "California" },
-    CloudRegion { id: "westus2", name: "West US 2", location: "Washington" },
-    CloudRegion { id: "westus3", name: "West US 3", location: "Arizona" },
-    CloudRegion { id: "centralus", name: "Central US", location: "Iowa" },
-    CloudRegion { id: "canadacentral", name: "Canada Central", location: "Toronto" },
-    CloudRegion { id: "brazilsouth", name: "Brazil South", location: "São Paulo" },
+    CloudRegion {
+        id: "eastus",
+        name: "East US",
+        location: "Virginia",
+    },
+    CloudRegion {
+        id: "eastus2",
+        name: "East US 2",
+        location: "Virginia",
+    },
+    CloudRegion {
+        id: "westus",
+        name: "West US",
+        location: "California",
+    },
+    CloudRegion {
+        id: "westus2",
+        name: "West US 2",
+        location: "Washington",
+    },
+    CloudRegion {
+        id: "westus3",
+        name: "West US 3",
+        location: "Arizona",
+    },
+    CloudRegion {
+        id: "centralus",
+        name: "Central US",
+        location: "Iowa",
+    },
+    CloudRegion {
+        id: "canadacentral",
+        name: "Canada Central",
+        location: "Toronto",
+    },
+    CloudRegion {
+        id: "brazilsouth",
+        name: "Brazil South",
+        location: "São Paulo",
+    },
     // Europe
-    CloudRegion { id: "westeurope", name: "West Europe", location: "Netherlands" },
-    CloudRegion { id: "northeurope", name: "North Europe", location: "Ireland" },
-    CloudRegion { id: "uksouth", name: "UK South", location: "London" },
-    CloudRegion { id: "ukwest", name: "UK West", location: "Cardiff" },
-    CloudRegion { id: "germanywestcentral", name: "Germany West Central", location: "Frankfurt" },
-    CloudRegion { id: "francecentral", name: "France Central", location: "Paris" },
-    CloudRegion { id: "swedencentral", name: "Sweden Central", location: "Gävle" },
+    CloudRegion {
+        id: "westeurope",
+        name: "West Europe",
+        location: "Netherlands",
+    },
+    CloudRegion {
+        id: "northeurope",
+        name: "North Europe",
+        location: "Ireland",
+    },
+    CloudRegion {
+        id: "uksouth",
+        name: "UK South",
+        location: "London",
+    },
+    CloudRegion {
+        id: "ukwest",
+        name: "UK West",
+        location: "Cardiff",
+    },
+    CloudRegion {
+        id: "germanywestcentral",
+        name: "Germany West Central",
+        location: "Frankfurt",
+    },
+    CloudRegion {
+        id: "francecentral",
+        name: "France Central",
+        location: "Paris",
+    },
+    CloudRegion {
+        id: "swedencentral",
+        name: "Sweden Central",
+        location: "Gävle",
+    },
     // Asia Pacific
-    CloudRegion { id: "eastasia", name: "East Asia", location: "Hong Kong" },
-    CloudRegion { id: "southeastasia", name: "Southeast Asia", location: "Singapore" },
-    CloudRegion { id: "japaneast", name: "Japan East", location: "Tokyo" },
-    CloudRegion { id: "japanwest", name: "Japan West", location: "Osaka" },
-    CloudRegion { id: "koreacentral", name: "Korea Central", location: "Seoul" },
-    CloudRegion { id: "australiaeast", name: "Australia East", location: "Sydney" },
-    CloudRegion { id: "centralindia", name: "Central India", location: "Pune" },
+    CloudRegion {
+        id: "eastasia",
+        name: "East Asia",
+        location: "Hong Kong",
+    },
+    CloudRegion {
+        id: "southeastasia",
+        name: "Southeast Asia",
+        location: "Singapore",
+    },
+    CloudRegion {
+        id: "japaneast",
+        name: "Japan East",
+        location: "Tokyo",
+    },
+    CloudRegion {
+        id: "japanwest",
+        name: "Japan West",
+        location: "Osaka",
+    },
+    CloudRegion {
+        id: "koreacentral",
+        name: "Korea Central",
+        location: "Seoul",
+    },
+    CloudRegion {
+        id: "australiaeast",
+        name: "Australia East",
+        location: "Sydney",
+    },
+    CloudRegion {
+        id: "centralindia",
+        name: "Central India",
+        location: "Pune",
+    },
 ];
 
 // =============================================================================
@@ -108,11 +228,31 @@ pub struct CloudRunCpuMemory {
 
 /// GCP Cloud Run CPU/memory constraints (matching frontend CLOUD_RUN_MEMORY_CONSTRAINTS)
 pub static CLOUD_RUN_CPU_MEMORY: &[CloudRunCpuMemory] = &[
-    CloudRunCpuMemory { cpu: "1", memory_options: &["128Mi", "256Mi", "512Mi", "1Gi", "2Gi", "4Gi"], default_memory: "512Mi" },
-    CloudRunCpuMemory { cpu: "2", memory_options: &["256Mi", "512Mi", "1Gi", "2Gi", "4Gi", "8Gi"], default_memory: "2Gi" },
-    CloudRunCpuMemory { cpu: "4", memory_options: &["512Mi", "1Gi", "2Gi", "4Gi", "8Gi", "16Gi"], default_memory: "4Gi" },
-    CloudRunCpuMemory { cpu: "6", memory_options: &["1Gi", "2Gi", "4Gi", "8Gi", "16Gi", "24Gi"], default_memory: "8Gi" },
-    CloudRunCpuMemory { cpu: "8", memory_options: &["2Gi", "4Gi", "8Gi", "16Gi", "24Gi", "32Gi"], default_memory: "16Gi" },
+    CloudRunCpuMemory {
+        cpu: "1",
+        memory_options: &["128Mi", "256Mi", "512Mi", "1Gi", "2Gi", "4Gi"],
+        default_memory: "512Mi",
+    },
+    CloudRunCpuMemory {
+        cpu: "2",
+        memory_options: &["256Mi", "512Mi", "1Gi", "2Gi", "4Gi", "8Gi"],
+        default_memory: "2Gi",
+    },
+    CloudRunCpuMemory {
+        cpu: "4",
+        memory_options: &["512Mi", "1Gi", "2Gi", "4Gi", "8Gi", "16Gi"],
+        default_memory: "4Gi",
+    },
+    CloudRunCpuMemory {
+        cpu: "6",
+        memory_options: &["1Gi", "2Gi", "4Gi", "8Gi", "16Gi", "24Gi"],
+        default_memory: "8Gi",
+    },
+    CloudRunCpuMemory {
+        cpu: "8",
+        memory_options: &["2Gi", "4Gi", "8Gi", "16Gi", "24Gi", "32Gi"],
+        default_memory: "16Gi",
+    },
 ];
 
 // =============================================================================
@@ -121,12 +261,16 @@ pub static CLOUD_RUN_CPU_MEMORY: &[CloudRunCpuMemory] = &[
 
 /// Validate that a CPU/memory pair is valid for Azure Container Apps
 pub fn validate_aca_cpu_memory(cpu: &str, memory: &str) -> bool {
-    ACA_RESOURCE_PAIRS.iter().any(|p| p.cpu == cpu && p.memory == memory)
+    ACA_RESOURCE_PAIRS
+        .iter()
+        .any(|p| p.cpu == cpu && p.memory == memory)
 }
 
 /// Validate that a CPU/memory pair is valid for GCP Cloud Run
 pub fn validate_cloud_run_cpu_memory(cpu: &str, memory: &str) -> bool {
-    CLOUD_RUN_CPU_MEMORY.iter().any(|c| c.cpu == cpu && c.memory_options.contains(&memory))
+    CLOUD_RUN_CPU_MEMORY
+        .iter()
+        .any(|c| c.cpu == cpu && c.memory_options.contains(&memory))
 }
 
 /// Get available memory options for a given GCP Cloud Run CPU level
@@ -145,37 +289,147 @@ pub fn get_cloud_run_memory_for_cpu(cpu: &str) -> &'static [&'static str] {
 /// GCP regions
 pub static GCP_REGIONS: &[CloudRegion] = &[
     // Americas
-    CloudRegion { id: "us-central1", name: "Iowa", location: "US Central" },
-    CloudRegion { id: "us-east1", name: "South Carolina", location: "US East" },
-    CloudRegion { id: "us-east4", name: "Virginia", location: "US East" },
-    CloudRegion { id: "us-west1", name: "Oregon", location: "US West" },
-    CloudRegion { id: "us-west2", name: "Los Angeles", location: "US West" },
+    CloudRegion {
+        id: "us-central1",
+        name: "Iowa",
+        location: "US Central",
+    },
+    CloudRegion {
+        id: "us-east1",
+        name: "South Carolina",
+        location: "US East",
+    },
+    CloudRegion {
+        id: "us-east4",
+        name: "Virginia",
+        location: "US East",
+    },
+    CloudRegion {
+        id: "us-west1",
+        name: "Oregon",
+        location: "US West",
+    },
+    CloudRegion {
+        id: "us-west2",
+        name: "Los Angeles",
+        location: "US West",
+    },
     // Europe
-    CloudRegion { id: "europe-west1", name: "Belgium", location: "Europe" },
-    CloudRegion { id: "europe-west2", name: "London", location: "UK" },
-    CloudRegion { id: "europe-west3", name: "Frankfurt", location: "Germany" },
-    CloudRegion { id: "europe-west4", name: "Netherlands", location: "Europe" },
-    CloudRegion { id: "europe-north1", name: "Finland", location: "Europe" },
+    CloudRegion {
+        id: "europe-west1",
+        name: "Belgium",
+        location: "Europe",
+    },
+    CloudRegion {
+        id: "europe-west2",
+        name: "London",
+        location: "UK",
+    },
+    CloudRegion {
+        id: "europe-west3",
+        name: "Frankfurt",
+        location: "Germany",
+    },
+    CloudRegion {
+        id: "europe-west4",
+        name: "Netherlands",
+        location: "Europe",
+    },
+    CloudRegion {
+        id: "europe-north1",
+        name: "Finland",
+        location: "Europe",
+    },
     // Asia Pacific
-    CloudRegion { id: "asia-east1", name: "Taiwan", location: "Asia Pacific" },
-    CloudRegion { id: "asia-northeast1", name: "Tokyo", location: "Japan" },
-    CloudRegion { id: "asia-southeast1", name: "Singapore", location: "Southeast Asia" },
-    CloudRegion { id: "australia-southeast1", name: "Sydney", location: "Australia" },
+    CloudRegion {
+        id: "asia-east1",
+        name: "Taiwan",
+        location: "Asia Pacific",
+    },
+    CloudRegion {
+        id: "asia-northeast1",
+        name: "Tokyo",
+        location: "Japan",
+    },
+    CloudRegion {
+        id: "asia-southeast1",
+        name: "Singapore",
+        location: "Southeast Asia",
+    },
+    CloudRegion {
+        id: "australia-southeast1",
+        name: "Sydney",
+        location: "Australia",
+    },
 ];
 
 /// GCP machine types (Compute Engine)
 pub static GCP_MACHINE_TYPES: &[MachineType] = &[
     // E2 Series (Cost-optimized)
-    MachineType { id: "e2-micro", name: "e2-micro", cpu: "0.25", memory: "1 GB", description: Some("Shared-core") },
-    MachineType { id: "e2-small", name: "e2-small", cpu: "0.5", memory: "2 GB", description: Some("Shared-core") },
-    MachineType { id: "e2-medium", name: "e2-medium", cpu: "1", memory: "4 GB", description: Some("Shared-core") },
-    MachineType { id: "e2-standard-2", name: "e2-standard-2", cpu: "2", memory: "8 GB", description: None },
-    MachineType { id: "e2-standard-4", name: "e2-standard-4", cpu: "4", memory: "16 GB", description: None },
-    MachineType { id: "e2-standard-8", name: "e2-standard-8", cpu: "8", memory: "32 GB", description: None },
+    MachineType {
+        id: "e2-micro",
+        name: "e2-micro",
+        cpu: "0.25",
+        memory: "1 GB",
+        description: Some("Shared-core"),
+    },
+    MachineType {
+        id: "e2-small",
+        name: "e2-small",
+        cpu: "0.5",
+        memory: "2 GB",
+        description: Some("Shared-core"),
+    },
+    MachineType {
+        id: "e2-medium",
+        name: "e2-medium",
+        cpu: "1",
+        memory: "4 GB",
+        description: Some("Shared-core"),
+    },
+    MachineType {
+        id: "e2-standard-2",
+        name: "e2-standard-2",
+        cpu: "2",
+        memory: "8 GB",
+        description: None,
+    },
+    MachineType {
+        id: "e2-standard-4",
+        name: "e2-standard-4",
+        cpu: "4",
+        memory: "16 GB",
+        description: None,
+    },
+    MachineType {
+        id: "e2-standard-8",
+        name: "e2-standard-8",
+        cpu: "8",
+        memory: "32 GB",
+        description: None,
+    },
     // N2 Series (Balanced)
-    MachineType { id: "n2-standard-2", name: "n2-standard-2", cpu: "2", memory: "8 GB", description: None },
-    MachineType { id: "n2-standard-4", name: "n2-standard-4", cpu: "4", memory: "16 GB", description: None },
-    MachineType { id: "n2-standard-8", name: "n2-standard-8", cpu: "8", memory: "32 GB", description: None },
+    MachineType {
+        id: "n2-standard-2",
+        name: "n2-standard-2",
+        cpu: "2",
+        memory: "8 GB",
+        description: None,
+    },
+    MachineType {
+        id: "n2-standard-4",
+        name: "n2-standard-4",
+        cpu: "4",
+        memory: "16 GB",
+        description: None,
+    },
+    MachineType {
+        id: "n2-standard-8",
+        name: "n2-standard-8",
+        cpu: "8",
+        memory: "32 GB",
+        description: None,
+    },
 ];
 
 // =============================================================================
@@ -324,7 +578,8 @@ pub async fn get_hetzner_regions_dynamic(
                 || error_msg.contains("token")
                 || error_msg.contains("API token")
                 || error_msg.contains("401")
-                || error_msg.contains("412") // failedPrecondition
+                || error_msg.contains("412")
+            // failedPrecondition
             {
                 HetznerFetchResult::NoCredentials
             } else {
@@ -347,7 +602,10 @@ pub async fn get_hetzner_server_types_dynamic(
     project_id: &str,
     preferred_location: Option<&str>,
 ) -> HetznerFetchResult<Vec<DynamicMachineType>> {
-    match client.get_hetzner_server_types(project_id, preferred_location).await {
+    match client
+        .get_hetzner_server_types(project_id, preferred_location)
+        .await
+    {
         Ok(server_types) => {
             HetznerFetchResult::Success(server_types.iter().map(server_type_to_dynamic).collect())
         }
@@ -359,7 +617,8 @@ pub async fn get_hetzner_server_types_dynamic(
                 || error_msg.contains("token")
                 || error_msg.contains("API token")
                 || error_msg.contains("401")
-                || error_msg.contains("412") // failedPrecondition
+                || error_msg.contains("412")
+            // failedPrecondition
             {
                 HetznerFetchResult::NoCredentials
             } else {
@@ -383,7 +642,10 @@ pub async fn check_hetzner_availability(
     location: &str,
     server_type: &str,
 ) -> (bool, Option<String>, Vec<String>) {
-    match client.check_hetzner_availability(project_id, location, server_type).await {
+    match client
+        .check_hetzner_availability(project_id, location, server_type)
+        .await
+    {
         Ok(result) => (
             result.available,
             result.reason,
@@ -419,10 +681,11 @@ pub async fn get_recommended_server_type(
         _ => (2, 4.0, false), // Default to standard
     };
 
-    let server_types = match get_hetzner_server_types_dynamic(client, project_id, preferred_location).await {
-        HetznerFetchResult::Success(types) => types,
-        _ => return None,
-    };
+    let server_types =
+        match get_hetzner_server_types_dynamic(client, project_id, preferred_location).await {
+            HetznerFetchResult::Success(types) => types,
+            _ => return None,
+        };
 
     // Filter by requirements and find cheapest
     server_types
@@ -434,7 +697,7 @@ pub async fn get_recommended_server_type(
         })
         .filter(|st| {
             // If preferred location is set, only include types available there
-            preferred_location.map_or(true, |loc| st.available_in.contains(&loc.to_string()))
+            preferred_location.is_none_or(|loc| st.available_in.contains(&loc.to_string()))
         })
         .min_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap())
 }
@@ -456,13 +719,16 @@ pub async fn find_best_region(
     // Sort by availability count, preferring specified zone
     let mut sorted_regions = regions;
     sorted_regions.sort_by(|a, b| {
-        let a_zone_match = preferred_zone.map_or(false, |z| a.network_zone == z);
-        let b_zone_match = preferred_zone.map_or(false, |z| b.network_zone == z);
+        let a_zone_match = preferred_zone.is_some_and(|z| a.network_zone == z);
+        let b_zone_match = preferred_zone.is_some_and(|z| b.network_zone == z);
 
         match (a_zone_match, b_zone_match) {
             (true, false) => std::cmp::Ordering::Less,
             (false, true) => std::cmp::Ordering::Greater,
-            _ => b.available_server_types.len().cmp(&a.available_server_types.len()),
+            _ => b
+                .available_server_types
+                .len()
+                .cmp(&a.available_server_types.len()),
         }
     });
 
@@ -478,10 +744,11 @@ pub async fn find_cheapest_available(
     project_id: &str,
     region: &str,
 ) -> Option<DynamicMachineType> {
-    let server_types = match get_hetzner_server_types_dynamic(client, project_id, Some(region)).await {
-        HetznerFetchResult::Success(types) => types,
-        _ => return None,
-    };
+    let server_types =
+        match get_hetzner_server_types_dynamic(client, project_id, Some(region)).await {
+            HetznerFetchResult::Success(types) => types,
+            _ => return None,
+        };
 
     // Filter to only available types in this region, sort by price
     server_types
@@ -497,7 +764,10 @@ pub async fn find_cheapest_available(
 /// Format dynamic region for display
 pub fn format_dynamic_region_display(region: &DynamicCloudRegion) -> String {
     if region.available_server_types.is_empty() {
-        format!("{} ({}) - checking availability...", region.name, region.location)
+        format!(
+            "{} ({}) - checking availability...",
+            region.name, region.location
+        )
     } else {
         format!(
             "{} ({}) · {} server types available",

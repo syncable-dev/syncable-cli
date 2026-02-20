@@ -28,13 +28,13 @@
 
 use std::sync::Arc;
 
-use ag_ui_core::{
+use syncable_ag_ui_core::{
     BaseEvent, Event, InterruptInfo, JsonValue, MessageId, Role, RunFinishedEvent,
     RunFinishedOutcome, RunId, RunStartedEvent, TextMessageContentEvent, TextMessageEndEvent,
     TextMessageStartEvent, ThreadId, ToolCallArgsEvent, ToolCallEndEvent, ToolCallId,
     ToolCallStartEvent,
 };
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 
 /// Bridge between agent code and AG-UI protocol events.
 ///
@@ -115,7 +115,7 @@ impl EventBridge {
     pub async fn finish_run_with_error(&self, message: &str) {
         let _run_id = self.run_id.write().await.take();
 
-        self.emit(Event::RunError(ag_ui_core::RunErrorEvent {
+        self.emit(Event::RunError(syncable_ag_ui_core::RunErrorEvent {
             base: BaseEvent::with_current_timestamp(),
             message: message.to_string(),
             code: None,
@@ -310,15 +310,17 @@ impl EventBridge {
 
     /// Emits a state snapshot.
     pub async fn emit_state_snapshot(&self, state: JsonValue) {
-        self.emit(Event::StateSnapshot(ag_ui_core::StateSnapshotEvent {
-            base: BaseEvent::with_current_timestamp(),
-            snapshot: state,
-        }));
+        self.emit(Event::StateSnapshot(
+            syncable_ag_ui_core::StateSnapshotEvent {
+                base: BaseEvent::with_current_timestamp(),
+                snapshot: state,
+            },
+        ));
     }
 
     /// Emits a state delta (JSON Patch).
     pub async fn emit_state_delta(&self, delta: Vec<JsonValue>) {
-        self.emit(Event::StateDelta(ag_ui_core::StateDeltaEvent {
+        self.emit(Event::StateDelta(syncable_ag_ui_core::StateDeltaEvent {
             base: BaseEvent::with_current_timestamp(),
             delta,
         }));
@@ -330,15 +332,17 @@ impl EventBridge {
 
     /// Starts a thinking/processing step.
     pub async fn start_thinking(&self, title: Option<&str>) {
-        self.emit(Event::ThinkingStart(ag_ui_core::ThinkingStartEvent {
-            base: BaseEvent::with_current_timestamp(),
-            title: title.map(|s| s.to_string()),
-        }));
+        self.emit(Event::ThinkingStart(
+            syncable_ag_ui_core::ThinkingStartEvent {
+                base: BaseEvent::with_current_timestamp(),
+                title: title.map(|s| s.to_string()),
+            },
+        ));
     }
 
     /// Ends the current thinking step.
     pub async fn end_thinking(&self) {
-        self.emit(Event::ThinkingEnd(ag_ui_core::ThinkingEndEvent {
+        self.emit(Event::ThinkingEnd(syncable_ag_ui_core::ThinkingEndEvent {
             base: BaseEvent::with_current_timestamp(),
         }));
     }
@@ -346,7 +350,7 @@ impl EventBridge {
     /// Starts a step in the agent workflow.
     pub async fn start_step(&self, name: &str) {
         *self.current_step_name.write().await = Some(name.to_string());
-        self.emit(Event::StepStarted(ag_ui_core::StepStartedEvent {
+        self.emit(Event::StepStarted(syncable_ag_ui_core::StepStartedEvent {
             base: BaseEvent::with_current_timestamp(),
             step_name: name.to_string(),
         }));
@@ -354,12 +358,18 @@ impl EventBridge {
 
     /// Ends the current step.
     pub async fn end_step(&self) {
-        let step_name = self.current_step_name.write().await.take()
+        let step_name = self
+            .current_step_name
+            .write()
+            .await
+            .take()
             .unwrap_or_else(|| "unknown".to_string());
-        self.emit(Event::StepFinished(ag_ui_core::StepFinishedEvent {
-            base: BaseEvent::with_current_timestamp(),
-            step_name,
-        }));
+        self.emit(Event::StepFinished(
+            syncable_ag_ui_core::StepFinishedEvent {
+                base: BaseEvent::with_current_timestamp(),
+                step_name,
+            },
+        ));
     }
 
     // =========================================================================
@@ -368,7 +378,7 @@ impl EventBridge {
 
     /// Emits a custom event.
     pub async fn emit_custom(&self, name: &str, value: JsonValue) {
-        self.emit(Event::Custom(ag_ui_core::CustomEvent {
+        self.emit(Event::Custom(syncable_ag_ui_core::CustomEvent {
             base: BaseEvent::with_current_timestamp(),
             name: name.to_string(),
             value,
@@ -424,7 +434,9 @@ mod tests {
     async fn test_tool_call() {
         let bridge = create_bridge();
 
-        let tool_id = bridge.start_tool_call("test", &serde_json::json!({"key": "value"})).await;
+        let tool_id = bridge
+            .start_tool_call("test", &serde_json::json!({"key": "value"}))
+            .await;
         bridge.emit_tool_args_chunk(&tool_id, "more args").await;
         bridge.end_tool_call(&tool_id).await;
         // Should not panic

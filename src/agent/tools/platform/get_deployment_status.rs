@@ -133,27 +133,32 @@ also check if the service has a public URL (meaning it's actually ready).
 
                 // Also check actual deployment if project_id and service_name provided
                 // This is crucial for Cloud Runner where task completes but service takes longer
-                let (service_status, public_url, service_ready) = if let (Some(project_id), Some(service_name)) = (&args.project_id, &args.service_name) {
-                    match client.list_deployments(project_id, Some(10)).await {
-                        Ok(paginated) => {
-                            // Find the deployment for this service
-                            let deployment = paginated.data.iter()
-                                .find(|d| d.service_name.eq_ignore_ascii_case(service_name));
+                let (service_status, public_url, service_ready) =
+                    if let (Some(project_id), Some(service_name)) =
+                        (&args.project_id, &args.service_name)
+                    {
+                        match client.list_deployments(project_id, Some(10)).await {
+                            Ok(paginated) => {
+                                // Find the deployment for this service
+                                let deployment = paginated
+                                    .data
+                                    .iter()
+                                    .find(|d| d.service_name.eq_ignore_ascii_case(service_name));
 
-                            match deployment {
-                                Some(d) => (
-                                    Some(d.status.clone()),
-                                    d.public_url.clone(),
-                                    d.public_url.is_some() && d.status == "running"
-                                ),
-                                None => (None, None, false)
+                                match deployment {
+                                    Some(d) => (
+                                        Some(d.status.clone()),
+                                        d.public_url.clone(),
+                                        d.public_url.is_some() && d.status == "running",
+                                    ),
+                                    None => (None, None, false),
+                                }
                             }
+                            Err(_) => (None, None, false),
                         }
-                        Err(_) => (None, None, false)
-                    }
-                } else {
-                    (None, None, false)
-                };
+                    } else {
+                        (None, None, false)
+                    };
 
                 // True completion = task done AND (service has URL or no service check requested)
                 let truly_ready = if args.project_id.is_some() {
@@ -200,7 +205,10 @@ also check if the service has a public URL (meaning it's actually ready).
                     result["action"] = json!("STOP_POLLING");
                 } else if truly_ready && public_url.is_some() {
                     result["next_steps"] = json!([
-                        format!("STOP - Service is live at: {}", public_url.as_ref().unwrap()),
+                        format!(
+                            "STOP - Service is live at: {}",
+                            public_url.as_ref().unwrap()
+                        ),
                         "Deployment completed successfully!",
                         "Inform the user their service is ready"
                     ]);
@@ -214,10 +222,15 @@ also check if the service has a public URL (meaning it's actually ready).
                     ]);
                     result["action"] = json!("INFORM_USER_AND_WAIT");
                     result["estimated_wait"] = json!("1-2 minutes");
-                    result["note"] = json!("Task shows 100% but container is still being built/deployed. This is normal. DO NOT poll repeatedly - inform the user and wait for them to ask for status.");
+                    result["note"] = json!(
+                        "Task shows 100% but container is still being built/deployed. This is normal. DO NOT poll repeatedly - inform the user and wait for them to ask for status."
+                    );
                 } else if !task_complete {
                     result["next_steps"] = json!([
-                        format!("STOP POLLING - Deployment is {} ({}% complete)", status.overall_status, status.progress),
+                        format!(
+                            "STOP POLLING - Deployment is {} ({}% complete)",
+                            status.overall_status, status.progress
+                        ),
                         "Inform the user of current progress",
                         "Tell them to wait and ask again in 30 seconds if they want an update",
                         "DO NOT call get_deployment_status again automatically"

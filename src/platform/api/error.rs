@@ -63,9 +63,7 @@ impl PlatformApiError {
             Self::Unauthorized => Some("Run `sync-ctl auth login` to authenticate"),
             Self::RateLimited => Some("Wait a moment and try again"),
             Self::HttpError(_) => Some("Check your internet connection"),
-            Self::ServerError { .. } => {
-                Some("The server is experiencing issues. Try again later")
-            }
+            Self::ServerError { .. } => Some("The server is experiencing issues. Try again later"),
             Self::PermissionDenied(_) => {
                 Some("Check your project permissions in the Syncable dashboard")
             }
@@ -74,9 +72,7 @@ impl PlatformApiError {
             Self::ApiError { status, .. } if *status >= 400 && *status < 500 => {
                 Some("Check the request parameters")
             }
-            Self::ConnectionFailed => {
-                Some("Check your internet connection and try again")
-            }
+            Self::ConnectionFailed => Some("Check your internet connection and try again"),
             _ => None,
         }
     }

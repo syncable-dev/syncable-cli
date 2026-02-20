@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::agent::tools::error::{ErrorCategory, format_error_for_llm};
-use crate::platform::api::{PlatformApiClient, PlatformApiError};
 use crate::platform::PlatformSession;
+use crate::platform::api::{PlatformApiClient, PlatformApiError};
 
 /// Arguments for the select project tool
 #[derive(Debug, Deserialize)]

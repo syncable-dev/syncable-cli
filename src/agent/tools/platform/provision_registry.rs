@@ -149,7 +149,9 @@ and polls until completion (may take 1-3 minutes).
                 "provision_registry",
                 ErrorCategory::ValidationFailed,
                 "cluster_id cannot be empty",
-                Some(vec!["Use list_deployment_capabilities to find available clusters"]),
+                Some(vec![
+                    "Use list_deployment_capabilities to find available clusters",
+                ]),
             ));
         }
 
@@ -284,8 +286,9 @@ and polls until completion (may take 1-3 minutes).
                         ]
                     });
 
-                    return serde_json::to_string_pretty(&result)
-                        .map_err(|e| ProvisionRegistryError(format!("Failed to serialize: {}", e)));
+                    return serde_json::to_string_pretty(&result).map_err(|e| {
+                        ProvisionRegistryError(format!("Failed to serialize: {}", e))
+                    });
                 }
                 RegistryTaskState::Failed => {
                     let error_msg = status
@@ -324,7 +327,13 @@ and polls until completion (may take 1-3 minutes).
 fn sanitize_registry_name(name: &str) -> String {
     name.to_lowercase()
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '-' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect::<String>()
         .trim_matches('-')
         .to_string()

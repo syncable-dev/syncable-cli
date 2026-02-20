@@ -1,11 +1,11 @@
 //! Provider selection step for deployment wizard
 
 use crate::platform::api::{
+    PlatformApiClient,
     types::{
         CloudProvider, ClusterStatus, ClusterSummary, ProviderDeploymentStatus, RegistryStatus,
         RegistrySummary,
     },
-    PlatformApiClient,
 };
 use crate::wizard::render::{display_step_header, status_indicator, wizard_render_config};
 use colored::Colorize;
@@ -92,8 +92,11 @@ pub async fn get_provider_deployment_statuses(
         let is_connected = connected_providers.contains(provider.as_str());
 
         // Cloud Runner available for GCP, Hetzner, and Azure when connected
-        let cloud_runner_available =
-            is_connected && matches!(provider, CloudProvider::Gcp | CloudProvider::Hetzner | CloudProvider::Azure);
+        let cloud_runner_available = is_connected
+            && matches!(
+                provider,
+                CloudProvider::Gcp | CloudProvider::Hetzner | CloudProvider::Azure
+            );
 
         let summary = build_status_summary(&clusters, &registries, cloud_runner_available);
 
@@ -177,7 +180,12 @@ pub fn select_provider(statuses: &[ProviderDeploymentStatus]) -> ProviderSelecti
                 if s.is_connected {
                     format!("{} {}  {}", indicator, name, s.summary.dimmed())
                 } else {
-                    format!("{} {}  {}", indicator, name.dimmed(), "Not connected".dimmed())
+                    format!(
+                        "{} {}  {}",
+                        indicator,
+                        name.dimmed(),
+                        "Not connected".dimmed()
+                    )
                 }
             }
         })
@@ -251,11 +259,7 @@ pub fn select_provider(statuses: &[ProviderDeploymentStatus]) -> ProviderSelecti
                 return ProviderSelectionResult::Cancelled;
             }
 
-            println!(
-                "\n{} Selected: {:?}",
-                "✓".green(),
-                selected_status.provider
-            );
+            println!("\n{} Selected: {:?}", "✓".green(), selected_status.provider);
             ProviderSelectionResult::Selected(selected_status.provider.clone())
         }
         Err(InquireError::OperationCanceled) | Err(InquireError::OperationInterrupted) => {

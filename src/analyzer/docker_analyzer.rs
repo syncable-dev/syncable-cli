@@ -1297,13 +1297,7 @@ fn sanitize_service_name(name: &str) -> String {
     let sanitized: String = name
         .to_lowercase()
         .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() {
-                c
-            } else {
-                '-'
-            }
-        })
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
         .collect();
 
     // Remove consecutive hyphens and trim hyphens from ends
@@ -1365,7 +1359,7 @@ fn infer_default_port(base_image: &Option<String>) -> Option<u16> {
     // Extract image name without registry/tag
     let image_name = image_lower
         .split('/')
-        .last()
+        .next_back()
         .unwrap_or(&image_lower)
         .split(':')
         .next()
