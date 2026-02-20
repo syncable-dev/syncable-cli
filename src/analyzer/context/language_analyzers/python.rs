@@ -1,5 +1,6 @@
 use crate::analyzer::{
-    AnalysisConfig, BuildScript, EntryPoint, Port, PortSource, Protocol, context::helpers::create_regex,
+    AnalysisConfig, BuildScript, EntryPoint, Port, PortSource, Protocol,
+    context::helpers::create_regex,
 };
 use crate::common::file_utils::{is_readable_file, read_file_safe};
 use crate::error::Result;

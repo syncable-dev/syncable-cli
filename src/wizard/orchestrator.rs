@@ -1,21 +1,20 @@
 //! Wizard orchestration - ties all steps together
 
 use crate::analyzer::discover_dockerfiles_for_deployment;
-use crate::platform::api::types::{
-    build_cloud_runner_config_v2, CloudProvider, CloudRunnerConfigInput,
-    ConnectRepositoryRequest, CreateDeploymentConfigRequest, DeploymentTarget,
-    ProjectRepository, TriggerDeploymentRequest, WizardDeploymentConfig,
-};
 use crate::platform::api::PlatformApiClient;
+use crate::platform::api::types::{
+    CloudProvider, CloudRunnerConfigInput, ConnectRepositoryRequest, CreateDeploymentConfigRequest,
+    DeploymentTarget, ProjectRepository, TriggerDeploymentRequest, WizardDeploymentConfig,
+    build_cloud_runner_config_v2,
+};
 use crate::wizard::{
-    collect_config, collect_env_vars, collect_service_endpoint_env_vars,
-    filter_endpoints_for_provider, get_available_endpoints,
-    get_provider_deployment_statuses, provision_registry,
-    select_cluster, select_dockerfile, select_infrastructure, select_provider, select_registry,
-    select_repository, select_target, ClusterSelectionResult, ConfigFormResult,
-    DockerfileSelectionResult, InfrastructureSelectionResult, ProviderSelectionResult,
-    RegistryProvisioningResult, RegistrySelectionResult, RepositorySelectionResult,
-    TargetSelectionResult,
+    ClusterSelectionResult, ConfigFormResult, DockerfileSelectionResult,
+    InfrastructureSelectionResult, ProviderSelectionResult, RegistryProvisioningResult,
+    RegistrySelectionResult, RepositorySelectionResult, TargetSelectionResult, collect_config,
+    collect_env_vars, collect_service_endpoint_env_vars, filter_endpoints_for_provider,
+    get_available_endpoints, get_provider_deployment_statuses, provision_registry, select_cluster,
+    select_dockerfile, select_infrastructure, select_provider, select_registry, select_repository,
+    select_target,
 };
 use colored::Colorize;
 use inquire::{Confirm, InquireError};
@@ -78,10 +77,14 @@ pub async fn run_wizard(
             println!("{} Connecting repository...", "→".cyan());
 
             // Extract owner from full_name if not provided
-            let owner = available
-                .owner
-                .clone()
-                .unwrap_or_else(|| available.full_name.split('/').next().unwrap_or("").to_string());
+            let owner = available.owner.clone().unwrap_or_else(|| {
+                available
+                    .full_name
+                    .split('/')
+                    .next()
+                    .unwrap_or("")
+                    .to_string()
+            });
 
             let connect_request = ConnectRepositoryRequest {
                 project_id: project_id.to_string(),
@@ -90,7 +93,10 @@ pub async fn run_wizard(
                 repository_full_name: available.full_name.clone(),
                 repository_owner: owner.clone(),
                 repository_private: available.private,
-                default_branch: available.default_branch.clone().or(Some("main".to_string())),
+                default_branch: available
+                    .default_branch
+                    .clone()
+                    .or(Some("main".to_string())),
                 connection_type: Some("app".to_string()),
                 github_installation_id: available.installation_id,
                 repository_type: Some("application".to_string()),
@@ -123,7 +129,10 @@ pub async fn run_wizard(
                 }
             }
         }
-        RepositorySelectionResult::NeedsGitHubApp { installation_url, org_name } => {
+        RepositorySelectionResult::NeedsGitHubApp {
+            installation_url,
+            org_name,
+        } => {
             println!(
                 "\n{} Please install the Syncable GitHub App for organization '{}' first.",
                 "⚠".yellow(),
@@ -180,7 +189,8 @@ pub async fn run_wizard(
     };
 
     // Step 3: Infrastructure selection for Cloud Runner OR Cluster selection for K8s
-    let (cluster_id, region, machine_type, cpu, memory) = if target == DeploymentTarget::CloudRunner {
+    let (cluster_id, region, machine_type, cpu, memory) = if target == DeploymentTarget::CloudRunner
+    {
         // Cloud Runner: Select region and machine type
         // Pass client and project_id for dynamic Hetzner availability fetching
         match select_infrastructure(&provider, 3, Some(client), Some(project_id)).await {
@@ -192,7 +202,8 @@ pub async fn run_wizard(
             } => (None, Some(region), Some(machine_type), cpu, memory),
             InfrastructureSelectionResult::Back => {
                 // Go back (restart wizard for simplicity)
-                return Box::pin(run_wizard(client, project_id, environment_id, project_path)).await;
+                return Box::pin(run_wizard(client, project_id, environment_id, project_path))
+                    .await;
             }
             InfrastructureSelectionResult::Cancelled => return WizardResult::Cancelled,
         }
@@ -266,7 +277,8 @@ pub async fn run_wizard(
             }
             RegistrySelectionResult::Back => {
                 // Go back (restart wizard for simplicity)
-                return Box::pin(run_wizard(client, project_id, environment_id, project_path)).await;
+                return Box::pin(run_wizard(client, project_id, environment_id, project_path))
+                    .await;
             }
             RegistrySelectionResult::Cancelled => return WizardResult::Cancelled,
         }
@@ -362,8 +374,7 @@ pub async fn run_wizard(
         .filter(|ep| ep.service_name != service_being_deployed)
         .collect();
     // Only show private endpoints from the same cloud provider
-    let available_endpoints =
-        filter_endpoints_for_provider(available_endpoints, provider.as_str());
+    let available_endpoints = filter_endpoints_for_provider(available_endpoints, provider.as_str());
 
     if !available_endpoints.is_empty() {
         let endpoint_vars = collect_service_endpoint_env_vars(&available_endpoints);
@@ -429,7 +440,10 @@ pub async fn run_wizard(
             // Fetch provider credential for GCP project ID / Azure subscription ID
             let (gcp_project_id, subscription_id) = match provider {
                 CloudProvider::Gcp | CloudProvider::Azure => {
-                    match client.check_provider_connection(&provider, project_id).await {
+                    match client
+                        .check_provider_connection(&provider, project_id)
+                        .await
+                    {
                         Ok(Some(cred)) => match provider {
                             CloudProvider::Gcp => (cred.provider_account_id, None),
                             CloudProvider::Azure => (None, cred.provider_account_id),
@@ -470,7 +484,10 @@ pub async fn run_wizard(
     log::debug!("  serviceName: {}", deploy_request.service_name);
     log::debug!("  environmentId: {}", deploy_request.environment_id);
     log::debug!("  repositoryId: {}", deploy_request.repository_id);
-    log::debug!("  repositoryFullName: {}", deploy_request.repository_full_name);
+    log::debug!(
+        "  repositoryFullName: {}",
+        deploy_request.repository_full_name
+    );
     log::debug!("  dockerfilePath: {:?}", deploy_request.dockerfile_path);
     log::debug!("  buildContext: {:?}", deploy_request.build_context);
     log::debug!("  targetType: {}", deploy_request.target_type);
@@ -527,16 +544,16 @@ pub async fn run_wizard(
                 "{}",
                 "═══════════════════════════════════════════════════════════════".bright_green()
             );
-            println!(
-                "{}  Deployment started!",
-                "✓".bright_green().bold()
-            );
+            println!("{}  Deployment started!", "✓".bright_green().bold());
             println!(
                 "{}",
                 "═══════════════════════════════════════════════════════════════".bright_green()
             );
             println!();
-            println!("  Service:  {}", config.service_name.as_deref().unwrap_or("").cyan());
+            println!(
+                "  Service:  {}",
+                config.service_name.as_deref().unwrap_or("").cyan()
+            );
             println!("  Task ID:  {}", response.backstage_task_id.dimmed());
             println!("  Status:   {}", response.status.yellow());
             println!();

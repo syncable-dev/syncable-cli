@@ -27,7 +27,8 @@ pub fn select_registry(registries: &[RegistrySummary]) -> RegistrySelectionResul
     );
 
     // Filter to ready registries
-    let ready_registries: Vec<&RegistrySummary> = registries.iter().filter(|r| r.is_ready).collect();
+    let ready_registries: Vec<&RegistrySummary> =
+        registries.iter().filter(|r| r.is_ready).collect();
 
     // Build options
     let mut options: Vec<String> = ready_registries
@@ -61,7 +62,10 @@ pub fn select_registry(registries: &[RegistrySummary]) -> RegistrySelectionResul
             }
 
             if answer.contains("Provision new") {
-                println!("\n{} Will provision new registry during deployment", "→".cyan());
+                println!(
+                    "\n{} Will provision new registry during deployment",
+                    "→".cyan()
+                );
                 return RegistrySelectionResult::ProvisionNew;
             }
 

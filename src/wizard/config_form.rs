@@ -156,22 +156,19 @@ pub fn collect_config(
     );
 
     // Show previously selected options
-    println!(
-        "  {} Dockerfile: {}",
-        "│".dimmed(),
-        dockerfile_path.cyan()
-    );
-    println!(
-        "  {} Build context: {}",
-        "│".dimmed(),
-        build_context.cyan()
-    );
+    println!("  {} Dockerfile: {}", "│".dimmed(), dockerfile_path.cyan());
+    println!("  {} Build context: {}", "│".dimmed(), build_context.cyan());
     if let Some(ref r) = region {
         println!("  {} Region: {}", "│".dimmed(), r.cyan());
     }
     if let Some(ref c) = cpu {
         if let Some(ref m) = memory {
-            println!("  {} Resources: {} vCPU / {}", "│".dimmed(), c.cyan(), m.cyan());
+            println!(
+                "  {} Resources: {} vCPU / {}",
+                "│".dimmed(),
+                c.cyan(),
+                m.cyan()
+            );
         }
     } else if let Some(ref m) = machine_type {
         println!("  {} Machine: {}", "│".dimmed(), m.cyan());
@@ -352,11 +349,7 @@ pub fn collect_env_vars(project_path: &Path) -> Vec<DeploymentSecretInput> {
         for f in &discovered {
             let abs = project_path.join(f);
             let count = count_env_vars_in_file(&abs);
-            let label = format!(
-                "  {:<30} {} vars",
-                f.display(),
-                count.to_string().cyan()
-            );
+            let label = format!("  {:<30} {} vars", f.display(), count.to_string().cyan());
             println!("    {}", label);
             options.push(format!("{:<30} {} vars", f.display(), count));
         }
@@ -448,10 +441,7 @@ fn collect_env_vars_manually() -> Vec<DeploymentSecretInput> {
             is_secret,
         });
 
-        let add_another = match Confirm::new("Add another?")
-            .with_default(false)
-            .prompt()
-        {
+        let add_another = match Confirm::new("Add another?").with_default(false).prompt() {
             Ok(v) => v,
             Err(_) => false,
         };
@@ -554,7 +544,12 @@ fn collect_env_vars_from_file(
     );
     for s in &secrets {
         if s.is_secret {
-            println!("    {} {} {}", "•".dimmed(), s.key.cyan(), "(secret)".dimmed());
+            println!(
+                "    {} {} {}",
+                "•".dimmed(),
+                s.key.cyan(),
+                "(secret)".dimmed()
+            );
         } else {
             println!("    {} {}", "•".dimmed(), s.key.cyan());
         }
@@ -580,11 +575,7 @@ fn collect_env_vars_from_file(
         Err(_) => false,
     };
 
-    if confirm {
-        secrets
-    } else {
-        Vec::new()
-    }
+    if confirm { secrets } else { Vec::new() }
 }
 
 /// Check if a key name looks like it should be a secret
@@ -631,7 +622,13 @@ fn get_current_branch() -> Option<String> {
 fn sanitize_service_name(name: &str) -> String {
     name.to_lowercase()
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '-' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect::<String>()
         .trim_matches('-')
         .to_string()

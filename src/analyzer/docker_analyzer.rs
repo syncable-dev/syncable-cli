@@ -1297,13 +1297,7 @@ fn sanitize_service_name(name: &str) -> String {
     let sanitized: String = name
         .to_lowercase()
         .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() {
-                c
-            } else {
-                '-'
-            }
-        })
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
         .collect();
 
     // Remove consecutive hyphens and trim hyphens from ends

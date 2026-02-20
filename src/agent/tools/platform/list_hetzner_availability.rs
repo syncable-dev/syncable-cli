@@ -9,11 +9,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::agent::tools::error::{ErrorCategory, format_error_for_llm};
-use crate::platform::api::PlatformApiClient;
 use crate::platform::PlatformSession;
+use crate::platform::api::PlatformApiClient;
 use crate::wizard::{
-    get_hetzner_regions_dynamic, get_hetzner_server_types_dynamic,
-    HetznerFetchResult, DynamicCloudRegion, DynamicMachineType,
+    DynamicCloudRegion, DynamicMachineType, HetznerFetchResult, get_hetzner_regions_dynamic,
+    get_hetzner_server_types_dynamic,
 };
 
 /// Arguments for the list_hetzner_availability tool
@@ -142,65 +142,69 @@ This provides current data directly from Hetzner API - never use hardcoded/stati
         let project_id = session.project_id.clone().unwrap_or_default();
 
         // Fetch regions
-        let regions: Vec<DynamicCloudRegion> = match get_hetzner_regions_dynamic(&client, &project_id).await {
-            HetznerFetchResult::Success(r) => r,
-            HetznerFetchResult::NoCredentials => {
-                return Ok(format_error_for_llm(
-                    "list_hetzner_availability",
-                    ErrorCategory::PermissionDenied,
-                    "Hetzner credentials not configured for this project",
-                    Some(vec![
-                        "Add Hetzner API token in project settings",
-                        "Use open_provider_settings to configure Hetzner",
-                    ]),
-                ));
-            }
-            HetznerFetchResult::ApiError(err) => {
-                return Ok(format_error_for_llm(
-                    "list_hetzner_availability",
-                    ErrorCategory::NetworkError,
-                    &format!("Failed to fetch Hetzner regions: {}", err),
-                    None,
-                ));
-            }
-        };
+        let regions: Vec<DynamicCloudRegion> =
+            match get_hetzner_regions_dynamic(&client, &project_id).await {
+                HetznerFetchResult::Success(r) => r,
+                HetznerFetchResult::NoCredentials => {
+                    return Ok(format_error_for_llm(
+                        "list_hetzner_availability",
+                        ErrorCategory::PermissionDenied,
+                        "Hetzner credentials not configured for this project",
+                        Some(vec![
+                            "Add Hetzner API token in project settings",
+                            "Use open_provider_settings to configure Hetzner",
+                        ]),
+                    ));
+                }
+                HetznerFetchResult::ApiError(err) => {
+                    return Ok(format_error_for_llm(
+                        "list_hetzner_availability",
+                        ErrorCategory::NetworkError,
+                        &format!("Failed to fetch Hetzner regions: {}", err),
+                        None,
+                    ));
+                }
+            };
 
         // Fetch server types
-        let server_types: Vec<DynamicMachineType> = match get_hetzner_server_types_dynamic(
-            &client,
-            &project_id,
-            args.location.as_deref(),
-        ).await {
-            HetznerFetchResult::Success(s) => s,
-            HetznerFetchResult::NoCredentials => Vec::new(), // Already handled above
-            HetznerFetchResult::ApiError(_) => Vec::new(), // Non-fatal, continue with regions
-        };
+        let server_types: Vec<DynamicMachineType> =
+            match get_hetzner_server_types_dynamic(&client, &project_id, args.location.as_deref())
+                .await
+            {
+                HetznerFetchResult::Success(s) => s,
+                HetznerFetchResult::NoCredentials => Vec::new(), // Already handled above
+                HetznerFetchResult::ApiError(_) => Vec::new(),   // Non-fatal, continue with regions
+            };
 
         // Format response
         let regions_json: Vec<serde_json::Value> = regions
             .iter()
-            .map(|r| json!({
-                "id": r.id,
-                "name": r.name,
-                "country": r.location,
-                "network_zone": r.network_zone,
-                "available_server_types_count": r.available_server_types.len(),
-                "available_server_types": r.available_server_types,
-            }))
+            .map(|r| {
+                json!({
+                    "id": r.id,
+                    "name": r.name,
+                    "country": r.location,
+                    "network_zone": r.network_zone,
+                    "available_server_types_count": r.available_server_types.len(),
+                    "available_server_types": r.available_server_types,
+                })
+            })
             .collect();
 
         let server_types_json: Vec<serde_json::Value> = server_types
             .iter()
-            .map(|s| json!({
-                "id": s.id,
-                "name": s.name,
-                "cores": s.cores,
-                "memory_gb": s.memory_gb,
-                "disk_gb": s.disk_gb,
-                "price_hourly_eur": s.price_hourly,
-                "price_monthly_eur": s.price_monthly,
-                "available_in": s.available_in,
-            }))
+            .map(|s| {
+                json!({
+                    "id": s.id,
+                    "name": s.name,
+                    "cores": s.cores,
+                    "memory_gb": s.memory_gb,
+                    "disk_gb": s.disk_gb,
+                    "price_hourly_eur": s.price_hourly,
+                    "price_monthly_eur": s.price_monthly,
+                    "available_in": s.available_in,
+                })
+            })
             .collect();
 
         // Group server types by category for easier reading
@@ -278,7 +282,10 @@ mod tests {
 
     #[test]
     fn test_tool_name() {
-        assert_eq!(ListHetznerAvailabilityTool::NAME, "list_hetzner_availability");
+        assert_eq!(
+            ListHetznerAvailabilityTool::NAME,
+            "list_hetzner_availability"
+        );
     }
 
     #[test]

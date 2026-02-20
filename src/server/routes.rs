@@ -8,15 +8,15 @@
 use std::convert::Infallible;
 
 use axum::{
+    Json,
     extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade},
         State,
+        ws::{Message, WebSocket, WebSocketUpgrade},
     },
     response::{
-        sse::{Event as SseEvent, KeepAlive, Sse},
         IntoResponse, Response,
+        sse::{Event as SseEvent, KeepAlive, Sse},
     },
-    Json,
 };
 use futures_util::{SinkExt, Stream, StreamExt};
 use serde::Deserialize;
@@ -109,7 +109,10 @@ pub async fn post_message(
     State(state): State<ServerState>,
     Json(raw): Json<serde_json::Value>,
 ) -> Response {
-    debug!("Received POST request body: {}", serde_json::to_string_pretty(&raw).unwrap_or_default());
+    debug!(
+        "Received POST request body: {}",
+        serde_json::to_string_pretty(&raw).unwrap_or_default()
+    );
 
     // Try to parse as CopilotKit request
     let copilot_req: Result<CopilotKitRequest, _> = serde_json::from_value(raw.clone());
@@ -148,17 +151,21 @@ pub async fn post_message(
                     forwarded_props: None,
                 });
 
-                let thread_id_str = body.thread_id
+                let thread_id_str = body
+                    .thread_id
                     .or(req.params.as_ref().and_then(|p| p.thread_id.clone()))
                     .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-                let run_id_str = body.run_id
+                let run_id_str = body
+                    .run_id
                     .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
                 // Parse IDs, falling back to random if invalid UUID
-                let thread_id: ag_ui_core::ThreadId = thread_id_str.parse()
-                    .unwrap_or_else(|_| ag_ui_core::ThreadId::random());
-                let run_id: ag_ui_core::RunId = run_id_str.parse()
-                    .unwrap_or_else(|_| ag_ui_core::RunId::random());
+                let thread_id: syncable_ag_ui_core::ThreadId = thread_id_str
+                    .parse()
+                    .unwrap_or_else(|_| syncable_ag_ui_core::ThreadId::random());
+                let run_id: syncable_ag_ui_core::RunId = run_id_str
+                    .parse()
+                    .unwrap_or_else(|_| syncable_ag_ui_core::RunId::random());
 
                 // Convert messages from JSON to Message type
                 let messages = convert_messages(body.messages.unwrap_or_default());
@@ -177,16 +184,20 @@ pub async fn post_message(
                 // Direct RunAgentInput format
                 debug!("Detected direct RunAgentInput format");
 
-                let thread_id_str = req.thread_id
+                let thread_id_str = req
+                    .thread_id
                     .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-                let run_id_str = req.run_id
+                let run_id_str = req
+                    .run_id
                     .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
                 // Parse IDs, falling back to random if invalid UUID
-                let thread_id: ag_ui_core::ThreadId = thread_id_str.parse()
-                    .unwrap_or_else(|_| ag_ui_core::ThreadId::random());
-                let run_id: ag_ui_core::RunId = run_id_str.parse()
-                    .unwrap_or_else(|_| ag_ui_core::RunId::random());
+                let thread_id: syncable_ag_ui_core::ThreadId = thread_id_str
+                    .parse()
+                    .unwrap_or_else(|_| syncable_ag_ui_core::ThreadId::random());
+                let run_id: syncable_ag_ui_core::RunId = run_id_str
+                    .parse()
+                    .unwrap_or_else(|_| syncable_ag_ui_core::RunId::random());
 
                 let messages = convert_messages(req.messages.unwrap_or_default());
                 let tools = convert_tools(req.tools.unwrap_or_default());
@@ -205,7 +216,8 @@ pub async fn post_message(
                 return Json(json!({
                     "status": "error",
                     "message": "Invalid request format"
-                })).into_response();
+                }))
+                .into_response();
             }
         }
         Err(e) => {
@@ -213,7 +225,8 @@ pub async fn post_message(
             return Json(json!({
                 "status": "error",
                 "message": format!("Failed to parse request: {}", e)
-            })).into_response();
+            }))
+            .into_response();
         }
     };
 
@@ -239,12 +252,13 @@ pub async fn post_message(
         return Json(json!({
             "status": "error",
             "message": "Failed to route message to agent processor"
-        })).into_response();
+        }))
+        .into_response();
     }
 
     // Create SSE stream that filters events and ends on RunFinished/RunError
     let stream = async_stream::stream! {
-        use ag_ui_core::Event;
+        use syncable_ag_ui_core::Event;
 
         loop {
             match event_rx.recv().await {
@@ -276,19 +290,24 @@ pub async fn post_message(
         }
     };
 
-    Sse::new(stream).keep_alive(KeepAlive::default()).into_response()
+    Sse::new(stream)
+        .keep_alive(KeepAlive::default())
+        .into_response()
 }
 
 /// Convert JSON messages to AG-UI Message type
-fn convert_messages(raw_messages: Vec<serde_json::Value>) -> Vec<ag_ui_core::types::Message> {
-    use ag_ui_core::MessageId;
+fn convert_messages(
+    raw_messages: Vec<serde_json::Value>,
+) -> Vec<syncable_ag_ui_core::types::Message> {
+    use syncable_ag_ui_core::MessageId;
 
     raw_messages
         .into_iter()
         .filter_map(|msg| {
             let role = msg.get("role")?.as_str()?;
             let content = msg.get("content").and_then(|c| c.as_str()).unwrap_or("");
-            let id_str = msg.get("id")
+            let id_str = msg
+                .get("id")
                 .and_then(|i| i.as_str())
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
@@ -297,18 +316,18 @@ fn convert_messages(raw_messages: Vec<serde_json::Value>) -> Vec<ag_ui_core::typ
             let id: MessageId = id_str.parse().unwrap_or_else(|_| MessageId::random());
 
             match role {
-                "user" => Some(ag_ui_core::types::Message::User {
+                "user" => Some(syncable_ag_ui_core::types::Message::User {
                     id,
                     content: content.to_string(),
                     name: msg.get("name").and_then(|n| n.as_str()).map(String::from),
                 }),
-                "assistant" => Some(ag_ui_core::types::Message::Assistant {
+                "assistant" => Some(syncable_ag_ui_core::types::Message::Assistant {
                     id,
                     content: Some(content.to_string()),
                     name: msg.get("name").and_then(|n| n.as_str()).map(String::from),
                     tool_calls: None,
                 }),
-                "system" => Some(ag_ui_core::types::Message::System {
+                "system" => Some(syncable_ag_ui_core::types::Message::System {
                     id,
                     content: content.to_string(),
                     name: msg.get("name").and_then(|n| n.as_str()).map(String::from),
@@ -323,32 +342,38 @@ fn convert_messages(raw_messages: Vec<serde_json::Value>) -> Vec<ag_ui_core::typ
 }
 
 /// Convert JSON tools to AG-UI Tool type
-fn convert_tools(raw_tools: Vec<serde_json::Value>) -> Vec<ag_ui_core::types::Tool> {
+fn convert_tools(raw_tools: Vec<serde_json::Value>) -> Vec<syncable_ag_ui_core::types::Tool> {
     raw_tools
         .into_iter()
         .filter_map(|tool| {
             let name = tool.get("name")?.as_str()?.to_string();
-            let description = tool.get("description")
+            let description = tool
+                .get("description")
                 .and_then(|d| d.as_str())
                 .unwrap_or("")
                 .to_string();
-            let parameters = tool.get("parameters")
+            let parameters = tool
+                .get("parameters")
                 .cloned()
                 .unwrap_or(serde_json::json!({}));
 
-            Some(ag_ui_core::types::Tool::new(name, description, parameters))
+            Some(syncable_ag_ui_core::types::Tool::new(
+                name,
+                description,
+                parameters,
+            ))
         })
         .collect()
 }
 
 /// Convert JSON context to AG-UI Context type
-fn convert_context(raw_context: Vec<serde_json::Value>) -> Vec<ag_ui_core::types::Context> {
+fn convert_context(raw_context: Vec<serde_json::Value>) -> Vec<syncable_ag_ui_core::types::Context> {
     raw_context
         .into_iter()
         .filter_map(|ctx| {
             let description = ctx.get("description")?.as_str()?.to_string();
             let value = ctx.get("value")?.as_str()?.to_string();
-            Some(ag_ui_core::types::Context::new(description, value))
+            Some(syncable_ag_ui_core::types::Context::new(description, value))
         })
         .collect()
 }
@@ -367,9 +392,7 @@ pub async fn sse_handler(
                 let json = serde_json::to_string(&event).ok()?;
                 let event_type = event.event_type().as_str().to_string();
 
-                Some(Ok(SseEvent::default()
-                    .event(event_type)
-                    .data(json)))
+                Some(Ok(SseEvent::default().event(event_type).data(json)))
             }
             Err(_) => None, // Lagged, skip this event
         }
@@ -379,10 +402,7 @@ pub async fn sse_handler(
 }
 
 /// WebSocket endpoint for streaming AG-UI events.
-pub async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<ServerState>,
-) -> Response {
+pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<ServerState>) -> Response {
     ws.on_upgrade(move |socket| handle_websocket(socket, state))
 }
 
@@ -457,8 +477,8 @@ async fn handle_websocket(socket: WebSocket, state: ServerState) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ag_ui_core::types::Message as AgUiProtocolMessage;
-    use ag_ui_core::{RunId, ThreadId};
+    use syncable_ag_ui_core::types::Message as AgUiProtocolMessage;
+    use syncable_ag_ui_core::{RunId, ThreadId};
     use axum::extract::State;
 
     #[tokio::test]
@@ -474,7 +494,10 @@ mod tests {
         use http::StatusCode;
 
         let state = ServerState::new();
-        let mut msg_rx = state.take_message_receiver().await.expect("Should get receiver");
+        let mut msg_rx = state
+            .take_message_receiver()
+            .await
+            .expect("Should get receiver");
 
         // Create RunAgentInput as JSON value
         let thread_id = ThreadId::random();
@@ -510,7 +533,10 @@ mod tests {
         use http::StatusCode;
 
         let state = ServerState::new();
-        let mut msg_rx = state.take_message_receiver().await.expect("Should get receiver");
+        let mut msg_rx = state
+            .take_message_receiver()
+            .await
+            .expect("Should get receiver");
 
         // Create CopilotKit envelope format
         let input_json = json!({

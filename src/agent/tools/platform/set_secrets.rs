@@ -258,7 +258,9 @@ Set DATABASE_URL as a secret (value omitted — prompted in terminal) and NODE_E
                                 "set_deployment_secrets",
                                 ErrorCategory::ValidationFailed,
                                 "Secret entry cancelled by user",
-                                Some(vec!["The user cancelled secret input. Try again when ready."]),
+                                Some(vec![
+                                    "The user cancelled secret input. Try again when ready.",
+                                ]),
                             ));
                         }
                     }

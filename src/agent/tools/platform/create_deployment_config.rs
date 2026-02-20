@@ -8,7 +8,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::agent::tools::error::{ErrorCategory, format_error_for_llm};
-use crate::platform::api::types::{CloudProvider, CloudRunnerConfigInput, CreateDeploymentConfigRequest, build_cloud_runner_config_v2};
+use crate::platform::api::types::{
+    CloudProvider, CloudRunnerConfigInput, CreateDeploymentConfigRequest,
+    build_cloud_runner_config_v2,
+};
 use crate::platform::api::{PlatformApiClient, PlatformApiError};
 use std::str::FromStr;
 
@@ -312,7 +315,10 @@ A deployment config defines how to build and deploy a service, including:
             let mut subscription_id = None;
             if let Some(ref provider) = provider_enum {
                 if matches!(provider, CloudProvider::Gcp | CloudProvider::Azure) {
-                    if let Ok(credential) = client.check_provider_connection(provider, &args.project_id).await {
+                    if let Ok(credential) = client
+                        .check_provider_connection(provider, &args.project_id)
+                        .await
+                    {
                         if let Some(cred) = credential {
                             match provider {
                                 CloudProvider::Gcp => gcp_project_id = cred.provider_account_id,

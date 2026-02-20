@@ -44,7 +44,7 @@ pub struct ToolCallState {
     pub is_collapsible: bool,
     pub status_ok: bool,
     /// AG-UI tool call ID for event correlation
-    pub ag_ui_tool_call_id: Option<ag_ui_core::ToolCallId>,
+    pub ag_ui_tool_call_id: Option<syncable_ag_ui_core::ToolCallId>,
 }
 
 /// Accumulated usage from API responses
@@ -286,7 +286,9 @@ where
             let mut s = state.lock().await;
             if let Some(idx) = s.current_tool_index {
                 // Get tool call ID before mutating
-                let ag_ui_tool_call_id = s.tool_calls.get(idx)
+                let ag_ui_tool_call_id = s
+                    .tool_calls
+                    .get(idx)
                     .and_then(|t| t.ag_ui_tool_call_id.clone());
 
                 if let Some(tool) = s.tool_calls.get_mut(idx) {

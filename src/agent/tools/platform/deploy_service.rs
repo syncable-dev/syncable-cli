@@ -19,14 +19,14 @@ use crate::platform::api::types::{
 };
 
 use super::set_secrets::{SecretPromptResult, default_true, prompt_secret_value};
-use crate::platform::api::{PlatformApiClient, PlatformApiError, TriggerDeploymentRequest};
 use crate::platform::PlatformSession;
+use crate::platform::api::{PlatformApiClient, PlatformApiError, TriggerDeploymentRequest};
 use crate::wizard::{
-    RecommendationInput, recommend_deployment, get_provider_deployment_statuses,
-    get_hetzner_regions_dynamic, get_hetzner_server_types_dynamic, HetznerFetchResult,
-    DynamicCloudRegion, DynamicMachineType, discover_env_files, parse_env_file,
-    get_available_endpoints, filter_endpoints_for_provider, match_env_vars_to_services,
-    extract_network_endpoints,
+    DynamicCloudRegion, DynamicMachineType, HetznerFetchResult, RecommendationInput,
+    discover_env_files, extract_network_endpoints, filter_endpoints_for_provider,
+    get_available_endpoints, get_hetzner_regions_dynamic, get_hetzner_server_types_dynamic,
+    get_provider_deployment_statuses, match_env_vars_to_services, parse_env_file,
+    recommend_deployment,
 };
 use std::process::Command;
 
@@ -297,7 +297,10 @@ User: "deploy this service"
                 "deploy_service",
                 ErrorCategory::FileNotFound,
                 &format!("Path not found: {}", analysis_path.display()),
-                Some(vec!["Check if the path exists", "Use list_directory to explore"]),
+                Some(vec![
+                    "Check if the path exists",
+                    "Use list_directory to explore",
+                ]),
             ));
         }
 
@@ -382,23 +385,30 @@ User: "deploy this service"
         };
 
         // Resolve environment name for display
-        let (resolved_env_id, resolved_env_name, is_production) = if let Some(ref env_id) = environment_id {
-            let env = environments.iter().find(|e| e.id == *env_id);
-            let name = env.map(|e| e.name.clone()).unwrap_or_else(|| "Unknown".to_string());
-            let is_prod = name.to_lowercase().contains("prod");
-            (env_id.clone(), name, is_prod)
-        } else if let Some(existing) = &existing_config {
-            // Use the environment from existing config
-            let env = environments.iter().find(|e| e.id == existing.environment_id);
-            let name = env.map(|e| e.name.clone()).unwrap_or_else(|| "Unknown".to_string());
-            let is_prod = name.to_lowercase().contains("prod");
-            (existing.environment_id.clone(), name, is_prod)
-        } else if let Some(first_env) = environments.first() {
-            let is_prod = first_env.name.to_lowercase().contains("prod");
-            (first_env.id.clone(), first_env.name.clone(), is_prod)
-        } else {
-            ("".to_string(), "No environment".to_string(), false)
-        };
+        let (resolved_env_id, resolved_env_name, is_production) =
+            if let Some(ref env_id) = environment_id {
+                let env = environments.iter().find(|e| e.id == *env_id);
+                let name = env
+                    .map(|e| e.name.clone())
+                    .unwrap_or_else(|| "Unknown".to_string());
+                let is_prod = name.to_lowercase().contains("prod");
+                (env_id.clone(), name, is_prod)
+            } else if let Some(existing) = &existing_config {
+                // Use the environment from existing config
+                let env = environments
+                    .iter()
+                    .find(|e| e.id == existing.environment_id);
+                let name = env
+                    .map(|e| e.name.clone())
+                    .unwrap_or_else(|| "Unknown".to_string());
+                let is_prod = name.to_lowercase().contains("prod");
+                (existing.environment_id.clone(), name, is_prod)
+            } else if let Some(first_env) = environments.first() {
+                let is_prod = first_env.name.to_lowercase().contains("prod");
+                (first_env.id.clone(), first_env.name.clone(), is_prod)
+            } else {
+                ("".to_string(), "No environment".to_string(), false)
+            };
 
         // 6. Get available providers
         let capabilities = match get_provider_deployment_statuses(&client, &project_id).await {
@@ -447,7 +457,8 @@ User: "deploy this service"
 
         // 6.5. For Hetzner deployments, fetch real-time availability and update recommendations
         // We require real-time data - no static fallback allowed
-        let final_provider_for_check = args.provider
+        let final_provider_for_check = args
+            .provider
             .as_ref()
             .and_then(|p| CloudProvider::from_str(p).ok())
             .unwrap_or(recommendation.provider.clone());
@@ -486,7 +497,10 @@ User: "deploy this service"
                     return Ok(format_error_for_llm(
                         "deploy_service",
                         ErrorCategory::NetworkError,
-                        &format!("Cannot recommend Hetzner deployment: Failed to fetch availability - {}", err),
+                        &format!(
+                            "Cannot recommend Hetzner deployment: Failed to fetch availability - {}",
+                            err
+                        ),
                         Some(vec![
                             "Use list_hetzner_availability to check current status",
                             "Or specify a different provider (e.g., provider='gcp')",
@@ -496,7 +510,13 @@ User: "deploy this service"
             };
 
             // Fetch server types with optional location filter
-            let server_types = match get_hetzner_server_types_dynamic(&client, &project_id, args.region.as_deref()).await {
+            let server_types = match get_hetzner_server_types_dynamic(
+                &client,
+                &project_id,
+                args.region.as_deref(),
+            )
+            .await
+            {
                 HetznerFetchResult::Success(s) if !s.is_empty() => s,
                 HetznerFetchResult::Success(_) => {
                     return Ok(format_error_for_llm(
@@ -524,32 +544,51 @@ User: "deploy this service"
                     return Ok(format_error_for_llm(
                         "deploy_service",
                         ErrorCategory::NetworkError,
-                        &format!("Cannot recommend Hetzner deployment: Failed to fetch server types - {}", err),
-                        Some(vec!["Use list_hetzner_availability to check current status"]),
+                        &format!(
+                            "Cannot recommend Hetzner deployment: Failed to fetch server types - {}",
+                            err
+                        ),
+                        Some(vec![
+                            "Use list_hetzner_availability to check current status",
+                        ]),
                     ));
                 }
             };
 
             // Store for later use in recommendations
-            hetzner_availability = Some(HetznerAvailabilityData { regions, server_types });
+            hetzner_availability = Some(HetznerAvailabilityData {
+                regions,
+                server_types,
+            });
         }
 
         // 7. Extract analysis summary
-        let primary_language = analysis.languages.first()
+        let primary_language = analysis
+            .languages
+            .first()
             .map(|l| l.name.clone())
             .unwrap_or_else(|| "Unknown".to_string());
 
-        let primary_framework = analysis.technologies.iter()
-            .find(|t| matches!(t.category, TechnologyCategory::BackendFramework | TechnologyCategory::MetaFramework))
+        let primary_framework = analysis
+            .technologies
+            .iter()
+            .find(|t| {
+                matches!(
+                    t.category,
+                    TechnologyCategory::BackendFramework | TechnologyCategory::MetaFramework
+                )
+            })
             .map(|t| t.name.clone())
             .unwrap_or_else(|| "None detected".to_string());
 
-        let has_dockerfile = analysis.docker_analysis
+        let has_dockerfile = analysis
+            .docker_analysis
             .as_ref()
             .map(|d| !d.dockerfiles.is_empty())
             .unwrap_or(false);
 
-        let has_k8s = analysis.infrastructure
+        let has_k8s = analysis
+            .infrastructure
             .as_ref()
             .map(|i| i.has_kubernetes)
             .unwrap_or(false);
@@ -557,7 +596,9 @@ User: "deploy this service"
         // 10. If preview_only, return recommendation
         if args.preview_only {
             // Build the deployment mode info
-            let (deployment_mode, mode_explanation, next_steps) = if let Some(existing) = &existing_config {
+            let (deployment_mode, mode_explanation, next_steps) = if let Some(existing) =
+                &existing_config
+            {
                 (
                     "REDEPLOY",
                     format!(
@@ -588,105 +629,145 @@ User: "deploy this service"
 
             // Production warning
             let production_warning = if is_production {
-                Some("⚠️  WARNING: This will deploy to PRODUCTION environment. Please confirm you intend to deploy to production.")
+                Some(
+                    "⚠️  WARNING: This will deploy to PRODUCTION environment. Please confirm you intend to deploy to production.",
+                )
             } else {
                 None
             };
 
             // For Hetzner, use real-time availability to select best options
-            let (final_machine_type, final_region, machine_reasoning, region_reasoning, price_monthly) =
-                if let Some(ref hetzner) = hetzner_availability {
-                    // SMART SELECTION: Find the best region + machine combination
-                    // Strategy: Find cheapest machine with 4GB+ that's actually available somewhere
+            let (
+                final_machine_type,
+                final_region,
+                machine_reasoning,
+                region_reasoning,
+                price_monthly,
+            ) = if let Some(ref hetzner) = hetzner_availability {
+                // SMART SELECTION: Find the best region + machine combination
+                // Strategy: Find cheapest machine with 4GB+ that's actually available somewhere
 
-                    // First, find all server types that are actually available (non-empty available_in)
-                    let available_types: Vec<_> = hetzner.server_types.iter()
-                        .filter(|st| !st.available_in.is_empty())
-                        .collect();
+                // First, find all server types that are actually available (non-empty available_in)
+                let available_types: Vec<_> = hetzner
+                    .server_types
+                    .iter()
+                    .filter(|st| !st.available_in.is_empty())
+                    .collect();
 
-                    // If user specified a region, check if anything is available there
-                    let user_region = args.region.as_deref();
+                // If user specified a region, check if anything is available there
+                let user_region = args.region.as_deref();
 
-                    // Find best machine: cheapest with 4GB+ that's available
-                    let best_machine_with_region = if let Some(region) = user_region {
-                        // User specified region - find best machine for that region
-                        available_types.iter()
-                            .filter(|st| st.memory_gb >= 4.0 && st.available_in.contains(&region.to_string()))
-                            .min_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap())
-                            .map(|st| (*st, region.to_string()))
-                            .or_else(|| {
-                                // No 4GB+ available in that region, try any machine
-                                available_types.iter()
-                                    .filter(|st| st.available_in.contains(&region.to_string()))
-                                    .min_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap())
-                                    .map(|st| (*st, region.to_string()))
-                            })
-                    } else {
-                        // No region specified - find globally cheapest 4GB+ machine and use its best region
-                        available_types.iter()
-                            .filter(|st| st.memory_gb >= 4.0)
-                            .min_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap())
-                            .map(|st| {
-                                // Pick the first available region for this machine
-                                let region = st.available_in.first()
-                                    .cloned()
-                                    .unwrap_or_else(|| "nbg1".to_string());
-                                (*st, region)
-                            })
-                            .or_else(|| {
-                                // No 4GB+ available anywhere, find any cheapest machine
-                                available_types.iter()
-                                    .min_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap())
-                                    .map(|st| {
-                                        let region = st.available_in.first()
-                                            .cloned()
-                                            .unwrap_or_else(|| "nbg1".to_string());
-                                        (*st, region)
-                                    })
-                            })
-                    };
-
-                    if let Some((machine, region_id)) = best_machine_with_region {
-                        let region_name = hetzner.regions.iter()
-                            .find(|r| r.id == region_id)
-                            .map(|r| format!("{}, {}", r.name, r.location))
-                            .unwrap_or_else(|| region_id.clone());
-
-                        let available_count = hetzner.regions.iter()
-                            .find(|r| r.id == region_id)
-                            .map(|r| r.available_server_types.len())
-                            .unwrap_or(0);
-
-                        (
-                            args.machine_type.clone().unwrap_or_else(|| machine.id.clone()),
-                            region_id.clone(),
-                            format!(
-                                "Selected {} ({} vCPU, {:.0} GB RAM) - cheapest AVAILABLE option at €{:.2}/mo",
-                                machine.id, machine.cores, machine.memory_gb, machine.price_monthly
-                            ),
-                            format!("Selected {} ({}) - {} server types available", region_id, region_name, available_count),
-                            Some(machine.price_monthly),
-                        )
-                    } else {
-                        // No server types available anywhere - this shouldn't happen if we passed validation
-                        (
-                            args.machine_type.clone().unwrap_or_else(|| recommendation.machine_type.clone()),
-                            args.region.clone().unwrap_or_else(|| recommendation.region.clone()),
-                            "WARNING: No server types currently available - using fallback".to_string(),
-                            "Using fallback region".to_string(),
-                            None,
-                        )
-                    }
+                // Find best machine: cheapest with 4GB+ that's available
+                let best_machine_with_region = if let Some(region) = user_region {
+                    // User specified region - find best machine for that region
+                    available_types
+                        .iter()
+                        .filter(|st| {
+                            st.memory_gb >= 4.0 && st.available_in.contains(&region.to_string())
+                        })
+                        .min_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap())
+                        .map(|st| (*st, region.to_string()))
+                        .or_else(|| {
+                            // No 4GB+ available in that region, try any machine
+                            available_types
+                                .iter()
+                                .filter(|st| st.available_in.contains(&region.to_string()))
+                                .min_by(|a, b| {
+                                    a.price_monthly.partial_cmp(&b.price_monthly).unwrap()
+                                })
+                                .map(|st| (*st, region.to_string()))
+                        })
                 } else {
-                    // Non-Hetzner provider - use static recommendation
+                    // No region specified - find globally cheapest 4GB+ machine and use its best region
+                    available_types
+                        .iter()
+                        .filter(|st| st.memory_gb >= 4.0)
+                        .min_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap())
+                        .map(|st| {
+                            // Pick the first available region for this machine
+                            let region = st
+                                .available_in
+                                .first()
+                                .cloned()
+                                .unwrap_or_else(|| "nbg1".to_string());
+                            (*st, region)
+                        })
+                        .or_else(|| {
+                            // No 4GB+ available anywhere, find any cheapest machine
+                            available_types
+                                .iter()
+                                .min_by(|a, b| {
+                                    a.price_monthly.partial_cmp(&b.price_monthly).unwrap()
+                                })
+                                .map(|st| {
+                                    let region = st
+                                        .available_in
+                                        .first()
+                                        .cloned()
+                                        .unwrap_or_else(|| "nbg1".to_string());
+                                    (*st, region)
+                                })
+                        })
+                };
+
+                if let Some((machine, region_id)) = best_machine_with_region {
+                    let region_name = hetzner
+                        .regions
+                        .iter()
+                        .find(|r| r.id == region_id)
+                        .map(|r| format!("{}, {}", r.name, r.location))
+                        .unwrap_or_else(|| region_id.clone());
+
+                    let available_count = hetzner
+                        .regions
+                        .iter()
+                        .find(|r| r.id == region_id)
+                        .map(|r| r.available_server_types.len())
+                        .unwrap_or(0);
+
                     (
-                        args.machine_type.clone().unwrap_or_else(|| recommendation.machine_type.clone()),
-                        args.region.clone().unwrap_or_else(|| recommendation.region.clone()),
-                        recommendation.machine_reasoning.clone(),
-                        recommendation.region_reasoning.clone(),
+                        args.machine_type
+                            .clone()
+                            .unwrap_or_else(|| machine.id.clone()),
+                        region_id.clone(),
+                        format!(
+                            "Selected {} ({} vCPU, {:.0} GB RAM) - cheapest AVAILABLE option at €{:.2}/mo",
+                            machine.id, machine.cores, machine.memory_gb, machine.price_monthly
+                        ),
+                        format!(
+                            "Selected {} ({}) - {} server types available",
+                            region_id, region_name, available_count
+                        ),
+                        Some(machine.price_monthly),
+                    )
+                } else {
+                    // No server types available anywhere - this shouldn't happen if we passed validation
+                    (
+                        args.machine_type
+                            .clone()
+                            .unwrap_or_else(|| recommendation.machine_type.clone()),
+                        args.region
+                            .clone()
+                            .unwrap_or_else(|| recommendation.region.clone()),
+                        "WARNING: No server types currently available - using fallback".to_string(),
+                        "Using fallback region".to_string(),
                         None,
                     )
-                };
+                }
+            } else {
+                // Non-Hetzner provider - use static recommendation
+                (
+                    args.machine_type
+                        .clone()
+                        .unwrap_or_else(|| recommendation.machine_type.clone()),
+                    args.region
+                        .clone()
+                        .unwrap_or_else(|| recommendation.region.clone()),
+                    recommendation.machine_reasoning.clone(),
+                    recommendation.region_reasoning.clone(),
+                    None,
+                )
+            };
 
             // Build availability info for response
             let hetzner_availability_info = hetzner_availability.as_ref().map(|h| {
@@ -994,7 +1075,8 @@ User: "deploy this service"
         }
 
         // NEW DEPLOYMENT PATH - no existing config found
-        let final_provider = args.provider
+        let final_provider = args
+            .provider
             .as_ref()
             .and_then(|p| CloudProvider::from_str(p).ok())
             .unwrap_or(recommendation.provider.clone());
@@ -1004,7 +1086,9 @@ User: "deploy this service"
             // SMART SELECTION: Same logic as preview
 
             // Find all server types that are actually available (non-empty available_in)
-            let available_types: Vec<_> = hetzner.server_types.iter()
+            let available_types: Vec<_> = hetzner
+                .server_types
+                .iter()
                 .filter(|st| !st.available_in.is_empty())
                 .collect();
 
@@ -1013,32 +1097,42 @@ User: "deploy this service"
             // Find best machine: cheapest with 4GB+ that's available
             let best_machine_with_region = if let Some(region) = user_region {
                 // User specified region - find best machine for that region
-                available_types.iter()
-                    .filter(|st| st.memory_gb >= 4.0 && st.available_in.contains(&region.to_string()))
+                available_types
+                    .iter()
+                    .filter(|st| {
+                        st.memory_gb >= 4.0 && st.available_in.contains(&region.to_string())
+                    })
                     .min_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap())
                     .map(|st| (st.id.clone(), region.to_string()))
                     .or_else(|| {
-                        available_types.iter()
+                        available_types
+                            .iter()
                             .filter(|st| st.available_in.contains(&region.to_string()))
                             .min_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap())
                             .map(|st| (st.id.clone(), region.to_string()))
                     })
             } else {
                 // No region specified - find globally cheapest 4GB+ machine
-                available_types.iter()
+                available_types
+                    .iter()
                     .filter(|st| st.memory_gb >= 4.0)
                     .min_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap())
                     .map(|st| {
-                        let region = st.available_in.first()
+                        let region = st
+                            .available_in
+                            .first()
                             .cloned()
                             .unwrap_or_else(|| "nbg1".to_string());
                         (st.id.clone(), region)
                     })
                     .or_else(|| {
-                        available_types.iter()
+                        available_types
+                            .iter()
                             .min_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap())
                             .map(|st| {
-                                let region = st.available_in.first()
+                                let region = st
+                                    .available_in
+                                    .first()
                                     .cloned()
                                     .unwrap_or_else(|| "nbg1".to_string());
                                 (st.id.clone(), region)
@@ -1054,21 +1148,28 @@ User: "deploy this service"
             } else {
                 // Fallback to static defaults
                 (
-                    args.machine_type.clone().unwrap_or_else(|| recommendation.machine_type.clone()),
-                    args.region.clone().unwrap_or_else(|| recommendation.region.clone()),
+                    args.machine_type
+                        .clone()
+                        .unwrap_or_else(|| recommendation.machine_type.clone()),
+                    args.region
+                        .clone()
+                        .unwrap_or_else(|| recommendation.region.clone()),
                 )
             }
         } else {
             // Non-Hetzner or no availability data - use static defaults
-            let machine = args.machine_type.clone()
+            let machine = args
+                .machine_type
+                .clone()
                 .unwrap_or_else(|| recommendation.machine_type.clone());
-            let region = args.region.clone()
+            let region = args
+                .region
+                .clone()
                 .unwrap_or_else(|| recommendation.region.clone());
             (machine, region)
         };
 
-        let final_port = args.port
-            .unwrap_or(recommendation.port);
+        let final_port = args.port.unwrap_or(recommendation.port);
 
         // Get repository info
         let repositories = match client.list_project_repositories(&project_id).await {
@@ -1135,17 +1236,22 @@ User: "deploy this service"
         //
         // NOT:
         //   dockerfile: "Dockerfile", context: "."  (would look at repo root)
-        let (dockerfile_path, build_context) = analysis.docker_analysis
+        let (dockerfile_path, build_context) = analysis
+            .docker_analysis
             .as_ref()
             .and_then(|d| d.dockerfiles.first())
             .map(|df| {
                 // Get dockerfile filename (e.g., "Dockerfile" or "Dockerfile.prod")
-                let dockerfile_name = df.path.file_name()
+                let dockerfile_name = df
+                    .path
+                    .file_name()
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_else(|| "Dockerfile".to_string());
 
                 // Derive dockerfile's directory relative to analysis_path
-                let analysis_relative_dir = df.path.parent()
+                let analysis_relative_dir = df
+                    .path
+                    .parent()
                     .and_then(|p| p.strip_prefix(&analysis_path).ok())
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_default();
@@ -1159,19 +1265,28 @@ User: "deploy this service"
                     if analysis_relative_dir.is_empty() {
                         (dockerfile_name, ".".to_string())
                     } else {
-                        (format!("{}/{}", analysis_relative_dir, dockerfile_name), analysis_relative_dir)
+                        (
+                            format!("{}/{}", analysis_relative_dir, dockerfile_name),
+                            analysis_relative_dir,
+                        )
                     }
                 } else {
                     // Analyzing a subdirectory - prepend subpath to make repo-root-relative
                     if analysis_relative_dir.is_empty() {
                         // Dockerfile at root of analyzed subdir
                         // e.g., subpath="services/contact-intelligence" -> dockerfile="services/contact-intelligence/Dockerfile"
-                        (format!("{}/{}", subpath, dockerfile_name), subpath.to_string())
+                        (
+                            format!("{}/{}", subpath, dockerfile_name),
+                            subpath.to_string(),
+                        )
                     } else {
                         // Dockerfile in nested dir within analyzed subdir
                         // e.g., subpath="services", analysis_relative_dir="contact-intelligence"
                         let full_context = format!("{}/{}", subpath, analysis_relative_dir);
-                        (format!("{}/{}", full_context, dockerfile_name), full_context)
+                        (
+                            format!("{}/{}", full_context, dockerfile_name),
+                            full_context,
+                        )
                     }
                 }
             })
@@ -1196,7 +1311,10 @@ User: "deploy this service"
         let mut gcp_project_id = None;
         let mut subscription_id = None;
         if matches!(final_provider, CloudProvider::Gcp | CloudProvider::Azure) {
-            if let Ok(Some(cred)) = client.check_provider_connection(&final_provider, &project_id).await {
+            if let Ok(Some(cred)) = client
+                .check_provider_connection(&final_provider, &project_id)
+                .await
+            {
                 match final_provider {
                     CloudProvider::Gcp => gcp_project_id = cred.provider_account_id,
                     CloudProvider::Azure => subscription_id = cred.provider_account_id,
@@ -1206,15 +1324,20 @@ User: "deploy this service"
         }
 
         // Determine CPU/memory from args or recommendation
-        let final_cpu = args.cpu.clone()
-            .or_else(|| recommendation.cpu.clone());
-        let final_memory = args.memory.clone()
+        let final_cpu = args.cpu.clone().or_else(|| recommendation.cpu.clone());
+        let final_memory = args
+            .memory
+            .clone()
             .or_else(|| recommendation.memory.clone());
 
         let config_input = CloudRunnerConfigInput {
             provider: Some(final_provider.clone()),
             region: Some(final_region.clone()),
-            server_type: if final_provider == CloudProvider::Hetzner { Some(final_machine.clone()) } else { None },
+            server_type: if final_provider == CloudProvider::Hetzner {
+                Some(final_machine.clone())
+            } else {
+                None
+            },
             gcp_project_id,
             cpu: final_cpu.clone(),
             memory: final_memory.clone(),
@@ -1243,7 +1366,9 @@ User: "deploy this service"
                                     "deploy_service",
                                     ErrorCategory::ValidationFailed,
                                     "Secret entry cancelled by user",
-                                    Some(vec!["The user cancelled secret input. Try again when ready."]),
+                                    Some(vec![
+                                        "The user cancelled secret input. Try again when ready.",
+                                    ]),
                                 ));
                             }
                         }
@@ -1256,7 +1381,11 @@ User: "deploy this service"
                     is_secret: sk.is_secret,
                 });
             }
-            if resolved.is_empty() { None } else { Some(resolved) }
+            if resolved.is_empty() {
+                None
+            } else {
+                Some(resolved)
+            }
         } else {
             None
         };
@@ -1278,11 +1407,14 @@ User: "deploy this service"
             build_context: Some(build_context.clone()),
             context: Some(build_context.clone()),
             port: final_port as i32,
-            branch: repo.default_branch.clone().unwrap_or_else(|| "main".to_string()),
+            branch: repo
+                .default_branch
+                .clone()
+                .unwrap_or_else(|| "main".to_string()),
             target_type: recommendation.target.as_str().to_string(),
             cloud_provider: final_provider.as_str().to_string(),
             environment_id: resolved_env_id.clone(),
-            cluster_id: None, // Cloud Runner doesn't need cluster
+            cluster_id: None,  // Cloud Runner doesn't need cluster
             registry_id: None, // Auto-provision
             auto_deploy_enabled: true,
             is_public: Some(args.is_public),
@@ -1385,7 +1517,13 @@ fn parse_repo_from_url(url: &str) -> Option<String> {
 
     // HTTPS format: https://github.com/owner/repo.git
     if url.starts_with("https://") || url.starts_with("http://") {
-        if let Some(path) = url.split('/').skip(3).collect::<Vec<_>>().join("/").strip_suffix(".git") {
+        if let Some(path) = url
+            .split('/')
+            .skip(3)
+            .collect::<Vec<_>>()
+            .join("/")
+            .strip_suffix(".git")
+        {
             return Some(path.to_string());
         }
         // Without .git suffix
@@ -1404,12 +1542,15 @@ fn find_matching_repository<'a>(
     project_path: &PathBuf,
 ) -> Option<&'a ProjectRepository> {
     // First, try to detect from local git remote
-    if let Some(detected_name) = detect_git_remote(project_path).and_then(|url| parse_repo_from_url(&url)) {
+    if let Some(detected_name) =
+        detect_git_remote(project_path).and_then(|url| parse_repo_from_url(&url))
+    {
         tracing::debug!("Detected local git remote: {}", detected_name);
 
-        if let Some(repo) = repositories.iter().find(|r| {
-            r.repository_full_name.eq_ignore_ascii_case(&detected_name)
-        }) {
+        if let Some(repo) = repositories
+            .iter()
+            .find(|r| r.repository_full_name.eq_ignore_ascii_case(&detected_name))
+        {
             tracing::debug!("Matched detected repo: {}", repo.repository_full_name);
             return Some(repo);
         }
@@ -1418,9 +1559,12 @@ fn find_matching_repository<'a>(
     // Fall back: find first non-GitOps repository
     // GitOps repos are typically infrastructure/config repos, not application repos
     if let Some(repo) = repositories.iter().find(|r| {
-        r.is_primary_git_ops != Some(true) &&
-        !r.repository_full_name.to_lowercase().contains("infrastructure") &&
-        !r.repository_full_name.to_lowercase().contains("gitops")
+        r.is_primary_git_ops != Some(true)
+            && !r
+                .repository_full_name
+                .to_lowercase()
+                .contains("infrastructure")
+            && !r.repository_full_name.to_lowercase().contains("gitops")
     }) {
         tracing::debug!("Using non-gitops repo: {}", repo.repository_full_name);
         return Some(repo);
@@ -1516,10 +1660,7 @@ mod tests {
             get_service_name(&PathBuf::from("/path/to/my_service")),
             "my-service"
         );
-        assert_eq!(
-            get_service_name(&PathBuf::from("/path/to/MyApp")),
-            "myapp"
-        );
+        assert_eq!(get_service_name(&PathBuf::from("/path/to/MyApp")), "myapp");
         assert_eq!(
             get_service_name(&PathBuf::from("/path/to/api-service")),
             "api-service"
@@ -1551,6 +1692,10 @@ mod tests {
         };
 
         let result = tool.call(args).await.unwrap();
-        assert!(result.contains("error") || result.contains("not found") || result.contains("Path not found"));
+        assert!(
+            result.contains("error")
+                || result.contains("not found")
+                || result.contains("Path not found")
+        );
     }
 }

@@ -161,7 +161,10 @@ impl CloudProvider {
     /// Returns `true` for GCP, Hetzner, and Azure (currently supported).
     /// Returns `false` for AWS, Scaleway, Cyso (coming soon).
     pub fn is_available(&self) -> bool {
-        matches!(self, CloudProvider::Gcp | CloudProvider::Hetzner | CloudProvider::Azure)
+        matches!(
+            self,
+            CloudProvider::Gcp | CloudProvider::Hetzner | CloudProvider::Azure
+        )
     }
 }
 
@@ -1047,7 +1050,10 @@ pub fn build_cloud_runner_config_v2(input: &CloudRunnerConfigInput) -> serde_jso
             if let Some(allow) = input.allow_unauthenticated {
                 gcp_config.insert("allowUnauthenticated".to_string(), serde_json::json!(allow));
             } else if let Some(is_pub) = input.is_public {
-                gcp_config.insert("allowUnauthenticated".to_string(), serde_json::json!(is_pub));
+                gcp_config.insert(
+                    "allowUnauthenticated".to_string(),
+                    serde_json::json!(is_pub),
+                );
             }
             if let Some(boost) = input.cpu_boost {
                 gcp_config.insert("cpuBoost".to_string(), serde_json::json!(boost));
@@ -1070,7 +1076,10 @@ pub fn build_cloud_runner_config_v2(input: &CloudRunnerConfigInput) -> serde_jso
             if let Some(ref sub_id) = input.subscription_id {
                 azure_config.insert("subscriptionId".to_string(), serde_json::json!(sub_id));
             }
-            azure_config.insert("deploymentType".to_string(), serde_json::json!("azure_container_app"));
+            azure_config.insert(
+                "deploymentType".to_string(),
+                serde_json::json!("azure_container_app"),
+            );
             if let Some(ref cpu) = input.cpu {
                 azure_config.insert("cpu".to_string(), serde_json::json!(cpu));
             }
@@ -1935,9 +1944,18 @@ mod tests {
             Some("/health"),
         );
         let gcp = config.get("gcp").expect("should have gcp key");
-        assert_eq!(gcp.get("region").and_then(|v| v.as_str()), Some("us-central1"));
-        assert_eq!(gcp.get("allowUnauthenticated").and_then(|v| v.as_bool()), Some(true));
-        assert_eq!(gcp.get("healthCheckPath").and_then(|v| v.as_str()), Some("/health"));
+        assert_eq!(
+            gcp.get("region").and_then(|v| v.as_str()),
+            Some("us-central1")
+        );
+        assert_eq!(
+            gcp.get("allowUnauthenticated").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+        assert_eq!(
+            gcp.get("healthCheckPath").and_then(|v| v.as_str()),
+            Some("/health")
+        );
     }
 
     #[test]
@@ -1950,24 +1968,30 @@ mod tests {
             None,
         );
         let gcp = config.get("gcp").expect("should have gcp key");
-        assert_eq!(gcp.get("region").and_then(|v| v.as_str()), Some("europe-west1"));
-        assert_eq!(gcp.get("allowUnauthenticated").and_then(|v| v.as_bool()), Some(false));
+        assert_eq!(
+            gcp.get("region").and_then(|v| v.as_str()),
+            Some("europe-west1")
+        );
+        assert_eq!(
+            gcp.get("allowUnauthenticated").and_then(|v| v.as_bool()),
+            Some(false)
+        );
         // No health check path when not provided
         assert!(gcp.get("healthCheckPath").is_none());
     }
 
     #[test]
     fn test_build_cloud_runner_config_hetzner() {
-        let config = build_cloud_runner_config(
-            &CloudProvider::Hetzner,
-            "nbg1",
-            "cx22",
-            true,
-            None,
-        );
+        let config = build_cloud_runner_config(&CloudProvider::Hetzner, "nbg1", "cx22", true, None);
         let hetzner = config.get("hetzner").expect("should have hetzner key");
-        assert_eq!(hetzner.get("location").and_then(|v| v.as_str()), Some("nbg1"));
-        assert_eq!(hetzner.get("serverType").and_then(|v| v.as_str()), Some("cx22"));
+        assert_eq!(
+            hetzner.get("location").and_then(|v| v.as_str()),
+            Some("nbg1")
+        );
+        assert_eq!(
+            hetzner.get("serverType").and_then(|v| v.as_str()),
+            Some("cx22")
+        );
     }
 
     #[test]
@@ -1980,8 +2004,14 @@ mod tests {
             Some("/healthz"),
         );
         let hetzner = config.get("hetzner").expect("should have hetzner key");
-        assert_eq!(hetzner.get("location").and_then(|v| v.as_str()), Some("fsn1"));
-        assert_eq!(hetzner.get("serverType").and_then(|v| v.as_str()), Some("cx32"));
+        assert_eq!(
+            hetzner.get("location").and_then(|v| v.as_str()),
+            Some("fsn1")
+        );
+        assert_eq!(
+            hetzner.get("serverType").and_then(|v| v.as_str()),
+            Some("cx32")
+        );
         // Hetzner config doesn't include health check path in current implementation
     }
 
@@ -2005,14 +2035,26 @@ mod tests {
         };
         let config = build_cloud_runner_config_v2(&input);
         let gcp = config.get("gcp").expect("should have gcp key");
-        assert_eq!(gcp.get("region").and_then(|v| v.as_str()), Some("us-central1"));
-        assert_eq!(gcp.get("projectId").and_then(|v| v.as_str()), Some("my-project"));
+        assert_eq!(
+            gcp.get("region").and_then(|v| v.as_str()),
+            Some("us-central1")
+        );
+        assert_eq!(
+            gcp.get("projectId").and_then(|v| v.as_str()),
+            Some("my-project")
+        );
         assert_eq!(gcp.get("cpu").and_then(|v| v.as_str()), Some("2"));
         assert_eq!(gcp.get("memory").and_then(|v| v.as_str()), Some("2Gi"));
         assert_eq!(gcp.get("minInstances").and_then(|v| v.as_i64()), Some(0));
         assert_eq!(gcp.get("maxInstances").and_then(|v| v.as_i64()), Some(10));
-        assert_eq!(gcp.get("allowUnauthenticated").and_then(|v| v.as_bool()), Some(true));
-        assert_eq!(gcp.get("healthCheckPath").and_then(|v| v.as_str()), Some("/health"));
+        assert_eq!(
+            gcp.get("allowUnauthenticated").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+        assert_eq!(
+            gcp.get("healthCheckPath").and_then(|v| v.as_str()),
+            Some("/health")
+        );
     }
 
     #[test]
@@ -2030,9 +2072,18 @@ mod tests {
         };
         let config = build_cloud_runner_config_v2(&input);
         let azure = config.get("azure").expect("should have azure key");
-        assert_eq!(azure.get("location").and_then(|v| v.as_str()), Some("eastus"));
-        assert_eq!(azure.get("subscriptionId").and_then(|v| v.as_str()), Some("sub-123"));
-        assert_eq!(azure.get("deploymentType").and_then(|v| v.as_str()), Some("azure_container_app"));
+        assert_eq!(
+            azure.get("location").and_then(|v| v.as_str()),
+            Some("eastus")
+        );
+        assert_eq!(
+            azure.get("subscriptionId").and_then(|v| v.as_str()),
+            Some("sub-123")
+        );
+        assert_eq!(
+            azure.get("deploymentType").and_then(|v| v.as_str()),
+            Some("azure_container_app")
+        );
         assert_eq!(azure.get("cpu").and_then(|v| v.as_str()), Some("0.5"));
         assert_eq!(azure.get("memory").and_then(|v| v.as_str()), Some("1.0Gi"));
         assert_eq!(azure.get("isPublic").and_then(|v| v.as_bool()), Some(true));
@@ -2053,8 +2104,14 @@ mod tests {
         };
         let config = build_cloud_runner_config_v2(&input);
         let hetzner = config.get("hetzner").expect("should have hetzner key");
-        assert_eq!(hetzner.get("location").and_then(|v| v.as_str()), Some("nbg1"));
-        assert_eq!(hetzner.get("serverType").and_then(|v| v.as_str()), Some("cx22"));
+        assert_eq!(
+            hetzner.get("location").and_then(|v| v.as_str()),
+            Some("nbg1")
+        );
+        assert_eq!(
+            hetzner.get("serverType").and_then(|v| v.as_str()),
+            Some("cx22")
+        );
     }
 
     #[test]
