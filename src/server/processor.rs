@@ -65,7 +65,6 @@ use rig::completion::{CompletionModel, CompletionResponse, Message as RigPromptM
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use syncable_ag_ui_core::ToolCallId;
-use syncable_ag_ui_core::state::StateManager;
 use tokio::sync::Mutex;
 
 /// Step status for generative UI progress display.

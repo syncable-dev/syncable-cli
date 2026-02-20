@@ -210,17 +210,17 @@ This provides current data directly from Hetzner API - never use hardcoded/stati
         // Group server types by category for easier reading
         let shared_cpu: Vec<&serde_json::Value> = server_types_json
             .iter()
-            .filter(|s| s["id"].as_str().map_or(false, |id| id.starts_with("cx")))
+            .filter(|s| s["id"].as_str().is_some_and(|id| id.starts_with("cx")))
             .collect();
 
         let dedicated_cpu: Vec<&serde_json::Value> = server_types_json
             .iter()
-            .filter(|s| s["id"].as_str().map_or(false, |id| id.starts_with("ccx")))
+            .filter(|s| s["id"].as_str().is_some_and(|id| id.starts_with("ccx")))
             .collect();
 
         let performance: Vec<&serde_json::Value> = server_types_json
             .iter()
-            .filter(|s| s["id"].as_str().map_or(false, |id| id.starts_with("cpx")))
+            .filter(|s| s["id"].as_str().is_some_and(|id| id.starts_with("cpx")))
             .collect();
 
         let response = json!({

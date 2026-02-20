@@ -697,7 +697,7 @@ pub async fn get_recommended_server_type(
         })
         .filter(|st| {
             // If preferred location is set, only include types available there
-            preferred_location.map_or(true, |loc| st.available_in.contains(&loc.to_string()))
+            preferred_location.is_none_or(|loc| st.available_in.contains(&loc.to_string()))
         })
         .min_by(|a, b| a.price_monthly.partial_cmp(&b.price_monthly).unwrap())
 }
@@ -719,8 +719,8 @@ pub async fn find_best_region(
     // Sort by availability count, preferring specified zone
     let mut sorted_regions = regions;
     sorted_regions.sort_by(|a, b| {
-        let a_zone_match = preferred_zone.map_or(false, |z| a.network_zone == z);
-        let b_zone_match = preferred_zone.map_or(false, |z| b.network_zone == z);
+        let a_zone_match = preferred_zone.is_some_and(|z| a.network_zone == z);
+        let b_zone_match = preferred_zone.is_some_and(|z| b.network_zone == z);
 
         match (a_zone_match, b_zone_match) {
             (true, false) => std::cmp::Ordering::Less,

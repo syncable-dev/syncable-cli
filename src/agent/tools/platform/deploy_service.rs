@@ -379,10 +379,10 @@ User: "deploy this service"
             .find(|c| c.service_name.eq_ignore_ascii_case(&service_name));
 
         // 5. Get environment info for display
-        let environments = match client.list_environments(&project_id).await {
-            Ok(envs) => envs,
-            Err(_) => Vec::new(),
-        };
+        let environments: Vec<crate::platform::api::types::Environment> = client
+            .list_environments(&project_id)
+            .await
+            .unwrap_or_default();
 
         // Resolve environment name for display
         let (resolved_env_id, resolved_env_name, is_production) =

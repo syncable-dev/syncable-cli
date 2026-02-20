@@ -441,10 +441,10 @@ fn collect_env_vars_manually() -> Vec<DeploymentSecretInput> {
             is_secret,
         });
 
-        let add_another = match Confirm::new("Add another?").with_default(false).prompt() {
-            Ok(v) => v,
-            Err(_) => false,
-        };
+        let add_another = Confirm::new("Add another?")
+            .with_default(false)
+            .prompt()
+            .unwrap_or_default();
 
         if !add_another {
             break;
@@ -567,13 +567,10 @@ fn collect_env_vars_from_file(
         );
     }
 
-    let confirm = match Confirm::new("Use these variables?")
+    let confirm = Confirm::new("Use these variables?")
         .with_default(true)
         .prompt()
-    {
-        Ok(v) => v,
-        Err(_) => false,
-    };
+        .unwrap_or_default();
 
     if confirm { secrets } else { Vec::new() }
 }

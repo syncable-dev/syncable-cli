@@ -192,7 +192,7 @@ pub fn extract_service_hint(env_var_name: &str) -> Option<String> {
 
     // Try suffixes longest-first so _SERVICE_URL is tried before _URL
     let mut suffixes: Vec<&&str> = URL_SUFFIXES.iter().collect();
-    suffixes.sort_by(|a, b| b.len().cmp(&a.len()));
+    suffixes.sort_by_key(|b| std::cmp::Reverse(b.len()));
 
     for suffix in suffixes {
         if upper.ends_with(suffix) {
@@ -214,7 +214,7 @@ fn normalize(s: &str) -> String {
 /// Split a name into tokens on `_` and `-`.
 fn tokenize(s: &str) -> Vec<String> {
     s.to_lowercase()
-        .split(|c: char| c == '_' || c == '-')
+        .split(['_', '-'])
         .filter(|t| !t.is_empty())
         .map(String::from)
         .collect()
@@ -293,7 +293,7 @@ pub fn match_env_vars_to_services(
         let mut best: Option<(MatchConfidence, &AvailableServiceEndpoint)> = None;
         for ep in endpoints {
             if let Some(conf) = match_hint_to_service(&hint, &ep.service_name) {
-                if best.as_ref().map_or(true, |(bc, _)| conf > *bc) {
+                if best.as_ref().is_none_or(|(bc, _)| conf > *bc) {
                     best = Some((conf, ep));
                 }
             }
