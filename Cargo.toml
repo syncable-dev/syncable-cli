@@ -116,7 +116,7 @@ syntect = "5"                   # Syntax highlighting
 strip-ansi-escapes = "0.2"      # Strip ANSI codes for testing
 
 # Dockerfile linting (hadolint-rs)
-nom = "7"                  # Parser combinators for Dockerfile parsing
+nom = "8"                  # Parser combinators for Dockerfile parsing
 anyhow = "1.0.100"
 open = "5.3.3"
 
