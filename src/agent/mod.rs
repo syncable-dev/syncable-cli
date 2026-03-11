@@ -690,8 +690,13 @@ pub async fn run_interactive(
                 Some(&current_input),
                 session.plan_mode,
             );
-            let is_generation = prompts::is_generation_query(&current_input);
             let is_planning = session.plan_mode.is_planning();
+            // Inherit generation mode for short follow-up messages ("sure", "yes", "go ahead",
+            // etc.) so the write/shell tool set is not lost between turns.
+            let is_generation = prompts::is_generation_query(&current_input)
+                || (!is_planning
+                    && session.last_was_generation
+                    && current_input.trim().len() < 60);
 
             // Note: using raw_chat_history directly which preserves Reasoning blocks
             // This is needed for extended thinking to work with multi-turn conversations
@@ -1137,6 +1142,10 @@ pub async fn run_interactive(
 
                     // Add to conversation history with tool call records
                     conversation_history.add_turn(input.clone(), text.clone(), tool_calls.clone());
+
+                    // Remember whether this turn had generation tools active so short follow-up
+                    // messages ("sure", "go ahead", etc.) don't lose write/shell access.
+                    session.last_was_generation = is_generation;
 
                     // Check if this heavy turn requires immediate compaction
                     // This helps prevent context overflow in subsequent requests
