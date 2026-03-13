@@ -335,7 +335,7 @@ pub struct CreateDeploymentConfigResponse {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TriggerDeploymentRequest {
-    /// Project ID for the deployment
+    /// The project UUID this config belongs to
     pub project_id: String,
     /// Deployment config ID to use
     pub config_id: String,

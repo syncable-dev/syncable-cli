@@ -525,8 +525,7 @@ pub async fn run_wizard(
 
     // Debug: Show trigger request
     log::debug!(
-        "Trigger request: projectId={}, configId={}",
-        trigger_request.project_id,
+        "Trigger request: configId={}",
         trigger_request.config_id
     );
 

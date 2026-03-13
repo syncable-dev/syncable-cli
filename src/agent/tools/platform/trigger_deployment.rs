@@ -9,12 +9,11 @@ use serde_json::json;
 
 use crate::agent::tools::error::{ErrorCategory, format_error_for_llm};
 use crate::platform::api::{PlatformApiClient, PlatformApiError, TriggerDeploymentRequest};
+use crate::platform::session::PlatformSession;
 
 /// Arguments for the trigger deployment tool
 #[derive(Debug, Deserialize)]
 pub struct TriggerDeploymentArgs {
-    /// The project ID for the deployment
-    pub project_id: String,
     /// The deployment config ID to use
     pub config_id: String,
     /// Optional specific commit SHA to deploy
@@ -56,13 +55,12 @@ Starts a new deployment for the specified config. Returns a task ID that can be
 used to monitor deployment progress with `get_deployment_status`.
 
 **Parameters:**
-- project_id: The project UUID
-- config_id: The deployment config ID (get from list_deployment_configs)
+- config_id: The deployment config ID (get from list_deployment_configs or create_deployment_config)
 - commit_sha: Optional specific commit to deploy (defaults to latest on branch)
 
 **Prerequisites:**
 - User must be authenticated via `sync-ctl auth login`
-- A deployment config must exist for the project
+- A deployment config must exist (use create_deployment_config first if needed)
 
 **Use Cases:**
 - Deploy the latest code from a branch
@@ -77,38 +75,21 @@ used to monitor deployment progress with `get_deployment_status`.
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "project_id": {
-                        "type": "string",
-                        "description": "The UUID of the project"
-                    },
                     "config_id": {
                         "type": "string",
-                        "description": "The deployment config ID (from list_deployment_configs)"
+                        "description": "The deployment config ID (from list_deployment_configs or create_deployment_config)"
                     },
                     "commit_sha": {
                         "type": "string",
                         "description": "Optional: specific commit SHA to deploy (defaults to latest)"
                     }
                 },
-                "required": ["project_id", "config_id"]
+                "required": ["config_id"]
             }),
         }
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        // Validate project_id
-        if args.project_id.trim().is_empty() {
-            return Ok(format_error_for_llm(
-                "trigger_deployment",
-                ErrorCategory::ValidationFailed,
-                "project_id cannot be empty",
-                Some(vec![
-                    "Use list_projects to find valid project IDs",
-                    "Use select_project to set the current project context",
-                ]),
-            ));
-        }
-
         // Validate config_id
         if args.config_id.trim().is_empty() {
             return Ok(format_error_for_llm(
@@ -121,6 +102,30 @@ used to monitor deployment progress with `get_deployment_status`.
             ));
         }
 
+        // Load project_id from session (authoritative source)
+        let session = match PlatformSession::load() {
+            Ok(s) => s,
+            Err(_) => {
+                return Ok(format_error_for_llm(
+                    "trigger_deployment",
+                    ErrorCategory::InternalError,
+                    "Failed to load platform session",
+                    Some(vec!["Try authenticating with `sync-ctl auth login`"]),
+                ));
+            }
+        };
+
+        if !session.is_project_selected() {
+            return Ok(format_error_for_llm(
+                "trigger_deployment",
+                ErrorCategory::ValidationFailed,
+                "No project selected",
+                Some(vec!["Use select_project to choose a project first"]),
+            ));
+        }
+
+        let project_id = session.project_id.clone().unwrap_or_default();
+
         // Create the API client
         let client = match PlatformApiClient::new() {
             Ok(c) => c,
@@ -131,7 +136,7 @@ used to monitor deployment progress with `get_deployment_status`.
 
         // Build the request
         let request = TriggerDeploymentRequest {
-            project_id: args.project_id.clone(),
+            project_id,
             config_id: args.config_id.clone(),
             commit_sha: args.commit_sha.clone(),
         };
