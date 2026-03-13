@@ -13,13 +13,12 @@ use crate::platform::api::types::{
     build_cloud_runner_config_v2,
 };
 use crate::platform::api::{PlatformApiClient, PlatformApiError};
+use crate::platform::session::PlatformSession;
 use std::str::FromStr;
 
 /// Arguments for the create deployment config tool
 #[derive(Debug, Deserialize)]
 pub struct CreateDeploymentConfigArgs {
-    /// The project UUID
-    pub project_id: String,
     /// Service name for the deployment
     pub service_name: String,
     /// Repository ID from GitHub integration
@@ -102,7 +101,6 @@ A deployment config defines how to build and deploy a service, including:
 - Auto-deploy settings
 
 **Required Parameters:**
-- project_id: The project UUID
 - service_name: Name for the service (lowercase, hyphens allowed)
 - repository_id: GitHub repository ID (from platform GitHub integration)
 - repository_full_name: Full repo name like "owner/repo"
@@ -138,10 +136,6 @@ A deployment config defines how to build and deploy a service, including:
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "project_id": {
-                        "type": "string",
-                        "description": "The UUID of the project"
-                    },
                     "service_name": {
                         "type": "string",
                         "description": "Name for the service (lowercase, hyphens allowed)"
@@ -218,7 +212,7 @@ A deployment config defines how to build and deploy a service, including:
                     }
                 },
                 "required": [
-                    "project_id", "service_name", "repository_id", "repository_full_name",
+                    "service_name", "repository_id", "repository_full_name",
                     "port", "branch", "target_type", "provider", "environment_id"
                 ]
             }),
@@ -226,18 +220,29 @@ A deployment config defines how to build and deploy a service, including:
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        // Validate required fields
-        if args.project_id.trim().is_empty() {
+        // Load project_id from session (authoritative source — prevents stale IDs from LLM context)
+        let session = match PlatformSession::load() {
+            Ok(s) => s,
+            Err(_) => {
+                return Ok(format_error_for_llm(
+                    "create_deployment_config",
+                    ErrorCategory::InternalError,
+                    "Failed to load platform session",
+                    Some(vec!["Try authenticating with `sync-ctl auth login`"]),
+                ));
+            }
+        };
+
+        if !session.is_project_selected() {
             return Ok(format_error_for_llm(
                 "create_deployment_config",
                 ErrorCategory::ValidationFailed,
-                "project_id cannot be empty",
-                Some(vec![
-                    "Use list_projects to find valid project IDs",
-                    "Use current_context to get the selected project",
-                ]),
+                "No project selected",
+                Some(vec!["Use select_project to choose a project first"]),
             ));
         }
+
+        let project_id = session.project_id.clone().unwrap_or_default();
 
         if args.service_name.trim().is_empty() {
             return Ok(format_error_for_llm(
@@ -316,7 +321,7 @@ A deployment config defines how to build and deploy a service, including:
             if let Some(ref provider) = provider_enum {
                 if matches!(provider, CloudProvider::Gcp | CloudProvider::Azure) {
                     if let Ok(credential) = client
-                        .check_provider_connection(provider, &args.project_id)
+                        .check_provider_connection(provider, &project_id)
                         .await
                     {
                         if let Some(cred) = credential {
@@ -351,7 +356,7 @@ A deployment config defines how to build and deploy a service, including:
         // Note: Send both field name variants (dockerfile/dockerfilePath, context/buildContext)
         // for backend compatibility - different endpoints may expect different field names
         let request = CreateDeploymentConfigRequest {
-            project_id: args.project_id.clone(),
+            project_id,
             service_name: args.service_name.clone(),
             repository_id: args.repository_id,
             repository_full_name: args.repository_full_name.clone(),
