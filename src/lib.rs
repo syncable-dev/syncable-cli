@@ -33,11 +33,13 @@ pub async fn run_command(
             path,
             json,
             detailed,
+            summary,
+            matrix,
             display,
             only,
             color_scheme,
         } => {
-            match handlers::handle_analyze(path, json, detailed, display, only, color_scheme) {
+            match handlers::handle_analyze(path, json, detailed, summary, matrix, display, only, color_scheme) {
                 Ok(_output) => Ok(()), // The output was already printed by display_analysis_with_return
                 Err(e) => Err(e),
             }
