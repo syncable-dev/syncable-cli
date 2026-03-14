@@ -1,6 +1,6 @@
 //! CI Context — CI-02
 //!
-//! Defines `CiContext`, the enriched project data structure that all CI/CD
+//! Defines `CiContext`, the enriched project data structure that all CI
 //! generators consume. It wraps the existing `ProjectAnalysis` and adds
 //! CI-specific fields that the base analyzer does not capture.
 
