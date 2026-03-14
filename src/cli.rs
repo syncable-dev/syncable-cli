@@ -66,39 +66,10 @@ pub enum Commands {
         color_scheme: Option<ColorScheme>,
     },
 
-    /// Generate IaC files for a project
+    /// Generate files for a project (IaC, CI pipelines, and more)
     Generate {
-        /// Path to the project directory to analyze
-        #[arg(value_name = "PROJECT_PATH")]
-        path: PathBuf,
-
-        /// Output directory for generated files
-        #[arg(short, long, value_name = "OUTPUT_DIR")]
-        output: Option<PathBuf>,
-
-        /// Generate Dockerfile
-        #[arg(long)]
-        dockerfile: bool,
-
-        /// Generate Docker Compose file
-        #[arg(long)]
-        compose: bool,
-
-        /// Generate Terraform configuration
-        #[arg(long)]
-        terraform: bool,
-
-        /// Generate all supported IaC files
-        #[arg(long, conflicts_with_all = ["dockerfile", "compose", "terraform"])]
-        all: bool,
-
-        /// Perform a dry run without creating files
-        #[arg(long)]
-        dry_run: bool,
-
-        /// Overwrite existing files
-        #[arg(long)]
-        force: bool,
+        #[command(subcommand)]
+        command: GenerateCommand,
     },
 
     /// Validate existing IaC files against best practices
@@ -635,6 +606,98 @@ pub enum ChatProvider {
     /// Use saved default from config file
     #[default]
     Auto,
+}
+
+/// Generate subcommands
+#[derive(Subcommand)]
+pub enum GenerateCommand {
+    /// Generate IaC files (Dockerfile, Docker Compose, Terraform)
+    Iac {
+        /// Path to the project directory to analyze
+        #[arg(value_name = "PROJECT_PATH")]
+        path: PathBuf,
+
+        /// Output directory for generated files
+        #[arg(short, long, value_name = "OUTPUT_DIR")]
+        output: Option<PathBuf>,
+
+        /// Generate Dockerfile
+        #[arg(long)]
+        dockerfile: bool,
+
+        /// Generate Docker Compose file
+        #[arg(long)]
+        compose: bool,
+
+        /// Generate Terraform configuration
+        #[arg(long)]
+        terraform: bool,
+
+        /// Generate all supported IaC files
+        #[arg(long, conflicts_with_all = ["dockerfile", "compose", "terraform"])]
+        all: bool,
+
+        /// Perform a dry run without creating files
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Overwrite existing files
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Generate a CI pipeline skeleton for your project
+    Ci {
+        /// Path to the project directory
+        #[arg(value_name = "PROJECT_PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Cloud platform target for the pipeline
+        #[arg(long, value_enum)]
+        platform: CiPlatform,
+
+        /// Pipeline file format (defaults to canonical format for the chosen platform)
+        #[arg(long, value_enum)]
+        format: Option<CiFormat>,
+
+        /// Print the generated pipeline to stdout instead of writing files
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Output directory for generated pipeline files
+        #[arg(short, long, value_name = "OUTPUT_DIR")]
+        output: Option<PathBuf>,
+
+        /// Prefix applied to all environment variable and secret names
+        #[arg(long, value_name = "PREFIX")]
+        env_prefix: Option<String>,
+
+        /// Omit Docker build steps even when a Dockerfile is detected
+        #[arg(long)]
+        skip_docker: bool,
+    },
+}
+
+/// Cloud platform target for CI pipeline generation
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum CiPlatform {
+    /// Microsoft Azure (Azure Pipelines)
+    Azure,
+    /// Google Cloud Platform (Cloud Build)
+    Gcp,
+    /// Hetzner (GitHub Actions on Hetzner-hosted runners)
+    Hetzner,
+}
+
+/// CI pipeline file format
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum CiFormat {
+    /// GitHub Actions workflow (.github/workflows/ci.yml)
+    GithubActions,
+    /// Azure Pipelines (azure-pipelines.yml)
+    AzurePipelines,
+    /// Google Cloud Build (cloudbuild.yaml)
+    CloudBuild,
 }
 
 impl Cli {

@@ -42,18 +42,31 @@ pub async fn run_command(
                 Err(e) => Err(e),
             }
         }
-        Commands::Generate {
-            path,
-            output,
-            dockerfile,
-            compose,
-            terraform,
-            all,
-            dry_run,
-            force,
-        } => handlers::handle_generate(
-            path, output, dockerfile, compose, terraform, all, dry_run, force,
-        ),
+        Commands::Generate { command } => match command {
+            cli::GenerateCommand::Iac {
+                path,
+                output,
+                dockerfile,
+                compose,
+                terraform,
+                all,
+                dry_run,
+                force,
+            } => handlers::handle_generate(
+                path, output, dockerfile, compose, terraform, all, dry_run, force,
+            ),
+            cli::GenerateCommand::Ci {
+                path,
+                platform,
+                format,
+                dry_run,
+                output,
+                env_prefix,
+                skip_docker,
+            } => handlers::handle_generate_ci(
+                path, platform, format, dry_run, output, env_prefix, skip_docker,
+            ),
+        },
         Commands::Validate { path, types, fix } => handlers::handle_validate(path, types, fix),
         Commands::Support {
             languages,

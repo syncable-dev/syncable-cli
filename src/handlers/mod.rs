@@ -11,7 +11,7 @@ pub mod vulnerabilities;
 // Re-export all handler functions
 pub use analyze::handle_analyze;
 pub use dependencies::handle_dependencies;
-pub use generate::{handle_generate, handle_validate};
+pub use generate::{handle_generate, handle_generate_ci, handle_validate};
 pub use optimize::{OptimizeOptions, handle_optimize};
 pub use security::handle_security;
 pub use tools::handle_tools;
