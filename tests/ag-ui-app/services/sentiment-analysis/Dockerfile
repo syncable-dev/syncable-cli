@@ -3,12 +3,12 @@
 # Using Debian slim for better native module compatibility
 # =============================================================================
 
-FROM node:20-slim
+FROM node:20-slim AS builder
 
-# Install dumb-init for proper signal handling
+# Install build dependencies for native modules (better-sqlite3)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    dumb-init \
-    wget \
+    python3 \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -25,6 +25,29 @@ RUN pnpm install --frozen-lockfile
 # Copy source code and build
 COPY . .
 RUN pnpm build
+
+# =============================================================================
+# Production stage - minimal runtime image
+# =============================================================================
+FROM node:20-slim
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    dumb-init \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Enable pnpm for runtime
+RUN corepack enable pnpm
+
+# Copy package files
+COPY package.json pnpm-lock.yaml* .npmrc* ./
+
+# Copy built artifacts and node_modules from builder
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
 
 # Create non-root user for security
 RUN groupadd --system --gid 1001 nodejs && \
