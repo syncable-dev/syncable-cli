@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.36.0](https://github.com/syncable-dev/syncable-cli/compare/v0.35.1...v0.36.0) - 2026-03-15
+
+### Fixed
+
+- *(agent)* restore write/shell tools on follow-up confirmation turns
+- convert service Dockerfiles to multi-stage builds for ARM64 compatibility
+
+### Other
+
+- Merge pull request #301 from syncable-dev/develop
+- hallucinated project_id
+
 ## [0.35.1](https://github.com/syncable-dev/syncable-cli/compare/v0.35.0...v0.35.1) - 2026-02-20
 
 ### Other
