@@ -524,11 +524,7 @@ pub async fn run_wizard(
     };
 
     // Debug: Show trigger request
-    log::debug!(
-        "Trigger request: projectId={}, configId={}",
-        trigger_request.project_id,
-        trigger_request.config_id
-    );
+    log::debug!("Trigger request: configId={}", trigger_request.config_id);
 
     match client.trigger_deployment(&trigger_request).await {
         Ok(response) => {

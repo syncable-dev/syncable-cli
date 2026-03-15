@@ -705,6 +705,18 @@ pub fn is_generation_query(query: &str) -> bool {
         "new feature",
         "develop",
         "code",
+        // Common modification verbs (previously missing)
+        "fix",
+        "update",
+        "add",
+        "change",
+        "modify",
+        "edit",
+        "configure",
+        "setup",
+        "set up",
+        "patch",
+        "install",
         // Plan execution keywords - needed for plan continuation
         "plan",
         "continue",
