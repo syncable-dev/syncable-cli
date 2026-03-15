@@ -34,6 +34,10 @@ pub struct ChatSession {
     pub token_usage: TokenUsage,
     /// Current planning mode state
     pub plan_mode: PlanMode,
+    /// Whether the previous turn used generation mode (write/shell tools active).
+    /// Used so short follow-up messages ("sure", "go ahead", "yes") inherit the
+    /// tool set from the previous turn instead of losing write/shell access.
+    pub last_was_generation: bool,
     /// Session loaded via /resume command, to be processed by main loop
     pub pending_resume: Option<crate::agent::persistence::ConversationRecord>,
     /// Platform session state (selected project/org context)
@@ -58,6 +62,7 @@ impl ChatSession {
             history: Vec::new(),
             token_usage: TokenUsage::new(),
             plan_mode: PlanMode::default(),
+            last_was_generation: false,
             pending_resume: None,
             platform_session,
         }

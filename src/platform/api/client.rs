@@ -722,7 +722,7 @@ impl PlatformApiClient {
         request: &TriggerDeploymentRequest,
     ) -> Result<TriggerDeploymentResponse> {
         log::debug!(
-            "Triggering deployment: POST /api/deployment-configs/deploy with projectId={}, configId={}",
+            "Triggering deployment: POST /api/deployment-configs/deploy with projectId={} configId={}",
             request.project_id,
             request.config_id
         );
