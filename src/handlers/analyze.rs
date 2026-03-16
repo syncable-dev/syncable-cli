@@ -11,6 +11,8 @@ pub fn handle_analyze(
     path: std::path::PathBuf,
     json: bool,
     detailed: bool,
+    summary: bool,
+    matrix: bool,
     display: Option<DisplayFormat>,
     _only: Option<Vec<String>>,
     color_scheme: Option<ColorScheme>,
@@ -39,10 +41,14 @@ pub fn handle_analyze(
     let output = if json {
         display_analysis_with_return(&monorepo_analysis, DisplayMode::Json)
     } else {
-        // Determine display mode
+        // Determine display mode from flags (standalone flags take precedence over --display)
         let mode = if detailed {
             // Legacy flag for backward compatibility
             DisplayMode::Detailed
+        } else if summary {
+            DisplayMode::Summary
+        } else if matrix {
+            DisplayMode::Matrix
         } else {
             match display {
                 Some(DisplayFormat::Matrix) | None => DisplayMode::Matrix,

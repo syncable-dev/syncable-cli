@@ -130,6 +130,8 @@ async fn run() -> syncable_cli::Result<()> {
             path,
             json,
             detailed,
+            summary,
+            matrix,
             display,
             only,
             color_scheme,
@@ -139,6 +141,10 @@ async fn run() -> syncable_cli::Result<()> {
                 "json"
             } else if detailed {
                 "detailed"
+            } else if summary {
+                "summary"
+            } else if matrix {
+                "matrix"
             } else {
                 match display {
                     Some(DisplayFormat::Matrix) | None => "matrix",
@@ -169,7 +175,7 @@ async fn run() -> syncable_cli::Result<()> {
                 telemetry_client.track_analyze_folder(properties);
             }
 
-            match handle_analyze(path, json, detailed, display, only, color_scheme) {
+            match handle_analyze(path, json, detailed, summary, matrix, display, only, color_scheme) {
                 Ok(_output) => Ok(()), // The output was already printed by display_analysis_with_return
                 Err(e) => Err(e),
             }
@@ -1548,6 +1554,8 @@ pub fn handle_analyze(
     path: std::path::PathBuf,
     json: bool,
     detailed: bool,
+    summary: bool,
+    matrix: bool,
     display: Option<DisplayFormat>,
     only: Option<Vec<String>>,
     color_scheme: Option<ColorScheme>,
@@ -1557,6 +1565,8 @@ pub fn handle_analyze(
         path,
         json,
         detailed,
+        summary,
+        matrix,
         display,
         only,
         color_scheme,

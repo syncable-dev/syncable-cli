@@ -50,8 +50,16 @@ pub enum Commands {
         json: bool,
 
         /// Show detailed analysis information (legacy format)
-        #[arg(short, long, conflicts_with = "display")]
+        #[arg(short, long, conflicts_with_all = ["display", "summary", "matrix"])]
         detailed: bool,
+
+        /// Show summary analysis information
+        #[arg(short, long, conflicts_with_all = ["display", "detailed", "matrix"])]
+        summary: bool,
+
+        /// Show matrix/dashboard analysis information
+        #[arg(short = 'M', long, conflicts_with_all = ["display", "detailed", "summary"])]
+        matrix: bool,
 
         /// Display format for analysis results
         #[arg(long, value_enum, default_value = "matrix")]
