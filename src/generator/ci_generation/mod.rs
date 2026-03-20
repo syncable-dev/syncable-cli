@@ -6,10 +6,12 @@
 //!
 //! ## Submodules
 //!
-//! - `context`  — `CiContext` struct and context collector (CI-02)
-//! - `schema`   — Platform-agnostic `CiPipeline` data model (CI-14)
-//! - `templates`— Per-platform YAML assemblers (CI-11, CI-12, CI-13)
+//! - `context`          — `CiContext` struct and context collector (CI-02)
+//! - `runtime_resolver` — Runtime version resolver (CI-03)
+//! - `schema`           — Platform-agnostic `CiPipeline` data model (CI-14)
+//! - `templates`        — Per-platform YAML assemblers (CI-11, CI-12, CI-13)
 
 pub mod context;
+pub mod runtime_resolver;
 pub mod schema;
 pub mod templates;
