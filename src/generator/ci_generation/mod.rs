@@ -8,9 +8,11 @@
 //!
 //! - `context`          — `CiContext` struct and context collector (CI-02)
 //! - `runtime_resolver` — Runtime version resolver (CI-03)
+//! - `cache`            — Dependency cache strategy (CI-04)
 //! - `schema`           — Platform-agnostic `CiPipeline` data model (CI-14)
 //! - `templates`        — Per-platform YAML assemblers (CI-11, CI-12, CI-13)
 
+pub mod cache;
 pub mod context;
 pub mod runtime_resolver;
 pub mod schema;
