@@ -1,17 +1,23 @@
 use clap::Parser;
 use syncable_cli::{
-    analyzer::{self, vulnerability_checker::VulnerabilitySeverity, DetectedTechnology, TechnologyCategory, LibraryType},
-    cli::{Cli, Commands, OutputFormat, SeverityThreshold},
-    config,
-    generator,
+    analyzer::{self, analyze_monorepo, vulnerability::VulnerabilitySeverity},
+    cli::{
+        ChatProvider, Cli, ColorScheme, Commands, DisplayFormat, EnvCommand, OutputFormat,
+        SecurityScanMode, SeverityThreshold, ToolsCommand,
+    },
+    config, generator,
+    telemetry::{self},
 };
-use std::process;
+
+use colored::Colorize;
+use dirs::cache_dir;
+use serde_json::json;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::time::{SystemTime, Duration};
-use dirs::cache_dir;
-use reqwest::blocking::get;
+use std::process;
+use std::time::{Duration, SystemTime};
+use syncable_cli::analyzer::display::BoxDrawer;
 
 #[tokio::main]
 async fn main() {
@@ -22,322 +28,1540 @@ async fn main() {
 }
 
 async fn run() -> syncable_cli::Result<()> {
-    check_for_update();
     let cli = Cli::parse();
-    
+
+    // Handle update cache clearing
+    if cli.clear_update_cache {
+        clear_update_cache();
+        println!("✅ Update cache cleared. Checking for updates now...");
+    }
+
+    // Suppress update banner when JSON output is requested
+    let suppress_update_banner = cli.json
+        || matches!(
+            &cli.command,
+            Commands::Analyze { json: true, .. }
+                | Commands::Dependencies {
+                    format: OutputFormat::Json,
+                    ..
+                }
+                | Commands::Vulnerabilities {
+                    format: OutputFormat::Json,
+                    ..
+                }
+                | Commands::Security {
+                    format: OutputFormat::Json,
+                    ..
+                }
+                | Commands::Tools {
+                    command: ToolsCommand::Status {
+                        format: OutputFormat::Json,
+                        ..
+                    }
+                }
+        );
+    check_for_update(suppress_update_banner).await;
+
     // Initialize logging
     cli.init_logging();
-    
+
+    log::debug!("Loading configuration...");
+
     // Load configuration
-    let _config = match config::load_config(cli.config.as_deref()) {
+    let mut config = match config::load_config(cli.config.as_deref()) {
         Ok(config) => config,
         Err(e) => {
             eprintln!("Failed to load configuration: {}", e);
             process::exit(1);
         }
     };
-    
+
+    log::debug!(
+        "Configuration loaded: telemetry enabled = {}",
+        config.telemetry.enabled
+    );
+
+    // Override telemetry setting if CLI flag is set
+    if cli.disable_telemetry {
+        config.telemetry.enabled = false;
+    }
+
+    log::debug!("Initializing telemetry...");
+
+    // Initialize telemetry
+    if let Err(e) = telemetry::init_telemetry(&config).await {
+        log::warn!("Failed to initialize telemetry: {}", e);
+    } else {
+        log::debug!("Telemetry initialized successfully");
+    }
+
+    // Check if telemetry client is available
+    if telemetry::get_telemetry_client().is_some() {
+        log::debug!("Telemetry client is available");
+    } else {
+        log::debug!("Telemetry client is NOT available");
+    }
+
+    // Get command name for telemetry
+    let command_name = match &cli.command {
+        Commands::Analyze { .. } => "analyze",
+        Commands::Generate { .. } => "generate",
+        Commands::Validate { .. } => "validate",
+        Commands::Support { .. } => "support",
+        Commands::Dependencies { .. } => "dependencies",
+        Commands::Vulnerabilities { .. } => "vulnerabilities",
+        Commands::Security { .. } => "security",
+        Commands::Tools { .. } => "tools",
+        Commands::Optimize { .. } => "optimize",
+        Commands::Chat { .. } => "chat",
+        Commands::Auth { .. } => "auth",
+        Commands::Project { .. } => "project",
+        Commands::Org { .. } => "org",
+        Commands::Env { .. } => "env",
+        Commands::Deploy { .. } => "deploy",
+        Commands::Agent { .. } => "agent",
+    };
+
+    log::debug!("Command name: {}", command_name);
+
     // Execute command
     let result = match cli.command {
-        Commands::Analyze { path, json, detailed, only } => {
-            handle_analyze(path, json, detailed, only)
+        Commands::Analyze {
+            path,
+            json,
+            detailed,
+            display,
+            only,
+            color_scheme,
+        } => {
+            // Determine analysis mode
+            let analysis_mode = if json {
+                "json"
+            } else if detailed {
+                "detailed"
+            } else {
+                match display {
+                    Some(DisplayFormat::Matrix) | None => "matrix",
+                    Some(DisplayFormat::Detailed) => "detailed",
+                    Some(DisplayFormat::Summary) => "summary",
+                }
+            };
+
+            // Create telemetry properties
+            let mut properties = HashMap::new();
+            properties.insert("analysis_mode".to_string(), json!(analysis_mode));
+
+            if let Some(color) = color_scheme {
+                let color_str = match color {
+                    ColorScheme::Auto => "auto",
+                    ColorScheme::Dark => "dark",
+                    ColorScheme::Light => "light",
+                };
+                properties.insert("color_scheme".to_string(), json!(color_str));
+            }
+
+            if let Some(only_filters) = &only {
+                properties.insert("only_filter".to_string(), json!(only_filters));
+            }
+
+            // Track Analyze Folder event with properties
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_analyze_folder(properties);
+            }
+
+            match handle_analyze(path, json, detailed, display, only, color_scheme) {
+                Ok(_output) => Ok(()), // The output was already printed by display_analysis_with_return
+                Err(e) => Err(e),
+            }
         }
-        Commands::Generate { 
-            path, 
-            output, 
-            dockerfile, 
-            compose, 
-            terraform, 
+        Commands::Generate {
+            path,
+            output,
+            dockerfile,
+            compose,
+            terraform,
             all,
             dry_run,
-            force 
+            force,
         } => {
-            handle_generate(path, output, dockerfile, compose, terraform, all, dry_run, force)
-        }
-        Commands::Validate { path, types, fix } => {
-            handle_validate(path, types, fix)
-        }
-        Commands::Support { languages, frameworks, detailed } => {
-            handle_support(languages, frameworks, detailed)
-        }
-        Commands::Dependencies { path, licenses, vulnerabilities, prod_only, dev_only, format } => {
-            handle_dependencies(path, licenses, vulnerabilities, prod_only, dev_only, format).await
-        }
-        Commands::Vulnerabilities { path, severity, format, output } => {
-            handle_vulnerabilities(path, severity, format, output).await
-        }
-        Commands::Security { 
-            path, 
-            include_low, 
-            no_secrets, 
-            no_code_patterns, 
-            no_infrastructure, 
-            no_compliance, 
-            frameworks, 
-            format, 
-            output, 
-            fail_on_findings 
-        } => {
-            handle_security(
-                path, 
-                include_low, 
-                no_secrets, 
-                no_code_patterns, 
-                no_infrastructure, 
-                no_compliance, 
-                frameworks, 
-                format, 
-                output, 
-                fail_on_findings
+            // Create telemetry properties
+            let mut properties = HashMap::new();
+
+            if dockerfile {
+                properties.insert("generate_dockerfile".to_string(), json!(true));
+            }
+
+            if compose {
+                properties.insert("generate_compose".to_string(), json!(true));
+            }
+
+            if terraform {
+                properties.insert("generate_terraform".to_string(), json!(true));
+            }
+
+            if all {
+                properties.insert("generate_all".to_string(), json!(true));
+            }
+
+            if dry_run {
+                properties.insert("dry_run".to_string(), json!(true));
+            }
+
+            if force {
+                properties.insert("force_overwrite".to_string(), json!(true));
+            }
+
+            if output.is_some() {
+                properties.insert("custom_output_dir".to_string(), json!(true));
+            }
+
+            // Track Generate command with properties
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_generate(properties);
+            }
+
+            handle_generate(
+                path, output, dockerfile, compose, terraform, all, dry_run, force,
             )
         }
+
+        Commands::Validate { path, types, fix } => {
+            // Create telemetry properties
+            let mut properties = HashMap::new();
+
+            if let Some(ref type_list) = types {
+                properties.insert("validation_types".to_string(), json!(type_list));
+            }
+
+            if fix {
+                properties.insert("auto_fix".to_string(), json!(true));
+            }
+
+            // Track Validate command with properties
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_validate(properties);
+            }
+
+            handle_validate(path, types, fix)
+        }
+        Commands::Support {
+            languages,
+            frameworks,
+            detailed,
+        } => {
+            // Create telemetry properties
+            let mut properties = HashMap::new();
+
+            if languages {
+                properties.insert("show_languages".to_string(), json!(true));
+            }
+
+            if frameworks {
+                properties.insert("show_frameworks".to_string(), json!(true));
+            }
+
+            if detailed {
+                properties.insert("detailed".to_string(), json!(true));
+            }
+
+            // Track Support command with properties
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_support(properties);
+            }
+
+            handle_support(languages, frameworks, detailed)
+        }
+        Commands::Dependencies {
+            path,
+            licenses,
+            vulnerabilities,
+            prod_only,
+            dev_only,
+            format,
+        } => {
+            // Create telemetry properties
+            let mut properties = HashMap::new();
+
+            if licenses {
+                properties.insert("show_licenses".to_string(), json!(true));
+            }
+
+            if vulnerabilities {
+                properties.insert("check_vulnerabilities".to_string(), json!(true));
+            }
+
+            if prod_only {
+                properties.insert("prod_only".to_string(), json!(true));
+            }
+
+            if dev_only {
+                properties.insert("dev_only".to_string(), json!(true));
+            }
+
+            // Honor global --json flag for output selection
+            let effective_format = if cli.json { OutputFormat::Json } else { format };
+
+            let format_str = match effective_format {
+                OutputFormat::Table => "table",
+                OutputFormat::Json => "json",
+            };
+            properties.insert("output_format".to_string(), json!(format_str));
+
+            // Track Dependencies command with properties
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_dependencies(properties);
+            }
+
+            handle_dependencies(
+                path,
+                licenses,
+                vulnerabilities,
+                prod_only,
+                dev_only,
+                effective_format,
+            )
+            .await
+            .map(|_| ())
+        }
+        Commands::Vulnerabilities {
+            path,
+            severity,
+            format,
+            output,
+        } => {
+            // Create telemetry properties
+            let mut properties = HashMap::new();
+
+            if let Some(sev) = &severity {
+                let severity_str = match sev {
+                    SeverityThreshold::Low => "low",
+                    SeverityThreshold::Medium => "medium",
+                    SeverityThreshold::High => "high",
+                    SeverityThreshold::Critical => "critical",
+                };
+                properties.insert("severity_threshold".to_string(), json!(severity_str));
+            }
+
+            // Honor global --json flag for output selection
+            let effective_format = if cli.json { OutputFormat::Json } else { format };
+
+            let format_str = match effective_format {
+                OutputFormat::Table => "table",
+                OutputFormat::Json => "json",
+            };
+            properties.insert("output_format".to_string(), json!(format_str));
+
+            if output.is_some() {
+                properties.insert("export_to_file".to_string(), json!(true));
+            }
+
+            // Track Vulnerabilities command with properties
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_vulnerabilities(properties);
+            }
+
+            handle_vulnerabilities(path, severity, effective_format, output).await
+        }
+        Commands::Security {
+            path,
+            mode,
+            include_low,
+            no_secrets,
+            no_code_patterns,
+            no_infrastructure,
+            no_compliance,
+            frameworks,
+            format,
+            output,
+            fail_on_findings,
+        } => {
+            // Create telemetry properties
+            let mut properties = HashMap::new();
+
+            let mode_str = match mode {
+                SecurityScanMode::Lightning => "lightning",
+                SecurityScanMode::Fast => "fast",
+                SecurityScanMode::Balanced => "balanced",
+                SecurityScanMode::Thorough => "thorough",
+                SecurityScanMode::Paranoid => "paranoid",
+            };
+            properties.insert("scan_mode".to_string(), json!(mode_str));
+
+            if include_low {
+                properties.insert("include_low_severity".to_string(), json!(true));
+            }
+
+            if no_secrets {
+                properties.insert("skip_secrets".to_string(), json!(true));
+            }
+
+            if no_code_patterns {
+                properties.insert("skip_code_patterns".to_string(), json!(true));
+            }
+
+            if no_infrastructure {
+                properties.insert("skip_infrastructure".to_string(), json!(true));
+            }
+
+            if no_compliance {
+                properties.insert("skip_compliance".to_string(), json!(true));
+            }
+
+            if !frameworks.is_empty() {
+                properties.insert("compliance_frameworks".to_string(), json!(frameworks));
+            }
+
+            // Honor global --json flag for output selection
+            let effective_format = if cli.json { OutputFormat::Json } else { format };
+
+            let format_str = match effective_format {
+                OutputFormat::Table => "table",
+                OutputFormat::Json => "json",
+            };
+            properties.insert("output_format".to_string(), json!(format_str));
+
+            if output.is_some() {
+                properties.insert("export_to_file".to_string(), json!(true));
+            }
+
+            if fail_on_findings {
+                properties.insert("fail_on_findings".to_string(), json!(true));
+            }
+
+            // Track Security command with properties
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_security(properties);
+            }
+
+            handle_security(
+                path,
+                mode,
+                include_low,
+                no_secrets,
+                no_code_patterns,
+                no_infrastructure,
+                no_compliance,
+                frameworks,
+                effective_format,
+                output,
+                fail_on_findings,
+            )
+        }
+        Commands::Tools { command } => {
+            // Create telemetry properties based on the subcommand
+            let mut properties = HashMap::new();
+
+            match &command {
+                ToolsCommand::Status { format, languages } => {
+                    properties.insert("subcommand".to_string(), json!("status"));
+
+                    let format_str = match format {
+                        OutputFormat::Table => "table",
+                        OutputFormat::Json => "json",
+                    };
+                    properties.insert("output_format".to_string(), json!(format_str));
+
+                    if let Some(langs) = languages {
+                        properties.insert("languages".to_string(), json!(langs));
+                    }
+                }
+                ToolsCommand::Install {
+                    languages,
+                    include_owasp,
+                    dry_run,
+                    yes: _,
+                } => {
+                    properties.insert("subcommand".to_string(), json!("install"));
+
+                    if let Some(langs) = languages {
+                        properties.insert("languages".to_string(), json!(langs));
+                    }
+
+                    if *include_owasp {
+                        properties.insert("include_owasp".to_string(), json!(true));
+                    }
+
+                    if *dry_run {
+                        properties.insert("dry_run".to_string(), json!(true));
+                    }
+                }
+                ToolsCommand::Verify {
+                    languages,
+                    detailed,
+                } => {
+                    properties.insert("subcommand".to_string(), json!("verify"));
+
+                    if let Some(langs) = languages {
+                        properties.insert("languages".to_string(), json!(langs));
+                    }
+
+                    if *detailed {
+                        properties.insert("detailed".to_string(), json!(true));
+                    }
+                }
+                ToolsCommand::Guide {
+                    languages,
+                    platform,
+                } => {
+                    properties.insert("subcommand".to_string(), json!("guide"));
+
+                    if let Some(langs) = languages {
+                        properties.insert("languages".to_string(), json!(langs));
+                    }
+
+                    if let Some(platform) = platform {
+                        properties.insert("platform".to_string(), json!(platform));
+                    }
+                }
+            }
+
+            // Track Tools command with properties
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_tools(properties);
+            }
+
+            handle_tools(command).await
+        }
+
+        Commands::Optimize {
+            path,
+            cluster,
+            prometheus,
+            namespace,
+            period,
+            severity,
+            threshold,
+            safety_margin,
+            include_info,
+            include_system,
+            format,
+            output,
+            fix,
+            full,
+            apply,
+            dry_run,
+            backup_dir,
+            min_confidence,
+            cloud_provider,
+            region,
+        } => {
+            // Create telemetry properties
+            let mut properties = HashMap::new();
+
+            if cluster.is_some() {
+                properties.insert("live_cluster".to_string(), json!(true));
+            }
+
+            if prometheus.is_some() {
+                properties.insert("prometheus".to_string(), json!(true));
+            }
+
+            if let Some(sev) = &severity {
+                properties.insert("severity".to_string(), json!(sev));
+            }
+
+            if let Some(thresh) = threshold {
+                properties.insert("threshold".to_string(), json!(thresh));
+            }
+
+            if include_info {
+                properties.insert("include_info".to_string(), json!(true));
+            }
+
+            if include_system {
+                properties.insert("include_system".to_string(), json!(true));
+            }
+
+            let format_str = match format {
+                OutputFormat::Table => "table",
+                OutputFormat::Json => "json",
+            };
+            properties.insert("output_format".to_string(), json!(format_str));
+
+            if fix {
+                properties.insert("fix".to_string(), json!(true));
+            }
+
+            // Track Optimize command with properties
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_event("optimize", properties);
+            }
+
+            use syncable_cli::handlers::OptimizeOptions;
+            let options = OptimizeOptions {
+                cluster,
+                prometheus,
+                namespace,
+                period,
+                severity,
+                threshold,
+                safety_margin,
+                include_info,
+                include_system,
+                format: format_str.to_string(),
+                output: output.map(|p| p.to_string_lossy().to_string()),
+                fix,
+                full,
+                apply,
+                dry_run,
+                backup_dir: backup_dir.map(|p| p.to_string_lossy().to_string()),
+                min_confidence,
+                cloud_provider,
+                region,
+            };
+
+            syncable_cli::handlers::handle_optimize(&path, options).await
+        }
+
+        Commands::Chat {
+            path,
+            provider,
+            model,
+            query,
+            resume,
+            list_sessions,
+            ag_ui,
+            ag_ui_port,
+        } => {
+            // Handle --list-sessions flag first (before starting chat)
+            if list_sessions {
+                use syncable_cli::agent::persistence::{SessionSelector, format_relative_time};
+
+                let selector = SessionSelector::new(&path);
+                let sessions = selector.list_sessions();
+
+                if sessions.is_empty() {
+                    println!("No previous sessions found for this project.");
+                    return Ok(());
+                }
+
+                println!("\nSessions for this project ({}):\n", sessions.len());
+                for session in &sessions {
+                    let time = format_relative_time(session.last_updated);
+                    println!("  [{}] {} ({})", session.index, session.display_name, time);
+                    println!(
+                        "      {} messages · ID: {}",
+                        session.message_count,
+                        &session.id[..8]
+                    );
+                }
+                println!("\nTo resume: sync-ctl chat --resume <NUMBER|ID>");
+                return Ok(());
+            }
+
+            let mut properties = HashMap::new();
+
+            let provider_str = match provider {
+                ChatProvider::Openai => "openai",
+                ChatProvider::Anthropic => "anthropic",
+                ChatProvider::Bedrock => "bedrock",
+                ChatProvider::Ollama => "ollama",
+                ChatProvider::Auto => "auto",
+            };
+            properties.insert("provider".to_string(), json!(provider_str));
+
+            if let Some(m) = &model {
+                properties.insert("model".to_string(), json!(m));
+            }
+
+            properties.insert(
+                "mode".to_string(),
+                json!(if query.is_some() {
+                    "query"
+                } else if resume.is_some() {
+                    "resume"
+                } else {
+                    "interactive"
+                }),
+            );
+
+            // Track Chat command
+            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                telemetry_client.track_event("chat", properties.clone());
+            }
+
+            // Start AG-UI server if requested and get the event bridge
+            let event_bridge = if ag_ui {
+                use syncable_cli::server::{AgUiConfig, AgUiServer};
+
+                let config = AgUiConfig::new().port(ag_ui_port);
+                let server = AgUiServer::new(config);
+                let bridge = server.event_bridge();
+
+                // Spawn server in background
+                tokio::spawn(async move {
+                    if let Err(e) = server.run().await {
+                        eprintln!("AG-UI server error: {}", e);
+                    }
+                });
+
+                println!("AG-UI server started on http://127.0.0.1:{}", ag_ui_port);
+                println!("  SSE endpoint:       /sse");
+                println!("  WebSocket endpoint: /ws");
+                println!("  Health check:       /health\n");
+
+                Some(bridge)
+            } else {
+                None
+            };
+
+            syncable_cli::run_command(
+                Commands::Chat {
+                    path,
+                    provider,
+                    model,
+                    query,
+                    resume,
+                    list_sessions,
+                    ag_ui,
+                    ag_ui_port,
+                },
+                event_bridge,
+            )
+            .await
+        }
+        Commands::Auth { command } => {
+            // Auth commands are handled by lib.rs
+            syncable_cli::run_command(Commands::Auth { command }, None).await
+        }
+        Commands::Project { command } => {
+            // Project commands are handled by lib.rs
+            syncable_cli::run_command(Commands::Project { command }, None).await
+        }
+        Commands::Org { command } => {
+            // Org commands are handled by lib.rs
+            syncable_cli::run_command(Commands::Org { command }, None).await
+        }
+        Commands::Env { command } => {
+            use syncable_cli::auth::credentials;
+            use syncable_cli::platform::api::PlatformApiClient;
+            use syncable_cli::platform::session::PlatformSession;
+
+            // Check authentication
+            if !credentials::is_authenticated() {
+                eprintln!("Not logged in. Run `sync-ctl auth login` first.");
+                process::exit(1);
+            }
+
+            // Load platform session for org/project context
+            let session = match PlatformSession::load() {
+                Ok(s) => s,
+                Err(_) => {
+                    eprintln!("No project selected. Run `sync-ctl project select` first.");
+                    process::exit(1);
+                }
+            };
+
+            let project_id = match &session.project_id {
+                Some(p) => p.clone(),
+                None => {
+                    eprintln!("No project selected. Run `sync-ctl project select` first.");
+                    process::exit(1);
+                }
+            };
+
+            // Create API client
+            let client = match PlatformApiClient::new() {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("Failed to create API client: {}", e);
+                    process::exit(1);
+                }
+            };
+
+            match command {
+                EnvCommand::List { format } => match client.list_environments(&project_id).await {
+                    Ok(environments) => {
+                        if environments.is_empty() {
+                            println!("No environments found in project.");
+                            println!(
+                                "\nCreate one with: {}",
+                                "sync-ctl deploy new-env".bright_cyan()
+                            );
+                        } else {
+                            match format {
+                                OutputFormat::Json => {
+                                    println!(
+                                        "{}",
+                                        serde_json::to_string_pretty(&environments).unwrap()
+                                    );
+                                }
+                                OutputFormat::Table => {
+                                    println!("\nEnvironments in project:\n");
+                                    for env in &environments {
+                                        let selected = session
+                                            .environment_id
+                                            .as_ref()
+                                            .map(|id| id == &env.id)
+                                            .unwrap_or(false);
+                                        let marker = if selected {
+                                            "→ ".green()
+                                        } else {
+                                            "  ".normal()
+                                        };
+                                        println!(
+                                            "{}{} ({}) - {}",
+                                            marker,
+                                            env.name.bold(),
+                                            env.id.dimmed(),
+                                            env.environment_type
+                                        );
+                                    }
+                                    println!(
+                                        "\nSelect with: {}",
+                                        "sync-ctl env select <ID>".bright_cyan()
+                                    );
+                                }
+                            }
+                        }
+                        Ok(())
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to list environments: {}", e);
+                        process::exit(1);
+                    }
+                },
+                EnvCommand::Select { id } => {
+                    // Verify environment exists (match by ID or name)
+                    match client.list_environments(&project_id).await {
+                        Ok(environments) => {
+                            if let Some(env) = environments
+                                .iter()
+                                .find(|e| e.id == id || e.name.eq_ignore_ascii_case(&id))
+                            {
+                                // Update session with environment
+                                let new_session = PlatformSession::with_environment(
+                                    session.project_id.unwrap(),
+                                    session.project_name.unwrap_or_default(),
+                                    session.org_id.unwrap_or_default(),
+                                    session.org_name.unwrap_or_default(),
+                                    env.id.clone(),
+                                    env.name.clone(),
+                                );
+
+                                if let Err(e) = new_session.save() {
+                                    eprintln!("Failed to save session: {}", e);
+                                    process::exit(1);
+                                }
+
+                                println!(
+                                    "{} Selected environment: {}",
+                                    "✓".green(),
+                                    env.name.bold()
+                                );
+                                println!("Context: {}", new_session.display_context());
+                                Ok(())
+                            } else {
+                                eprintln!("Environment not found: {}", id);
+                                eprintln!("Run `sync-ctl env list` to see available environments.");
+                                process::exit(1);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to list environments: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+            }
+        }
+        Commands::Agent {
+            path,
+            port,
+            host,
+            provider,
+            model,
+        } => {
+            // Agent command is handled by lib.rs
+            syncable_cli::run_command(
+                Commands::Agent {
+                    path,
+                    port,
+                    host,
+                    provider,
+                    model,
+                },
+                None,
+            )
+            .await
+        }
+        Commands::Deploy { path, command } => {
+            use syncable_cli::auth::credentials;
+            use syncable_cli::cli::DeployCommand;
+            use syncable_cli::platform::api::PlatformApiClient;
+            use syncable_cli::platform::session::PlatformSession;
+            use syncable_cli::wizard::{
+                EnvironmentCreationResult, EnvironmentSelectionResult, WizardResult,
+                create_environment_wizard, run_wizard, select_environment,
+            };
+
+            // Check authentication
+            if !credentials::is_authenticated() {
+                eprintln!("Not logged in. Run `sync-ctl auth login` first.");
+                process::exit(1);
+            }
+
+            // Load platform session for org/project context
+            let session = match PlatformSession::load() {
+                Ok(s) => s,
+                Err(_) => {
+                    eprintln!("No project selected. Run `sync-ctl project select` first.");
+                    process::exit(1);
+                }
+            };
+
+            let project_id = match &session.project_id {
+                Some(p) => p.clone(),
+                None => {
+                    eprintln!("No project selected. Run `sync-ctl project select` first.");
+                    process::exit(1);
+                }
+            };
+
+            // Create API client
+            let client = match PlatformApiClient::new() {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("Failed to create API client: {}", e);
+                    process::exit(1);
+                }
+            };
+
+            match command {
+                Some(DeployCommand::NewEnv) => {
+                    // Run environment creation wizard
+                    match create_environment_wizard(&client, &project_id).await {
+                        EnvironmentCreationResult::Created(env) => {
+                            // Optionally update session with the new environment
+                            let new_session = PlatformSession::with_environment(
+                                session.project_id.unwrap(),
+                                session.project_name.unwrap_or_default(),
+                                session.org_id.unwrap_or_default(),
+                                session.org_name.unwrap_or_default(),
+                                env.id.clone(),
+                                env.name.clone(),
+                            );
+
+                            if let Err(e) = new_session.save() {
+                                eprintln!("Warning: Failed to save session: {}", e);
+                            }
+
+                            println!(
+                                "\nContext updated: {}",
+                                new_session.display_context().bright_cyan()
+                            );
+                            println!(
+                                "\nNext: Run {} to deploy a service",
+                                "sync-ctl deploy".bright_cyan()
+                            );
+                            Ok(())
+                        }
+                        EnvironmentCreationResult::Cancelled => {
+                            println!("{}", "Environment creation cancelled.".dimmed());
+                            Ok(())
+                        }
+                        EnvironmentCreationResult::Error(e) => {
+                            eprintln!("Error: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+                Some(DeployCommand::Status { task_id, watch }) => {
+                    // Check deployment status
+                    use std::time::Duration;
+                    use tokio::time::sleep;
+
+                    loop {
+                        match client.get_deployment_status(&task_id).await {
+                            Ok(status) => {
+                                // Clear screen if watching
+                                if watch {
+                                    print!("\x1B[2J\x1B[1;1H");
+                                }
+
+                                println!();
+                                println!(
+                                    "{}",
+                                    "═══════════════════════════════════════════════════════════════"
+                                        .bright_blue()
+                                );
+                                println!("{}", format!("  Deployment Status: {}", task_id).bold());
+                                println!(
+                                    "{}",
+                                    "═══════════════════════════════════════════════════════════════"
+                                        .bright_blue()
+                                );
+                                println!();
+
+                                // Status with color
+                                let status_color = match status.status.as_str() {
+                                    "completed" => status.status.green(),
+                                    "failed" => status.status.red(),
+                                    _ => status.status.yellow(),
+                                };
+                                println!("  Task Status:    {}", status_color);
+
+                                // Overall status with color
+                                let overall_color = match status.overall_status.as_str() {
+                                    "healthy" => status.overall_status.green(),
+                                    "failed" => status.overall_status.red(),
+                                    _ => status.overall_status.yellow(),
+                                };
+                                println!("  Overall Status: {}", overall_color);
+                                println!("  Progress:       {}%", status.progress);
+
+                                if let Some(step) = &status.current_step {
+                                    println!("  Current Step:   {}", step);
+                                }
+
+                                if !status.overall_message.is_empty() {
+                                    println!("  Message:        {}", status.overall_message);
+                                }
+
+                                if let Some(error) = &status.error {
+                                    println!();
+                                    println!("  {} {}", "Error:".red().bold(), error);
+                                }
+
+                                println!();
+
+                                // Check if we should stop watching
+                                if !watch
+                                    || status.status == "completed"
+                                    || status.status == "failed"
+                                {
+                                    if status.status == "completed"
+                                        && status.overall_status == "healthy"
+                                    {
+                                        println!(
+                                            "  {} Deployment completed successfully!",
+                                            "✓".green()
+                                        );
+                                    } else if status.status == "failed"
+                                        || status.overall_status == "failed"
+                                    {
+                                        println!("  {} Deployment failed.", "✗".red());
+                                        process::exit(1);
+                                    }
+                                    break;
+                                }
+
+                                // Wait before next poll
+                                println!("  {}", "Watching... (Ctrl+C to stop)".dimmed());
+                                sleep(Duration::from_secs(5)).await;
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to get deployment status: {}", e);
+                                process::exit(1);
+                            }
+                        }
+                    }
+                    Ok(())
+                }
+                Some(DeployCommand::Wizard { path: wizard_path }) => {
+                    // Always ask for environment selection
+                    let (environment_id, _session) =
+                        match select_environment(&client, &project_id).await {
+                            EnvironmentSelectionResult::Selected(env) => {
+                                // Update session with selected environment
+                                let new_session = PlatformSession::with_environment(
+                                    session.project_id.clone().unwrap(),
+                                    session.project_name.clone().unwrap_or_default(),
+                                    session.org_id.clone().unwrap_or_default(),
+                                    session.org_name.clone().unwrap_or_default(),
+                                    env.id.clone(),
+                                    env.name.clone(),
+                                );
+                                let _ = new_session.save();
+                                (env.id, new_session)
+                            }
+                            EnvironmentSelectionResult::CreateNew => {
+                                // Run environment creation wizard
+                                match create_environment_wizard(&client, &project_id).await {
+                                    EnvironmentCreationResult::Created(env) => {
+                                        let new_session = PlatformSession::with_environment(
+                                            session.project_id.clone().unwrap(),
+                                            session.project_name.clone().unwrap_or_default(),
+                                            session.org_id.clone().unwrap_or_default(),
+                                            session.org_name.clone().unwrap_or_default(),
+                                            env.id.clone(),
+                                            env.name.clone(),
+                                        );
+                                        let _ = new_session.save();
+                                        (env.id, new_session)
+                                    }
+                                    EnvironmentCreationResult::Cancelled => {
+                                        println!("{}", "Environment creation cancelled.".dimmed());
+                                        return Ok(());
+                                    }
+                                    EnvironmentCreationResult::Error(e) => {
+                                        eprintln!("Error creating environment: {}", e);
+                                        process::exit(1);
+                                    }
+                                }
+                            }
+                            EnvironmentSelectionResult::Cancelled => {
+                                println!("{}", "Wizard cancelled.".dimmed());
+                                return Ok(());
+                            }
+                            EnvironmentSelectionResult::Error(e) => {
+                                eprintln!("Error: {}", e);
+                                process::exit(1);
+                            }
+                        };
+
+                    // Run deployment wizard
+                    match run_wizard(&client, &project_id, &environment_id, &wizard_path).await {
+                        WizardResult::Deployed(_info) => {
+                            // Deployment was triggered successfully
+                            // The orchestrator already printed success message with task ID
+                            Ok(())
+                        }
+                        WizardResult::Success(config) => {
+                            println!("{}", "Deployment configuration created!".green().bold());
+                            if !config.is_complete() {
+                                println!(
+                                    "{}",
+                                    format!("Missing fields: {:?}", config.missing_fields())
+                                        .yellow()
+                                );
+                            }
+                            println!("\n{}", "Next: Run deployment with created config".dimmed());
+                            Ok(())
+                        }
+                        WizardResult::StartAgent(prompt) => {
+                            println!(
+                                "\n{} Starting agent to help create Dockerfile...\n",
+                                "→".cyan()
+                            );
+                            // Transition to chat mode with the prompt (no AG-UI in wizard mode)
+                            syncable_cli::run_command(
+                                Commands::Chat {
+                                    path: wizard_path,
+                                    provider: ChatProvider::Auto,
+                                    model: None,
+                                    query: Some(prompt),
+                                    resume: None,
+                                    list_sessions: false,
+                                    ag_ui: false,
+                                    ag_ui_port: 9090,
+                                },
+                                None,
+                            )
+                            .await
+                        }
+                        WizardResult::Cancelled => {
+                            println!("{}", "Wizard cancelled.".dimmed());
+                            Ok(())
+                        }
+                        WizardResult::Error(e) => {
+                            eprintln!("Error: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+                None => {
+                    // Always ask for environment selection
+                    let (environment_id, _session) =
+                        match select_environment(&client, &project_id).await {
+                            EnvironmentSelectionResult::Selected(env) => {
+                                // Update session with selected environment
+                                let new_session = PlatformSession::with_environment(
+                                    session.project_id.clone().unwrap(),
+                                    session.project_name.clone().unwrap_or_default(),
+                                    session.org_id.clone().unwrap_or_default(),
+                                    session.org_name.clone().unwrap_or_default(),
+                                    env.id.clone(),
+                                    env.name.clone(),
+                                );
+                                let _ = new_session.save();
+                                (env.id, new_session)
+                            }
+                            EnvironmentSelectionResult::CreateNew => {
+                                // Run environment creation wizard
+                                match create_environment_wizard(&client, &project_id).await {
+                                    EnvironmentCreationResult::Created(env) => {
+                                        let new_session = PlatformSession::with_environment(
+                                            session.project_id.clone().unwrap(),
+                                            session.project_name.clone().unwrap_or_default(),
+                                            session.org_id.clone().unwrap_or_default(),
+                                            session.org_name.clone().unwrap_or_default(),
+                                            env.id.clone(),
+                                            env.name.clone(),
+                                        );
+                                        let _ = new_session.save();
+                                        (env.id, new_session)
+                                    }
+                                    EnvironmentCreationResult::Cancelled => {
+                                        println!("{}", "Environment creation cancelled.".dimmed());
+                                        return Ok(());
+                                    }
+                                    EnvironmentCreationResult::Error(e) => {
+                                        eprintln!("Error creating environment: {}", e);
+                                        process::exit(1);
+                                    }
+                                }
+                            }
+                            EnvironmentSelectionResult::Cancelled => {
+                                println!("{}", "Wizard cancelled.".dimmed());
+                                return Ok(());
+                            }
+                            EnvironmentSelectionResult::Error(e) => {
+                                eprintln!("Error: {}", e);
+                                process::exit(1);
+                            }
+                        };
+
+                    // Run deployment wizard with top-level path
+                    match run_wizard(&client, &project_id, &environment_id, &path).await {
+                        WizardResult::Deployed(_info) => {
+                            // Deployment was triggered successfully
+                            // The orchestrator already printed success message with task ID
+                            Ok(())
+                        }
+                        WizardResult::Success(config) => {
+                            println!("{}", "Deployment configuration created!".green().bold());
+                            if !config.is_complete() {
+                                println!(
+                                    "{}",
+                                    format!("Missing fields: {:?}", config.missing_fields())
+                                        .yellow()
+                                );
+                            }
+                            println!("\n{}", "Next: Run deployment with created config".dimmed());
+                            Ok(())
+                        }
+                        WizardResult::StartAgent(prompt) => {
+                            println!(
+                                "\n{} Starting agent to help create Dockerfile...\n",
+                                "→".cyan()
+                            );
+                            // Transition to chat mode with the prompt (no AG-UI in wizard mode)
+                            syncable_cli::run_command(
+                                Commands::Chat {
+                                    path: path.clone(),
+                                    provider: ChatProvider::Auto,
+                                    model: None,
+                                    query: Some(prompt),
+                                    resume: None,
+                                    list_sessions: false,
+                                    ag_ui: false,
+                                    ag_ui_port: 9090,
+                                },
+                                None,
+                            )
+                            .await
+                        }
+                        WizardResult::Cancelled => {
+                            println!("{}", "Wizard cancelled.".dimmed());
+                            Ok(())
+                        }
+                        WizardResult::Error(e) => {
+                            eprintln!("Error: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+            }
+        }
     };
-    
+
+    // Flush telemetry events before exiting
+    if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+        telemetry_client.flush().await;
+    }
+
     if let Err(e) = result {
         eprintln!("Error: {}", e);
         process::exit(1);
     }
-    
+
     Ok(())
 }
 
-fn check_for_update() {
-    let cache_file = cache_dir()
+fn clear_update_cache() {
+    let cache_dir_path = cache_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("syncable-cli/last_update_check");
+        .join("syncable-cli");
+    let cache_file = cache_dir_path.join("version_cache.json");
+
+    if cache_file.exists() {
+        match fs::remove_file(&cache_file) {
+            Ok(_) => {
+                if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+                    eprintln!("🗑️  Removed update cache file: {}", cache_file.display());
+                }
+            }
+            Err(e) => {
+                eprintln!("⚠️  Failed to remove update cache: {}", e);
+            }
+        }
+    } else if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+        eprintln!(
+            "🗑️  No update cache file found at: {}",
+            cache_file.display()
+        );
+    }
+}
+
+async fn check_for_update(suppress_output: bool) {
+    // In JSON mode (or when suppressed), avoid any banner or network I/O
+    if suppress_output {
+        return;
+    }
+    let cache_dir_path = cache_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("syncable-cli");
+    let cache_file = cache_dir_path.join("version_cache.json");
     let now = SystemTime::now();
 
-    // Only check once per day
-    if let Ok(metadata) = fs::metadata(&cache_file) {
+    // Smart cache system: only cache when no update is available
+    // Check every 2 hours when no update was found, immediately when an update might be available
+    let should_check = if let Ok(metadata) = fs::metadata(&cache_file) {
         if let Ok(modified) = metadata.modified() {
-            if now.duration_since(modified).unwrap_or(Duration::ZERO) < Duration::from_secs(60 * 60 * 24) {
-                return;
+            let cache_duration = now.duration_since(modified).unwrap_or(Duration::ZERO);
+
+            // Read cached data to determine cache strategy
+            if let Ok(cache_content) = fs::read_to_string(&cache_file) {
+                if let Ok(cache_data) = serde_json::from_str::<serde_json::Value>(&cache_content) {
+                    let cached_latest = cache_data["latest_version"].as_str().unwrap_or("");
+                    let current = env!("CARGO_PKG_VERSION");
+
+                    // If cached version is newer than current, check immediately
+                    if !cached_latest.is_empty() && is_version_newer(current, cached_latest) {
+                        if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+                            eprintln!("🔍 Update available in cache, showing immediately");
+                        }
+                        show_update_notification(current, cached_latest);
+                        return;
+                    }
+
+                    // If no update in cache, check every 2 hours
+                    cache_duration >= Duration::from_secs(60 * 60 * 2)
+                } else {
+                    true // Invalid cache, check now
+                }
+            } else {
+                true // Can't read cache, check now
+            }
+        } else {
+            true // Can't get modified time, check now
+        }
+    } else {
+        true // No cache file, check now
+    };
+
+    if !should_check {
+        if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+            eprintln!("🔍 Update check skipped - checked recently and no update available");
+        }
+        return;
+    }
+
+    // Debug logging
+    if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+        eprintln!("🔍 Checking for updates...");
+    }
+
+    // Query GitHub releases API
+    let client = reqwest::Client::builder()
+        .user_agent(format!("syncable-cli/{}", env!("CARGO_PKG_VERSION")))
+        .timeout(std::time::Duration::from_secs(5))
+        .build();
+
+    match client {
+        Ok(client) => {
+            let result = client
+                .get("https://api.github.com/repos/syncable-dev/syncable-cli/releases/latest")
+                .send()
+                .await;
+
+            match result {
+                Ok(response) => {
+                    if !response.status().is_success() {
+                        if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+                            eprintln!("⚠️  GitHub API returned status: {}", response.status());
+                        }
+                        return;
+                    }
+
+                    match response.json::<serde_json::Value>().await {
+                        Ok(json) => {
+                            let latest = json["tag_name"]
+                                .as_str()
+                                .unwrap_or("")
+                                .trim_start_matches('v'); // Remove 'v' prefix if present
+                            let current = env!("CARGO_PKG_VERSION");
+
+                            if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+                                eprintln!(
+                                    "📦 Current version: {}, Latest version: {}",
+                                    current, latest
+                                );
+                            }
+
+                            // Update cache with latest version info
+                            let cache_data = serde_json::json!({
+                                "latest_version": latest,
+                                "current_version": current,
+                                "checked_at": now.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs(),
+                                "update_available": is_version_newer(current, latest)
+                            });
+
+                            let _ = fs::create_dir_all(&cache_dir_path);
+                            let _ = fs::write(
+                                &cache_file,
+                                serde_json::to_string_pretty(&cache_data).unwrap_or_default(),
+                            );
+
+                            // Show update notification if newer version is available
+                            if !latest.is_empty()
+                                && latest != current
+                                && is_version_newer(current, latest)
+                                && !suppress_output
+                            {
+                                show_update_notification(current, latest);
+                            }
+                        }
+                        Err(e) => {
+                            if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+                                eprintln!("⚠️  Failed to parse GitHub API response: {}", e);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+                        eprintln!("⚠️  Failed to check for updates: {}", e);
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            if std::env::var("SYNC_CTL_DEBUG").is_ok() {
+                eprintln!("⚠️  Failed to create HTTP client: {}", e);
             }
         }
     }
+}
 
-    // Query crates.io
-    let resp = get("https://crates.io/api/v1/crates/syncable-cli")
-        .and_then(|r| r.json::<serde_json::Value>());
-    if let Ok(json) = resp {
-        let latest = json["crate"]["max_version"].as_str().unwrap_or("");
-        let current = env!("CARGO_PKG_VERSION");
-        if latest != "" && latest != current {
-            println!(
-                "\x1b[33m🔔 A new version of sync-ctl is available: {latest} (current: {current})\nRun `cargo install syncable-cli --force` to update.\x1b[0m"
-            );
+fn show_update_notification(current: &str, latest: &str) {
+    use colored::*;
+
+    let mut box_drawer = BoxDrawer::new(&"UPDATE AVAILABLE".bright_red().bold().to_string());
+
+    // Version info line with prominent colors
+    let version_info = format!(
+        "New version: {} | Current: {}",
+        latest.bright_green().bold(),
+        current.bright_red()
+    );
+    box_drawer.add_value_only(&version_info);
+
+    // Empty line for spacing
+    box_drawer.add_value_only("");
+
+    // Instructions header with emphasis
+    box_drawer.add_value_only(
+        &"To update, run one of these commands:"
+            .bright_cyan()
+            .bold()
+            .to_string(),
+    );
+    box_drawer.add_value_only("");
+
+    // Recommended method - highlighted as primary option
+    box_drawer.add_line(
+        &"RECOMMENDED".bright_green().bold().to_string(),
+        &"(via Cargo)".green().to_string(),
+        false,
+    );
+    let cargo_cmd = "cargo install syncable-cli"
+        .bright_white()
+        .on_blue()
+        .bold()
+        .to_string();
+    box_drawer.add_value_only(&format!("  {}", cargo_cmd));
+    box_drawer.add_value_only("");
+
+    // Alternative method - neutral coloring
+    box_drawer.add_line(
+        &"ALTERNATIVE".yellow().bold().to_string(),
+        &"(direct download)".yellow().to_string(),
+        false,
+    );
+    let github_url = format!(
+        "  Visit: {}",
+        format!("github.com/syncable-dev/syncable-cli/releases/v{}", latest)
+            .bright_blue()
+            .underline()
+    );
+    box_drawer.add_value_only(&github_url);
+    box_drawer.add_value_only("");
+
+    // Install script method - secondary option
+    box_drawer.add_line(
+        &"SCRIPT".magenta().bold().to_string(),
+        &"(automated installer)".magenta().to_string(),
+        false,
+    );
+    let script_cmd = "curl -sSL install.syncable.dev | sh"
+        .bright_white()
+        .on_magenta()
+        .bold()
+        .to_string();
+    box_drawer.add_value_only(&format!("  {}", script_cmd));
+
+    // Add a helpful note
+    box_drawer.add_value_only("");
+    box_drawer.add_value_only(
+        &"Tip: The Cargo method is fastest for existing Rust users"
+            .dimmed()
+            .italic()
+            .to_string(),
+    );
+
+    // Print to stderr so it doesn't interfere with JSON output
+    eprintln!("\n{}", box_drawer.draw());
+}
+
+// Helper function to compare semantic versions
+fn is_version_newer(current: &str, latest: &str) -> bool {
+    let current_parts: Vec<u32> = current.split('.').filter_map(|s| s.parse().ok()).collect();
+    let latest_parts: Vec<u32> = latest.split('.').filter_map(|s| s.parse().ok()).collect();
+
+    for i in 0..3 {
+        let current_part = current_parts.get(i).unwrap_or(&0);
+        let latest_part = latest_parts.get(i).unwrap_or(&0);
+
+        if latest_part > current_part {
+            return true;
+        } else if latest_part < current_part {
+            return false;
         }
     }
 
-    // Update cache file
-    let _ = fs::create_dir_all(cache_file.parent().unwrap());
-    let _ = fs::write(&cache_file, "");
+    false
 }
 
-fn handle_analyze(
+pub fn handle_analyze(
     path: std::path::PathBuf,
     json: bool,
     detailed: bool,
-    _only: Option<Vec<String>>,
+    display: Option<DisplayFormat>,
+    only: Option<Vec<String>>,
+    color_scheme: Option<ColorScheme>,
 ) -> syncable_cli::Result<()> {
-    println!("🔍 Analyzing project: {}", path.display());
-    
-    let analysis = analyzer::analyze_project(&path)?;
-    
-    if json {
-        println!("{}", serde_json::to_string_pretty(&analysis)?);
-    } else if detailed {
-        // Use the beautiful formatting from the example
-        println!("{}", "=".repeat(60));
-        println!("\n📊 PROJECT CONTEXT ANALYSIS RESULTS");
-        println!("{}", "=".repeat(60));
-        
-        // Project Type
-        println!("\n🎯 Project Type: {:?}", analysis.project_type);
-        use analyzer::ProjectType;
-        match analysis.project_type {
-            ProjectType::WebApplication => println!("   This is a web application with UI"),
-            ProjectType::ApiService => println!("   This is an API service without UI"),
-            ProjectType::CliTool => println!("   This is a command-line tool"),
-            ProjectType::Library => println!("   This is a library/package"),
-            ProjectType::Microservice => println!("   This is a microservice"),
-            ProjectType::StaticSite => println!("   This is a static website"),
-            _ => println!("   Project type details not available"),
-        }
-        
-        // Languages
-        println!("\n🌐 Languages Detected ({}):", analysis.languages.len());
-        for (i, lang) in analysis.languages.iter().enumerate() {
-            println!("   {}. {} (confidence: {:.1}%)", 
-                i + 1, 
-                lang.name, 
-                lang.confidence * 100.0
-            );
-            if let Some(version) = &lang.version {
-                println!("      Version: {}", version);
-            }
-        }
-        
-        // Technologies with proper categorization
-        display_technologies_detailed(&analysis.technologies);
-        
-        // Entry Points
-        println!("\n📍 Entry Points ({}):", analysis.entry_points.len());
-        if analysis.entry_points.is_empty() {
-            println!("   No entry points detected");
-        } else {
-            for (i, entry) in analysis.entry_points.iter().enumerate() {
-                println!("   {}. File: {}", i + 1, entry.file.display());
-                if let Some(func) = &entry.function {
-                    println!("      Function: {}", func);
-                }
-                if let Some(cmd) = &entry.command {
-                    println!("      Command: {}", cmd);
-                }
-            }
-        }
-        
-        // Ports
-        println!("\n🔌 Exposed Ports ({}):", analysis.ports.len());
-        if analysis.ports.is_empty() {
-            println!("   No ports detected");
-        } else {
-            for port in &analysis.ports {
-                println!("   - Port {}: {:?}", port.number, port.protocol);
-                if let Some(desc) = &port.description {
-                    println!("     {}", desc);
-                }
-            }
-        }
-        
-        // Environment Variables
-        println!("\n🔐 Environment Variables ({}):", analysis.environment_variables.len());
-        let required_vars: Vec<_> = analysis.environment_variables.iter()
-            .filter(|ev| ev.required)
-            .collect();
-        let optional_vars: Vec<_> = analysis.environment_variables.iter()
-            .filter(|ev| !ev.required)
-            .collect();
-        
-        if !required_vars.is_empty() {
-            println!("   Required:");
-            for var in required_vars {
-                println!("     - {} {}", 
-                    var.name,
-                    if let Some(desc) = &var.description { 
-                        format!("({})", desc) 
-                    } else { 
-                        String::new() 
-                    }
-                );
-            }
-        }
-        
-        if !optional_vars.is_empty() {
-            println!("   Optional:");
-            for var in optional_vars {
-                println!("     - {} = {:?}", 
-                    var.name, 
-                    var.default_value.as_deref().unwrap_or("no default")
-                );
-            }
-        }
-        
-        if analysis.environment_variables.is_empty() {
-            println!("   No environment variables detected");
-        }
-        
-        // Build Scripts
-        println!("\n🔨 Build Scripts ({}):", analysis.build_scripts.len());
-        let default_scripts: Vec<_> = analysis.build_scripts.iter()
-            .filter(|bs| bs.is_default)
-            .collect();
-        let other_scripts: Vec<_> = analysis.build_scripts.iter()
-            .filter(|bs| !bs.is_default)
-            .collect();
-        
-        if !default_scripts.is_empty() {
-            println!("   Default scripts:");
-            for script in default_scripts {
-                println!("     - {}: {}", script.name, script.command);
-                if let Some(desc) = &script.description {
-                    println!("       {}", desc);
-                }
-            }
-        }
-        
-        if !other_scripts.is_empty() {
-            println!("   Other scripts:");
-            for script in other_scripts {
-                println!("     - {}: {}", script.name, script.command);
-                if let Some(desc) = &script.description {
-                    println!("       {}", desc);
-                }
-            }
-        }
-        
-        if analysis.build_scripts.is_empty() {
-            println!("   No build scripts detected");
-        }
-        
-        // Dependencies (sample)
-        println!("\n📦 Dependencies ({}):", analysis.dependencies.len());
-        if analysis.dependencies.is_empty() {
-            println!("   No dependencies detected");
-        } else if analysis.dependencies.len() <= 10 {
-            for (name, version) in &analysis.dependencies {
-                println!("   - {} v{}", name, version);
-            }
-        } else {
-            // Show first 10
-            for (name, version) in analysis.dependencies.iter().take(10) {
-                println!("   - {} v{}", name, version);
-            }
-            println!("   ... and {} more", analysis.dependencies.len() - 10);
-        }
-        
-        // Summary
-        println!("\n📋 SUMMARY");
-        println!("{}", "=".repeat(60));
-        println!("✅ Project Context Analysis Complete!");
-        println!("\nProject Context Components:");
-        println!("   1. Entry points detected: {}", 
-            if analysis.entry_points.is_empty() { "❌ None" } else { "✅ Yes" });
-        println!("   2. Ports identified: {}", 
-            if analysis.ports.is_empty() { "❌ None" } else { "✅ Yes" });
-        println!("   3. Environment variables extracted: {}", 
-            if analysis.environment_variables.is_empty() { "❌ None" } else { "✅ Yes" });
-        println!("   4. Build scripts analyzed: {}", 
-            if analysis.build_scripts.is_empty() { "❌ None" } else { "✅ Yes" });
-        println!("   5. Project type determined: {}", 
-            if matches!(analysis.project_type, ProjectType::Unknown) { "❌ Unknown" } else { "✅ Yes" });
-        
-        println!("\n📈 Analysis Metadata:");
-        println!("   - Duration: {}ms", analysis.analysis_metadata.analysis_duration_ms);
-        println!("   - Files analyzed: {}", analysis.analysis_metadata.files_analyzed);
-        println!("   - Confidence score: {:.1}%", analysis.analysis_metadata.confidence_score * 100.0);
-        
-    } else {
-        // Simple summary view (non-detailed)
-        println!("\n📊 Analysis Results:");
-        println!("├── Project: {}", analysis.project_root.display());
-        println!("├── Languages detected: {}", analysis.languages.len());
-        for lang in &analysis.languages {
-            println!("│   ├── {} (confidence: {:.1}%)", lang.name, lang.confidence * 100.0);
-        }
-        display_technologies_summary(&analysis.technologies);
-        println!("├── Dependencies found: {}", analysis.dependencies.len());
-        println!("├── Entry points: {}", analysis.entry_points.len());
-        println!("├── Ports detected: {}", analysis.ports.len());
-        println!("├── Environment variables: {}", analysis.environment_variables.len());
-        println!("└── Project type: {:?}", analysis.project_type);
-        
-        println!("\n📈 Analysis metadata:");
-        println!("├── Duration: {}ms", analysis.analysis_metadata.analysis_duration_ms);
-        println!("├── Files analyzed: {}", analysis.analysis_metadata.files_analyzed);
-        println!("└── Confidence score: {:.1}%", analysis.analysis_metadata.confidence_score * 100.0);
-    }
-    
+    // Call the handler from the handlers module which returns a string
+    syncable_cli::handlers::analyze::handle_analyze(
+        path,
+        json,
+        detailed,
+        display,
+        only,
+        color_scheme,
+    )?;
+
     Ok(())
 }
 
@@ -352,17 +1576,34 @@ fn handle_generate(
     _force: bool,
 ) -> syncable_cli::Result<()> {
     println!("🔍 Analyzing project for generation: {}", path.display());
-    
-    let analysis = analyzer::analyze_project(&path)?;
-    
+
+    let monorepo_analysis = analyze_monorepo(&path)?;
+
     println!("✅ Analysis complete. Generating IaC files...");
-    
+
+    if monorepo_analysis.is_monorepo {
+        println!(
+            "📦 Detected monorepo with {} projects",
+            monorepo_analysis.projects.len()
+        );
+        println!(
+            "🚧 Monorepo IaC generation is coming soon! For now, generating for the overall structure."
+        );
+        println!(
+            "💡 Tip: You can run generate commands on individual project directories for now."
+        );
+    }
+
+    // For now, use the first/main project for generation
+    // TODO: Implement proper monorepo IaC generation
+    let main_project = &monorepo_analysis.projects[0];
+
     let generate_all = all || (!dockerfile && !compose && !terraform);
-    
+
     if generate_all || dockerfile {
         println!("\n🐳 Generating Dockerfile...");
-        let dockerfile_content = generator::generate_dockerfile(&analysis)?;
-        
+        let dockerfile_content = generator::generate_dockerfile(&main_project.analysis)?;
+
         if dry_run {
             println!("--- Dockerfile (dry run) ---");
             println!("{}", dockerfile_content);
@@ -371,11 +1612,11 @@ fn handle_generate(
             println!("✅ Dockerfile generated successfully!");
         }
     }
-    
+
     if generate_all || compose {
         println!("\n🐙 Generating Docker Compose file...");
-        let compose_content = generator::generate_compose(&analysis)?;
-        
+        let compose_content = generator::generate_compose(&main_project.analysis)?;
+
         if dry_run {
             println!("--- docker-compose.yml (dry run) ---");
             println!("{}", compose_content);
@@ -384,11 +1625,11 @@ fn handle_generate(
             println!("✅ Docker Compose file generated successfully!");
         }
     }
-    
+
     if generate_all || terraform {
         println!("\n🏗️  Generating Terraform configuration...");
-        let terraform_content = generator::generate_terraform(&analysis)?;
-        
+        let terraform_content = generator::generate_terraform(&main_project.analysis)?;
+
         if dry_run {
             println!("--- main.tf (dry run) ---");
             println!("{}", terraform_content);
@@ -397,11 +1638,16 @@ fn handle_generate(
             println!("✅ Terraform configuration generated successfully!");
         }
     }
-    
+
     if !dry_run {
         println!("\n🎉 Generation complete! IaC files have been created in the current directory.");
+
+        if monorepo_analysis.is_monorepo {
+            println!("🔧 Note: Generated files are based on the main project structure.");
+            println!("   Advanced monorepo support with per-project generation is coming soon!");
+        }
     }
-    
+
     Ok(())
 }
 
@@ -415,12 +1661,8 @@ fn handle_validate(
     Ok(())
 }
 
-fn handle_support(
-    languages: bool,
-    frameworks: bool,
-    _detailed: bool,
-) -> syncable_cli::Result<()> {
-    if languages || (!languages && !frameworks) {
+fn handle_support(languages: bool, frameworks: bool, _detailed: bool) -> syncable_cli::Result<()> {
+    if languages || !frameworks {
         println!("🌐 Supported Languages:");
         println!("├── Rust");
         println!("├── JavaScript/TypeScript");
@@ -429,286 +1671,73 @@ fn handle_support(
         println!("├── Java");
         println!("└── (More coming soon...)");
     }
-    
-    if frameworks || (!languages && !frameworks) {
+
+    if frameworks || !languages {
         println!("\n🚀 Supported Frameworks:");
         println!("├── Web: Express.js, Next.js, React, Vue.js, Actix Web");
         println!("├── Database: PostgreSQL, MySQL, MongoDB, Redis");
         println!("├── Build Tools: npm, yarn, cargo, maven, gradle");
         println!("└── (More coming soon...)");
     }
-    
+
     Ok(())
 }
 
-async fn handle_dependencies(
+pub async fn handle_dependencies(
     path: std::path::PathBuf,
     licenses: bool,
     vulnerabilities: bool,
     _prod_only: bool,
     _dev_only: bool,
     format: OutputFormat,
-) -> syncable_cli::Result<()> {
-    let project_path = path.canonicalize()
-        .unwrap_or_else(|_| path.clone());
-    
-    println!("🔍 Analyzing dependencies: {}", project_path.display());
-    
-    // First, analyze the project to detect languages
-    let analysis = analyzer::analyze_project(&project_path)?;
-    
-    // Then perform detailed dependency analysis
-    let dep_analysis = analyzer::dependency_parser::parse_detailed_dependencies(
-        &project_path,
-        &analysis.languages,
-        &analyzer::AnalysisConfig::default(),
-    ).await?;
-    
-    if format == OutputFormat::Table {
-        // Table output
-        use termcolor::{ColorChoice, StandardStream, WriteColor, ColorSpec, Color};
-        
-        let mut stdout = StandardStream::stdout(ColorChoice::Always);
-        
-        // Print summary
-        println!("\n📦 Dependency Analysis Report");
-        println!("{}", "=".repeat(80));
-        
-        let total_deps: usize = dep_analysis.dependencies.len();
-        println!("Total dependencies: {}", total_deps);
-        
-        for (name, info) in &dep_analysis.dependencies {
-            print!("  {} v{}", name, info.version);
-            
-            // Color code by type
-            stdout.set_color(ColorSpec::new().set_fg(Some(
-                if info.is_dev { Color::Yellow } else { Color::Green }
-            )))?;
-            
-            print!(" [{}]", if info.is_dev { "dev" } else { "prod" });
-            
-            stdout.reset()?;
-            
-            if licenses && info.license.is_some() {
-                print!(" - License: {}", info.license.as_ref().unwrap_or(&"Unknown".to_string()));
-            }
-            
-            println!();
-        }
-        
-        if licenses {
-            // License summary
-            println!("\n📋 License Summary");
-            println!("{}", "-".repeat(80));
-            
-            use std::collections::HashMap;
-            let mut license_counts: HashMap<String, usize> = HashMap::new();
-            
-            for (_name, info) in &dep_analysis.dependencies {
-                if let Some(license) = &info.license {
-                    *license_counts.entry(license.clone()).or_insert(0) += 1;
-                }
-            }
-            
-            let mut licenses: Vec<_> = license_counts.into_iter().collect();
-            licenses.sort_by(|a, b| b.1.cmp(&a.1));
-            
-            for (license, count) in licenses {
-                println!("  {}: {} packages", license, count);
-            }
-        }
-        
-        if vulnerabilities {
-            println!("\n🔍 Checking for vulnerabilities...");
-            
-            // Convert DetailedDependencyMap to the format expected by VulnerabilityChecker
-            let mut deps_by_language: HashMap<analyzer::dependency_parser::Language, Vec<analyzer::dependency_parser::DependencyInfo>> = HashMap::new();
-            
-            // Group dependencies by detected languages
-            for language in &analysis.languages {
-                let mut lang_deps = Vec::new();
-                
-                // Filter dependencies that belong to this language
-                for (name, info) in &dep_analysis.dependencies {
-                    // Simple heuristic to determine language based on source
-                    let matches_language = match language.name.as_str() {
-                        "Rust" => info.source == "crates.io",
-                        "JavaScript" | "TypeScript" => info.source == "npm",
-                        "Python" => info.source == "pypi",
-                        "Go" => info.source == "go modules",
-                        "Java" | "Kotlin" => info.source == "maven" || info.source == "gradle",
-                        _ => false,
-                    };
-                    
-                    if matches_language {
-                        // Convert to new DependencyInfo format expected by vulnerability checker
-                        lang_deps.push(analyzer::dependency_parser::DependencyInfo {
-                            name: name.clone(),
-                            version: info.version.clone(),
-                            dep_type: if info.is_dev { 
-                                analyzer::dependency_parser::DependencyType::Dev 
-                            } else { 
-                                analyzer::dependency_parser::DependencyType::Production 
-                            },
-                            license: info.license.clone().unwrap_or_default(),
-                            source: Some(info.source.clone()),
-                            language: match language.name.as_str() {
-                                "Rust" => analyzer::dependency_parser::Language::Rust,
-                                "JavaScript" => analyzer::dependency_parser::Language::JavaScript,
-                                "TypeScript" => analyzer::dependency_parser::Language::TypeScript,
-                                "Python" => analyzer::dependency_parser::Language::Python,
-                                "Go" => analyzer::dependency_parser::Language::Go,
-                                "Java" => analyzer::dependency_parser::Language::Java,
-                                "Kotlin" => analyzer::dependency_parser::Language::Kotlin,
-                                _ => analyzer::dependency_parser::Language::Unknown,
-                            },
-                        });
-                    }
-                }
-                
-                if !lang_deps.is_empty() {
-                    let lang_enum = match language.name.as_str() {
-                        "Rust" => analyzer::dependency_parser::Language::Rust,
-                        "JavaScript" => analyzer::dependency_parser::Language::JavaScript,
-                        "TypeScript" => analyzer::dependency_parser::Language::TypeScript,
-                        "Python" => analyzer::dependency_parser::Language::Python,
-                        "Go" => analyzer::dependency_parser::Language::Go,
-                        "Java" => analyzer::dependency_parser::Language::Java,
-                        "Kotlin" => analyzer::dependency_parser::Language::Kotlin,
-                        _ => analyzer::dependency_parser::Language::Unknown,
-                    };
-                    deps_by_language.insert(lang_enum, lang_deps);
-                }
-            }
-            
-            let checker = analyzer::vulnerability_checker::VulnerabilityChecker::new();
-            match checker.check_all_dependencies(&deps_by_language, &project_path).await {
-                Ok(report) => {
-                    println!("\n🛡️ Vulnerability Report");
-                    println!("{}", "-".repeat(80));
-                    println!("Checked at: {}", report.checked_at.format("%Y-%m-%d %H:%M:%S UTC"));
-                    println!("Total vulnerabilities: {}", report.total_vulnerabilities);
-                    
-                    if report.total_vulnerabilities > 0 {
-                        println!("\nSeverity Breakdown:");
-                        if report.critical_count > 0 {
-                            stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)).set_bold(true))?;
-                            println!("  CRITICAL: {}", report.critical_count);
-                            stdout.reset()?;
-                        }
-                        if report.high_count > 0 {
-                            stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
-                            println!("  HIGH: {}", report.high_count);
-                            stdout.reset()?;
-                        }
-                        if report.medium_count > 0 {
-                            stdout.set_color(ColorSpec::new().set_fg(Some(Color::Yellow)))?;
-                            println!("  MEDIUM: {}", report.medium_count);
-                            stdout.reset()?;
-                        }
-                        if report.low_count > 0 {
-                            stdout.set_color(ColorSpec::new().set_fg(Some(Color::Blue)))?;
-                            println!("  LOW: {}", report.low_count);
-                            stdout.reset()?;
-                        }
-                        
-                        println!("\nVulnerable Dependencies:");
-                        for vuln_dep in &report.vulnerable_dependencies {
-                            println!("\n  📦 {} v{} ({})", 
-                                vuln_dep.name, 
-                                vuln_dep.version,
-                                vuln_dep.language.as_str()
-                            );
-                            
-                            for vuln in &vuln_dep.vulnerabilities {
-                                print!("    ⚠️  {} ", vuln.id);
-                                
-                                // Color by severity
-                                stdout.set_color(ColorSpec::new().set_fg(Some(
-                                    match vuln.severity {
-                                        VulnerabilitySeverity::Critical => Color::Red,
-                                        VulnerabilitySeverity::High => Color::Red,
-                                        VulnerabilitySeverity::Medium => Color::Yellow,
-                                        VulnerabilitySeverity::Low => Color::Blue,
-                                        VulnerabilitySeverity::Info => Color::Cyan,
-                                    }
-                                )).set_bold(vuln.severity == VulnerabilitySeverity::Critical))?;
-                                
-                                print!("[{}]", match vuln.severity {
-                                    VulnerabilitySeverity::Critical => "CRITICAL",
-                                    VulnerabilitySeverity::High => "HIGH",
-                                    VulnerabilitySeverity::Medium => "MEDIUM",
-                                    VulnerabilitySeverity::Low => "LOW",
-                                    VulnerabilitySeverity::Info => "INFO",
-                                });
-                                
-                                stdout.reset()?;
-                                
-                                println!(" - {}", vuln.title);
-                                
-                                if let Some(ref cve) = vuln.cve {
-                                    println!("       CVE: {}", cve);
-                                }
-                                if let Some(ref patched) = vuln.patched_versions {
-                                    stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green)))?;
-                                    println!("       Fix: Upgrade to {}", patched);
-                                    stdout.reset()?;
-                                }
-                            }
-                        }
-                    } else {
-                        stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green)))?;
-                        println!("\n✅ No known vulnerabilities found!");
-                        stdout.reset()?;
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Error checking vulnerabilities: {}", e);
-                    process::exit(1);
-                }
-            }
-        }
-    } else if format == OutputFormat::Json {
-        // JSON output
-        let output = serde_json::json!({
-            "dependencies": dep_analysis.dependencies,
-            "total": dep_analysis.dependencies.len(),
-        });
-        println!("{}", serde_json::to_string_pretty(&output)?);
-    }
-    
-    Ok(())
+) -> syncable_cli::Result<String> {
+    syncable_cli::handlers::dependencies::handle_dependencies(
+        path,
+        licenses,
+        vulnerabilities,
+        _prod_only,
+        _dev_only,
+        format,
+    )
+    .await
 }
 
-async fn handle_vulnerabilities(
+pub async fn handle_vulnerabilities(
     path: std::path::PathBuf,
     severity: Option<SeverityThreshold>,
     format: OutputFormat,
     output: Option<std::path::PathBuf>,
 ) -> syncable_cli::Result<()> {
-    let project_path = path.canonicalize()
-        .unwrap_or_else(|_| path.clone());
-    
-    println!("🔍 Scanning for vulnerabilities in: {}", project_path.display());
-    
+    let project_path = path.canonicalize().unwrap_or_else(|_| path.clone());
+
+    println!(
+        "🔍 Scanning for vulnerabilities in: {}",
+        project_path.display()
+    );
+
     // Parse dependencies
-    let dependencies = analyzer::dependency_parser::DependencyParser::new().parse_all_dependencies(&project_path)?;
-    
+    let dependencies = analyzer::dependency_parser::DependencyParser::new()
+        .parse_all_dependencies(&project_path)?;
+
     if dependencies.is_empty() {
         println!("No dependencies found to check.");
         return Ok(());
     }
-    
+
     // Check vulnerabilities
-    let checker = analyzer::vulnerability_checker::VulnerabilityChecker::new();
-    let report = checker.check_all_dependencies(&dependencies, &project_path).await
-        .map_err(|e| syncable_cli::error::IaCGeneratorError::Analysis(
-            syncable_cli::error::AnalysisError::DependencyParsing {
-                file: "vulnerability check".to_string(),
-                reason: e.to_string(),
-            }
-        ))?;
-    
+    let checker = analyzer::vulnerability::VulnerabilityChecker::new();
+    let report = checker
+        .check_all_dependencies(&dependencies, &project_path)
+        .await
+        .map_err(|e| {
+            syncable_cli::error::IaCGeneratorError::Analysis(
+                syncable_cli::error::AnalysisError::DependencyParsing {
+                    file: "vulnerability check".to_string(),
+                    reason: e.to_string(),
+                },
+            )
+        })?;
+
     // Filter by severity if requested
     let filtered_report = if let Some(threshold) = severity {
         let min_severity = match threshold {
@@ -717,8 +1746,9 @@ async fn handle_vulnerabilities(
             SeverityThreshold::High => VulnerabilitySeverity::High,
             SeverityThreshold::Critical => VulnerabilitySeverity::Critical,
         };
-        
-        let filtered_deps: Vec<_> = report.vulnerable_dependencies
+
+        let filtered_deps: Vec<_> = report
+            .vulnerable_dependencies
             .into_iter()
             .filter_map(|mut dep| {
                 dep.vulnerabilities.retain(|v| v.severity >= min_severity);
@@ -729,8 +1759,8 @@ async fn handle_vulnerabilities(
                 }
             })
             .collect();
-        
-        use analyzer::vulnerability_checker::VulnerabilityReport;
+
+        use analyzer::vulnerability::VulnerabilityReport;
         let mut filtered = VulnerabilityReport {
             checked_at: report.checked_at,
             total_vulnerabilities: 0,
@@ -740,7 +1770,7 @@ async fn handle_vulnerabilities(
             low_count: 0,
             vulnerable_dependencies: filtered_deps,
         };
-        
+
         // Recalculate counts
         for dep in &filtered.vulnerable_dependencies {
             for vuln in &dep.vulnerabilities {
@@ -750,40 +1780,48 @@ async fn handle_vulnerabilities(
                     VulnerabilitySeverity::High => filtered.high_count += 1,
                     VulnerabilitySeverity::Medium => filtered.medium_count += 1,
                     VulnerabilitySeverity::Low => filtered.low_count += 1,
-                    VulnerabilitySeverity::Info => {},
+                    VulnerabilitySeverity::Info => {}
                 }
             }
         }
-        
+
         filtered
     } else {
         report
     };
-    
+
     // Format output
     let output_string = match format {
         OutputFormat::Table => {
             // Color formatting for output
 
-            
             let mut output = String::new();
-            
-            output.push_str(&format!("\n🛡️  Vulnerability Scan Report\n"));
-            output.push_str(&format!("{}\n", "=".repeat(80)));
-            output.push_str(&format!("Scanned at: {}\n", filtered_report.checked_at.format("%Y-%m-%d %H:%M:%S UTC")));
+
+            output.push_str("\n🛡️  Vulnerability Scan Report\n");
+            output.push_str(&format!("{}\n", "=".repeat(80).bright_blue()));
+            output.push_str(&format!(
+                "Scanned at: {}\n",
+                filtered_report.checked_at.format("%Y-%m-%d %H:%M:%S UTC")
+            ));
             output.push_str(&format!("Path: {}\n", project_path.display()));
-            
+
             if let Some(threshold) = severity {
                 output.push_str(&format!("Severity filter: >= {:?}\n", threshold));
             }
-            
-            output.push_str(&format!("\nSummary:\n"));
-            output.push_str(&format!("Total vulnerabilities: {}\n", filtered_report.total_vulnerabilities));
-            
+
+            output.push_str("\nSummary:\n");
+            output.push_str(&format!(
+                "Total vulnerabilities: {}\n",
+                filtered_report.total_vulnerabilities
+            ));
+
             if filtered_report.total_vulnerabilities > 0 {
                 output.push_str("\nBy Severity:\n");
                 if filtered_report.critical_count > 0 {
-                    output.push_str(&format!("  🔴 CRITICAL: {}\n", filtered_report.critical_count));
+                    output.push_str(&format!(
+                        "  🔴 CRITICAL: {}\n",
+                        filtered_report.critical_count
+                    ));
                 }
                 if filtered_report.high_count > 0 {
                     output.push_str(&format!("  🔴 HIGH: {}\n", filtered_report.high_count));
@@ -794,17 +1832,18 @@ async fn handle_vulnerabilities(
                 if filtered_report.low_count > 0 {
                     output.push_str(&format!("  🔵 LOW: {}\n", filtered_report.low_count));
                 }
-                
+
                 output.push_str(&format!("\n{}\n", "-".repeat(80)));
                 output.push_str("Vulnerable Dependencies:\n\n");
-                
+
                 for vuln_dep in &filtered_report.vulnerable_dependencies {
-                    output.push_str(&format!("📦 {} v{} ({})\n", 
-                        vuln_dep.name, 
+                    output.push_str(&format!(
+                        "📦 {} v{} ({})\n",
+                        vuln_dep.name,
                         vuln_dep.version,
                         vuln_dep.language.as_str()
                     ));
-                    
+
                     for vuln in &vuln_dep.vulnerabilities {
                         let severity_str = match vuln.severity {
                             VulnerabilitySeverity::Critical => "CRITICAL",
@@ -813,10 +1852,10 @@ async fn handle_vulnerabilities(
                             VulnerabilitySeverity::Low => "LOW",
                             VulnerabilitySeverity::Info => "INFO",
                         };
-                        
+
                         output.push_str(&format!("\n  ⚠️  {} [{}]\n", vuln.id, severity_str));
                         output.push_str(&format!("     {}\n", vuln.title));
-                        
+
                         if !vuln.description.is_empty() && vuln.description != vuln.title {
                             // Wrap description
                             let wrapped = textwrap::fill(&vuln.description, 70);
@@ -824,34 +1863,32 @@ async fn handle_vulnerabilities(
                                 output.push_str(&format!("     {}\n", line));
                             }
                         }
-                        
+
                         if let Some(ref cve) = vuln.cve {
                             output.push_str(&format!("     CVE: {}\n", cve));
                         }
-                        
+
                         if let Some(ref ghsa) = vuln.ghsa {
                             output.push_str(&format!("     GHSA: {}\n", ghsa));
                         }
-                        
+
                         output.push_str(&format!("     Affected: {}\n", vuln.affected_versions));
-                        
+
                         if let Some(ref patched) = vuln.patched_versions {
                             output.push_str(&format!("     ✅ Fix: Upgrade to {}\n", patched));
                         }
                     }
-                    output.push_str("\n");
+                    output.push('\n');
                 }
             } else {
                 output.push_str("\n✅ No vulnerabilities found!\n");
             }
-            
+
             output
         }
-        OutputFormat::Json => {
-            serde_json::to_string_pretty(&filtered_report)?
-        }
+        OutputFormat::Json => serde_json::to_string_pretty(&filtered_report)?,
     };
-    
+
     // Output results
     if let Some(output_path) = output {
         std::fs::write(&output_path, output_string)?;
@@ -859,162 +1896,18 @@ async fn handle_vulnerabilities(
     } else {
         println!("{}", output_string);
     }
-    
+
     // Exit with non-zero code if critical/high vulnerabilities found
     if filtered_report.critical_count > 0 || filtered_report.high_count > 0 {
         std::process::exit(1);
     }
-    
+
     Ok(())
 }
 
-/// Display technologies in detailed format with proper categorization
-fn display_technologies_detailed(technologies: &[DetectedTechnology]) {
-    if technologies.is_empty() {
-        println!("\n🛠️  Technologies Detected: None");
-        return;
-    }
-
-    // Group technologies by IaC-relevant categories
-    let mut meta_frameworks = Vec::new();
-    let mut backend_frameworks = Vec::new();
-    let mut frontend_frameworks = Vec::new();
-    let mut ui_libraries = Vec::new();
-    let mut build_tools = Vec::new();
-    let mut databases = Vec::new();
-    let mut testing = Vec::new();
-    let mut runtimes = Vec::new();
-    let mut other_libraries = Vec::new();
-
-    for tech in technologies {
-        match &tech.category {
-            TechnologyCategory::MetaFramework => meta_frameworks.push(tech),
-            TechnologyCategory::BackendFramework => backend_frameworks.push(tech),
-            TechnologyCategory::FrontendFramework => frontend_frameworks.push(tech),
-            TechnologyCategory::Library(lib_type) => match lib_type {
-                LibraryType::UI => ui_libraries.push(tech),
-                _ => other_libraries.push(tech),
-            },
-            TechnologyCategory::BuildTool => build_tools.push(tech),
-            TechnologyCategory::Database => databases.push(tech),
-            TechnologyCategory::Testing => testing.push(tech),
-            TechnologyCategory::Runtime => runtimes.push(tech),
-            _ => other_libraries.push(tech),
-        }
-    }
-
-    println!("\n🛠️  Technology Stack:");
-    
-    // Primary Framework (highlighted)
-    if let Some(primary) = technologies.iter().find(|t| t.is_primary) {
-        println!("   🎯 PRIMARY: {} (confidence: {:.1}%)", primary.name, primary.confidence * 100.0);
-        println!("      Architecture driver for this project");
-    }
-
-    // Meta-frameworks
-    if !meta_frameworks.is_empty() {
-        println!("\n   🏗️  Meta-Frameworks:");
-        for tech in meta_frameworks {
-            println!("      • {} (confidence: {:.1}%)", tech.name, tech.confidence * 100.0);
-        }
-    }
-
-    // Backend frameworks
-    if !backend_frameworks.is_empty() {
-        println!("\n   🖥️  Backend Frameworks:");
-        for tech in backend_frameworks {
-            println!("      • {} (confidence: {:.1}%)", tech.name, tech.confidence * 100.0);
-        }
-    }
-
-    // Frontend frameworks
-    if !frontend_frameworks.is_empty() {
-        println!("\n   🌐 Frontend Frameworks:");
-        for tech in frontend_frameworks {
-            println!("      • {} (confidence: {:.1}%)", tech.name, tech.confidence * 100.0);
-        }
-    }
-
-    // UI Libraries
-    if !ui_libraries.is_empty() {
-        println!("\n   🎨 UI Libraries:");
-        for tech in ui_libraries {
-            println!("      • {} (confidence: {:.1}%)", tech.name, tech.confidence * 100.0);
-        }
-    }
-
-    // Note: Removed utility library categories (Data Fetching, Routing, State Management)
-    // as they don't provide value for IaC generation
-
-    // Build Tools
-    if !build_tools.is_empty() {
-        println!("\n   🔨 Build Tools:");
-        for tech in build_tools {
-            println!("      • {} (confidence: {:.1}%)", tech.name, tech.confidence * 100.0);
-        }
-    }
-
-    // Databases
-    if !databases.is_empty() {
-        println!("\n   🗃️  Database & ORM:");
-        for tech in databases {
-            println!("      • {} (confidence: {:.1}%)", tech.name, tech.confidence * 100.0);
-        }
-    }
-
-    // Testing
-    if !testing.is_empty() {
-        println!("\n   🧪 Testing:");
-        for tech in testing {
-            println!("      • {} (confidence: {:.1}%)", tech.name, tech.confidence * 100.0);
-        }
-    }
-
-    // Runtimes
-    if !runtimes.is_empty() {
-        println!("\n   ⚡ Runtimes:");
-        for tech in runtimes {
-            println!("      • {} (confidence: {:.1}%)", tech.name, tech.confidence * 100.0);
-        }
-    }
-
-    // Other Libraries
-    if !other_libraries.is_empty() {
-        println!("\n   📚 Other Libraries:");
-        for tech in other_libraries {
-            println!("      • {} (confidence: {:.1}%)", tech.name, tech.confidence * 100.0);
-        }
-    }
-}
-
-/// Display technologies in summary format for simple view
-fn display_technologies_summary(technologies: &[DetectedTechnology]) {
-    println!("├── Technologies detected: {}", technologies.len());
-    
-    // Show primary technology first
-    if let Some(primary) = technologies.iter().find(|t| t.is_primary) {
-        println!("│   ├── 🎯 {} (PRIMARY, {:.1}%)", primary.name, primary.confidence * 100.0);
-    }
-    
-    // Show other technologies
-    for tech in technologies.iter().filter(|t| !t.is_primary) {
-        let icon = match &tech.category {
-            TechnologyCategory::MetaFramework => "🏗️",
-            TechnologyCategory::BackendFramework => "🖥️",
-            TechnologyCategory::FrontendFramework => "🌐",
-            TechnologyCategory::Library(LibraryType::UI) => "🎨",
-            TechnologyCategory::BuildTool => "🔨",
-            TechnologyCategory::Database => "🗃️",
-            TechnologyCategory::Testing => "🧪",
-            TechnologyCategory::Runtime => "⚡",
-            _ => "📚",
-        };
-        println!("│   ├── {} {} (confidence: {:.1}%)", icon, tech.name, tech.confidence * 100.0);
-    }
-}
-
-fn handle_security(
+pub fn handle_security(
     path: std::path::PathBuf,
+    mode: SecurityScanMode,
     include_low: bool,
     no_secrets: bool,
     no_code_patterns: bool,
@@ -1025,248 +1918,26 @@ fn handle_security(
     output: Option<std::path::PathBuf>,
     fail_on_findings: bool,
 ) -> syncable_cli::Result<()> {
-    use syncable_cli::analyzer::{SecurityAnalyzer, SecurityAnalysisConfig};
-    use indicatif::{ProgressBar, ProgressStyle};
-    use std::time::Duration;
-    use std::thread;
-    
-    let project_path = path.canonicalize()
-        .unwrap_or_else(|_| path.clone());
-    
-    // Create beautiful progress indicator
-    let progress = ProgressBar::new(100);
-    progress.set_style(
-        ProgressStyle::default_bar()
-            .template("🛡️  {msg} [{elapsed_precise}] {bar:40.cyan/blue} {pos:>3}/{len:3} {percent}%")
-            .unwrap()
-            .progress_chars("▰▱")
-    );
-    
-    // Step 1: Project Analysis
-    progress.set_message("Analyzing project structure...");
-    progress.set_position(10);
-    let project_analysis = analyzer::analyze_project(&project_path)?;
-    thread::sleep(Duration::from_millis(200));
-    
-    // Step 2: Security Configuration
-    progress.set_message("Configuring security scanners...");
-    progress.set_position(20);
-    let config = SecurityAnalysisConfig {
-        include_low_severity: include_low,
-        check_secrets: !no_secrets,
-        check_code_patterns: !no_code_patterns,
-        check_infrastructure: !no_infrastructure,
-        check_compliance: !no_compliance,
-        frameworks_to_check: frameworks.clone(),
-        ignore_patterns: vec![
-            "node_modules".to_string(),
-            ".git".to_string(),
-            "target".to_string(),
-            "build".to_string(),
-            ".next".to_string(),
-            "dist".to_string(),
-        ],
-    };
-    thread::sleep(Duration::from_millis(300));
-    
-    // Step 3: Security Scanner Initialization
-    progress.set_message("Initializing security analyzer...");
-    progress.set_position(30);
-    let security_analyzer = SecurityAnalyzer::with_config(config)
-        .map_err(|e| syncable_cli::error::IaCGeneratorError::Analysis(
-            syncable_cli::error::AnalysisError::InvalidStructure(
-                format!("Failed to create security analyzer: {}", e)
-            )
-        ))?;
-    thread::sleep(Duration::from_millis(200));
-    
-    // Step 4: Secret Detection
-    if !no_secrets {
-        progress.set_message("Scanning for exposed secrets...");
-        progress.set_position(50);
-        thread::sleep(Duration::from_millis(500));
-    }
-    
-    // Step 5: Code Pattern Analysis
-    if !no_code_patterns {
-        progress.set_message("Analyzing code security patterns...");
-        progress.set_position(70);
-        thread::sleep(Duration::from_millis(400));
-    }
-    
-            // Step 6: Environment Variables (always runs)
-        progress.set_message("Analyzing environment variables...");
-        progress.set_position(85);
-        thread::sleep(Duration::from_millis(200));
-        
-        // Step 7: Final processing
-        progress.set_message("Finalizing analysis...");
-        progress.set_position(95);
-        thread::sleep(Duration::from_millis(200));
-    
-    // Step 8: Generating Report
-    progress.set_message("Generating security report...");
-    progress.set_position(100);
-    let security_report = security_analyzer.analyze_security(&project_analysis)
-        .map_err(|e| syncable_cli::error::IaCGeneratorError::Analysis(
-            syncable_cli::error::AnalysisError::InvalidStructure(
-                format!("Security analysis failed: {}", e)
-            )
-        ))?;
-    
-    progress.finish_and_clear();
-    
-    // Format output in the beautiful style requested
-    let output_string = match format {
-        OutputFormat::Table => {
-            let mut output = String::new();
-            
-            // Beautiful Header
-            output.push_str("\n🛡️  Security Analysis Results\n");
-            output.push_str(&format!("{}\n", "=".repeat(60)));
-            
-            // Security Summary
-            output.push_str("\n📊 SECURITY SUMMARY\n");
-            output.push_str(&format!("✅ Security Score: {:.1}/100\n", security_report.overall_score));
-            
-            // Analysis Scope - only show what's actually implemented
-            output.push_str("\n🔍 ANALYSIS SCOPE\n");
-            let config_files = security_report.findings.iter()
-                .filter_map(|f| f.file_path.as_ref())
-                .collect::<std::collections::HashSet<_>>()
-                .len();
-            let code_files = security_report.findings.iter()
-                .filter(|f| matches!(f.category, syncable_cli::analyzer::SecurityCategory::CodeSecurityPattern))
-                .filter_map(|f| f.file_path.as_ref())
-                .collect::<std::collections::HashSet<_>>()
-                .len();
-            
-            output.push_str(&format!("✅ Secret Detection         ({} files analyzed)\n", config_files.max(1)));
-            output.push_str(&format!("✅ Environment Variables    ({} variables checked)\n", project_analysis.environment_variables.len()));
-            if code_files > 0 {
-                output.push_str(&format!("✅ Code Security Patterns   ({} files analyzed)\n", code_files));
-            } else {
-                output.push_str("ℹ️  Code Security Patterns   (no applicable files found)\n");
-            }
-            output.push_str("🚧 Infrastructure Security  (coming soon)\n");
-            output.push_str("🚧 Compliance Frameworks    (coming soon)\n");
-            
-            // Findings by Category
-            output.push_str("\n🎯 FINDINGS BY CATEGORY\n");
-            
-            // Count findings by our categories
-            let mut secret_findings = 0;
-            let mut code_findings = 0;
-            let mut infrastructure_findings = 0;
-            let mut compliance_findings = 0;
-            
-            for finding in &security_report.findings {
-                match finding.category {
-                    syncable_cli::analyzer::SecurityCategory::SecretsExposure => secret_findings += 1,
-                    syncable_cli::analyzer::SecurityCategory::CodeSecurityPattern |
-                    syncable_cli::analyzer::SecurityCategory::AuthenticationSecurity |
-                    syncable_cli::analyzer::SecurityCategory::DataProtection => code_findings += 1,
-                    syncable_cli::analyzer::SecurityCategory::InfrastructureSecurity |
-                    syncable_cli::analyzer::SecurityCategory::NetworkSecurity |
-                    syncable_cli::analyzer::SecurityCategory::InsecureConfiguration => infrastructure_findings += 1,
-                    syncable_cli::analyzer::SecurityCategory::Compliance => compliance_findings += 1,
-                }
-            }
-            
-            output.push_str(&format!("🔐 Secret Detection: {} findings\n", secret_findings));
-            output.push_str(&format!("🔒 Code Security: {} finding{}\n", code_findings, if code_findings == 1 { "" } else { "s" }));
-            output.push_str(&format!("🏗️ Infrastructure: {} findings\n", infrastructure_findings));
-            output.push_str(&format!("📋 Compliance: {} finding{}\n", compliance_findings, if compliance_findings == 1 { "" } else { "s" }));
-            
-            // Recommendations
-            if !security_report.recommendations.is_empty() {
-                output.push_str("\n💡 RECOMMENDATIONS\n");
-                for recommendation in &security_report.recommendations {
-                    output.push_str(&format!("• {}\n", recommendation));
-                }
-            } else {
-                // Add some default recommendations based on the analysis
-                output.push_str("\n💡 RECOMMENDATIONS\n");
-                output.push_str("• Enable dependency vulnerability scanning in CI/CD\n");
-                output.push_str("• Consider implementing rate limiting for API endpoints\n");
-                output.push_str("• Review environment variable security practices\n");
-            }
-            
-            // If there are actual findings, show them in detail
-            if !security_report.findings.is_empty() {
-                output.push_str(&format!("\n{}\n", "=".repeat(60)));
-                output.push_str("🔍 DETAILED FINDINGS\n\n");
-                
-                for (i, finding) in security_report.findings.iter().enumerate() {
-                    let severity_emoji = match finding.severity {
-                        syncable_cli::analyzer::SecuritySeverity::Critical => "🚨",
-                        syncable_cli::analyzer::SecuritySeverity::High => "⚠️ ",
-                        syncable_cli::analyzer::SecuritySeverity::Medium => "⚡",
-                        syncable_cli::analyzer::SecuritySeverity::Low => "ℹ️ ",
-                        syncable_cli::analyzer::SecuritySeverity::Info => "💡",
-                    };
-                    
-                    output.push_str(&format!("{}. {} [{}] {}\n", i + 1, severity_emoji, finding.id, finding.title));
-                    output.push_str(&format!("   📝 {}\n", finding.description));
-                    
-                    if let Some(file) = &finding.file_path {
-                        output.push_str(&format!("   📁 File: {}", file.display()));
-                        if let Some(line) = finding.line_number {
-                            output.push_str(&format!(" (line {})", line));
-                        }
-                        output.push_str("\n");
-                    }
-                    
-                    if let Some(evidence) = &finding.evidence {
-                        output.push_str(&format!("   🔍 Evidence: {}\n", evidence));
-                    }
-                    
-                    if !finding.remediation.is_empty() {
-                        output.push_str("   🔧 Fix:\n");
-                        for remediation in &finding.remediation {
-                            output.push_str(&format!("      • {}\n", remediation));
-                        }
-                    }
-                    
-                    output.push_str("\n");
-                }
-            }
-            
-            output
-        }
-        OutputFormat::Json => {
-            serde_json::to_string_pretty(&security_report)?
-        }
-    };
-    
-    // Output results
-    if let Some(output_path) = output {
-        std::fs::write(&output_path, output_string)?;
-        println!("Security report saved to: {}", output_path.display());
-    } else {
-        print!("{}", output_string);
-    }
-    
-    // Exit with error code if requested and findings exist
-    if fail_on_findings && security_report.total_findings > 0 {
-        let critical_count = security_report.findings_by_severity
-            .get(&syncable_cli::analyzer::SecuritySeverity::Critical)
-            .unwrap_or(&0);
-        let high_count = security_report.findings_by_severity
-            .get(&syncable_cli::analyzer::SecuritySeverity::High)
-            .unwrap_or(&0);
-        
-        if *critical_count > 0 {
-            eprintln!("❌ Critical security issues found. Please address immediately.");
-            std::process::exit(1);
-        } else if *high_count > 0 {
-            eprintln!("⚠️  High severity security issues found. Review recommended.");
-            std::process::exit(2);
-        } else {
-            eprintln!("ℹ️  Security issues found but none are critical or high severity.");
-            std::process::exit(3);
-        }
-    }
-    
+    // Call the handler from the handlers module which both prints and returns a string
+    let _result = syncable_cli::handlers::security::handle_security(
+        path,
+        mode,
+        include_low,
+        no_secrets,
+        no_code_patterns,
+        no_infrastructure,
+        no_compliance,
+        frameworks,
+        format,
+        output,
+        fail_on_findings,
+    )?;
+
+    // The handler already prints everything, so we just return Ok
+    // The returned string is available if needed by other consumers (like AI agents)
     Ok(())
+}
+
+async fn handle_tools(command: ToolsCommand) -> syncable_cli::Result<()> {
+    syncable_cli::handlers::tools::handle_tools(command).await
 }

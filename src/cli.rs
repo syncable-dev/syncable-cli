@@ -5,7 +5,9 @@ use std::path::PathBuf;
 #[command(name = "sync-ctl")]
 #[command(version = env!("CARGO_PKG_VERSION"))]
 #[command(about = "Generate Infrastructure as Code from your codebase")]
-#[command(long_about = "A powerful CLI tool that analyzes your codebase and automatically generates optimized Infrastructure as Code configurations including Dockerfiles, Docker Compose files, and Terraform configurations.")]
+#[command(
+    long_about = "A powerful CLI tool that analyzes your codebase and automatically generates optimized Infrastructure as Code configurations including Dockerfiles, Docker Compose files, and Terraform configurations"
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -25,6 +27,14 @@ pub struct Cli {
     /// Output in JSON format where applicable
     #[arg(long, global = true)]
     pub json: bool,
+
+    /// Clear the update check cache and force a new check
+    #[arg(long, global = true)]
+    pub clear_update_cache: bool,
+
+    /// Disable telemetry data collection
+    #[arg(long, global = true)]
+    pub disable_telemetry: bool,
 }
 
 #[derive(Subcommand)]
@@ -39,13 +49,21 @@ pub enum Commands {
         #[arg(short, long)]
         json: bool,
 
-        /// Show detailed analysis information
-        #[arg(short, long)]
+        /// Show detailed analysis information (legacy format)
+        #[arg(short, long, conflicts_with = "display")]
         detailed: bool,
+
+        /// Display format for analysis results
+        #[arg(long, value_enum, default_value = "matrix")]
+        display: Option<DisplayFormat>,
 
         /// Only analyze specific aspects (languages, frameworks, dependencies)
         #[arg(long, value_delimiter = ',')]
         only: Option<Vec<String>>,
+
+        /// Color scheme for terminal output (auto-detect, dark, light)
+        #[arg(long, value_enum, default_value = "auto")]
+        color_scheme: Option<ColorScheme>,
     },
 
     /// Generate IaC files for a project
@@ -165,6 +183,10 @@ pub enum Commands {
         #[arg(value_name = "PROJECT_PATH", default_value = ".")]
         path: PathBuf,
 
+        /// Security scan mode (lightning, fast, balanced, thorough, paranoid)
+        #[arg(long, value_enum, default_value = "thorough")]
+        mode: SecurityScanMode,
+
         /// Include low severity findings
         #[arg(long)]
         include_low: bool,
@@ -201,6 +223,355 @@ pub enum Commands {
         #[arg(long)]
         fail_on_findings: bool,
     },
+
+    /// Manage vulnerability scanning tools
+    Tools {
+        #[command(subcommand)]
+        command: ToolsCommand,
+    },
+
+    /// Analyze Kubernetes manifests for resource optimization opportunities
+    Optimize {
+        /// Path to Kubernetes manifests (file or directory)
+        #[arg(value_name = "PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Connect to a live Kubernetes cluster for metrics-based recommendations
+        /// Uses current kubeconfig context, or specify a context name
+        #[arg(long, short = 'k', value_name = "CONTEXT", default_missing_value = "current", num_args = 0..=1)]
+        cluster: Option<String>,
+
+        /// Prometheus URL for historical metrics (e.g., http://localhost:9090)
+        #[arg(long, value_name = "URL")]
+        prometheus: Option<String>,
+
+        /// Target namespace(s) for cluster analysis (comma-separated, or * for all)
+        #[arg(long, short = 'n', value_name = "NAMESPACE")]
+        namespace: Option<String>,
+
+        /// Analysis period for historical metrics (e.g., 7d, 30d)
+        #[arg(long, short = 'p', default_value = "7d")]
+        period: String,
+
+        /// Minimum severity to report (critical, warning, info)
+        #[arg(long, short = 's')]
+        severity: Option<String>,
+
+        /// Minimum waste percentage threshold (0-100)
+        #[arg(long, short = 't')]
+        threshold: Option<u8>,
+
+        /// Safety margin percentage for recommendations (default: 20)
+        #[arg(long)]
+        safety_margin: Option<u8>,
+
+        /// Include info-level suggestions
+        #[arg(long)]
+        include_info: bool,
+
+        /// Include system namespaces (kube-system, etc.)
+        #[arg(long)]
+        include_system: bool,
+
+        /// Output format (table, json, yaml)
+        #[arg(long, value_enum, default_value = "table")]
+        format: OutputFormat,
+
+        /// Write report to file
+        #[arg(long, short = 'o')]
+        output: Option<PathBuf>,
+
+        /// Generate fix suggestions
+        #[arg(long)]
+        fix: bool,
+
+        /// Apply fixes to manifest files (requires --fix or --full with live cluster)
+        #[arg(long, requires = "fix")]
+        apply: bool,
+
+        /// Preview changes without applying (dry-run mode)
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Backup directory for original files before applying fixes
+        #[arg(long, value_name = "DIR")]
+        backup_dir: Option<PathBuf>,
+
+        /// Minimum confidence threshold for auto-apply (0-100, default: 70)
+        #[arg(long, default_value = "70")]
+        min_confidence: u8,
+
+        /// Cloud provider for cost estimation (aws, gcp, azure, onprem)
+        #[arg(long, value_name = "PROVIDER")]
+        cloud_provider: Option<String>,
+
+        /// Region for cloud pricing (e.g., us-east-1, us-central1)
+        #[arg(long, value_name = "REGION", default_value = "us-east-1")]
+        region: String,
+
+        /// Run comprehensive analysis (includes kubelint security checks and helmlint validation)
+        #[arg(long, short = 'f')]
+        full: bool,
+    },
+
+    /// Start an interactive AI chat session to analyze and understand your project
+    Chat {
+        /// Path to the project directory (default: current directory)
+        #[arg(value_name = "PROJECT_PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// LLM provider to use (uses saved preference by default)
+        #[arg(long, value_enum, default_value = "auto")]
+        provider: ChatProvider,
+
+        /// Model to use (e.g., gpt-4o, claude-3-5-sonnet-latest, llama3.2)
+        #[arg(long)]
+        model: Option<String>,
+
+        /// Run a single query instead of interactive mode
+        #[arg(long)]
+        query: Option<String>,
+
+        /// Resume a previous session (accepts: "latest", session number, or UUID)
+        #[arg(long, short = 'r')]
+        resume: Option<String>,
+
+        /// List available sessions for this project and exit
+        #[arg(long)]
+        list_sessions: bool,
+
+        /// Start AG-UI server for frontend connectivity (SSE/WebSocket)
+        #[arg(long)]
+        ag_ui: bool,
+
+        /// AG-UI server port (default: 9090)
+        #[arg(long, default_value = "9090", requires = "ag_ui")]
+        ag_ui_port: u16,
+    },
+
+    /// Authenticate with the Syncable platform
+    Auth {
+        #[command(subcommand)]
+        command: AuthCommand,
+    },
+
+    /// Manage Syncable projects
+    Project {
+        #[command(subcommand)]
+        command: ProjectCommand,
+    },
+
+    /// Manage Syncable organizations
+    Org {
+        #[command(subcommand)]
+        command: OrgCommand,
+    },
+
+    /// Manage environments within a project
+    Env {
+        #[command(subcommand)]
+        command: EnvCommand,
+    },
+
+    /// Deploy services to the Syncable platform (launches wizard by default)
+    Deploy {
+        /// Path to the project directory (default: current directory)
+        #[arg(value_name = "PROJECT_PATH", default_value = ".")]
+        path: PathBuf,
+
+        #[command(subcommand)]
+        command: Option<DeployCommand>,
+    },
+
+    /// Run as dedicated AG-UI agent server (headless mode for containers)
+    Agent {
+        /// Path to the project directory
+        #[arg(value_name = "PROJECT_PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Port for AG-UI server
+        #[arg(long, short, default_value = "9090")]
+        port: u16,
+
+        /// Host address to bind to
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+
+        /// LLM provider to use
+        #[arg(long, value_enum, default_value = "auto")]
+        provider: ChatProvider,
+
+        /// Model to use
+        #[arg(long)]
+        model: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ToolsCommand {
+    /// Check which vulnerability scanning tools are installed
+    Status {
+        /// Output format
+        #[arg(long, value_enum, default_value = "table")]
+        format: OutputFormat,
+
+        /// Check tools for specific languages only
+        #[arg(long, value_delimiter = ',')]
+        languages: Option<Vec<String>>,
+    },
+
+    /// Install missing vulnerability scanning tools
+    Install {
+        /// Install tools for specific languages only
+        #[arg(long, value_delimiter = ',')]
+        languages: Option<Vec<String>>,
+
+        /// Also install OWASP Dependency Check (large download)
+        #[arg(long)]
+        include_owasp: bool,
+
+        /// Perform a dry run to show what would be installed
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Skip confirmation prompts
+        #[arg(short, long)]
+        yes: bool,
+    },
+
+    /// Verify that installed tools are working correctly
+    Verify {
+        /// Test tools for specific languages only
+        #[arg(long, value_delimiter = ',')]
+        languages: Option<Vec<String>>,
+
+        /// Show detailed verification output
+        #[arg(short, long)]
+        detailed: bool,
+    },
+
+    /// Show tool installation guides for manual setup
+    Guide {
+        /// Show guide for specific languages only
+        #[arg(long, value_delimiter = ',')]
+        languages: Option<Vec<String>>,
+
+        /// Show platform-specific instructions
+        #[arg(long)]
+        platform: Option<String>,
+    },
+}
+
+/// Authentication subcommands for the Syncable platform
+#[derive(Subcommand)]
+pub enum AuthCommand {
+    /// Log in to Syncable (opens browser for authentication)
+    Login {
+        /// Don't open browser automatically
+        #[arg(long)]
+        no_browser: bool,
+    },
+
+    /// Log out and clear stored credentials
+    Logout,
+
+    /// Show current authentication status
+    Status,
+
+    /// Print current access token (for scripting)
+    Token {
+        /// Print raw token without formatting
+        #[arg(long)]
+        raw: bool,
+    },
+}
+
+/// Project management subcommands
+#[derive(Subcommand)]
+pub enum ProjectCommand {
+    /// List projects in the current organization
+    List {
+        /// Organization ID to list projects from (uses current org if not specified)
+        #[arg(long)]
+        org_id: Option<String>,
+
+        /// Output format
+        #[arg(long, value_enum, default_value = "table")]
+        format: OutputFormat,
+    },
+
+    /// Select a project to work with
+    Select {
+        /// Project ID to select
+        id: String,
+    },
+
+    /// Show current organization and project context
+    Current,
+
+    /// Show details of a project
+    Info {
+        /// Project ID (uses current project if not specified)
+        id: Option<String>,
+    },
+}
+
+/// Organization management subcommands
+#[derive(Subcommand)]
+pub enum OrgCommand {
+    /// List organizations you belong to
+    List {
+        /// Output format
+        #[arg(long, value_enum, default_value = "table")]
+        format: OutputFormat,
+    },
+
+    /// Select an organization to work with
+    Select {
+        /// Organization ID to select
+        id: String,
+    },
+}
+
+/// Environment management subcommands
+#[derive(Subcommand)]
+pub enum EnvCommand {
+    /// List environments in the current project
+    List {
+        /// Output format
+        #[arg(long, value_enum, default_value = "table")]
+        format: OutputFormat,
+    },
+
+    /// Select an environment to work with
+    Select {
+        /// Environment ID to select
+        id: String,
+    },
+}
+
+/// Deployment subcommands
+#[derive(Subcommand)]
+pub enum DeployCommand {
+    /// Launch interactive deployment wizard
+    Wizard {
+        /// Path to the project directory (default: current directory)
+        #[arg(value_name = "PROJECT_PATH", default_value = ".")]
+        path: PathBuf,
+    },
+
+    /// Create a new environment for the current project
+    NewEnv,
+
+    /// Check deployment status
+    Status {
+        /// The deployment task ID (from deploy command output)
+        task_id: String,
+
+        /// Watch for status updates (poll until complete)
+        #[arg(short, long)]
+        watch: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -210,11 +581,60 @@ pub enum OutputFormat {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum DisplayFormat {
+    /// Compact matrix/dashboard view (modern, easy to scan)
+    Matrix,
+    /// Detailed vertical view (legacy format with all details)
+    Detailed,
+    /// Brief summary only
+    Summary,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum ColorScheme {
+    /// Auto-detect terminal background (default)
+    Auto,
+    /// Dark background terminal colors
+    Dark,
+    /// Light background terminal colors
+    Light,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum SeverityThreshold {
     Low,
     Medium,
     High,
     Critical,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum SecurityScanMode {
+    /// Lightning fast scan - critical files only (.env, configs)
+    Lightning,
+    /// Fast scan - smart sampling with priority patterns
+    Fast,
+    /// Balanced scan - good coverage with performance optimizations (recommended)
+    Balanced,
+    /// Thorough scan - comprehensive analysis of all files
+    Thorough,
+    /// Paranoid scan - most comprehensive including low-severity findings
+    Paranoid,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
+pub enum ChatProvider {
+    /// OpenAI (GPT-4o, GPT-4, etc.)
+    Openai,
+    /// Anthropic (Claude 3)
+    Anthropic,
+    /// AWS Bedrock (Claude via AWS)
+    Bedrock,
+    /// Ollama (local LLM, no API key needed)
+    Ollama,
+    /// Use saved default from config file
+    #[default]
+    Auto,
 }
 
 impl Cli {
@@ -235,4 +655,4 @@ impl Cli {
             .filter_level(level)
             .init();
     }
-} 
+}

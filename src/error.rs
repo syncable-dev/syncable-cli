@@ -23,6 +23,9 @@ pub enum IaCGeneratorError {
 
     #[error("Security error: {0}")]
     Security(#[from] SecurityError),
+
+    #[error("Agent error: {0}")]
+    Agent(#[from] crate::agent::AgentError),
 }
 
 #[derive(Error, Debug)]
@@ -82,4 +85,4 @@ pub enum SecurityError {
     InsufficientPermissions(String),
 }
 
-pub type Result<T> = std::result::Result<T, IaCGeneratorError>; 
+pub type Result<T> = std::result::Result<T, IaCGeneratorError>;

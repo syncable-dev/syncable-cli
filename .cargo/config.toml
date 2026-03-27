@@ -1,6 +1,8 @@
 [build]
 rustflags = ["-C", "target-cpu=native"]
 
+# Note: mold linker doesn't support macOS. Use default ld64 (already fast on Mac)
+
 [alias]
 b = "build"
 br = "build --release"
@@ -9,5 +11,4 @@ t = "test"
 tr = "test --release"
 r = "run"
 rr = "run --release"
-fmt = "fmt --all"
-clippy = "clippy --all-targets --all-features" 
+# Note: cargo fmt and clippy aliases removed - were recursive and broke CI

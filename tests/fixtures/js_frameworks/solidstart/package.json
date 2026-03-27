@@ -1,0 +1,8 @@
+{
+  "name": "fixture-solidstart",
+  "private": true,
+  "dependencies": {
+    "solid-start": "1.0.0",
+    "solid-js": "1.8.0"
+  }
+}
