@@ -953,6 +953,46 @@ pub fn list_outputs() -> Vec<OutputInfo> {
     outputs
 }
 
+/// Resolve "latest" to the most recent ref_id by scanning disk files.
+/// Works across separate CLI invocations (no in-memory state dependency).
+pub fn resolve_latest() -> Option<String> {
+    let output_dir = std::path::Path::new("/tmp/syncable-cli/outputs");
+    if !output_dir.exists() {
+        return None;
+    }
+
+    let mut newest: Option<(u64, String)> = None;
+
+    if let Ok(entries) = std::fs::read_dir(output_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().map_or(true, |e| e != "json") {
+                continue;
+            }
+
+            if let Ok(contents) = std::fs::read_to_string(&path) {
+                if let Ok(data) = serde_json::from_str::<Value>(&contents) {
+                    if let Some(ts) = data.get("timestamp").and_then(|v| v.as_u64()) {
+                        if let Some(ref_id) = data.get("ref_id").and_then(|v| v.as_str()) {
+                            match &newest {
+                                Some((best_ts, _)) if ts > *best_ts => {
+                                    newest = Some((ts, ref_id.to_string()));
+                                }
+                                None => {
+                                    newest = Some((ts, ref_id.to_string()));
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    newest.map(|(_, ref_id)| ref_id)
+}
+
 /// Information about a stored output
 #[derive(Debug, Clone)]
 pub struct OutputInfo {
@@ -1215,5 +1255,57 @@ mod tests {
         let result = find_issues_array(&data);
         assert!(result.is_some());
         assert_eq!(result.unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_resolve_latest_returns_most_recent() {
+        use std::fs;
+        use std::path::Path;
+
+        let output_dir = Path::new("/tmp/syncable-cli/outputs");
+        fs::create_dir_all(output_dir).unwrap();
+
+        // Clean up any existing test files
+        let _ = fs::remove_file(output_dir.join("test_old_aaa111.json"));
+        let _ = fs::remove_file(output_dir.join("test_new_bbb222.json"));
+
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // Write two files with different timestamps.
+        // Use a far-future timestamp for the "new" file so it's always
+        // the most recent, even when other tests run concurrently and
+        // call store_output() with the current time.
+        let old_data = serde_json::json!({
+            "ref_id": "test_old_aaa111",
+            "tool": "test_old",
+            "timestamp": now - 60,
+            "data": {}
+        });
+        let new_data = serde_json::json!({
+            "ref_id": "test_new_bbb222",
+            "tool": "test_new",
+            "timestamp": now + 9_999_999,
+            "data": {}
+        });
+
+        fs::write(
+            output_dir.join("test_old_aaa111.json"),
+            serde_json::to_string(&old_data).unwrap(),
+        ).unwrap();
+        fs::write(
+            output_dir.join("test_new_bbb222.json"),
+            serde_json::to_string(&new_data).unwrap(),
+        ).unwrap();
+
+        let latest = resolve_latest();
+        assert!(latest.is_some());
+        assert_eq!(latest.unwrap(), "test_new_bbb222");
+
+        // Cleanup
+        let _ = fs::remove_file(output_dir.join("test_old_aaa111.json"));
+        let _ = fs::remove_file(output_dir.join("test_new_bbb222.json"));
     }
 }
