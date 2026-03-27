@@ -19,39 +19,39 @@ Analyze Kubernetes manifests and optionally live cluster metrics to recommend re
 ### Static manifest analysis
 
 ```bash
-sync-ctl optimize <PATH> --format json
+sync-ctl optimize <PATH> --agent
 ```
 
 ### Live cluster analysis
 
 ```bash
-sync-ctl optimize <PATH> --cluster --format json
-sync-ctl optimize <PATH> --cluster my-context --namespace default --format json
+sync-ctl optimize <PATH> --cluster --agent
+sync-ctl optimize <PATH> --cluster my-context --namespace default --agent
 ```
 
 ### With Prometheus metrics
 
 ```bash
-sync-ctl optimize <PATH> --cluster --prometheus http://localhost:9090 --period 30d --format json
+sync-ctl optimize <PATH> --cluster --prometheus http://localhost:9090 --period 30d --agent
 ```
 
 ### Full analysis (includes kubelint + helmlint)
 
 ```bash
-sync-ctl optimize <PATH> --full --format json
+sync-ctl optimize <PATH> --full --agent
 ```
 
 ### Cost estimation
 
 ```bash
-sync-ctl optimize <PATH> --cluster --cloud-provider aws --region us-east-1 --format json
+sync-ctl optimize <PATH> --cluster --cloud-provider aws --region us-east-1 --agent
 ```
 
 ### Key Flags
 
 | Flag | Purpose |
 |------|---------|
-| `--format json` | Machine-readable output (always use) |
+| `--agent` | Compressed output for agent consumption (always use) |
 | `--cluster [CONTEXT]` | Connect to live K8s cluster (uses current context if no name given) |
 | `--prometheus <URL>` | Prometheus URL for historical metrics |
 | `--namespace <NS>` | Target namespace (or `*` for all) |
@@ -67,22 +67,34 @@ sync-ctl optimize <PATH> --cluster --cloud-provider aws --region us-east-1 --for
 
 ## Output Interpretation
 
-The JSON output contains:
-
-- **recommendations** — array of optimization suggestions with:
-  - Resource right-sizing (CPU/memory requests/limits)
-  - Confidence score
-  - Current vs recommended values
-  - Estimated savings
-- **costs** — cost attribution per workload (if `--cloud-provider` set)
-- **drift** — configuration drift between manifests and running state (if `--cluster` set)
-- **security** — kubelint findings (if `--full` set)
-
 **Priority for reporting to user:**
 1. High-confidence right-sizing recommendations with cost savings
 2. Critical security findings (from `--full`)
 3. Drift detection issues
 4. Cost breakdown summary
+
+## Reading Results
+
+When you use `--agent`, the output is a compressed summary. High-confidence right-sizing recommendations are included in full. Cost summary and drift findings are always present when applicable.
+
+The output JSON includes:
+- `summary` — total recommendations, estimated savings, containers analyzed
+- `top_recommendations` — highest-impact right-sizing suggestions
+- `costs` — cost attribution summary (if `--cloud-provider` set)
+- `drift` — configuration drift issues (if `--cluster` set)
+- `full_data_ref` — reference ID for retrieving full data
+- `retrieval_hint` — exact command for drill-down
+
+To drill into specifics:
+```bash
+# Get high-severity findings
+sync-ctl retrieve <ref_id> --query "severity:high"
+
+# Get recommendations for a specific container
+sync-ctl retrieve <ref_id> --query "container:my-app"
+```
+
+**Available query filters:** `severity:<level>`, `container:<name>`
 
 ## Safety
 
@@ -95,7 +107,7 @@ The JSON output contains:
 
 | Error | Cause | Action |
 |-------|-------|--------|
-| `No Kubernetes manifests found` | No YAML with K8s resources | Run `sync-ctl analyze <PATH> --json` to check for K8s presence |
+| `No Kubernetes manifests found` | No YAML with K8s resources | Run `sync-ctl analyze <PATH> --agent` to check for K8s presence |
 | `Cannot connect to cluster` | Invalid kubeconfig or cluster unreachable | Check `kubectl cluster-info` works, verify context name |
 | `Prometheus unreachable` | Wrong URL or Prometheus not running | Verify URL, fall back to static analysis without `--prometheus` |
 
@@ -103,15 +115,15 @@ The JSON output contains:
 
 **Quick static analysis:**
 ```bash
-sync-ctl optimize . --format json
+sync-ctl optimize . --agent
 ```
 
 **Full analysis with live cluster and cost estimation:**
 ```bash
-sync-ctl optimize . --cluster --cloud-provider aws --full --format json
+sync-ctl optimize . --cluster --cloud-provider aws --full --agent
 ```
 
 **Preview fixes before applying:**
 ```bash
-sync-ctl optimize . --fix --dry-run --format json
+sync-ctl optimize . --fix --dry-run --agent
 ```

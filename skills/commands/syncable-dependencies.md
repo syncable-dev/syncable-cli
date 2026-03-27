@@ -17,31 +17,26 @@ Analyze project dependencies in detail: list all packages, check license types, 
 ### Full dependency analysis with licenses
 
 ```bash
-sync-ctl dependencies <PATH> --licenses --format json
+sync-ctl dependencies <PATH> --licenses --agent
 ```
 
 ### Production dependencies only
 
 ```bash
-sync-ctl dependencies <PATH> --licenses --prod-only --format json
+sync-ctl dependencies <PATH> --licenses --prod-only --agent
 ```
 
 ### Key Flags
 
 | Flag | Purpose |
 |------|---------|
-| `--format json` | Machine-readable output (always use) |
+| `--agent` | Compressed output for agent consumption (always use) |
 | `--licenses` | Include license information for each dependency |
 | `--vulnerabilities` | Quick inline vulnerability check (for thorough CVE scanning, use the standalone `sync-ctl vulnerabilities` command instead) |
 | `--prod-only` | Show only production dependencies |
 | `--dev-only` | Show only development dependencies |
 
 ## Output Interpretation
-
-The JSON output contains:
-
-- **dependencies** — array of packages with name, version, license, and prod/dev classification
-- **summary** — total counts, license distribution
 
 **Priority for reporting to user:**
 1. License concerns (copyleft in commercial projects, unknown licenses)
@@ -51,6 +46,27 @@ The JSON output contains:
 **When to use `--vulnerabilities` vs standalone `vulnerabilities` command:**
 - Use `--vulnerabilities` here for a quick inline check alongside license info
 - Use `sync-ctl vulnerabilities` for a dedicated, thorough CVE scan
+
+## Reading Results
+
+When you use `--agent`, the output is a compressed summary. License distribution and dependency counts are always included. Individual package details are available via retrieve for large dependency trees.
+
+The output JSON includes:
+- `summary` — total counts, license distribution, prod/dev split
+- `license_concerns` — packages with copyleft or unknown licenses
+- `full_data_ref` — reference ID for retrieving full data
+- `retrieval_hint` — exact command for drill-down
+
+To drill into specifics:
+```bash
+# Get high-severity license findings
+sync-ctl retrieve <ref_id> --query "severity:high"
+
+# Get findings for a specific file
+sync-ctl retrieve <ref_id> --query "file:package.json"
+```
+
+**Available query filters:** `severity:<level>`, `file:<path>`
 
 ## Error Handling
 
@@ -63,15 +79,15 @@ The JSON output contains:
 
 **Full audit with licenses:**
 ```bash
-sync-ctl dependencies . --licenses --format json
+sync-ctl dependencies . --licenses --agent
 ```
 
 **Production-only for license compliance:**
 ```bash
-sync-ctl dependencies . --licenses --prod-only --format json
+sync-ctl dependencies . --licenses --prod-only --agent
 ```
 
 **Quick vulnerability check alongside deps:**
 ```bash
-sync-ctl dependencies . --licenses --vulnerabilities --format json
+sync-ctl dependencies . --licenses --vulnerabilities --agent
 ```

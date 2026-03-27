@@ -14,10 +14,10 @@ Analyze a project directory to detect its tech stack: programming languages, fra
 
 ## Commands
 
-### Basic analysis (JSON output for agent consumption)
+### Basic analysis (agent output)
 
 ```bash
-sync-ctl analyze <PATH> --json
+sync-ctl analyze <PATH> --agent
 ```
 
 ### Human-readable matrix view
@@ -29,31 +29,54 @@ sync-ctl analyze <PATH> --display matrix
 ### Filtered analysis (only specific aspects)
 
 ```bash
-sync-ctl analyze <PATH> --json --only languages,frameworks
-sync-ctl analyze <PATH> --json --only dependencies
+sync-ctl analyze <PATH> --agent --only languages,frameworks
+sync-ctl analyze <PATH> --agent --only dependencies
 ```
 
 ### Key Flags
 
 | Flag | Purpose |
 |------|---------|
-| `--json` | Machine-readable JSON output (always use when processing results) |
+| `--agent` | Compressed output for agent consumption (always use when processing results) |
 | `--detailed` | Show detailed analysis (legacy vertical format) |
 | `--display {matrix\|detailed\|summary}` | Display format for human-readable output |
 | `--only <filters>` | Comma-separated: `languages`, `frameworks`, `dependencies` |
 
 ## Output Interpretation
 
-The JSON output contains:
-
-- **languages** — detected programming languages with file counts and percentages
-- **frameworks** — detected frameworks with versions where available
-- **dependencies** — package managers found and dependency counts
-- **runtimes** — detected runtime versions (Node.js, Python, Go, Rust, Java)
-- **docker** — whether Dockerfiles or Docker Compose files exist
-- **monorepo** — whether the project is a monorepo and its structure
-
 When reporting to the user, prioritize: primary language, main framework, runtime version, and whether Docker/K8s infrastructure exists.
+
+## Reading Results
+
+When you use `--agent`, the output is a compressed summary — not the full analysis. Act on it directly for most decisions.
+
+The output JSON includes:
+- `summary` — project count, languages, frameworks detected
+- `full_data_ref` — reference ID for retrieving full data
+- `retrieval_hint` — exact command to get more details
+
+To drill into specifics:
+```bash
+# Get framework details
+sync-ctl retrieve <ref_id> --query "section:frameworks"
+
+# Get language breakdown
+sync-ctl retrieve <ref_id> --query "section:languages"
+
+# Get specific project details (monorepos)
+sync-ctl retrieve <ref_id> --query "project:<project-name>"
+
+# Get specific language details
+sync-ctl retrieve <ref_id> --query "language:Go"
+
+# Get specific framework details
+sync-ctl retrieve <ref_id> --query "framework:React"
+
+# List all stored outputs
+sync-ctl retrieve --list
+```
+
+**Available query filters:** `section:summary`, `section:frameworks`, `section:languages`, `language:<name>`, `framework:<name>`, `project:<name>`, `compact:true`
 
 ## Error Handling
 
@@ -67,15 +90,15 @@ When reporting to the user, prioritize: primary language, main framework, runtim
 
 **Analyze current directory:**
 ```bash
-sync-ctl analyze . --json
+sync-ctl analyze . --agent
 ```
 
 **Analyze a specific project:**
 ```bash
-sync-ctl analyze /path/to/project --json
+sync-ctl analyze /path/to/project --agent
 ```
 
 **Quick language-only check:**
 ```bash
-sync-ctl analyze . --json --only languages
+sync-ctl analyze . --agent --only languages
 ```

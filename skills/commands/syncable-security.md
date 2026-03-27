@@ -17,7 +17,7 @@ Perform security analysis on a codebase: detect leaked secrets (API keys, tokens
 ### Standard security scan
 
 ```bash
-sync-ctl security <PATH> --mode balanced --format json
+sync-ctl security <PATH> --mode balanced --agent
 ```
 
 ### Mode Selection Guide
@@ -37,7 +37,7 @@ Always pass `--mode` explicitly. Choose based on context:
 | Flag | Purpose |
 |------|---------|
 | `--mode {lightning\|fast\|balanced\|thorough\|paranoid}` | Scan depth (always specify) |
-| `--format json` | Machine-readable output (always use when processing results) |
+| `--agent` | Compressed output for agent consumption (always use when processing results) |
 | `--include-low` | Include low-severity findings (off by default) |
 | `--no-secrets` | Skip secrets detection (only code patterns) |
 | `--no-code-patterns` | Skip code pattern analysis (only secrets) |
@@ -46,23 +46,38 @@ Always pass `--mode` explicitly. Choose based on context:
 
 ## Output Interpretation
 
-The JSON output contains:
-
-- **findings** — array of security issues, each with:
-  - `severity` — Critical, High, Medium, Low, Info
-  - `category` — secrets, code_pattern, configuration, infrastructure
-  - `file` — exact file path
-  - `line` — line number
-  - `description` — what was found
-  - `remediation` — how to fix it
-- **summary** — total counts by severity
-- **score** — overall security score (0-100)
-
 **Priority for reporting to user:**
 1. Critical findings first (leaked secrets, hardcoded credentials)
 2. High findings (insecure patterns)
 3. Summary with score
 4. Remediation steps for top findings
+
+## Reading Results
+
+When you use `--agent`, the output is a compressed summary (~15KB max). All **critical** issues are included in full detail. High-severity issues show the first 10. Medium/low issues are deduplicated into patterns.
+
+The output JSON includes:
+- `status` — e.g., "CRITICAL_ISSUES_FOUND", "HIGH_ISSUES_FOUND", "CLEAN"
+- `summary` — counts by severity (total, critical, high, medium, low, info)
+- `critical_issues` — full details for every critical finding
+- `high_issues` — first 10 high-severity findings
+- `patterns` — deduplicated medium/low findings with counts
+- `full_data_ref` — reference ID for retrieving full data
+- `retrieval_hint` — exact command for drill-down
+
+To drill into specifics:
+```bash
+# Get all critical findings
+sync-ctl retrieve <ref_id> --query "severity:critical"
+
+# Get findings for a specific file
+sync-ctl retrieve <ref_id> --query "file:src/auth.rs"
+
+# Get findings by rule code
+sync-ctl retrieve <ref_id> --query "code:hardcoded-secret"
+```
+
+**Available query filters:** `severity:critical|high|medium|low|info`, `file:<path>`, `code:<id>`
 
 ## Error Handling
 
@@ -76,20 +91,20 @@ The JSON output contains:
 
 **Quick secrets check on current directory:**
 ```bash
-sync-ctl security . --mode balanced --format json
+sync-ctl security . --mode balanced --agent
 ```
 
 **Deep pre-deploy audit:**
 ```bash
-sync-ctl security . --mode paranoid --format json
+sync-ctl security . --mode paranoid --agent
 ```
 
 **Secrets-only scan (skip code patterns):**
 ```bash
-sync-ctl security . --mode thorough --no-code-patterns --format json
+sync-ctl security . --mode thorough --no-code-patterns --agent
 ```
 
 **Save report to file:**
 ```bash
-sync-ctl security . --mode thorough --format json --output security-report.json
+sync-ctl security . --mode thorough --agent --output security-report.json
 ```
