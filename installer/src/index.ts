@@ -43,6 +43,7 @@ program
   .option('-y, --yes', 'Skip confirmations')
   .option('--verbose', 'Show detailed output')
   .action(async (opts) => {
+    const verbose = opts.verbose || false;
     console.log(chalk.bold('\n  Syncable CLI Skills Installer'));
     console.log('  ' + '─'.repeat(29) + '\n');
 
@@ -122,6 +123,7 @@ program
     for (const { agent, detected } of detectionResults) {
       if (detected) {
         console.log(chalk.green(`  ✓ ${agent.displayName} detected`));
+        if (verbose) console.log(chalk.dim(`    path: ${agent.getSkillPath()}`));
       } else {
         console.log(chalk.dim(`  ✗ ${agent.displayName} not detected`));
       }
@@ -157,7 +159,13 @@ program
     }
 
     if (selectedAgents.length === 0) {
-      console.log(chalk.yellow('\n  No agents selected. Nothing to install.'));
+      if (opts.globalOnly) {
+        console.log(chalk.yellow('\n  No global agents detected (Claude Code, Codex). Nothing to install.'));
+      } else if (opts.projectOnly) {
+        console.log(chalk.yellow('\n  No project agents detected (Cursor, Windsurf, Gemini). Nothing to install.'));
+      } else {
+        console.log(chalk.yellow('\n  No agents selected. Nothing to install.'));
+      }
       return;
     }
 
@@ -194,6 +202,7 @@ program
             break;
         }
         spinner.succeed(`  ${skills.length} skills installed for ${agent.displayName}`);
+        if (verbose) console.log(chalk.dim(`    dest: ${dest}`));
       } catch (err) {
         spinner.fail(`  Failed to install skills for ${agent.displayName}: ${err}`);
       }
@@ -260,12 +269,20 @@ program
   .command('update')
   .description('Update skills to latest version')
   .option('--agents <list>', 'Comma-separated agent list')
+  .option('--dry-run', 'Show what would be done without doing it')
+  .option('--global-only', 'Only update global skills')
+  .option('--project-only', 'Only update project-level rules')
   .option('-y, --yes', 'Skip confirmations')
+  .option('--verbose', 'Show detailed output')
   .action(async (opts) => {
     const yesFlag = opts.yes ? ['--yes'] : [];
     const agentsFlag = opts.agents ? ['--agents', opts.agents] : [];
+    const dryRunFlag = opts.dryRun ? ['--dry-run'] : [];
+    const globalOnlyFlag = opts.globalOnly ? ['--global-only'] : [];
+    const projectOnlyFlag = opts.projectOnly ? ['--project-only'] : [];
+    const verboseFlag = opts.verbose ? ['--verbose'] : [];
     await program.commands.find((c) => c.name() === 'uninstall')!.parseAsync(['node', 'x', ...agentsFlag, ...yesFlag]);
-    await program.commands.find((c) => c.name() === 'install')!.parseAsync(['node', 'x', '--skip-cli', ...agentsFlag, ...yesFlag]);
+    await program.commands.find((c) => c.name() === 'install')!.parseAsync(['node', 'x', '--skip-cli', ...agentsFlag, ...yesFlag, ...dryRunFlag, ...globalOnlyFlag, ...projectOnlyFlag, ...verboseFlag]);
   });
 
 program
