@@ -17,7 +17,7 @@ Run a comprehensive project health check by chaining multiple Syncable CLI comma
 ### Step 1: Analyze the project stack
 
 ```bash
-sync-ctl analyze <PATH> --json
+sync-ctl analyze <PATH> --agent
 ```
 
 Parse the output to understand:
@@ -25,10 +25,12 @@ Parse the output to understand:
 - Whether dependencies exist (needed for steps 3 and 4)
 - Whether secrets-capable files exist (affects step 2 mode)
 
+Save the `full_data_ref` from the analyze output — you'll use it to retrieve details without re-running analyze.
+
 ### Step 2: Security scan
 
 ```bash
-sync-ctl security <PATH> --mode balanced --format json
+sync-ctl security <PATH> --mode balanced --agent
 ```
 
 **Decision point:** If step 1 shows no config files, secrets files, or environment files, use `--mode lightning` instead of `--mode balanced` to save time.
@@ -36,7 +38,7 @@ sync-ctl security <PATH> --mode balanced --format json
 ### Step 3: Vulnerability scan
 
 ```bash
-sync-ctl vulnerabilities <PATH> --format json
+sync-ctl vulnerabilities <PATH> --agent
 ```
 
 **Decision point:** If step 1 detected no dependencies (no package.json, requirements.txt, Cargo.toml, go.mod, etc.), **skip this step entirely** and note "No dependencies detected" in the report.
@@ -44,7 +46,7 @@ sync-ctl vulnerabilities <PATH> --format json
 ### Step 4: Dependency audit
 
 ```bash
-sync-ctl dependencies <PATH> --licenses --format json
+sync-ctl dependencies <PATH> --licenses --agent
 ```
 
 **Decision point:** Same as step 3 — skip if no dependencies detected.
@@ -74,10 +76,30 @@ After all steps complete, synthesize a unified report for the user:
 The agent runs these commands in sequence, skipping steps based on decision points:
 
 ```bash
-sync-ctl analyze . --json
-sync-ctl security . --mode balanced --format json
-sync-ctl vulnerabilities . --format json
-sync-ctl dependencies . --licenses --format json
+sync-ctl analyze . --agent
+sync-ctl security . --mode balanced --agent
+sync-ctl vulnerabilities . --agent
+sync-ctl dependencies . --licenses --agent
 ```
 
 Then synthesizes the results into a single report for the user.
+
+## Cross-Step Retrieval
+
+Each step produces a `full_data_ref` in its output. You can retrieve details from any previous step at any time:
+
+```bash
+# Check what data is available from all steps
+sync-ctl retrieve --list
+
+# Get framework details from Step 1 (analyze)
+sync-ctl retrieve <analyze_ref_id> --query "section:frameworks"
+
+# Get critical security findings from Step 2
+sync-ctl retrieve <security_ref_id> --query "severity:critical"
+
+# Get vulnerability details from Step 3
+sync-ctl retrieve <vuln_ref_id> --query "severity:high"
+```
+
+Do NOT re-run a command just to get more detail — use `sync-ctl retrieve` instead.

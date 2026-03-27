@@ -17,12 +17,14 @@ Perform a deep, multi-layered security review suitable for pre-deployment gates 
 ### Step 1: Analyze the project
 
 ```bash
-sync-ctl analyze <PATH> --json
+sync-ctl analyze <PATH> --agent
 ```
 
 Parse the output to determine:
 - What IaC files exist (Dockerfiles, Compose, Terraform, K8s manifests) — needed for step 4
 - What dependencies exist — needed for step 3
+
+Save the `full_data_ref` from the analyze output — you'll use it to retrieve details without re-running analyze.
 
 ### Step 2: Deep security scan
 
@@ -30,18 +32,18 @@ Choose mode based on context:
 
 **For PR reviews / pre-merge:**
 ```bash
-sync-ctl security <PATH> --mode thorough --format json
+sync-ctl security <PATH> --mode thorough --agent
 ```
 
 **For production deployment / compliance:**
 ```bash
-sync-ctl security <PATH> --mode paranoid --format json
+sync-ctl security <PATH> --mode paranoid --agent
 ```
 
 ### Step 3: Vulnerability scan
 
 ```bash
-sync-ctl vulnerabilities <PATH> --format json
+sync-ctl vulnerabilities <PATH> --agent
 ```
 
 ### Step 4: IaC validation
@@ -77,3 +79,23 @@ Produce a security audit report:
 5. **Remediation Priority** — ordered list of actions to resolve findings
 
 **If critical findings exist:** Explicitly warn the user. If this audit is part of a deploy pipeline, recommend blocking deployment until critical issues are resolved.
+
+## Cross-Step Retrieval
+
+Each step produces a `full_data_ref` in its output. You can retrieve details from any previous step at any time:
+
+```bash
+# Check what data is available from all steps
+sync-ctl retrieve --list
+
+# Get framework details from Step 1 (analyze)
+sync-ctl retrieve <analyze_ref_id> --query "section:frameworks"
+
+# Get critical security findings from Step 2
+sync-ctl retrieve <security_ref_id> --query "severity:critical"
+
+# Get vulnerability details from Step 3
+sync-ctl retrieve <vuln_ref_id> --query "severity:high"
+```
+
+Do NOT re-run a command just to get more detail — use `sync-ctl retrieve` instead.

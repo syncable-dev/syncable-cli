@@ -47,22 +47,25 @@ sync-ctl env select <ENV_ID>
 ### Step 2: Analyze the project
 
 ```bash
-sync-ctl analyze <PATH> --json
+sync-ctl analyze <PATH> --agent
 ```
+
+Save the `full_data_ref` from the analyze output — do not re-run analyze in later steps; use `sync-ctl retrieve` with this ref_id instead.
 
 ### Step 3: Pre-deploy security audit
 
 Execute the `syncable-security-audit` workflow inline (all its steps and decision logic). **Note:** Step 2's analyze output is reused here — do not re-run analyze.
 
-1. `sync-ctl security <PATH> --mode paranoid --format json`
-2. `sync-ctl vulnerabilities <PATH> --format json`
+1. `sync-ctl security <PATH> --mode paranoid --agent`
+2. `sync-ctl vulnerabilities <PATH> --agent`
 3. `sync-ctl validate <PATH>` (if IaC files exist per Step 2's analysis)
 
-**CRITICAL GATE:** If the security audit finds **critical** findings:
-- Present all critical findings to the user
-- Explicitly warn: "Critical security findings detected. Deploying with these issues is not recommended."
-- Ask the user whether to proceed or abort
-- **Never deploy silently when critical findings exist**
+**CRITICAL GATE:** Check the security output's `status` field:
+- If `status` is "CRITICAL_ISSUES_FOUND": present findings to user, warn, require confirmation
+- If `status` is "HIGH_ISSUES_FOUND": warn but allow deployment
+- If `status` is "CLEAN": proceed to deploy
+
+All critical findings are in the `critical_issues` array of the compressed output — no retrieval needed for the gate decision.
 
 ### Step 4: Deploy
 
@@ -90,3 +93,23 @@ sync-ctl deploy status <TASK_ID> --watch
 - **Never deploy without the security gate.** Even if the user says "just deploy", run at least a fast security scan.
 - **Always confirm with the user before triggering deployment.** Show them what will be deployed, to which environment.
 - **Monitor deployment status** after triggering — don't fire-and-forget.
+
+## Cross-Step Retrieval
+
+Each step produces a `full_data_ref` in its output. You can retrieve details from any previous step at any time:
+
+```bash
+# Check what data is available from all steps
+sync-ctl retrieve --list
+
+# Get framework details from Step 2 (analyze)
+sync-ctl retrieve <analyze_ref_id> --query "section:frameworks"
+
+# Get critical security findings from Step 3
+sync-ctl retrieve <security_ref_id> --query "severity:critical"
+
+# Get vulnerability details from Step 3
+sync-ctl retrieve <vuln_ref_id> --query "severity:high"
+```
+
+Do NOT re-run a command just to get more detail — use `sync-ctl retrieve` instead.
