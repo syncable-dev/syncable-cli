@@ -64,6 +64,10 @@ pub enum Commands {
         /// Color scheme for terminal output (auto-detect, dark, light)
         #[arg(long, value_enum, default_value = "auto")]
         color_scheme: Option<ColorScheme>,
+
+        /// Output compressed JSON for AI agent consumption (implies --json)
+        #[arg(long)]
+        agent: bool,
     },
 
     /// Generate IaC files for a project
@@ -114,6 +118,10 @@ pub enum Commands {
         /// Fix issues automatically where possible
         #[arg(long)]
         fix: bool,
+
+        /// Output compressed JSON for AI agent consumption (implies --json)
+        #[arg(long)]
+        agent: bool,
     },
 
     /// Show supported languages and frameworks
@@ -156,6 +164,10 @@ pub enum Commands {
         /// Output format
         #[arg(long, value_enum, default_value = "table")]
         format: OutputFormat,
+
+        /// Output compressed JSON for AI agent consumption (implies --json)
+        #[arg(long)]
+        agent: bool,
     },
 
     /// Check dependencies for known vulnerabilities
@@ -175,6 +187,10 @@ pub enum Commands {
         /// Export report to file
         #[arg(long)]
         output: Option<PathBuf>,
+
+        /// Output compressed JSON for AI agent consumption (implies --json)
+        #[arg(long)]
+        agent: bool,
     },
 
     /// Perform comprehensive security analysis
@@ -222,6 +238,10 @@ pub enum Commands {
         /// Exit with error code on security findings
         #[arg(long)]
         fail_on_findings: bool,
+
+        /// Output compressed JSON for AI agent consumption (implies --json)
+        #[arg(long)]
+        agent: bool,
     },
 
     /// Manage vulnerability scanning tools
@@ -312,6 +332,25 @@ pub enum Commands {
         /// Run comprehensive analysis (includes kubelint security checks and helmlint validation)
         #[arg(long, short = 'f')]
         full: bool,
+
+        /// Output compressed JSON for AI agent consumption (implies --json)
+        #[arg(long)]
+        agent: bool,
+    },
+
+    /// Retrieve stored output from a previous --agent command
+    Retrieve {
+        /// Reference ID (e.g., "security_a1b2c3d4") or "latest" for most recent
+        #[arg(value_name = "REF_ID")]
+        ref_id: Option<String>,
+
+        /// Filter query (e.g., "severity:critical", "file:path", "section:frameworks")
+        #[arg(long, short = 'q')]
+        query: Option<String>,
+
+        /// List all stored outputs
+        #[arg(long)]
+        list: bool,
     },
 
     /// Start an interactive AI chat session to analyze and understand your project
