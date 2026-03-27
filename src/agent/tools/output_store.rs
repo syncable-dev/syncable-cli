@@ -297,6 +297,8 @@ fn find_issues_array(data: &Value) -> Option<Vec<Value>> {
         "errors",
         "recommendations",
         "results",
+        "failures",
+        "diagnostics",
     ];
 
     for field in &issue_fields {
@@ -1188,5 +1190,30 @@ mod tests {
         let gin = retrieve_filtered(&ref_id, Some("framework:Gin"));
         assert!(gin.is_some());
         assert_eq!(gin.as_ref().unwrap()["total_matches"], 1);
+    }
+
+    #[test]
+    fn test_find_issues_array_failures_field() {
+        let data = serde_json::json!({
+            "failures": [
+                {"code": "DL3008", "severity": "warning", "message": "Pin versions"},
+                {"code": "DL3009", "severity": "info", "message": "Delete apt cache"}
+            ]
+        });
+        let result = find_issues_array(&data);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_find_issues_array_diagnostics_field() {
+        let data = serde_json::json!({
+            "diagnostics": [
+                {"code": "DC001", "severity": "error", "message": "Invalid compose version"}
+            ]
+        });
+        let result = find_issues_array(&data);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().len(), 1);
     }
 }
