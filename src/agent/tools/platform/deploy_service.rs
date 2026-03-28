@@ -1681,6 +1681,7 @@ mod tests {
         let tool = DeployServiceTool::new(PathBuf::from("/nonexistent/path/that/does/not/exist"));
         let args = DeployServiceArgs {
             path: Some("nope".to_string()),
+            service_name: None,
             provider: None,
             machine_type: None,
             region: None,
