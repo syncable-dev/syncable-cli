@@ -1,6 +1,6 @@
 ---
 name: syncable-vulnerabilities
-description: Use when checking project dependencies for known CVEs or security vulnerabilities using Syncable CLI. Trigger on: "check for CVEs", "vulnerable dependencies", "dependency security", "are my packages safe", "npm audit", "cargo audit".
+description: Check project dependencies for known CVEs and security vulnerabilities across npm, pip, cargo, and go ecosystems using the Syncable CLI sync-ctl tool
 ---
 
 ## Purpose

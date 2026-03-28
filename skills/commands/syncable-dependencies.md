@@ -1,6 +1,6 @@
 ---
 name: syncable-dependencies
-description: Use when auditing project dependencies for licenses, production/dev split, or detailed dependency analysis using Syncable CLI. Trigger on: "license audit", "list dependencies", "dependency analysis", "what licenses am I using", "show me all packages".
+description: Audit project dependencies for licenses, production vs development split, and detailed package analysis using the Syncable CLI sync-ctl tool
 ---
 
 ## Purpose

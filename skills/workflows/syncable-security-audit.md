@@ -1,6 +1,6 @@
 ---
 name: syncable-security-audit
-description: Use when performing a thorough pre-deployment or compliance security review - combines deep security scan, CVE checks, and IaC validation via Syncable CLI. Trigger on: "security audit", "is this production-ready", "pre-deploy security check", "compliance review", "full security review".
+description: Perform a thorough pre-deployment or compliance security review combining deep security scan, CVE checks, and IaC validation using the Syncable CLI sync-ctl tool
 ---
 
 ## Purpose

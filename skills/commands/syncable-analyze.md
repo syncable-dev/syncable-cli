@@ -1,6 +1,6 @@
 ---
 name: syncable-analyze
-description: Use when analyzing a project's tech stack, detecting languages, frameworks, runtimes, or dependencies using Syncable CLI. Trigger on: "what stack is this", "analyze this project", "detect frameworks", "what languages does this use".
+description: Analyze a project's tech stack including languages, frameworks, runtimes, package managers, and dependencies using the Syncable CLI sync-ctl tool
 ---
 
 ## Purpose
