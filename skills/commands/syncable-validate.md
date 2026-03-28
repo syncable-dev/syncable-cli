@@ -1,6 +1,6 @@
 ---
 name: syncable-validate
-description: Use when linting or validating Dockerfiles, Docker Compose files, Terraform configs, or Kubernetes manifests using Syncable CLI. Trigger on: "lint Dockerfile", "validate compose", "check terraform", "is my IaC correct", "lint my infrastructure files".
+description: Lint and validate Dockerfiles, Docker Compose files, Kubernetes manifests, Helm charts, and Terraform configs using the Syncable CLI sync-ctl tool
 ---
 
 ## Purpose

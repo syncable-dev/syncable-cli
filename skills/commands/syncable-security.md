@@ -1,6 +1,6 @@
 ---
 name: syncable-security
-description: Use when scanning code for secrets, credentials, API keys, or insecure code patterns using Syncable CLI. Trigger on: "scan for secrets", "find leaked credentials", "security scan", "is this code secure", "check for hardcoded passwords".
+description: Scan code for leaked secrets, credentials, API keys, hardcoded passwords, and insecure code patterns using the Syncable CLI sync-ctl security scanner
 ---
 
 ## Purpose
