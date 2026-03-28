@@ -9,23 +9,30 @@ const sampleSkill = {
 };
 
 describe('transformForClaude', () => {
-  it('returns files preserving directory structure', () => {
+  it('creates skill directory with SKILL.md', () => {
     const result = transformForClaude(sampleSkill);
     expect(result.length).toBe(1);
-    expect(result[0].relativePath).toBe('commands/syncable-analyze.md');
+    expect(result[0].relativePath).toBe('skills/syncable-analyze/SKILL.md');
   });
 
-  it('preserves content exactly (no-op transform)', () => {
+  it('uses description-only frontmatter (no name field)', () => {
     const result = transformForClaude(sampleSkill);
     expect(result[0].content).toContain('---');
-    expect(result[0].content).toContain('name: syncable-analyze');
+    expect(result[0].content).toContain('description:');
+    expect(result[0].content).not.toContain('name:');
     expect(result[0].content).toContain('## Purpose');
     expect(result[0].content).toContain('Analyze stuff.');
   });
 
-  it('uses workflows/ for workflow skills', () => {
+  it('quotes the description for YAML safety', () => {
+    const result = transformForClaude(sampleSkill);
+    expect(result[0].content).toMatch(/description: ".*"/);
+  });
+
+  it('uses same path format for workflows', () => {
     const workflow = { ...sampleSkill, category: 'workflow' as const };
     const result = transformForClaude(workflow);
-    expect(result[0].relativePath).toBe('workflows/syncable-analyze.md');
+    // Plugin format doesn't distinguish commands vs workflows — all go under skills/
+    expect(result[0].relativePath).toBe('skills/syncable-analyze/SKILL.md');
   });
 });

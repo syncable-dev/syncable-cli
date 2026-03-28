@@ -18,6 +18,7 @@ node_modules/
 
 # Planning documents (local only, not shared)
 .planning/
+.env
 
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb

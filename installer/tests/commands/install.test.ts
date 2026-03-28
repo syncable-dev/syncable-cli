@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeSkillsForClaude, writeSkillsForCodex, writeSkillsForCursor, writeSkillsForWindsurf, writeSkillsForGemini } from '../../src/commands/install.js';
+import { transformForClaude } from '../../src/transformers/claude.js';
 import { Skill } from '../../src/skills.js';
 import fs from 'fs';
 import path from 'path';
@@ -31,17 +32,20 @@ afterEach(() => {
 });
 
 describe('writeSkillsForClaude', () => {
-  it('writes skills preserving commands/ and workflows/ structure', () => {
-    writeSkillsForClaude(sampleSkills, tmpDir);
-    expect(fs.existsSync(path.join(tmpDir, 'commands', 'syncable-analyze.md'))).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, 'workflows', 'syncable-project-assessment.md'))).toBe(true);
+  // Claude Code uses the plugin marketplace system.
+  // writeSkillsForClaude installs to ~/.claude/plugins/cache/ (not to a custom dest dir).
+  // We test the transform function directly instead to avoid writing to the real home dir.
+  it('transform produces skills/<name>/SKILL.md structure', () => {
+    const result = transformForClaude(sampleSkills[0]);
+    expect(result[0].relativePath).toBe('skills/syncable-analyze/SKILL.md');
+    expect(result[0].content).toContain('description:');
+    expect(result[0].content).toContain('Analyze.');
   });
 
-  it('preserves skill content', () => {
-    writeSkillsForClaude(sampleSkills, tmpDir);
-    const content = fs.readFileSync(path.join(tmpDir, 'commands', 'syncable-analyze.md'), 'utf-8');
-    expect(content).toContain('name: syncable-analyze');
-    expect(content).toContain('Analyze.');
+  it('transform uses YAML-safe description without name field', () => {
+    const result = transformForClaude(sampleSkills[0]);
+    expect(result[0].content).not.toContain('name:');
+    expect(result[0].content).toMatch(/description: ".*"/);
   });
 });
 
