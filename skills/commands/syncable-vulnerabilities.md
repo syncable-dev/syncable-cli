@@ -44,25 +44,34 @@ sync-ctl vulnerabilities <PATH> --severity high --agent
 
 ## Reading Results
 
-When you use `--agent`, the output is a compressed summary. All **critical** and **high** findings are included in full detail. Medium/low findings are deduplicated into patterns.
+When you use `--agent`, the output is a **compressed summary** — NOT the full data. Only critical and high findings are inline. To get medium/low details, you MUST use `sync-ctl retrieve`.
 
-The output JSON includes:
-- `status` — e.g., "CRITICAL_ISSUES_FOUND", "HIGH_ISSUES_FOUND", "CLEAN"
+**What's in the compressed output:**
 - `summary` — counts by severity (total, critical, high, medium, low)
 - `critical_issues` — full details for every critical finding
-- `high_issues` — first 10 high-severity findings
-- `patterns` — deduplicated medium/low findings with counts
-- `full_data_ref` — reference ID for retrieving full data
+- `high_issues` — first 10 high-severity findings (full detail)
+- `patterns` — deduplicated medium/low findings as counts only (NO individual details)
+- `full_data_ref` — reference ID for the full stored data
 - `retrieval_hint` — exact command for drill-down
 
-To drill into specifics:
-```bash
-# Get all critical findings
-sync-ctl retrieve <ref_id> --query "severity:critical"
+**IMPORTANT: Do NOT try to extract medium/low details from the compressed output. They are only available via retrieve.**
 
-# Get findings for a specific file
-sync-ctl retrieve <ref_id> --query "file:package.json"
+To get individual findings by severity:
+```bash
+# Get medium-severity findings (NOT in compressed output — must use retrieve)
+sync-ctl retrieve <ref_id> --query "severity:medium"
+
+# Get low-severity findings
+sync-ctl retrieve <ref_id> --query "severity:low"
+
+# Get high-severity findings (also in compressed output, but retrieve gives all of them)
+sync-ctl retrieve <ref_id> --query "severity:high"
+
+# Get findings for a specific source directory
+sync-ctl retrieve <ref_id> --query "file:services/api"
 ```
+
+Results are paginated (default 20). Use `--limit N --offset M` for more.
 
 **Available query filters:** `severity:<level>`, `file:<path>`
 

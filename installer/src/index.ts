@@ -20,6 +20,7 @@ import {
   InstallOptions,
 } from './commands/install.js';
 import { removeSyncableSkills, removeGeminiSection } from './commands/uninstall.js';
+import { uninstallClaudePlugin } from './transformers/claude.js';
 import { countInstalledSkills } from './commands/status.js';
 
 const require = createRequire(import.meta.url);
@@ -243,7 +244,7 @@ program
         const dest = agent.getSkillPath();
         switch (agent.name) {
           case 'claude':
-            removeSyncableSkills(dest);
+            uninstallClaudePlugin();
             break;
           case 'codex':
             removeSyncableSkills(dest, 'syncable-*');

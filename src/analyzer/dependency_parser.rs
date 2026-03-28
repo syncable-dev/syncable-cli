@@ -5,7 +5,7 @@ use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Detailed dependency information
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -181,50 +181,156 @@ impl DependencyParser {
     ) -> Result<HashMap<Language, Vec<DependencyInfo>>> {
         let mut dependencies = HashMap::new();
 
+        // Discover all project directories (root + subdirectories with manifests)
+        let project_dirs = self.discover_project_dirs(project_root);
+
+        for dir in &project_dirs {
+            self.parse_deps_in_dir(dir, &mut dependencies)?;
+        }
+
+        Ok(dependencies)
+    }
+
+    /// Discover project directories that contain package manifests.
+    /// Walks up to 4 levels deep, skipping common non-project directories.
+    pub fn discover_project_dirs(&self, root: &Path) -> Vec<PathBuf> {
+        let mut dirs = Vec::new();
+
+        // Always include root
+        if Self::has_package_manifest(root) {
+            dirs.push(root.to_path_buf());
+        }
+
+        // Walk subdirectories up to 4 levels deep
+        self.walk_for_manifests(root, 0, 4, &mut dirs);
+
+        // Deduplicate (root may appear twice)
+        dirs.sort();
+        dirs.dedup();
+
+        // If nothing found at all, still return root so callers get an empty result
+        if dirs.is_empty() {
+            dirs.push(root.to_path_buf());
+        }
+
+        dirs
+    }
+
+    fn walk_for_manifests(&self, dir: &Path, depth: usize, max_depth: usize, out: &mut Vec<PathBuf>) {
+        if depth >= max_depth {
+            return;
+        }
+
+        let skip_dirs = [
+            "node_modules", "target", ".git", "vendor", "dist", "build",
+            ".next", ".nuxt", "__pycache__", ".venv", "venv", ".cargo",
+        ];
+
+        let entries = match std::fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+
+            let name = match path.file_name().and_then(|n| n.to_str()) {
+                Some(n) => n,
+                None => continue,
+            };
+
+            // Skip hidden dirs and known non-project dirs
+            if name.starts_with('.') || skip_dirs.contains(&name) {
+                continue;
+            }
+
+            if Self::has_package_manifest(&path) {
+                out.push(path.clone());
+            }
+
+            // Continue recursing even if this dir had a manifest —
+            // monorepos can have nested projects
+            self.walk_for_manifests(&path, depth + 1, max_depth, out);
+        }
+    }
+
+    fn has_package_manifest(dir: &Path) -> bool {
+        let manifests = [
+            "Cargo.toml", "package.json", "requirements.txt", "pyproject.toml",
+            "Pipfile", "go.mod", "pom.xml", "build.gradle",
+        ];
+        manifests.iter().any(|m| dir.join(m).exists())
+    }
+
+    /// Parse dependencies in a single directory and merge into the accumulator.
+    fn parse_deps_in_dir(
+        &self,
+        dir: &Path,
+        dependencies: &mut HashMap<Language, Vec<DependencyInfo>>,
+    ) -> Result<()> {
         // Check for Rust
-        if project_root.join("Cargo.toml").exists() {
-            let rust_deps = self.parse_rust_deps(project_root)?;
-            if !rust_deps.is_empty() {
-                dependencies.insert(Language::Rust, rust_deps);
+        if dir.join("Cargo.toml").exists() {
+            if let Ok(rust_deps) = self.parse_rust_deps(dir) {
+                if !rust_deps.is_empty() {
+                    dependencies.entry(Language::Rust).or_default().extend(rust_deps);
+                }
             }
         }
 
         // Check for JavaScript/TypeScript
-        if project_root.join("package.json").exists() {
-            let js_deps = self.parse_js_deps(project_root)?;
-            if !js_deps.is_empty() {
-                dependencies.insert(Language::JavaScript, js_deps);
+        if dir.join("package.json").exists() {
+            if let Ok(js_deps) = self.parse_js_deps(dir) {
+                if !js_deps.is_empty() {
+                    dependencies.entry(Language::JavaScript).or_default().extend(js_deps);
+                }
             }
         }
 
         // Check for Python
-        if project_root.join("requirements.txt").exists()
-            || project_root.join("pyproject.toml").exists()
-            || project_root.join("Pipfile").exists()
+        if dir.join("requirements.txt").exists()
+            || dir.join("pyproject.toml").exists()
+            || dir.join("Pipfile").exists()
         {
-            let py_deps = self.parse_python_deps(project_root)?;
-            if !py_deps.is_empty() {
-                dependencies.insert(Language::Python, py_deps);
+            if let Ok(py_deps) = self.parse_python_deps(dir) {
+                if !py_deps.is_empty() {
+                    dependencies.entry(Language::Python).or_default().extend(py_deps);
+                }
             }
         }
 
         // Check for Go
-        if project_root.join("go.mod").exists() {
-            let go_deps = self.parse_go_deps(project_root)?;
-            if !go_deps.is_empty() {
-                dependencies.insert(Language::Go, go_deps);
+        if dir.join("go.mod").exists() {
+            if let Ok(go_deps) = self.parse_go_deps(dir) {
+                if !go_deps.is_empty() {
+                    dependencies.entry(Language::Go).or_default().extend(go_deps);
+                }
             }
         }
 
         // Check for Java/Kotlin
-        if project_root.join("pom.xml").exists() || project_root.join("build.gradle").exists() {
-            let java_deps = self.parse_java_deps(project_root)?;
-            if !java_deps.is_empty() {
-                dependencies.insert(Language::Java, java_deps);
+        if dir.join("pom.xml").exists() || dir.join("build.gradle").exists() {
+            if let Ok(java_deps) = self.parse_java_deps(dir) {
+                if !java_deps.is_empty() {
+                    dependencies.entry(Language::Java).or_default().extend(java_deps);
+                }
             }
         }
 
-        Ok(dependencies)
+        Ok(())
+    }
+
+    /// Parse dependencies in a single directory, returning a new HashMap.
+    /// Used by vulnerability handler to run per-directory audit checks.
+    pub fn parse_deps_in_dir_standalone(
+        &self,
+        dir: &Path,
+    ) -> Result<HashMap<Language, Vec<DependencyInfo>>> {
+        let mut deps = HashMap::new();
+        self.parse_deps_in_dir(dir, &mut deps)?;
+        Ok(deps)
     }
 
     fn parse_rust_deps(&self, project_root: &Path) -> Result<Vec<DependencyInfo>> {
@@ -1176,27 +1282,49 @@ pub async fn parse_detailed_dependencies(
     let mut detailed_deps = DetailedDependencyMap::new();
     let mut license_summary = HashMap::new();
 
+    // Discover all project directories (root + subdirectories with manifests)
+    let parser = DependencyParser::new();
+    let project_dirs = parser.discover_project_dirs(project_root);
+
     // First, get all dependencies without vulnerabilities
-    for language in languages {
-        let deps = match language.name.as_str() {
-            "Rust" => parse_rust_dependencies_detailed(project_root)?,
-            "JavaScript" | "TypeScript" | "JavaScript/TypeScript" => {
-                parse_js_dependencies_detailed(project_root)?
-            }
-            "Python" => parse_python_dependencies_detailed(project_root)?,
-            "Go" => parse_go_dependencies_detailed(project_root)?,
-            "Java" | "Kotlin" | "Java/Kotlin" => parse_jvm_dependencies_detailed(project_root)?,
-            _ => DetailedDependencyMap::new(),
-        };
+    for dir in &project_dirs {
+        for language in languages {
+            let deps = match language.name.as_str() {
+                "Rust" if dir.join("Cargo.toml").exists() => {
+                    parse_rust_dependencies_detailed(dir).unwrap_or_default()
+                }
+                "JavaScript" | "TypeScript" | "JavaScript/TypeScript"
+                    if dir.join("package.json").exists() =>
+                {
+                    parse_js_dependencies_detailed(dir).unwrap_or_default()
+                }
+                "Python"
+                    if dir.join("requirements.txt").exists()
+                        || dir.join("pyproject.toml").exists()
+                        || dir.join("Pipfile").exists() =>
+                {
+                    parse_python_dependencies_detailed(dir).unwrap_or_default()
+                }
+                "Go" if dir.join("go.mod").exists() => {
+                    parse_go_dependencies_detailed(dir).unwrap_or_default()
+                }
+                "Java" | "Kotlin" | "Java/Kotlin"
+                    if dir.join("pom.xml").exists() || dir.join("build.gradle").exists() =>
+                {
+                    parse_jvm_dependencies_detailed(dir).unwrap_or_default()
+                }
+                _ => DetailedDependencyMap::new(),
+            };
 
-        // Update license summary
-        for dep_info in deps.values() {
-            if let Some(license) = &dep_info.license {
-                *license_summary.entry(license.clone()).or_insert(0) += 1;
+            // Update license summary
+            for dep_info in deps.values() {
+                if let Some(license) = &dep_info.license {
+                    *license_summary.entry(license.clone()).or_insert(0) += 1;
+                }
             }
+
+            detailed_deps.extend(deps);
         }
-
-        detailed_deps.extend(deps);
     }
 
     // Check vulnerabilities for all dependencies

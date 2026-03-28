@@ -250,10 +250,33 @@ fn extract_issues(output: &Value) -> Vec<Value> {
         "results",
         "diagnostics",
         "failures", // LintResult from kubelint, hadolint, dclint, helmlint
+        "vulnerable_dependencies",
     ];
 
     for field in &issue_fields {
         if let Some(arr) = output.get(field).and_then(|v| v.as_array()) {
+            // For vulnerable_dependencies, flatten inner vulnerabilities
+            // so each vuln has a severity field the compressor can classify
+            if field == &"vulnerable_dependencies" && !arr.is_empty() {
+                let mut flat = Vec::new();
+                for dep in arr {
+                    let dep_name = dep.get("name").and_then(|v| v.as_str()).unwrap_or("unknown");
+                    let dep_version = dep.get("version").and_then(|v| v.as_str()).unwrap_or("?");
+                    let language = dep.get("language").cloned().unwrap_or(serde_json::Value::Null);
+                    if let Some(vulns) = dep.get("vulnerabilities").and_then(|v| v.as_array()) {
+                        for vuln in vulns {
+                            let mut entry = vuln.clone();
+                            if let Some(obj) = entry.as_object_mut() {
+                                obj.insert("package".to_string(), serde_json::json!(dep_name));
+                                obj.insert("package_version".to_string(), serde_json::json!(dep_version));
+                                obj.insert("language".to_string(), language.clone());
+                            }
+                            flat.push(entry);
+                        }
+                    }
+                }
+                return flat;
+            }
             return arr.clone();
         }
     }
@@ -662,7 +685,7 @@ pub fn compress_tool_output_cli(
         obj.insert(
             "retrieval_hint".to_string(),
             json!(format!(
-                "Use `sync-ctl retrieve '{}' --query 'severity:critical'` for full details. Other queries: 'file:<path>', 'code:<id>'",
+                "Use `sync-ctl retrieve '{}' --query 'severity:critical'` for details. Paginate with --limit N --offset M. Other queries: 'file:<path>', 'code:<id>'",
                 ref_id
             )),
         );
@@ -671,6 +694,45 @@ pub fn compress_tool_output_cli(
 
     // Store full output for later retrieval
     let ref_id = output_store::store_output(output, tool_name);
+
+    // Handle dependency-map outputs (e.g. {"dependencies": {...}, "total": N})
+    // These aren't issues/findings — compress by summarizing the dep map
+    if let Some(deps_obj) = output.get("dependencies").and_then(|v| v.as_object()) {
+        let total = output.get("total").and_then(|v| v.as_u64()).unwrap_or(deps_obj.len() as u64);
+
+        // Build a compact summary: counts by source, license distribution
+        let mut by_source: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let mut by_license: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let mut dev_count = 0usize;
+        let mut prod_count = 0usize;
+
+        for dep in deps_obj.values() {
+            let source = dep.get("source").and_then(|v| v.as_str()).unwrap_or("unknown");
+            *by_source.entry(source.to_string()).or_default() += 1;
+            let license = dep.get("license").and_then(|v| v.as_str()).unwrap_or("Unknown");
+            *by_license.entry(license.to_string()).or_default() += 1;
+            if dep.get("is_dev").and_then(|v| v.as_bool()).unwrap_or(false) {
+                dev_count += 1;
+            } else {
+                prod_count += 1;
+            }
+        }
+
+        return serde_json::to_string_pretty(&json!({
+            "tool": tool_name,
+            "total": total,
+            "production": prod_count,
+            "development": dev_count,
+            "by_source": by_source,
+            "by_license": by_license,
+            "full_data_ref": ref_id,
+            "retrieval_hint": format!(
+                "Use `sync-ctl retrieve '{}' --query 'file:<path>'` for details. Paginate with --limit N --offset M.",
+                ref_id
+            )
+        }))
+        .unwrap_or(raw_str);
+    }
 
     // Extract issues/findings array from the output
     let issues = extract_issues(output);
@@ -683,7 +745,7 @@ pub fn compress_tool_output_cli(
             "summary": { "total": 0 },
             "full_data_ref": ref_id,
             "retrieval_hint": format!(
-                "Use `sync-ctl retrieve '{}' --query 'severity:critical'` for full details. Other queries: 'file:<path>', 'code:<id>'",
+                "Use `sync-ctl retrieve '{}' --query 'severity:critical'` for details. Paginate with --limit N --offset M.",
                 ref_id
             )
         }))
@@ -746,7 +808,7 @@ pub fn compress_tool_output_cli(
         patterns,
         full_data_ref: ref_id.clone(),
         retrieval_hint: format!(
-            "Use `sync-ctl retrieve '{}' --query 'severity:critical'` for full details. Other queries: 'file:<path>', 'code:<id>'",
+            "Use `sync-ctl retrieve '{}' --query 'severity:critical'` for details. Paginate with --limit N --offset M. Other queries: 'file:<path>', 'code:<id>'",
             ref_id
         ),
     };

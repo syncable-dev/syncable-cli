@@ -1,6 +1,7 @@
 // Handler modules
 pub mod analyze;
 pub mod dependencies;
+pub mod deploy;
 pub mod generate;
 pub mod optimize;
 pub mod security;

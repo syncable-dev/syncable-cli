@@ -351,6 +351,14 @@ pub enum Commands {
         /// List all stored outputs
         #[arg(long)]
         list: bool,
+
+        /// Maximum number of results to return (default: 20)
+        #[arg(long, short = 'l', default_value = "20")]
+        limit: usize,
+
+        /// Number of results to skip (for pagination)
+        #[arg(long, default_value = "0")]
+        offset: usize,
     },
 
     /// Start an interactive AI chat session to analyze and understand your project
@@ -610,6 +618,96 @@ pub enum DeployCommand {
         /// Watch for status updates (poll until complete)
         #[arg(short, long)]
         watch: bool,
+    },
+
+    /// Preview deployment recommendation (non-interactive, JSON output for agents)
+    Preview {
+        /// Path to project or service subdirectory
+        #[arg(value_name = "PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Override service name (default: derived from directory name)
+        #[arg(long)]
+        service_name: Option<String>,
+
+        /// Override cloud provider (gcp, hetzner, azure)
+        #[arg(long)]
+        provider: Option<String>,
+
+        /// Override region
+        #[arg(long)]
+        region: Option<String>,
+
+        /// Override machine type
+        #[arg(long)]
+        machine_type: Option<String>,
+
+        /// Override detected port
+        #[arg(long)]
+        port: Option<u16>,
+
+        /// Make service publicly accessible
+        #[arg(long)]
+        public: bool,
+    },
+
+    /// Deploy a service non-interactively (for agents and CI/CD)
+    Run {
+        /// Path to project or service subdirectory
+        #[arg(value_name = "PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Override service name (default: derived from directory name)
+        #[arg(long)]
+        service_name: Option<String>,
+
+        /// Cloud provider (gcp, hetzner, azure)
+        #[arg(long)]
+        provider: Option<String>,
+
+        /// Region
+        #[arg(long)]
+        region: Option<String>,
+
+        /// Machine type
+        #[arg(long)]
+        machine_type: Option<String>,
+
+        /// Port to expose
+        #[arg(long)]
+        port: Option<u16>,
+
+        /// Make service publicly accessible
+        #[arg(long)]
+        public: bool,
+
+        /// CPU allocation (for GCP/Azure, e.g. "1000m", "2")
+        #[arg(long)]
+        cpu: Option<String>,
+
+        /// Memory allocation (for GCP/Azure, e.g. "512Mi", "2Gi")
+        #[arg(long)]
+        memory: Option<String>,
+
+        /// Min instances/replicas
+        #[arg(long)]
+        min_instances: Option<i32>,
+
+        /// Max instances/replicas
+        #[arg(long)]
+        max_instances: Option<i32>,
+
+        /// Environment variable as KEY=VALUE (non-secret, repeatable)
+        #[arg(long = "env", value_name = "KEY=VALUE")]
+        env_vars: Vec<String>,
+
+        /// Secret key name (user prompted in terminal for value, repeatable)
+        #[arg(long = "secret")]
+        secrets: Vec<String>,
+
+        /// Load environment variables from a .env file
+        #[arg(long)]
+        env_file: Option<PathBuf>,
     },
 }
 

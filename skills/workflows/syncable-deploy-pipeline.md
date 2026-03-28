@@ -69,13 +69,38 @@ All critical findings are in the `critical_issues` array of the compressed outpu
 
 ### Step 4: Deploy
 
+**4a. Get deployment recommendation:**
 ```bash
-sync-ctl deploy wizard
+sync-ctl deploy preview <PATH>
 ```
 
-Then monitor:
+This returns JSON with: provider recommendation (with reasoning), region, machine type, detected port, health check endpoint, alternatives, discovered .env files, and already-deployed service endpoints.
+
+**4b. Present recommendation to user and confirm.** Show:
+- Recommended provider, region, machine type
+- Detected port and whether public/internal
+- Any .env files found — ask if they should be injected
+- Any service endpoints that could be referenced (e.g., `BACKEND_URL`)
+
+**4c. Deploy with confirmed settings:**
+```bash
+sync-ctl deploy run <PATH> --provider <PROVIDER> --region <REGION> --port <PORT>
+```
+
+Add `--public` if user wants a public URL. Add `--env KEY=VALUE` for env vars and `--secret KEY` for secrets (user prompted in terminal). Add `--env-file .env` to inject from file.
+
+**4d. Monitor:**
 ```bash
 sync-ctl deploy status <TASK_ID> --watch
+```
+
+**Example with user overrides:**
+```bash
+# User said "deploy to GCP in us-central1, make it public, use the .env file"
+sync-ctl deploy run ./services/api \
+  --provider gcp --region us-central1 --port 8080 --public \
+  --env-file .env \
+  --secret "STRIPE_KEY"
 ```
 
 ## Decision Points Summary

@@ -49,24 +49,25 @@ sync-ctl dependencies <PATH> --licenses --prod-only --agent
 
 ## Reading Results
 
-When you use `--agent`, the output is a compressed summary. License distribution and dependency counts are always included. Individual package details are available via retrieve for large dependency trees.
+When you use `--agent`, the output is a **compressed summary** with counts, license distribution, and source breakdown. Individual package details are NOT in the compressed output — use `sync-ctl retrieve` to get them.
 
-The output JSON includes:
-- `summary` — total counts, license distribution, prod/dev split
-- `license_concerns` — packages with copyleft or unknown licenses
-- `full_data_ref` — reference ID for retrieving full data
-- `retrieval_hint` — exact command for drill-down
+**What's in the compressed output:**
+- `total` — total dependency count
+- `production` / `development` — prod vs dev split
+- `by_source` — counts per ecosystem (npm, crates.io, pypi, etc.)
+- `by_license` — license distribution
+- `full_data_ref` — reference ID for the full data
 
-To drill into specifics:
+**To get individual package details, use retrieve:**
 ```bash
-# Get high-severity license findings
-sync-ctl retrieve <ref_id> --query "severity:high"
+# Get the full dependency list
+sync-ctl retrieve <ref_id>
 
-# Get findings for a specific file
+# Search for a specific package
 sync-ctl retrieve <ref_id> --query "file:package.json"
 ```
 
-**Available query filters:** `severity:<level>`, `file:<path>`
+Results are paginated (default 20). Use `--limit N --offset M` for more.
 
 ## Error Handling
 

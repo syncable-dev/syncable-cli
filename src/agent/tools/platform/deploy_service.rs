@@ -53,6 +53,8 @@ pub struct SecretKeyInput {
 pub struct DeployServiceArgs {
     /// Optional: specific subdirectory/service to deploy (for monorepos)
     pub path: Option<String>,
+    /// Optional: override service name (default: derived from directory name)
+    pub service_name: Option<String>,
     /// Optional: override recommended provider (gcp, hetzner, azure)
     pub provider: Option<String>,
     /// Optional: override machine type selection
@@ -370,8 +372,9 @@ User: "deploy this service"
             }
         };
 
-        // Get service name early to check for duplicates
-        let service_name = get_service_name(&analysis_path);
+        // Get service name — use override if provided, otherwise derive from path
+        let service_name = args.service_name.clone()
+            .unwrap_or_else(|| get_service_name(&analysis_path));
 
         // Find existing config with same service name
         let existing_config = existing_configs

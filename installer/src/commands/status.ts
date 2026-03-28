@@ -2,12 +2,22 @@ import fs from 'fs';
 import path from 'path';
 import { AgentName } from '../agents/types.js';
 import { SKILL_MARKER_START } from '../constants.js';
+import { getClaudePluginCacheDir } from '../transformers/claude.js';
 
 export function countInstalledSkills(dirOrPath: string, agent: AgentName | string): number {
   if (!fs.existsSync(dirOrPath)) return 0;
 
   switch (agent) {
     case 'claude': {
+      // Check plugin cache location
+      const cacheDir = getClaudePluginCacheDir();
+      const skillsDir = path.join(cacheDir, 'skills');
+      if (fs.existsSync(skillsDir)) {
+        return fs.readdirSync(skillsDir)
+          .filter((f) => fs.statSync(path.join(skillsDir, f)).isDirectory())
+          .length;
+      }
+      // Fallback: check old location
       let count = 0;
       for (const sub of ['commands', 'workflows']) {
         const dir = path.join(dirOrPath, sub);
