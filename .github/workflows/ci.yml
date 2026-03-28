@@ -83,5 +83,7 @@ jobs:
           # Ignore advisories in transitive dependencies we cannot control:
           # - gix-date (RUSTSEC-2025-0140): via rustsec crate, awaiting upstream fix
           # - bincode (RUSTSEC-2025-0141): via syntect, marked "complete" by maintainer
+          # - aws-lc-sys (RUSTSEC-2026-0044..0048): via aws-sdk, awaiting upstream bump to >=0.39.0
+          # - rustls-webpki (RUSTSEC-2026-0049): via rustls, awaiting upstream bump to >=0.103.10
           # - Other transitive deps from rustsec, aws-sdk, kube, etc.
-          ignore: RUSTSEC-2020-0163,RUSTSEC-2024-0320,RUSTSEC-2025-0057,RUSTSEC-2025-0074,RUSTSEC-2025-0075,RUSTSEC-2025-0080,RUSTSEC-2025-0081,RUSTSEC-2025-0098,RUSTSEC-2025-0104,RUSTSEC-2025-0134,RUSTSEC-2025-0140,RUSTSEC-2025-0141
+          ignore: RUSTSEC-2020-0163,RUSTSEC-2024-0320,RUSTSEC-2025-0057,RUSTSEC-2025-0074,RUSTSEC-2025-0075,RUSTSEC-2025-0080,RUSTSEC-2025-0081,RUSTSEC-2025-0098,RUSTSEC-2025-0104,RUSTSEC-2025-0134,RUSTSEC-2025-0140,RUSTSEC-2025-0141,RUSTSEC-2026-0044,RUSTSEC-2026-0045,RUSTSEC-2026-0046,RUSTSEC-2026-0047,RUSTSEC-2026-0048,RUSTSEC-2026-0049
