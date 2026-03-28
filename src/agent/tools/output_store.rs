@@ -243,7 +243,12 @@ pub fn retrieve_output(ref_id: &str) -> Option<Value> {
 ///
 /// # Returns
 /// Filtered JSON value, or None if not found
-pub fn retrieve_filtered(ref_id: &str, query: Option<&str>) -> Option<Value> {
+pub fn retrieve_filtered(
+    ref_id: &str,
+    query: Option<&str>,
+    limit: usize,
+    offset: usize,
+) -> Option<Value> {
     let data = retrieve_output(ref_id)?;
 
     // Check if this is an analyze_project output
@@ -260,7 +265,7 @@ pub fn retrieve_filtered(ref_id: &str, query: Option<&str>) -> Option<Value> {
     let (filter_type, filter_value) = parse_query(query);
 
     // Find issues/findings array in data
-    let issues = find_issues_array(&data)?;
+    let issues = find_issues_array(&data).unwrap_or_default();
 
     // Filter issues
     let filtered: Vec<Value> = issues
@@ -269,11 +274,71 @@ pub fn retrieve_filtered(ref_id: &str, query: Option<&str>) -> Option<Value> {
         .cloned()
         .collect();
 
-    Some(serde_json::json!({
+    let total_matches = filtered.len();
+
+    // Apply pagination
+    let page: Vec<Value> = filtered
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .map(|v| truncate_result_value(v))
+        .collect();
+
+    let showing = page.len();
+    let has_more = offset + showing < total_matches;
+
+    let mut result = serde_json::json!({
         "query": query,
-        "total_matches": filtered.len(),
-        "results": filtered
-    }))
+        "total_matches": total_matches,
+        "showing": showing,
+        "offset": offset,
+        "has_more": has_more,
+        "results": page
+    });
+
+    if has_more {
+        result.as_object_mut().unwrap().insert(
+            "next_command".to_string(),
+            Value::String(format!(
+                "sync-ctl retrieve '{}' --query '{}' --offset {} --limit {}",
+                ref_id,
+                query,
+                offset + limit,
+                limit
+            )),
+        );
+    }
+
+    Some(result)
+}
+
+/// Truncate large fields in a single result to keep output compact.
+fn truncate_result_value(mut value: Value) -> Value {
+    if let Some(obj) = value.as_object_mut() {
+        // Truncate long description fields
+        for field in ["description", "message", "details"] {
+            if let Some(s) = obj.get(field).and_then(|v| v.as_str()) {
+                if s.len() > 200 {
+                    let truncated = format!("{}...", &s[..200]);
+                    obj.insert(field.to_string(), Value::String(truncated));
+                }
+            }
+        }
+
+        // Cap references/urls arrays
+        if let Some(refs) = obj.get("references").and_then(|v| v.as_array()) {
+            if refs.len() > 3 {
+                let truncated: Vec<Value> = refs.iter().take(3).cloned().collect();
+                let remaining = refs.len() - 3;
+                obj.insert("references".to_string(), Value::Array(truncated));
+                obj.insert(
+                    "references_truncated".to_string(),
+                    Value::Number(remaining.into()),
+                );
+            }
+        }
+    }
+    value
 }
 
 /// Parse a query string into type and value
@@ -297,10 +362,50 @@ fn find_issues_array(data: &Value) -> Option<Vec<Value>> {
         "errors",
         "recommendations",
         "results",
+        "failures",
+        "diagnostics",
+        "vulnerable_dependencies",
+        "dependencies",
     ];
 
     for field in &issue_fields {
         if let Some(arr) = data.get(field).and_then(|v| v.as_array()) {
+            // Flatten vulnerable_dependencies: each dep has inner vulnerabilities[]
+            if *field == "vulnerable_dependencies" && !arr.is_empty() {
+                let mut flat = Vec::new();
+                for dep in arr {
+                    let dep_name = dep
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown");
+                    let dep_version = dep.get("version").and_then(|v| v.as_str()).unwrap_or("?");
+                    let source_dir = dep.get("source_dir").cloned();
+                    let language = dep.get("language").cloned();
+                    if let Some(vulns) = dep.get("vulnerabilities").and_then(|v| v.as_array()) {
+                        for vuln in vulns {
+                            let mut entry = vuln.clone();
+                            if let Some(obj) = entry.as_object_mut() {
+                                obj.insert(
+                                    "package".to_string(),
+                                    Value::String(dep_name.to_string()),
+                                );
+                                obj.insert(
+                                    "package_version".to_string(),
+                                    Value::String(dep_version.to_string()),
+                                );
+                                if let Some(sd) = &source_dir {
+                                    obj.insert("source_dir".to_string(), sd.clone());
+                                }
+                                if let Some(lang) = &language {
+                                    obj.insert("language".to_string(), lang.clone());
+                                }
+                            }
+                            flat.push(entry);
+                        }
+                    }
+                }
+                return Some(flat);
+            }
             return Some(arr.clone());
         }
     }
@@ -951,6 +1056,46 @@ pub fn list_outputs() -> Vec<OutputInfo> {
     outputs
 }
 
+/// Resolve "latest" to the most recent ref_id by scanning disk files.
+/// Works across separate CLI invocations (no in-memory state dependency).
+pub fn resolve_latest() -> Option<String> {
+    let output_dir = std::path::Path::new("/tmp/syncable-cli/outputs");
+    if !output_dir.exists() {
+        return None;
+    }
+
+    let mut newest: Option<(u64, String)> = None;
+
+    if let Ok(entries) = std::fs::read_dir(output_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().map_or(true, |e| e != "json") {
+                continue;
+            }
+
+            if let Ok(contents) = std::fs::read_to_string(&path) {
+                if let Ok(data) = serde_json::from_str::<Value>(&contents) {
+                    if let Some(ts) = data.get("timestamp").and_then(|v| v.as_u64()) {
+                        if let Some(ref_id) = data.get("ref_id").and_then(|v| v.as_str()) {
+                            match &newest {
+                                Some((best_ts, _)) if ts > *best_ts => {
+                                    newest = Some((ts, ref_id.to_string()));
+                                }
+                                None => {
+                                    newest = Some((ts, ref_id.to_string()));
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    newest.map(|(_, ref_id)| ref_id)
+}
+
 /// Information about a stored output
 #[derive(Debug, Clone)]
 pub struct OutputInfo {
@@ -1023,13 +1168,13 @@ mod tests {
         let ref_id = store_output(&data, "filter_test");
 
         // Filter by code
-        let filtered = retrieve_filtered(&ref_id, Some("code:DL3008"));
+        let filtered = retrieve_filtered(&ref_id, Some("code:DL3008"), 100, 0);
         assert!(filtered.is_some());
         let results = filtered.unwrap();
         assert_eq!(results["total_matches"], 2);
 
         // Filter by severity
-        let filtered = retrieve_filtered(&ref_id, Some("severity:info"));
+        let filtered = retrieve_filtered(&ref_id, Some("severity:info"), 100, 0);
         assert!(filtered.is_some());
         let results = filtered.unwrap();
         assert_eq!(results["total_matches"], 1);
@@ -1110,7 +1255,7 @@ mod tests {
         let ref_id = store_output(&data, "analyze_project_test");
 
         // Default retrieval should return compacted output
-        let result = retrieve_filtered(&ref_id, None);
+        let result = retrieve_filtered(&ref_id, None, 100, 0);
         assert!(result.is_some());
 
         let compacted = result.unwrap();
@@ -1161,18 +1306,18 @@ mod tests {
         let ref_id = store_output(&data, "analyze_query_test");
 
         // Test section:projects
-        let projects = retrieve_filtered(&ref_id, Some("section:projects"));
+        let projects = retrieve_filtered(&ref_id, Some("section:projects"), 100, 0);
         assert!(projects.is_some());
         assert_eq!(projects.as_ref().unwrap()["total_projects"], 1);
 
         // Test section:frameworks
-        let frameworks = retrieve_filtered(&ref_id, Some("section:frameworks"));
+        let frameworks = retrieve_filtered(&ref_id, Some("section:frameworks"), 100, 0);
         assert!(frameworks.is_some());
         assert_eq!(frameworks.as_ref().unwrap()["total_matches"], 1);
         assert_eq!(frameworks.as_ref().unwrap()["results"][0]["name"], "Gin");
 
         // Test section:languages
-        let languages = retrieve_filtered(&ref_id, Some("section:languages"));
+        let languages = retrieve_filtered(&ref_id, Some("section:languages"), 100, 0);
         assert!(languages.is_some());
         assert_eq!(languages.as_ref().unwrap()["total_matches"], 1);
         assert_eq!(languages.as_ref().unwrap()["results"][0]["name"], "Go");
@@ -1180,13 +1325,92 @@ mod tests {
         assert_eq!(languages.as_ref().unwrap()["results"][0]["file_count"], 2);
 
         // Test language:Go specific query
-        let go = retrieve_filtered(&ref_id, Some("language:Go"));
+        let go = retrieve_filtered(&ref_id, Some("language:Go"), 100, 0);
         assert!(go.is_some());
         assert_eq!(go.as_ref().unwrap()["total_matches"], 1);
 
         // Test framework:Gin specific query
-        let gin = retrieve_filtered(&ref_id, Some("framework:Gin"));
+        let gin = retrieve_filtered(&ref_id, Some("framework:Gin"), 100, 0);
         assert!(gin.is_some());
         assert_eq!(gin.as_ref().unwrap()["total_matches"], 1);
+    }
+
+    #[test]
+    fn test_find_issues_array_failures_field() {
+        let data = serde_json::json!({
+            "failures": [
+                {"code": "DL3008", "severity": "warning", "message": "Pin versions"},
+                {"code": "DL3009", "severity": "info", "message": "Delete apt cache"}
+            ]
+        });
+        let result = find_issues_array(&data);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_find_issues_array_diagnostics_field() {
+        let data = serde_json::json!({
+            "diagnostics": [
+                {"code": "DC001", "severity": "error", "message": "Invalid compose version"}
+            ]
+        });
+        let result = find_issues_array(&data);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_resolve_latest_returns_most_recent() {
+        use std::fs;
+        use std::path::Path;
+
+        let output_dir = Path::new("/tmp/syncable-cli/outputs");
+        fs::create_dir_all(output_dir).unwrap();
+
+        // Clean up any existing test files
+        let _ = fs::remove_file(output_dir.join("test_old_aaa111.json"));
+        let _ = fs::remove_file(output_dir.join("test_new_bbb222.json"));
+
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // Write two files with different timestamps.
+        // Use a far-future timestamp for the "new" file so it's always
+        // the most recent, even when other tests run concurrently and
+        // call store_output() with the current time.
+        let old_data = serde_json::json!({
+            "ref_id": "test_old_aaa111",
+            "tool": "test_old",
+            "timestamp": now - 60,
+            "data": {}
+        });
+        let new_data = serde_json::json!({
+            "ref_id": "test_new_bbb222",
+            "tool": "test_new",
+            "timestamp": now + 9_999_999,
+            "data": {}
+        });
+
+        fs::write(
+            output_dir.join("test_old_aaa111.json"),
+            serde_json::to_string(&old_data).unwrap(),
+        )
+        .unwrap();
+        fs::write(
+            output_dir.join("test_new_bbb222.json"),
+            serde_json::to_string(&new_data).unwrap(),
+        )
+        .unwrap();
+
+        let latest = resolve_latest();
+        assert!(latest.is_some());
+        assert_eq!(latest.unwrap(), "test_new_bbb222");
+
+        // Cleanup
+        let _ = fs::remove_file(output_dir.join("test_old_aaa111.json"));
+        let _ = fs::remove_file(output_dir.join("test_new_bbb222.json"));
     }
 }

@@ -19,6 +19,11 @@ use std::process;
 use std::time::{Duration, SystemTime};
 use syncable_cli::analyzer::display::BoxDrawer;
 
+use syncable_cli::agent::tools::compression::{
+    CompressionConfig, compress_analysis_output_cli, compress_tool_output_cli,
+};
+use syncable_cli::agent::tools::output_store;
+
 #[tokio::main]
 async fn main() {
     if let Err(e) = run().await {
@@ -36,30 +41,52 @@ async fn run() -> syncable_cli::Result<()> {
         println!("✅ Update cache cleared. Checking for updates now...");
     }
 
-    // Suppress update banner when JSON output is requested
+    // Suppress update banner when JSON output is requested or --agent mode
     let suppress_update_banner = cli.json
         || matches!(
             &cli.command,
             Commands::Analyze { json: true, .. }
+                | Commands::Analyze { agent: true, .. }
                 | Commands::Dependencies {
                     format: OutputFormat::Json,
                     ..
                 }
+                | Commands::Dependencies { agent: true, .. }
                 | Commands::Vulnerabilities {
                     format: OutputFormat::Json,
                     ..
                 }
+                | Commands::Vulnerabilities { agent: true, .. }
                 | Commands::Security {
                     format: OutputFormat::Json,
                     ..
                 }
+                | Commands::Security { agent: true, .. }
+                | Commands::Optimize { agent: true, .. }
                 | Commands::Tools {
                     command: ToolsCommand::Status {
                         format: OutputFormat::Json,
                         ..
                     }
                 }
+                | Commands::Retrieve { .. }
         );
+    // Set SYNCABLE_QUIET env var for agent mode to suppress deep pipeline prints
+    let is_agent_mode = matches!(
+        &cli.command,
+        Commands::Analyze { agent: true, .. }
+            | Commands::Dependencies { agent: true, .. }
+            | Commands::Vulnerabilities { agent: true, .. }
+            | Commands::Security { agent: true, .. }
+            | Commands::Optimize { agent: true, .. }
+    );
+    if is_agent_mode {
+        // SAFETY: set_var is called before any threads are spawned
+        unsafe {
+            std::env::set_var("SYNCABLE_QUIET", "1");
+        }
+    }
+
     check_for_update(suppress_update_banner).await;
 
     // Initialize logging
@@ -120,6 +147,7 @@ async fn run() -> syncable_cli::Result<()> {
         Commands::Env { .. } => "env",
         Commands::Deploy { .. } => "deploy",
         Commands::Agent { .. } => "agent",
+        Commands::Retrieve { .. } => "retrieve",
     };
 
     log::debug!("Command name: {}", command_name);
@@ -133,9 +161,10 @@ async fn run() -> syncable_cli::Result<()> {
             display,
             only,
             color_scheme,
+            agent,
         } => {
             // Determine analysis mode
-            let analysis_mode = if json {
+            let analysis_mode = if agent || json {
                 "json"
             } else if detailed {
                 "detailed"
@@ -169,9 +198,22 @@ async fn run() -> syncable_cli::Result<()> {
                 telemetry_client.track_analyze_folder(properties);
             }
 
-            match handle_analyze(path, json, detailed, display, only, color_scheme) {
-                Ok(_output) => Ok(()), // The output was already printed by display_analysis_with_return
-                Err(e) => Err(e),
+            if agent {
+                let output = syncable_cli::handlers::analyze::handle_analyze(
+                    path,
+                    true,
+                    false,
+                    None,
+                    only,
+                    color_scheme,
+                    true,
+                )?;
+                handle_agent_output(&output, "analyze_project", None)
+            } else {
+                match handle_analyze(path, json, detailed, display, only, color_scheme, false) {
+                    Ok(_output) => Ok(()),
+                    Err(e) => Err(e),
+                }
             }
         }
         Commands::Generate {
@@ -225,7 +267,12 @@ async fn run() -> syncable_cli::Result<()> {
             )
         }
 
-        Commands::Validate { path, types, fix } => {
+        Commands::Validate {
+            path,
+            types,
+            fix,
+            agent,
+        } => {
             // Create telemetry properties
             let mut properties = HashMap::new();
 
@@ -242,7 +289,16 @@ async fn run() -> syncable_cli::Result<()> {
                 telemetry_client.track_validate(properties);
             }
 
-            handle_validate(path, types, fix)
+            if agent {
+                let result = syncable_cli::handlers::handle_validate(path, types, fix, true)?;
+                handle_agent_output(&result, "validate", None)
+            } else {
+                let result = syncable_cli::handlers::handle_validate(path, types, fix, false)?;
+                if !result.is_empty() {
+                    // Non-agent mode: result was already printed by the handler
+                }
+                Ok(())
+            }
         }
         Commands::Support {
             languages,
@@ -278,6 +334,7 @@ async fn run() -> syncable_cli::Result<()> {
             prod_only,
             dev_only,
             format,
+            agent,
         } => {
             // Create telemetry properties
             let mut properties = HashMap::new();
@@ -298,8 +355,12 @@ async fn run() -> syncable_cli::Result<()> {
                 properties.insert("dev_only".to_string(), json!(true));
             }
 
-            // Honor global --json flag for output selection
-            let effective_format = if cli.json { OutputFormat::Json } else { format };
+            // Honor global --json flag or --agent flag for output selection
+            let effective_format = if agent || cli.json {
+                OutputFormat::Json
+            } else {
+                format
+            };
 
             let format_str = match effective_format {
                 OutputFormat::Table => "table",
@@ -312,22 +373,38 @@ async fn run() -> syncable_cli::Result<()> {
                 telemetry_client.track_dependencies(properties);
             }
 
-            handle_dependencies(
-                path,
-                licenses,
-                vulnerabilities,
-                prod_only,
-                dev_only,
-                effective_format,
-            )
-            .await
-            .map(|_| ())
+            if agent {
+                let result = handle_dependencies(
+                    path,
+                    licenses,
+                    vulnerabilities,
+                    prod_only,
+                    dev_only,
+                    OutputFormat::Json,
+                    true,
+                )
+                .await?;
+                handle_agent_output(&result, "dependencies", None)
+            } else {
+                handle_dependencies(
+                    path,
+                    licenses,
+                    vulnerabilities,
+                    prod_only,
+                    dev_only,
+                    effective_format,
+                    false,
+                )
+                .await
+                .map(|_| ())
+            }
         }
         Commands::Vulnerabilities {
             path,
             severity,
             format,
             output,
+            agent,
         } => {
             // Create telemetry properties
             let mut properties = HashMap::new();
@@ -342,8 +419,12 @@ async fn run() -> syncable_cli::Result<()> {
                 properties.insert("severity_threshold".to_string(), json!(severity_str));
             }
 
-            // Honor global --json flag for output selection
-            let effective_format = if cli.json { OutputFormat::Json } else { format };
+            // Honor global --json flag or --agent flag for output selection
+            let effective_format = if agent || cli.json {
+                OutputFormat::Json
+            } else {
+                format
+            };
 
             let format_str = match effective_format {
                 OutputFormat::Table => "table",
@@ -360,7 +441,15 @@ async fn run() -> syncable_cli::Result<()> {
                 telemetry_client.track_vulnerabilities(properties);
             }
 
-            handle_vulnerabilities(path, severity, effective_format, output).await
+            if agent {
+                let result =
+                    handle_vulnerabilities(path, severity, OutputFormat::Json, None, true).await?;
+                handle_agent_output(&result, "vulnerabilities", output.as_deref())
+            } else {
+                handle_vulnerabilities(path, severity, effective_format, output, false)
+                    .await
+                    .map(|_| ())
+            }
         }
         Commands::Security {
             path,
@@ -374,6 +463,7 @@ async fn run() -> syncable_cli::Result<()> {
             format,
             output,
             fail_on_findings,
+            agent,
         } => {
             // Create telemetry properties
             let mut properties = HashMap::new();
@@ -411,8 +501,12 @@ async fn run() -> syncable_cli::Result<()> {
                 properties.insert("compliance_frameworks".to_string(), json!(frameworks));
             }
 
-            // Honor global --json flag for output selection
-            let effective_format = if cli.json { OutputFormat::Json } else { format };
+            // Honor global --json flag or --agent flag for output selection
+            let effective_format = if agent || cli.json {
+                OutputFormat::Json
+            } else {
+                format
+            };
 
             let format_str = match effective_format {
                 OutputFormat::Table => "table",
@@ -433,19 +527,37 @@ async fn run() -> syncable_cli::Result<()> {
                 telemetry_client.track_security(properties);
             }
 
-            handle_security(
-                path,
-                mode,
-                include_low,
-                no_secrets,
-                no_code_patterns,
-                no_infrastructure,
-                no_compliance,
-                frameworks,
-                effective_format,
-                output,
-                fail_on_findings,
-            )
+            if agent {
+                let result = syncable_cli::handlers::security::handle_security(
+                    path,
+                    mode,
+                    include_low,
+                    no_secrets,
+                    no_code_patterns,
+                    no_infrastructure,
+                    no_compliance,
+                    frameworks,
+                    OutputFormat::Json,
+                    None,
+                    fail_on_findings,
+                    true,
+                )?;
+                handle_agent_output(&result, "security", output.as_deref())
+            } else {
+                handle_security(
+                    path,
+                    mode,
+                    include_low,
+                    no_secrets,
+                    no_code_patterns,
+                    no_infrastructure,
+                    no_compliance,
+                    frameworks,
+                    effective_format,
+                    output,
+                    fail_on_findings,
+                )
+            }
         }
         Commands::Tools { command } => {
             // Create telemetry properties based on the subcommand
@@ -544,6 +656,7 @@ async fn run() -> syncable_cli::Result<()> {
             min_confidence,
             cloud_provider,
             region,
+            agent,
         } => {
             // Create telemetry properties
             let mut properties = HashMap::new();
@@ -610,7 +723,13 @@ async fn run() -> syncable_cli::Result<()> {
                 region,
             };
 
-            syncable_cli::handlers::handle_optimize(&path, options).await
+            if agent {
+                let result =
+                    syncable_cli::handlers::optimize::handle_optimize_agent(&path, options)?;
+                handle_agent_output(&result, "optimize", None)
+            } else {
+                syncable_cli::handlers::handle_optimize(&path, options).await
+            }
         }
 
         Commands::Chat {
@@ -862,6 +981,85 @@ async fn run() -> syncable_cli::Result<()> {
                             process::exit(1);
                         }
                     }
+                }
+            }
+        }
+        Commands::Retrieve {
+            ref_id,
+            query,
+            list,
+            limit,
+            offset,
+        } => {
+            output_store::cleanup_old_outputs();
+
+            if list {
+                let outputs = output_store::list_outputs();
+                let json_list: Vec<serde_json::Value> = outputs
+                    .iter()
+                    .map(|o| {
+                        let age_secs = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs()
+                            .saturating_sub(o.timestamp);
+                        let age_str = if age_secs < 60 {
+                            format!("{}s ago", age_secs)
+                        } else if age_secs < 3600 {
+                            format!("{}m ago", age_secs / 60)
+                        } else {
+                            format!("{}h ago", age_secs / 3600)
+                        };
+                        serde_json::json!({
+                            "ref_id": o.ref_id,
+                            "tool": o.tool,
+                            "timestamp": o.timestamp,
+                            "age": age_str,
+                            "size_bytes": o.size_bytes,
+                        })
+                    })
+                    .collect();
+                println!("{}", serde_json::to_string_pretty(&json_list)?);
+                return Ok(());
+            }
+
+            let resolved_ref = match ref_id.as_deref() {
+                Some("latest") => match output_store::resolve_latest() {
+                    Some(id) => id,
+                    None => {
+                        let error = serde_json::json!({
+                            "error": "no_outputs",
+                            "message": "No stored outputs found. Run a command with --agent first."
+                        });
+                        eprintln!("{}", serde_json::to_string_pretty(&error)?);
+                        std::process::exit(1);
+                    }
+                },
+                Some(id) => id.to_string(),
+                None => {
+                    eprintln!("Usage: sync-ctl retrieve <REF_ID> [--query <FILTER>]");
+                    eprintln!("       sync-ctl retrieve --list");
+                    return Ok(());
+                }
+            };
+
+            match output_store::retrieve_filtered(&resolved_ref, query.as_deref(), limit, offset) {
+                Some(data) => {
+                    let json_str = serde_json::to_string_pretty(&data)?;
+                    println!("{}", json_str);
+                    Ok(())
+                }
+                None => {
+                    let available = output_store::list_outputs();
+                    let available_ids: Vec<&str> =
+                        available.iter().map(|o| o.ref_id.as_str()).collect();
+                    let error = serde_json::json!({
+                        "error": "not_found",
+                        "message": format!("Output '{}' not found (expired or invalid ref_id)", resolved_ref),
+                        "available": available_ids,
+                    });
+                    eprintln!("{}", serde_json::to_string_pretty(&error)?);
+                    std::process::exit(1);
                 }
             }
         }
@@ -1262,6 +1460,68 @@ async fn run() -> syncable_cli::Result<()> {
                         }
                     }
                 }
+                Some(DeployCommand::Preview {
+                    path: preview_path,
+                    service_name,
+                    provider,
+                    region,
+                    machine_type,
+                    port,
+                    public,
+                }) => {
+                    let project_path = preview_path.canonicalize().unwrap_or(preview_path);
+                    let result = syncable_cli::handlers::deploy::handle_deploy_preview(
+                        project_path.clone(),
+                        std::path::PathBuf::from("."),
+                        service_name,
+                        provider,
+                        region,
+                        machine_type,
+                        port,
+                        public,
+                    )
+                    .await?;
+                    println!("{}", result);
+                    Ok(())
+                }
+                Some(DeployCommand::Run {
+                    path: run_path,
+                    service_name,
+                    provider,
+                    region,
+                    machine_type,
+                    port,
+                    public,
+                    cpu,
+                    memory,
+                    min_instances,
+                    max_instances,
+                    env_vars,
+                    secrets,
+                    env_file,
+                }) => {
+                    let project_path = run_path.canonicalize().unwrap_or(run_path);
+                    let result = syncable_cli::handlers::deploy::handle_deploy_run(
+                        project_path.clone(),
+                        std::path::PathBuf::from("."),
+                        service_name,
+                        provider,
+                        region,
+                        machine_type,
+                        port,
+                        public,
+                        cpu,
+                        memory,
+                        min_instances,
+                        max_instances,
+                        env_vars,
+                        secrets,
+                        env_file,
+                    )
+                    .await?;
+                    println!("{}", result);
+                    Ok(())
+                }
             }
         }
     };
@@ -1544,6 +1804,39 @@ fn is_version_newer(current: &str, latest: &str) -> bool {
     false
 }
 
+/// Route command output through compression pipeline for --agent mode.
+fn handle_agent_output(
+    json_output: &str,
+    tool_name: &str,
+    output_file: Option<&std::path::Path>,
+) -> syncable_cli::Result<()> {
+    output_store::cleanup_old_outputs();
+
+    if let Some(path) = output_file {
+        std::fs::write(path, json_output)?;
+        eprintln!("Full output saved to: {}", path.display());
+    }
+
+    let value: serde_json::Value = serde_json::from_str(json_output).map_err(|e| {
+        syncable_cli::error::IaCGeneratorError::Analysis(
+            syncable_cli::error::AnalysisError::InvalidStructure(format!(
+                "Failed to parse output as JSON: {}",
+                e
+            )),
+        )
+    })?;
+
+    let config = CompressionConfig::default();
+    let compressed = if tool_name == "analyze_project" {
+        compress_analysis_output_cli(&value, &config)
+    } else {
+        compress_tool_output_cli(&value, tool_name, &config)
+    };
+
+    println!("{}", compressed);
+    Ok(())
+}
+
 pub fn handle_analyze(
     path: std::path::PathBuf,
     json: bool,
@@ -1551,6 +1844,7 @@ pub fn handle_analyze(
     display: Option<DisplayFormat>,
     only: Option<Vec<String>>,
     color_scheme: Option<ColorScheme>,
+    quiet: bool,
 ) -> syncable_cli::Result<()> {
     // Call the handler from the handlers module which returns a string
     syncable_cli::handlers::analyze::handle_analyze(
@@ -1560,6 +1854,7 @@ pub fn handle_analyze(
         display,
         only,
         color_scheme,
+        quiet,
     )?;
 
     Ok(())
@@ -1651,16 +1946,6 @@ fn handle_generate(
     Ok(())
 }
 
-fn handle_validate(
-    _path: std::path::PathBuf,
-    _types: Option<Vec<String>>,
-    _fix: bool,
-) -> syncable_cli::Result<()> {
-    println!("🔍 Validating IaC files...");
-    println!("⚠️  Validation feature is not yet implemented.");
-    Ok(())
-}
-
 fn handle_support(languages: bool, frameworks: bool, _detailed: bool) -> syncable_cli::Result<()> {
     if languages || !frameworks {
         println!("🌐 Supported Languages:");
@@ -1690,6 +1975,7 @@ pub async fn handle_dependencies(
     _prod_only: bool,
     _dev_only: bool,
     format: OutputFormat,
+    quiet: bool,
 ) -> syncable_cli::Result<String> {
     syncable_cli::handlers::dependencies::handle_dependencies(
         path,
@@ -1698,6 +1984,7 @@ pub async fn handle_dependencies(
         _prod_only,
         _dev_only,
         format,
+        quiet,
     )
     .await
 }
@@ -1707,36 +1994,149 @@ pub async fn handle_vulnerabilities(
     severity: Option<SeverityThreshold>,
     format: OutputFormat,
     output: Option<std::path::PathBuf>,
-) -> syncable_cli::Result<()> {
+    quiet: bool,
+) -> syncable_cli::Result<String> {
     let project_path = path.canonicalize().unwrap_or_else(|_| path.clone());
 
-    println!(
-        "🔍 Scanning for vulnerabilities in: {}",
-        project_path.display()
-    );
-
-    // Parse dependencies
-    let dependencies = analyzer::dependency_parser::DependencyParser::new()
-        .parse_all_dependencies(&project_path)?;
-
-    if dependencies.is_empty() {
-        println!("No dependencies found to check.");
-        return Ok(());
+    if !quiet {
+        println!(
+            "🔍 Scanning for vulnerabilities in: {}",
+            project_path.display()
+        );
     }
 
-    // Check vulnerabilities
-    let checker = analyzer::vulnerability::VulnerabilityChecker::new();
-    let report = checker
-        .check_all_dependencies(&dependencies, &project_path)
-        .await
-        .map_err(|e| {
+    // Discover project directories and check vulnerabilities per-directory.
+    let parser = analyzer::dependency_parser::DependencyParser::new();
+    let project_dirs = parser.discover_project_dirs(&project_path);
+
+    // Suppress per-directory tool status banners
+    let was_quiet = std::env::var("SYNCABLE_QUIET").is_ok();
+    if !was_quiet {
+        // SAFETY: set_var called on main thread before spawning audit subprocesses
+        unsafe {
+            std::env::set_var("SYNCABLE_QUIET", "1");
+        }
+    }
+
+    // Collect scannable dirs
+    let mut scannable_dirs = Vec::new();
+    for dir in &project_dirs {
+        let deps = parser.parse_deps_in_dir_standalone(dir).map_err(|e| {
             syncable_cli::error::IaCGeneratorError::Analysis(
                 syncable_cli::error::AnalysisError::DependencyParsing {
-                    file: "vulnerability check".to_string(),
+                    file: dir.display().to_string(),
                     reason: e.to_string(),
                 },
             )
         })?;
+        if !deps.is_empty() {
+            let langs: Vec<String> = deps.keys().map(|l| format!("{:?}", l)).collect();
+            scannable_dirs.push((dir.clone(), deps, langs));
+        }
+    }
+
+    if !quiet && scannable_dirs.len() > 1 {
+        println!("\n📦 Found {} projects to scan\n", scannable_dirs.len());
+    }
+
+    let mut merged_vulnerable_deps = Vec::new();
+    let any_deps_found = !scannable_dirs.is_empty();
+    let total_dirs = scannable_dirs.len();
+
+    for (i, (dir, deps, langs)) in scannable_dirs.into_iter().enumerate() {
+        let dir_name = dir
+            .strip_prefix(&project_path)
+            .unwrap_or(&dir)
+            .display()
+            .to_string();
+        let dir_label = if dir_name.is_empty() || dir_name == "." {
+            ".".to_string()
+        } else {
+            dir_name
+        };
+
+        if !quiet {
+            println!(
+                "  [{}/{}] Scanning {} ({})",
+                i + 1,
+                total_dirs,
+                dir_label,
+                langs.join(", ")
+            );
+        }
+
+        let checker = analyzer::vulnerability::VulnerabilityChecker::new();
+        match checker.check_all_dependencies(&deps, &dir).await {
+            Ok(report) => {
+                let count = report
+                    .vulnerable_dependencies
+                    .iter()
+                    .map(|d| d.vulnerabilities.len())
+                    .sum::<usize>();
+                if !quiet && count > 0 {
+                    println!("    ⚠️  {} vulnerabilities found", count);
+                }
+                for mut dep in report.vulnerable_dependencies {
+                    dep.source_dir = Some(dir_label.clone());
+                    merged_vulnerable_deps.push(dep);
+                }
+            }
+            Err(e) => {
+                if !quiet {
+                    eprintln!("    ⚠️  scan failed: {}", e);
+                }
+            }
+        }
+    }
+
+    // Restore env var
+    if !was_quiet {
+        unsafe {
+            std::env::remove_var("SYNCABLE_QUIET");
+        }
+    }
+
+    if !any_deps_found {
+        if !quiet {
+            println!("No dependencies found to check.");
+        }
+        return Ok(String::new());
+    }
+
+    // Deduplicate vulnerable deps
+    merged_vulnerable_deps.sort_by(|a, b| a.name.cmp(&b.name));
+    merged_vulnerable_deps.dedup_by(|a, b| a.name == b.name && a.version == b.version);
+
+    // Build merged report
+    let mut critical_count = 0usize;
+    let mut high_count = 0usize;
+    let mut medium_count = 0usize;
+    let mut low_count = 0usize;
+    let mut total_vulnerabilities = 0usize;
+
+    for dep in &merged_vulnerable_deps {
+        for vuln in &dep.vulnerabilities {
+            total_vulnerabilities += 1;
+            match vuln.severity {
+                VulnerabilitySeverity::Critical => critical_count += 1,
+                VulnerabilitySeverity::High => high_count += 1,
+                VulnerabilitySeverity::Medium => medium_count += 1,
+                VulnerabilitySeverity::Low => low_count += 1,
+                VulnerabilitySeverity::Info => {}
+            }
+        }
+    }
+
+    use analyzer::vulnerability::VulnerabilityReport;
+    let report = VulnerabilityReport {
+        checked_at: chrono::Utc::now(),
+        total_vulnerabilities,
+        critical_count,
+        high_count,
+        medium_count,
+        low_count,
+        vulnerable_dependencies: merged_vulnerable_deps,
+    };
 
     // Filter by severity if requested
     let filtered_report = if let Some(threshold) = severity {
@@ -1760,7 +2160,6 @@ pub async fn handle_vulnerabilities(
             })
             .collect();
 
-        use analyzer::vulnerability::VulnerabilityReport;
         let mut filtered = VulnerabilityReport {
             checked_at: report.checked_at,
             total_vulnerabilities: 0,
@@ -1837,11 +2236,13 @@ pub async fn handle_vulnerabilities(
                 output.push_str("Vulnerable Dependencies:\n\n");
 
                 for vuln_dep in &filtered_report.vulnerable_dependencies {
+                    let source = vuln_dep.source_dir.as_deref().unwrap_or(".");
                     output.push_str(&format!(
-                        "📦 {} v{} ({})\n",
+                        "📦 {} v{} ({}) [{}]\n",
                         vuln_dep.name,
                         vuln_dep.version,
-                        vuln_dep.language.as_str()
+                        vuln_dep.language.as_str(),
+                        source,
                     ));
 
                     for vuln in &vuln_dep.vulnerabilities {
@@ -1891,18 +2292,20 @@ pub async fn handle_vulnerabilities(
 
     // Output results
     if let Some(output_path) = output {
-        std::fs::write(&output_path, output_string)?;
-        println!("Report saved to: {}", output_path.display());
-    } else {
+        std::fs::write(&output_path, &output_string)?;
+        if !quiet {
+            println!("Report saved to: {}", output_path.display());
+        }
+    } else if !quiet {
         println!("{}", output_string);
     }
 
-    // Exit with non-zero code if critical/high vulnerabilities found
-    if filtered_report.critical_count > 0 || filtered_report.high_count > 0 {
+    // Exit with non-zero code if critical/high vulnerabilities found (skip in quiet/agent mode)
+    if !quiet && (filtered_report.critical_count > 0 || filtered_report.high_count > 0) {
         std::process::exit(1);
     }
 
-    Ok(())
+    Ok(output_string)
 }
 
 pub fn handle_security(
@@ -1931,6 +2334,7 @@ pub fn handle_security(
         format,
         output,
         fail_on_findings,
+        false,
     )?;
 
     // The handler already prints everything, so we just return Ok

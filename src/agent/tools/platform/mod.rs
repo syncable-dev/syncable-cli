@@ -85,7 +85,7 @@ pub use analyze_project::AnalyzeProjectTool;
 pub use check_provider_connection::CheckProviderConnectionTool;
 pub use create_deployment_config::CreateDeploymentConfigTool;
 pub use current_context::CurrentContextTool;
-pub use deploy_service::DeployServiceTool;
+pub use deploy_service::{DeployServiceArgs, DeployServiceTool, SecretKeyInput};
 pub use get_deployment_status::GetDeploymentStatusTool;
 pub use get_service_logs::GetServiceLogsTool;
 pub use list_deployment_capabilities::ListDeploymentCapabilitiesTool;

@@ -1,8 +1,8 @@
 use crate::{
     analyzer::analyze_monorepo,
     analyzer::display::{
-        ColorScheme as DisplayColorScheme, DisplayMode, display_analysis_with_return,
-        init_color_adapter,
+        ColorScheme as DisplayColorScheme, DisplayMode, display_analysis_to_string,
+        display_analysis_with_return, init_color_adapter,
     },
     cli::{ColorScheme, DisplayFormat},
 };
@@ -14,6 +14,7 @@ pub fn handle_analyze(
     display: Option<DisplayFormat>,
     _only: Option<Vec<String>>,
     color_scheme: Option<ColorScheme>,
+    quiet: bool,
 ) -> crate::Result<String> {
     // Initialize color adapter based on user preference
     if let Some(scheme) = color_scheme {
@@ -32,25 +33,28 @@ pub fn handle_analyze(
         }
     }
 
-    println!("🔍 Analyzing project: {}", path.display());
+    if !quiet {
+        println!("🔍 Analyzing project: {}", path.display());
+    }
 
     let monorepo_analysis = analyze_monorepo(&path)?;
 
-    let output = if json {
-        display_analysis_with_return(&monorepo_analysis, DisplayMode::Json)
+    let mode = if json {
+        DisplayMode::Json
+    } else if detailed {
+        // Legacy flag for backward compatibility
+        DisplayMode::Detailed
     } else {
-        // Determine display mode
-        let mode = if detailed {
-            // Legacy flag for backward compatibility
-            DisplayMode::Detailed
-        } else {
-            match display {
-                Some(DisplayFormat::Matrix) | None => DisplayMode::Matrix,
-                Some(DisplayFormat::Detailed) => DisplayMode::Detailed,
-                Some(DisplayFormat::Summary) => DisplayMode::Summary,
-            }
-        };
+        match display {
+            Some(DisplayFormat::Matrix) | None => DisplayMode::Matrix,
+            Some(DisplayFormat::Detailed) => DisplayMode::Detailed,
+            Some(DisplayFormat::Summary) => DisplayMode::Summary,
+        }
+    };
 
+    let output = if quiet {
+        display_analysis_to_string(&monorepo_analysis, mode)
+    } else {
         display_analysis_with_return(&monorepo_analysis, mode)
     };
 

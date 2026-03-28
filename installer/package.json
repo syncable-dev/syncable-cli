@@ -1,0 +1,63 @@
+{
+  "name": "syncable-cli-skills",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Install Syncable CLI skills for AI coding agents (Claude Code, Cursor, Windsurf, Codex, Gemini CLI)",
+  "license": "GPL-3.0",
+  "author": "Syncable <hello@syncable.dev> (https://syncable.dev)",
+  "homepage": "https://github.com/syncable-dev/syncable-cli/tree/main/installer",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/syncable-dev/syncable-cli.git",
+    "directory": "installer"
+  },
+  "bugs": {
+    "url": "https://github.com/syncable-dev/syncable-cli/issues"
+  },
+  "keywords": [
+    "syncable",
+    "ai",
+    "skills",
+    "claude",
+    "cursor",
+    "windsurf",
+    "codex",
+    "gemini",
+    "ai-agents",
+    "devops",
+    "security",
+    "cli"
+  ],
+  "bin": {
+    "syncable-cli-skills": "./dist/index.js"
+  },
+  "files": [
+    "dist/",
+    "skills/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "prebuild": "node scripts/copy-skills.js",
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "chalk": "^5.0.0",
+    "commander": "^12.0.0",
+    "fs-extra": "^11.0.0",
+    "inquirer": "^9.0.0",
+    "ora": "^8.0.0"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.0",
+    "@types/inquirer": "^9.0.9",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  }
+}

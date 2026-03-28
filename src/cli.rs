@@ -64,6 +64,10 @@ pub enum Commands {
         /// Color scheme for terminal output (auto-detect, dark, light)
         #[arg(long, value_enum, default_value = "auto")]
         color_scheme: Option<ColorScheme>,
+
+        /// Output compressed JSON for AI agent consumption (implies --json)
+        #[arg(long)]
+        agent: bool,
     },
 
     /// Generate IaC files for a project
@@ -114,6 +118,10 @@ pub enum Commands {
         /// Fix issues automatically where possible
         #[arg(long)]
         fix: bool,
+
+        /// Output compressed JSON for AI agent consumption (implies --json)
+        #[arg(long)]
+        agent: bool,
     },
 
     /// Show supported languages and frameworks
@@ -156,6 +164,10 @@ pub enum Commands {
         /// Output format
         #[arg(long, value_enum, default_value = "table")]
         format: OutputFormat,
+
+        /// Output compressed JSON for AI agent consumption (implies --json)
+        #[arg(long)]
+        agent: bool,
     },
 
     /// Check dependencies for known vulnerabilities
@@ -175,6 +187,10 @@ pub enum Commands {
         /// Export report to file
         #[arg(long)]
         output: Option<PathBuf>,
+
+        /// Output compressed JSON for AI agent consumption (implies --json)
+        #[arg(long)]
+        agent: bool,
     },
 
     /// Perform comprehensive security analysis
@@ -222,6 +238,10 @@ pub enum Commands {
         /// Exit with error code on security findings
         #[arg(long)]
         fail_on_findings: bool,
+
+        /// Output compressed JSON for AI agent consumption (implies --json)
+        #[arg(long)]
+        agent: bool,
     },
 
     /// Manage vulnerability scanning tools
@@ -312,6 +332,33 @@ pub enum Commands {
         /// Run comprehensive analysis (includes kubelint security checks and helmlint validation)
         #[arg(long, short = 'f')]
         full: bool,
+
+        /// Output compressed JSON for AI agent consumption (implies --json)
+        #[arg(long)]
+        agent: bool,
+    },
+
+    /// Retrieve stored output from a previous --agent command
+    Retrieve {
+        /// Reference ID (e.g., "security_a1b2c3d4") or "latest" for most recent
+        #[arg(value_name = "REF_ID")]
+        ref_id: Option<String>,
+
+        /// Filter query (e.g., "severity:critical", "file:path", "section:frameworks")
+        #[arg(long, short = 'q')]
+        query: Option<String>,
+
+        /// List all stored outputs
+        #[arg(long)]
+        list: bool,
+
+        /// Maximum number of results to return (default: 20)
+        #[arg(long, short = 'l', default_value = "20")]
+        limit: usize,
+
+        /// Number of results to skip (for pagination)
+        #[arg(long, default_value = "0")]
+        offset: usize,
     },
 
     /// Start an interactive AI chat session to analyze and understand your project
@@ -571,6 +618,96 @@ pub enum DeployCommand {
         /// Watch for status updates (poll until complete)
         #[arg(short, long)]
         watch: bool,
+    },
+
+    /// Preview deployment recommendation (non-interactive, JSON output for agents)
+    Preview {
+        /// Path to project or service subdirectory
+        #[arg(value_name = "PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Override service name (default: derived from directory name)
+        #[arg(long)]
+        service_name: Option<String>,
+
+        /// Override cloud provider (gcp, hetzner, azure)
+        #[arg(long)]
+        provider: Option<String>,
+
+        /// Override region
+        #[arg(long)]
+        region: Option<String>,
+
+        /// Override machine type
+        #[arg(long)]
+        machine_type: Option<String>,
+
+        /// Override detected port
+        #[arg(long)]
+        port: Option<u16>,
+
+        /// Make service publicly accessible
+        #[arg(long)]
+        public: bool,
+    },
+
+    /// Deploy a service non-interactively (for agents and CI/CD)
+    Run {
+        /// Path to project or service subdirectory
+        #[arg(value_name = "PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Override service name (default: derived from directory name)
+        #[arg(long)]
+        service_name: Option<String>,
+
+        /// Cloud provider (gcp, hetzner, azure)
+        #[arg(long)]
+        provider: Option<String>,
+
+        /// Region
+        #[arg(long)]
+        region: Option<String>,
+
+        /// Machine type
+        #[arg(long)]
+        machine_type: Option<String>,
+
+        /// Port to expose
+        #[arg(long)]
+        port: Option<u16>,
+
+        /// Make service publicly accessible
+        #[arg(long)]
+        public: bool,
+
+        /// CPU allocation (for GCP/Azure, e.g. "1000m", "2")
+        #[arg(long)]
+        cpu: Option<String>,
+
+        /// Memory allocation (for GCP/Azure, e.g. "512Mi", "2Gi")
+        #[arg(long)]
+        memory: Option<String>,
+
+        /// Min instances/replicas
+        #[arg(long)]
+        min_instances: Option<i32>,
+
+        /// Max instances/replicas
+        #[arg(long)]
+        max_instances: Option<i32>,
+
+        /// Environment variable as KEY=VALUE (non-secret, repeatable)
+        #[arg(long = "env", value_name = "KEY=VALUE")]
+        env_vars: Vec<String>,
+
+        /// Secret key name (user prompted in terminal for value, repeatable)
+        #[arg(long = "secret")]
+        secrets: Vec<String>,
+
+        /// Load environment variables from a .env file
+        #[arg(long)]
+        env_file: Option<PathBuf>,
     },
 }
 

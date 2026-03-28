@@ -10,7 +10,7 @@
 use crate::analyzer::helmlint::{HelmlintConfig, lint_chart as helmlint};
 use crate::analyzer::k8s_optimize::{
     DataSource, K8sOptimizeConfig, LiveAnalyzer, LiveAnalyzerConfig, OutputFormat, Severity,
-    analyze, format_result,
+    analyze, format_result, format_result_to_string,
 };
 use crate::analyzer::kubelint::{KubelintConfig, lint as kubelint};
 use crate::error::Result;
@@ -93,6 +93,37 @@ pub async fn handle_optimize(path: &Path, options: OptimizeOptions) -> Result<()
 
     // Static analysis mode (Phase 1)
     handle_static_optimize(path, options)
+}
+
+/// Handle optimize in agent mode - returns JSON string without printing.
+pub fn handle_optimize_agent(path: &Path, options: OptimizeOptions) -> Result<String> {
+    let mut config = K8sOptimizeConfig::default();
+
+    if let Some(severity_str) = &options.severity
+        && let Some(severity) = Severity::parse(severity_str)
+    {
+        config = config.with_severity(severity);
+    }
+
+    if let Some(threshold) = options.threshold {
+        config = config.with_threshold(threshold);
+    }
+
+    if let Some(margin) = options.safety_margin {
+        config = config.with_safety_margin(margin);
+    }
+
+    if options.include_info {
+        config = config.with_info();
+    }
+
+    if options.include_system {
+        config = config.with_system();
+    }
+
+    let result = analyze(path, &config);
+    let json_output = format_result_to_string(&result, OutputFormat::Json);
+    Ok(json_output)
 }
 
 /// Handle static analysis (Phase 1) - analyzes manifests without cluster connection.
