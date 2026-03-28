@@ -3,6 +3,8 @@
 import { Command } from 'commander';
 import inquirer from 'inquirer';
 import ora from 'ora';
+import path from 'path';
+import os from 'os';
 import chalk from 'chalk';
 import { createRequire } from 'module';
 import { checkNodeVersion, checkCargo, checkSyncCtl } from './prerequisites/check.js';
@@ -248,6 +250,8 @@ program
             break;
           case 'codex':
             removeSyncableSkills(dest, 'syncable-*');
+            // Also clean old location (~/.codex/skills/)
+            removeSyncableSkills(path.join(os.homedir(), '.codex', 'skills'), 'syncable-*');
             break;
           case 'cursor':
             removeSyncableSkills(dest, 'syncable-*.mdc');
