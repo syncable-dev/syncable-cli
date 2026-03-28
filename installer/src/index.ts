@@ -256,7 +256,7 @@ program
             removeSyncableSkills(dest, 'syncable-*.md');
             break;
           case 'gemini':
-            removeGeminiSection(dest);
+            removeSyncableSkills(dest, 'syncable-*');
             break;
         }
         spinner.succeed(`  Skills removed from ${agent.displayName}`);

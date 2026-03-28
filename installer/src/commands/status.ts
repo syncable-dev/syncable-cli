@@ -48,16 +48,10 @@ export function countInstalledSkills(dirOrPath: string, agent: AgentName | strin
 
     case 'gemini': {
       if (!fs.existsSync(dirOrPath)) return 0;
-      const content = fs.readFileSync(dirOrPath, 'utf-8');
-      if (content.includes(SKILL_MARKER_START)) {
-        const start = content.indexOf(SKILL_MARKER_START);
-        const end = content.indexOf('<!-- SYNCABLE-CLI-SKILLS-END -->');
-        if (start !== -1 && end !== -1) {
-          const section = content.slice(start, end);
-          return (section.match(/^### /gm) || []).length;
-        }
-      }
-      return 0;
+      // New format: skills/<name>/SKILL.md directories
+      return fs.readdirSync(dirOrPath)
+        .filter((f) => f.startsWith('syncable-') && fs.statSync(path.join(dirOrPath, f)).isDirectory())
+        .length;
     }
 
     default:
