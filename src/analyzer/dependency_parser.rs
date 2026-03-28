@@ -216,14 +216,30 @@ impl DependencyParser {
         dirs
     }
 
-    fn walk_for_manifests(&self, dir: &Path, depth: usize, max_depth: usize, out: &mut Vec<PathBuf>) {
+    fn walk_for_manifests(
+        &self,
+        dir: &Path,
+        depth: usize,
+        max_depth: usize,
+        out: &mut Vec<PathBuf>,
+    ) {
         if depth >= max_depth {
             return;
         }
 
         let skip_dirs = [
-            "node_modules", "target", ".git", "vendor", "dist", "build",
-            ".next", ".nuxt", "__pycache__", ".venv", "venv", ".cargo",
+            "node_modules",
+            "target",
+            ".git",
+            "vendor",
+            "dist",
+            "build",
+            ".next",
+            ".nuxt",
+            "__pycache__",
+            ".venv",
+            "venv",
+            ".cargo",
         ];
 
         let entries = match std::fs::read_dir(dir) {
@@ -259,8 +275,14 @@ impl DependencyParser {
 
     fn has_package_manifest(dir: &Path) -> bool {
         let manifests = [
-            "Cargo.toml", "package.json", "requirements.txt", "pyproject.toml",
-            "Pipfile", "go.mod", "pom.xml", "build.gradle",
+            "Cargo.toml",
+            "package.json",
+            "requirements.txt",
+            "pyproject.toml",
+            "Pipfile",
+            "go.mod",
+            "pom.xml",
+            "build.gradle",
         ];
         manifests.iter().any(|m| dir.join(m).exists())
     }
@@ -275,7 +297,10 @@ impl DependencyParser {
         if dir.join("Cargo.toml").exists() {
             if let Ok(rust_deps) = self.parse_rust_deps(dir) {
                 if !rust_deps.is_empty() {
-                    dependencies.entry(Language::Rust).or_default().extend(rust_deps);
+                    dependencies
+                        .entry(Language::Rust)
+                        .or_default()
+                        .extend(rust_deps);
                 }
             }
         }
@@ -284,7 +309,10 @@ impl DependencyParser {
         if dir.join("package.json").exists() {
             if let Ok(js_deps) = self.parse_js_deps(dir) {
                 if !js_deps.is_empty() {
-                    dependencies.entry(Language::JavaScript).or_default().extend(js_deps);
+                    dependencies
+                        .entry(Language::JavaScript)
+                        .or_default()
+                        .extend(js_deps);
                 }
             }
         }
@@ -296,7 +324,10 @@ impl DependencyParser {
         {
             if let Ok(py_deps) = self.parse_python_deps(dir) {
                 if !py_deps.is_empty() {
-                    dependencies.entry(Language::Python).or_default().extend(py_deps);
+                    dependencies
+                        .entry(Language::Python)
+                        .or_default()
+                        .extend(py_deps);
                 }
             }
         }
@@ -305,7 +336,10 @@ impl DependencyParser {
         if dir.join("go.mod").exists() {
             if let Ok(go_deps) = self.parse_go_deps(dir) {
                 if !go_deps.is_empty() {
-                    dependencies.entry(Language::Go).or_default().extend(go_deps);
+                    dependencies
+                        .entry(Language::Go)
+                        .or_default()
+                        .extend(go_deps);
                 }
             }
         }
@@ -314,7 +348,10 @@ impl DependencyParser {
         if dir.join("pom.xml").exists() || dir.join("build.gradle").exists() {
             if let Ok(java_deps) = self.parse_java_deps(dir) {
                 if !java_deps.is_empty() {
-                    dependencies.entry(Language::Java).or_default().extend(java_deps);
+                    dependencies
+                        .entry(Language::Java)
+                        .or_default()
+                        .extend(java_deps);
                 }
             }
         }

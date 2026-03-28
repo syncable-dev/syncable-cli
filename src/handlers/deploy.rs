@@ -87,7 +87,10 @@ pub async fn handle_deploy_run(
                 is_secret: false,
             });
         } else {
-            eprintln!("Warning: ignoring malformed --env '{}' (expected KEY=VALUE)", env_str);
+            eprintln!(
+                "Warning: ignoring malformed --env '{}' (expected KEY=VALUE)",
+                env_str
+            );
         }
     }
 
@@ -111,7 +114,11 @@ pub async fn handle_deploy_run(
                     }
                     if let Some((key, value)) = line.split_once('=') {
                         let key = key.trim().to_string();
-                        let value = value.trim().trim_matches('"').trim_matches('\'').to_string();
+                        let value = value
+                            .trim()
+                            .trim_matches('"')
+                            .trim_matches('\'')
+                            .to_string();
                         // Detect likely secrets by key name
                         let looks_secret = key.contains("SECRET")
                             || key.contains("KEY")
@@ -135,7 +142,10 @@ pub async fn handle_deploy_run(
                     }
                 }
             } else {
-                eprintln!("Warning: could not read env file: {}", env_file_path.display());
+                eprintln!(
+                    "Warning: could not read env file: {}",
+                    env_file_path.display()
+                );
             }
         } else {
             eprintln!("Warning: env file not found: {}", env_file_path.display());
@@ -155,7 +165,11 @@ pub async fn handle_deploy_run(
         min_instances,
         max_instances,
         preview_only: false,
-        secret_keys: if secret_keys.is_empty() { None } else { Some(secret_keys) },
+        secret_keys: if secret_keys.is_empty() {
+            None
+        } else {
+            Some(secret_keys)
+        },
     };
 
     // Use InteractiveCli so secrets can be prompted in terminal

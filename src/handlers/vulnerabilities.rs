@@ -30,7 +30,9 @@ pub async fn handle_vulnerabilities(
     // SAFETY: set_var is called on main thread before spawning audit subprocesses
     let was_quiet = std::env::var("SYNCABLE_QUIET").is_ok();
     if !was_quiet {
-        unsafe { std::env::set_var("SYNCABLE_QUIET", "1"); }
+        unsafe {
+            std::env::set_var("SYNCABLE_QUIET", "1");
+        }
     }
 
     // Collect scannable dirs first so we can show progress
@@ -52,7 +54,8 @@ pub async fn handle_vulnerabilities(
     let total_dirs = scannable_dirs.len();
 
     for (i, (dir, deps, langs)) in scannable_dirs.into_iter().enumerate() {
-        let dir_name = dir.strip_prefix(&project_path)
+        let dir_name = dir
+            .strip_prefix(&project_path)
             .unwrap_or(&dir)
             .display()
             .to_string();
@@ -65,14 +68,19 @@ pub async fn handle_vulnerabilities(
         if !quiet {
             println!(
                 "  [{}/{}] Scanning {} ({})",
-                i + 1, total_dirs, dir_label, langs.join(", ")
+                i + 1,
+                total_dirs,
+                dir_label,
+                langs.join(", ")
             );
         }
 
         let checker = analyzer::vulnerability::VulnerabilityChecker::new();
         match checker.check_all_dependencies(&deps, &dir).await {
             Ok(report) => {
-                let count = report.vulnerable_dependencies.iter()
+                let count = report
+                    .vulnerable_dependencies
+                    .iter()
                     .map(|d| d.vulnerabilities.len())
                     .sum::<usize>();
                 if !quiet && count > 0 {
@@ -94,7 +102,9 @@ pub async fn handle_vulnerabilities(
 
     // Restore env var
     if !was_quiet {
-        unsafe { std::env::remove_var("SYNCABLE_QUIET"); }
+        unsafe {
+            std::env::remove_var("SYNCABLE_QUIET");
+        }
     }
 
     if !any_deps_found {

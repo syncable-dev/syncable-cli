@@ -20,7 +20,7 @@ use std::time::{Duration, SystemTime};
 use syncable_cli::analyzer::display::BoxDrawer;
 
 use syncable_cli::agent::tools::compression::{
-    compress_tool_output_cli, compress_analysis_output_cli, CompressionConfig,
+    CompressionConfig, compress_analysis_output_cli, compress_tool_output_cli,
 };
 use syncable_cli::agent::tools::output_store;
 
@@ -82,7 +82,9 @@ async fn run() -> syncable_cli::Result<()> {
     );
     if is_agent_mode {
         // SAFETY: set_var is called before any threads are spawned
-        unsafe { std::env::set_var("SYNCABLE_QUIET", "1"); }
+        unsafe {
+            std::env::set_var("SYNCABLE_QUIET", "1");
+        }
     }
 
     check_for_update(suppress_update_banner).await;
@@ -198,7 +200,13 @@ async fn run() -> syncable_cli::Result<()> {
 
             if agent {
                 let output = syncable_cli::handlers::analyze::handle_analyze(
-                    path, true, false, None, only, color_scheme, true,
+                    path,
+                    true,
+                    false,
+                    None,
+                    only,
+                    color_scheme,
+                    true,
                 )?;
                 handle_agent_output(&output, "analyze_project", None)
             } else {
@@ -259,7 +267,12 @@ async fn run() -> syncable_cli::Result<()> {
             )
         }
 
-        Commands::Validate { path, types, fix, agent } => {
+        Commands::Validate {
+            path,
+            types,
+            fix,
+            agent,
+        } => {
             // Create telemetry properties
             let mut properties = HashMap::new();
 
@@ -343,7 +356,11 @@ async fn run() -> syncable_cli::Result<()> {
             }
 
             // Honor global --json flag or --agent flag for output selection
-            let effective_format = if agent || cli.json { OutputFormat::Json } else { format };
+            let effective_format = if agent || cli.json {
+                OutputFormat::Json
+            } else {
+                format
+            };
 
             let format_str = match effective_format {
                 OutputFormat::Table => "table",
@@ -358,8 +375,15 @@ async fn run() -> syncable_cli::Result<()> {
 
             if agent {
                 let result = handle_dependencies(
-                    path, licenses, vulnerabilities, prod_only, dev_only, OutputFormat::Json, true,
-                ).await?;
+                    path,
+                    licenses,
+                    vulnerabilities,
+                    prod_only,
+                    dev_only,
+                    OutputFormat::Json,
+                    true,
+                )
+                .await?;
                 handle_agent_output(&result, "dependencies", None)
             } else {
                 handle_dependencies(
@@ -396,7 +420,11 @@ async fn run() -> syncable_cli::Result<()> {
             }
 
             // Honor global --json flag or --agent flag for output selection
-            let effective_format = if agent || cli.json { OutputFormat::Json } else { format };
+            let effective_format = if agent || cli.json {
+                OutputFormat::Json
+            } else {
+                format
+            };
 
             let format_str = match effective_format {
                 OutputFormat::Table => "table",
@@ -414,10 +442,13 @@ async fn run() -> syncable_cli::Result<()> {
             }
 
             if agent {
-                let result = handle_vulnerabilities(path, severity, OutputFormat::Json, None, true).await?;
+                let result =
+                    handle_vulnerabilities(path, severity, OutputFormat::Json, None, true).await?;
                 handle_agent_output(&result, "vulnerabilities", output.as_deref())
             } else {
-                handle_vulnerabilities(path, severity, effective_format, output, false).await.map(|_| ())
+                handle_vulnerabilities(path, severity, effective_format, output, false)
+                    .await
+                    .map(|_| ())
             }
         }
         Commands::Security {
@@ -471,7 +502,11 @@ async fn run() -> syncable_cli::Result<()> {
             }
 
             // Honor global --json flag or --agent flag for output selection
-            let effective_format = if agent || cli.json { OutputFormat::Json } else { format };
+            let effective_format = if agent || cli.json {
+                OutputFormat::Json
+            } else {
+                format
+            };
 
             let format_str = match effective_format {
                 OutputFormat::Table => "table",
@@ -494,9 +529,18 @@ async fn run() -> syncable_cli::Result<()> {
 
             if agent {
                 let result = syncable_cli::handlers::security::handle_security(
-                    path, mode, include_low, no_secrets, no_code_patterns,
-                    no_infrastructure, no_compliance, frameworks,
-                    OutputFormat::Json, None, fail_on_findings, true,
+                    path,
+                    mode,
+                    include_low,
+                    no_secrets,
+                    no_code_patterns,
+                    no_infrastructure,
+                    no_compliance,
+                    frameworks,
+                    OutputFormat::Json,
+                    None,
+                    fail_on_findings,
+                    true,
                 )?;
                 handle_agent_output(&result, "security", output.as_deref())
             } else {
@@ -680,7 +724,8 @@ async fn run() -> syncable_cli::Result<()> {
             };
 
             if agent {
-                let result = syncable_cli::handlers::optimize::handle_optimize_agent(&path, options)?;
+                let result =
+                    syncable_cli::handlers::optimize::handle_optimize_agent(&path, options)?;
                 handle_agent_output(&result, "optimize", None)
             } else {
                 syncable_cli::handlers::handle_optimize(&path, options).await
@@ -939,32 +984,41 @@ async fn run() -> syncable_cli::Result<()> {
                 }
             }
         }
-        Commands::Retrieve { ref_id, query, list, limit, offset } => {
+        Commands::Retrieve {
+            ref_id,
+            query,
+            list,
+            limit,
+            offset,
+        } => {
             output_store::cleanup_old_outputs();
 
             if list {
                 let outputs = output_store::list_outputs();
-                let json_list: Vec<serde_json::Value> = outputs.iter().map(|o| {
-                    let age_secs = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs()
-                        .saturating_sub(o.timestamp);
-                    let age_str = if age_secs < 60 {
-                        format!("{}s ago", age_secs)
-                    } else if age_secs < 3600 {
-                        format!("{}m ago", age_secs / 60)
-                    } else {
-                        format!("{}h ago", age_secs / 3600)
-                    };
-                    serde_json::json!({
-                        "ref_id": o.ref_id,
-                        "tool": o.tool,
-                        "timestamp": o.timestamp,
-                        "age": age_str,
-                        "size_bytes": o.size_bytes,
+                let json_list: Vec<serde_json::Value> = outputs
+                    .iter()
+                    .map(|o| {
+                        let age_secs = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs()
+                            .saturating_sub(o.timestamp);
+                        let age_str = if age_secs < 60 {
+                            format!("{}s ago", age_secs)
+                        } else if age_secs < 3600 {
+                            format!("{}m ago", age_secs / 60)
+                        } else {
+                            format!("{}h ago", age_secs / 3600)
+                        };
+                        serde_json::json!({
+                            "ref_id": o.ref_id,
+                            "tool": o.tool,
+                            "timestamp": o.timestamp,
+                            "age": age_str,
+                            "size_bytes": o.size_bytes,
+                        })
                     })
-                }).collect();
+                    .collect();
                 println!("{}", serde_json::to_string_pretty(&json_list)?);
                 return Ok(());
             }
@@ -997,7 +1051,8 @@ async fn run() -> syncable_cli::Result<()> {
                 }
                 None => {
                     let available = output_store::list_outputs();
-                    let available_ids: Vec<&str> = available.iter().map(|o| o.ref_id.as_str()).collect();
+                    let available_ids: Vec<&str> =
+                        available.iter().map(|o| o.ref_id.as_str()).collect();
                     let error = serde_json::json!({
                         "error": "not_found",
                         "message": format!("Output '{}' not found (expired or invalid ref_id)", resolved_ref),
@@ -1405,28 +1460,65 @@ async fn run() -> syncable_cli::Result<()> {
                         }
                     }
                 }
-                Some(DeployCommand::Preview { path: preview_path, service_name, provider, region, machine_type, port, public }) => {
+                Some(DeployCommand::Preview {
+                    path: preview_path,
+                    service_name,
+                    provider,
+                    region,
+                    machine_type,
+                    port,
+                    public,
+                }) => {
                     let project_path = preview_path.canonicalize().unwrap_or(preview_path);
                     let result = syncable_cli::handlers::deploy::handle_deploy_preview(
                         project_path.clone(),
                         std::path::PathBuf::from("."),
-                        service_name, provider, region, machine_type, port, public,
-                    ).await?;
+                        service_name,
+                        provider,
+                        region,
+                        machine_type,
+                        port,
+                        public,
+                    )
+                    .await?;
                     println!("{}", result);
                     Ok(())
                 }
                 Some(DeployCommand::Run {
-                    path: run_path, service_name, provider, region, machine_type, port, public,
-                    cpu, memory, min_instances, max_instances, env_vars, secrets, env_file,
+                    path: run_path,
+                    service_name,
+                    provider,
+                    region,
+                    machine_type,
+                    port,
+                    public,
+                    cpu,
+                    memory,
+                    min_instances,
+                    max_instances,
+                    env_vars,
+                    secrets,
+                    env_file,
                 }) => {
                     let project_path = run_path.canonicalize().unwrap_or(run_path);
                     let result = syncable_cli::handlers::deploy::handle_deploy_run(
                         project_path.clone(),
                         std::path::PathBuf::from("."),
-                        service_name, provider, region, machine_type, port, public,
-                        cpu, memory, min_instances, max_instances,
-                        env_vars, secrets, env_file,
-                    ).await?;
+                        service_name,
+                        provider,
+                        region,
+                        machine_type,
+                        port,
+                        public,
+                        cpu,
+                        memory,
+                        min_instances,
+                        max_instances,
+                        env_vars,
+                        secrets,
+                        env_file,
+                    )
+                    .await?;
                     println!("{}", result);
                     Ok(())
                 }
@@ -1713,7 +1805,11 @@ fn is_version_newer(current: &str, latest: &str) -> bool {
 }
 
 /// Route command output through compression pipeline for --agent mode.
-fn handle_agent_output(json_output: &str, tool_name: &str, output_file: Option<&std::path::Path>) -> syncable_cli::Result<()> {
+fn handle_agent_output(
+    json_output: &str,
+    tool_name: &str,
+    output_file: Option<&std::path::Path>,
+) -> syncable_cli::Result<()> {
     output_store::cleanup_old_outputs();
 
     if let Some(path) = output_file {
@@ -1721,12 +1817,14 @@ fn handle_agent_output(json_output: &str, tool_name: &str, output_file: Option<&
         eprintln!("Full output saved to: {}", path.display());
     }
 
-    let value: serde_json::Value = serde_json::from_str(json_output)
-        .map_err(|e| syncable_cli::error::IaCGeneratorError::Analysis(
-            syncable_cli::error::AnalysisError::InvalidStructure(
-                format!("Failed to parse output as JSON: {}", e)
-            )
-        ))?;
+    let value: serde_json::Value = serde_json::from_str(json_output).map_err(|e| {
+        syncable_cli::error::IaCGeneratorError::Analysis(
+            syncable_cli::error::AnalysisError::InvalidStructure(format!(
+                "Failed to parse output as JSON: {}",
+                e
+            )),
+        )
+    })?;
 
     let config = CompressionConfig::default();
     let compressed = if tool_name == "analyze_project" {
@@ -1848,8 +1946,6 @@ fn handle_generate(
     Ok(())
 }
 
-
-
 fn handle_support(languages: bool, frameworks: bool, _detailed: bool) -> syncable_cli::Result<()> {
     if languages || !frameworks {
         println!("🌐 Supported Languages:");
@@ -1917,19 +2013,22 @@ pub async fn handle_vulnerabilities(
     let was_quiet = std::env::var("SYNCABLE_QUIET").is_ok();
     if !was_quiet {
         // SAFETY: set_var called on main thread before spawning audit subprocesses
-        unsafe { std::env::set_var("SYNCABLE_QUIET", "1"); }
+        unsafe {
+            std::env::set_var("SYNCABLE_QUIET", "1");
+        }
     }
 
     // Collect scannable dirs
     let mut scannable_dirs = Vec::new();
     for dir in &project_dirs {
-        let deps = parser.parse_deps_in_dir_standalone(dir)
-            .map_err(|e| syncable_cli::error::IaCGeneratorError::Analysis(
+        let deps = parser.parse_deps_in_dir_standalone(dir).map_err(|e| {
+            syncable_cli::error::IaCGeneratorError::Analysis(
                 syncable_cli::error::AnalysisError::DependencyParsing {
                     file: dir.display().to_string(),
                     reason: e.to_string(),
                 },
-            ))?;
+            )
+        })?;
         if !deps.is_empty() {
             let langs: Vec<String> = deps.keys().map(|l| format!("{:?}", l)).collect();
             scannable_dirs.push((dir.clone(), deps, langs));
@@ -1945,7 +2044,8 @@ pub async fn handle_vulnerabilities(
     let total_dirs = scannable_dirs.len();
 
     for (i, (dir, deps, langs)) in scannable_dirs.into_iter().enumerate() {
-        let dir_name = dir.strip_prefix(&project_path)
+        let dir_name = dir
+            .strip_prefix(&project_path)
             .unwrap_or(&dir)
             .display()
             .to_string();
@@ -1958,14 +2058,19 @@ pub async fn handle_vulnerabilities(
         if !quiet {
             println!(
                 "  [{}/{}] Scanning {} ({})",
-                i + 1, total_dirs, dir_label, langs.join(", ")
+                i + 1,
+                total_dirs,
+                dir_label,
+                langs.join(", ")
             );
         }
 
         let checker = analyzer::vulnerability::VulnerabilityChecker::new();
         match checker.check_all_dependencies(&deps, &dir).await {
             Ok(report) => {
-                let count = report.vulnerable_dependencies.iter()
+                let count = report
+                    .vulnerable_dependencies
+                    .iter()
                     .map(|d| d.vulnerabilities.len())
                     .sum::<usize>();
                 if !quiet && count > 0 {
@@ -1986,7 +2091,9 @@ pub async fn handle_vulnerabilities(
 
     // Restore env var
     if !was_quiet {
-        unsafe { std::env::remove_var("SYNCABLE_QUIET"); }
+        unsafe {
+            std::env::remove_var("SYNCABLE_QUIET");
+        }
     }
 
     if !any_deps_found {

@@ -108,7 +108,12 @@ pub fn handle_validate(
             .collect()
     });
     let check_all = type_filter.is_none();
-    let should_check = |name: &str| check_all || type_filter.as_ref().map_or(false, |f| f.iter().any(|t| t == name));
+    let should_check = |name: &str| {
+        check_all
+            || type_filter
+                .as_ref()
+                .map_or(false, |f| f.iter().any(|t| t == name))
+    };
 
     let mut all_results: Vec<serde_json::Value> = Vec::new();
     let mut total_errors = 0usize;
@@ -197,7 +202,10 @@ pub fn handle_validate(
         let k8s_dirs = find_k8s_dirs(&project_path);
         if !k8s_dirs.is_empty() {
             if !quiet {
-                println!("\n☸️  Checking {} K8s manifest location(s)...", k8s_dirs.len());
+                println!(
+                    "\n☸️  Checking {} K8s manifest location(s)...",
+                    k8s_dirs.len()
+                );
             }
             let config = kubelint::KubelintConfig::default();
             for dir in &k8s_dirs {
@@ -301,7 +309,9 @@ fn find_dockerfiles(root: &std::path::Path) -> Vec<std::path::PathBuf> {
     let mut files = Vec::new();
     let names = ["Dockerfile", "dockerfile", "Containerfile"];
     walk_for_files(root, 0, 4, &mut files, &|name| {
-        names.iter().any(|n| name == *n || name.starts_with(&format!("{}.", n)))
+        names
+            .iter()
+            .any(|n| name == *n || name.starts_with(&format!("{}.", n)))
     });
     files
 }
@@ -310,15 +320,24 @@ fn find_compose_files(root: &std::path::Path) -> Vec<std::path::PathBuf> {
     let mut files = Vec::new();
     walk_for_files(root, 0, 4, &mut files, &|name| {
         let n = name.to_lowercase();
-        n == "docker-compose.yml" || n == "docker-compose.yaml"
-            || n == "compose.yml" || n == "compose.yaml"
+        n == "docker-compose.yml"
+            || n == "docker-compose.yaml"
+            || n == "compose.yml"
+            || n == "compose.yaml"
     });
     files
 }
 
 fn find_k8s_dirs(root: &std::path::Path) -> Vec<std::path::PathBuf> {
     // Look for directories containing K8s YAML files (with kind: field)
-    let k8s_dir_names = ["k8s", "kubernetes", "manifests", "deploy", "deployments", "kube"];
+    let k8s_dir_names = [
+        "k8s",
+        "kubernetes",
+        "manifests",
+        "deploy",
+        "deployments",
+        "kube",
+    ];
     let mut dirs = Vec::new();
     if let Ok(entries) = std::fs::read_dir(root) {
         for entry in entries.flatten() {
@@ -357,7 +376,11 @@ fn has_k8s_files(dir: &std::path::Path) -> bool {
 }
 
 fn is_compose_file(p: &std::path::Path) -> bool {
-    let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_lowercase();
+    let name = p
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_lowercase();
     name.contains("compose") || name.contains("docker-compose")
 }
 
@@ -367,22 +390,42 @@ fn find_helm_charts_validate(root: &std::path::Path) -> Vec<std::path::PathBuf> 
         charts.push(root.to_path_buf());
         return charts;
     }
-    walk_for_dirs(root, 0, 3, &mut charts, &|dir| dir.join("Chart.yaml").exists());
+    walk_for_dirs(root, 0, 3, &mut charts, &|dir| {
+        dir.join("Chart.yaml").exists()
+    });
     charts
 }
 
 fn walk_for_files(
-    dir: &std::path::Path, depth: usize, max_depth: usize,
-    out: &mut Vec<std::path::PathBuf>, matcher: &dyn Fn(&str) -> bool,
+    dir: &std::path::Path,
+    depth: usize,
+    max_depth: usize,
+    out: &mut Vec<std::path::PathBuf>,
+    matcher: &dyn Fn(&str) -> bool,
 ) {
-    if depth >= max_depth { return; }
-    let skip = ["node_modules", "target", ".git", "vendor", "dist", "build", "__pycache__"];
-    let entries = match std::fs::read_dir(dir) { Ok(e) => e, Err(_) => return };
+    if depth >= max_depth {
+        return;
+    }
+    let skip = [
+        "node_modules",
+        "target",
+        ".git",
+        "vendor",
+        "dist",
+        "build",
+        "__pycache__",
+    ];
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
     for entry in entries.flatten() {
         let p = entry.path();
         if p.is_file() {
             if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
-                if matcher(name) { out.push(p); }
+                if matcher(name) {
+                    out.push(p);
+                }
             }
         } else if p.is_dir() {
             let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
@@ -394,18 +437,28 @@ fn walk_for_files(
 }
 
 fn walk_for_dirs(
-    dir: &std::path::Path, depth: usize, max_depth: usize,
-    out: &mut Vec<std::path::PathBuf>, matcher: &dyn Fn(&std::path::Path) -> bool,
+    dir: &std::path::Path,
+    depth: usize,
+    max_depth: usize,
+    out: &mut Vec<std::path::PathBuf>,
+    matcher: &dyn Fn(&std::path::Path) -> bool,
 ) {
-    if depth >= max_depth { return; }
+    if depth >= max_depth {
+        return;
+    }
     let skip = ["node_modules", "target", ".git", "vendor"];
-    let entries = match std::fs::read_dir(dir) { Ok(e) => e, Err(_) => return };
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
     for entry in entries.flatten() {
         let p = entry.path();
         if p.is_dir() {
             let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
             if !name.starts_with('.') && !skip.contains(&name) {
-                if matcher(&p) { out.push(p.clone()); }
+                if matcher(&p) {
+                    out.push(p.clone());
+                }
                 walk_for_dirs(&p, depth + 1, max_depth, out, matcher);
             }
         }
@@ -414,7 +467,9 @@ fn walk_for_dirs(
 
 // --- Severity counting helpers (each linter has its own types) ---
 
-fn count_severities_hadolint(result: &crate::analyzer::hadolint::LintResult) -> (usize, usize, usize) {
+fn count_severities_hadolint(
+    result: &crate::analyzer::hadolint::LintResult,
+) -> (usize, usize, usize) {
     use crate::analyzer::hadolint::Severity;
     let (mut e, mut w, mut i) = (0, 0, 0);
     for f in &result.failures {
@@ -440,7 +495,9 @@ fn count_severities_dclint(result: &crate::analyzer::dclint::LintResult) -> (usi
     (e, w, i)
 }
 
-fn count_severities_kubelint(result: &crate::analyzer::kubelint::LintResult) -> (usize, usize, usize) {
+fn count_severities_kubelint(
+    result: &crate::analyzer::kubelint::LintResult,
+) -> (usize, usize, usize) {
     use crate::analyzer::kubelint::Severity;
     let (mut e, mut w, mut i) = (0, 0, 0);
     for f in &result.failures {
@@ -453,7 +510,9 @@ fn count_severities_kubelint(result: &crate::analyzer::kubelint::LintResult) -> 
     (e, w, i)
 }
 
-fn count_severities_helmlint(result: &crate::analyzer::helmlint::LintResult) -> (usize, usize, usize) {
+fn count_severities_helmlint(
+    result: &crate::analyzer::helmlint::LintResult,
+) -> (usize, usize, usize) {
     use crate::analyzer::helmlint::Severity;
     let (mut e, mut w, mut i) = (0, 0, 0);
     for f in &result.failures {

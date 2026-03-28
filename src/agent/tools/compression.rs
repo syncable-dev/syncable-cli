@@ -260,15 +260,24 @@ fn extract_issues(output: &Value) -> Vec<Value> {
             if field == &"vulnerable_dependencies" && !arr.is_empty() {
                 let mut flat = Vec::new();
                 for dep in arr {
-                    let dep_name = dep.get("name").and_then(|v| v.as_str()).unwrap_or("unknown");
+                    let dep_name = dep
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown");
                     let dep_version = dep.get("version").and_then(|v| v.as_str()).unwrap_or("?");
-                    let language = dep.get("language").cloned().unwrap_or(serde_json::Value::Null);
+                    let language = dep
+                        .get("language")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null);
                     if let Some(vulns) = dep.get("vulnerabilities").and_then(|v| v.as_array()) {
                         for vuln in vulns {
                             let mut entry = vuln.clone();
                             if let Some(obj) = entry.as_object_mut() {
                                 obj.insert("package".to_string(), serde_json::json!(dep_name));
-                                obj.insert("package_version".to_string(), serde_json::json!(dep_version));
+                                obj.insert(
+                                    "package_version".to_string(),
+                                    serde_json::json!(dep_version),
+                                );
                                 obj.insert("language".to_string(), language.clone());
                             }
                             flat.push(entry);
@@ -698,18 +707,29 @@ pub fn compress_tool_output_cli(
     // Handle dependency-map outputs (e.g. {"dependencies": {...}, "total": N})
     // These aren't issues/findings — compress by summarizing the dep map
     if let Some(deps_obj) = output.get("dependencies").and_then(|v| v.as_object()) {
-        let total = output.get("total").and_then(|v| v.as_u64()).unwrap_or(deps_obj.len() as u64);
+        let total = output
+            .get("total")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(deps_obj.len() as u64);
 
         // Build a compact summary: counts by source, license distribution
-        let mut by_source: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-        let mut by_license: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let mut by_source: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
+        let mut by_license: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
         let mut dev_count = 0usize;
         let mut prod_count = 0usize;
 
         for dep in deps_obj.values() {
-            let source = dep.get("source").and_then(|v| v.as_str()).unwrap_or("unknown");
+            let source = dep
+                .get("source")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
             *by_source.entry(source.to_string()).or_default() += 1;
-            let license = dep.get("license").and_then(|v| v.as_str()).unwrap_or("Unknown");
+            let license = dep
+                .get("license")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Unknown");
             *by_license.entry(license.to_string()).or_default() += 1;
             if dep.get("is_dev").and_then(|v| v.as_bool()).unwrap_or(false) {
                 dev_count += 1;
@@ -1033,10 +1053,7 @@ mod tests {
 
         let json = parsed.unwrap();
         // Must contain CLI-syntax retrieval hint
-        let hint = json
-            .get("retrieval_hint")
-            .and_then(|v| v.as_str())
-            .unwrap();
+        let hint = json.get("retrieval_hint").and_then(|v| v.as_str()).unwrap();
         assert!(
             hint.contains("sync-ctl retrieve"),
             "Hint should use CLI syntax, got: {}",

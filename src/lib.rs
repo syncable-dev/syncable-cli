@@ -38,7 +38,8 @@ pub async fn run_command(
             color_scheme,
             agent: _,
         } => {
-            match handlers::handle_analyze(path, json, detailed, display, only, color_scheme, false) {
+            match handlers::handle_analyze(path, json, detailed, display, only, color_scheme, false)
+            {
                 Ok(_output) => Ok(()), // The output was already printed by display_analysis_with_return
                 Err(e) => Err(e),
             }
@@ -55,7 +56,12 @@ pub async fn run_command(
         } => handlers::handle_generate(
             path, output, dockerfile, compose, terraform, all, dry_run, force,
         ),
-        Commands::Validate { path, types, fix, agent: _ } => handlers::handle_validate(path, types, fix, false).map(|_| ()),
+        Commands::Validate {
+            path,
+            types,
+            fix,
+            agent: _,
+        } => handlers::handle_validate(path, types, fix, false).map(|_| ()),
         Commands::Support {
             languages,
             frameworks,
@@ -86,7 +92,9 @@ pub async fn run_command(
             format,
             output,
             agent: _,
-        } => handlers::handle_vulnerabilities(path, severity, format, output, false).await.map(|_| ()),
+        } => handlers::handle_vulnerabilities(path, severity, format, output, false)
+            .await
+            .map(|_| ()),
         Commands::Security {
             path,
             mode,

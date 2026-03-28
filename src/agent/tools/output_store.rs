@@ -301,7 +301,10 @@ pub fn retrieve_filtered(
             "next_command".to_string(),
             Value::String(format!(
                 "sync-ctl retrieve '{}' --query '{}' --offset {} --limit {}",
-                ref_id, query, offset + limit, limit
+                ref_id,
+                query,
+                offset + limit,
+                limit
             )),
         );
     }
@@ -328,7 +331,10 @@ fn truncate_result_value(mut value: Value) -> Value {
                 let truncated: Vec<Value> = refs.iter().take(3).cloned().collect();
                 let remaining = refs.len() - 3;
                 obj.insert("references".to_string(), Value::Array(truncated));
-                obj.insert("references_truncated".to_string(), Value::Number(remaining.into()));
+                obj.insert(
+                    "references_truncated".to_string(),
+                    Value::Number(remaining.into()),
+                );
             }
         }
     }
@@ -368,7 +374,10 @@ fn find_issues_array(data: &Value) -> Option<Vec<Value>> {
             if *field == "vulnerable_dependencies" && !arr.is_empty() {
                 let mut flat = Vec::new();
                 for dep in arr {
-                    let dep_name = dep.get("name").and_then(|v| v.as_str()).unwrap_or("unknown");
+                    let dep_name = dep
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown");
                     let dep_version = dep.get("version").and_then(|v| v.as_str()).unwrap_or("?");
                     let source_dir = dep.get("source_dir").cloned();
                     let language = dep.get("language").cloned();
@@ -376,10 +385,20 @@ fn find_issues_array(data: &Value) -> Option<Vec<Value>> {
                         for vuln in vulns {
                             let mut entry = vuln.clone();
                             if let Some(obj) = entry.as_object_mut() {
-                                obj.insert("package".to_string(), Value::String(dep_name.to_string()));
-                                obj.insert("package_version".to_string(), Value::String(dep_version.to_string()));
-                                if let Some(sd) = &source_dir { obj.insert("source_dir".to_string(), sd.clone()); }
-                                if let Some(lang) = &language { obj.insert("language".to_string(), lang.clone()); }
+                                obj.insert(
+                                    "package".to_string(),
+                                    Value::String(dep_name.to_string()),
+                                );
+                                obj.insert(
+                                    "package_version".to_string(),
+                                    Value::String(dep_version.to_string()),
+                                );
+                                if let Some(sd) = &source_dir {
+                                    obj.insert("source_dir".to_string(), sd.clone());
+                                }
+                                if let Some(lang) = &language {
+                                    obj.insert("language".to_string(), lang.clone());
+                                }
                             }
                             flat.push(entry);
                         }
@@ -1378,11 +1397,13 @@ mod tests {
         fs::write(
             output_dir.join("test_old_aaa111.json"),
             serde_json::to_string(&old_data).unwrap(),
-        ).unwrap();
+        )
+        .unwrap();
         fs::write(
             output_dir.join("test_new_bbb222.json"),
             serde_json::to_string(&new_data).unwrap(),
-        ).unwrap();
+        )
+        .unwrap();
 
         let latest = resolve_latest();
         assert!(latest.is_some());
