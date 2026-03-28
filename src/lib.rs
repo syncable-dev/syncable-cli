@@ -36,8 +36,10 @@ pub async fn run_command(
             display,
             only,
             color_scheme,
+            agent: _,
         } => {
-            match handlers::handle_analyze(path, json, detailed, display, only, color_scheme) {
+            match handlers::handle_analyze(path, json, detailed, display, only, color_scheme, false)
+            {
                 Ok(_output) => Ok(()), // The output was already printed by display_analysis_with_return
                 Err(e) => Err(e),
             }
@@ -54,7 +56,12 @@ pub async fn run_command(
         } => handlers::handle_generate(
             path, output, dockerfile, compose, terraform, all, dry_run, force,
         ),
-        Commands::Validate { path, types, fix } => handlers::handle_validate(path, types, fix),
+        Commands::Validate {
+            path,
+            types,
+            fix,
+            agent: _,
+        } => handlers::handle_validate(path, types, fix, false).map(|_| ()),
         Commands::Support {
             languages,
             frameworks,
@@ -67,6 +74,7 @@ pub async fn run_command(
             prod_only,
             dev_only,
             format,
+            agent: _,
         } => handlers::handle_dependencies(
             path,
             licenses,
@@ -74,6 +82,7 @@ pub async fn run_command(
             prod_only,
             dev_only,
             format,
+            false,
         )
         .await
         .map(|_| ()),
@@ -82,7 +91,10 @@ pub async fn run_command(
             severity,
             format,
             output,
-        } => handlers::handle_vulnerabilities(path, severity, format, output).await,
+            agent: _,
+        } => handlers::handle_vulnerabilities(path, severity, format, output, false)
+            .await
+            .map(|_| ()),
         Commands::Security {
             path,
             mode,
@@ -95,6 +107,7 @@ pub async fn run_command(
             format,
             output,
             fail_on_findings,
+            agent: _,
         } => {
             handlers::handle_security(
                 path,
@@ -108,6 +121,7 @@ pub async fn run_command(
                 format,
                 output,
                 fail_on_findings,
+                false,
             )
             .map(|_| ()) // Map Result<String> to Result<()>
         }
@@ -133,6 +147,7 @@ pub async fn run_command(
             min_confidence,
             cloud_provider,
             region,
+            agent: _,
         } => {
             let format_str = match format {
                 cli::OutputFormat::Table => "table",
@@ -707,6 +722,10 @@ pub async fn run_command(
             let project_path = path.canonicalize().unwrap_or(path);
             agent::run_agent_server(&project_path, provider_type, model, &host, port).await?;
             Ok(())
+        }
+        Commands::Retrieve { .. } => {
+            // Retrieve commands are handled in main.rs directly
+            unreachable!("Retrieve commands should be handled in main.rs")
         }
         Commands::Deploy { .. } => {
             // Deploy commands are handled in main.rs directly

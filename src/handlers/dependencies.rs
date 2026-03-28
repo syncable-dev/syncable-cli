@@ -13,13 +13,16 @@ pub async fn handle_dependencies(
     _prod_only: bool,
     _dev_only: bool,
     format: OutputFormat,
+    quiet: bool,
 ) -> crate::Result<String> {
     let project_path = path.canonicalize().unwrap_or_else(|_| path.clone());
 
     let mut output = String::new();
     let header = format!("🔍 Analyzing dependencies: {}\n", project_path.display());
-    println!("{}", header);
-    output.push_str(&header);
+    if !quiet {
+        println!("{}", header);
+        output.push_str(&header);
+    }
 
     // First, analyze the project using monorepo analysis
     let monorepo_analysis = analyze_monorepo(&project_path)?;
@@ -56,7 +59,9 @@ pub async fn handle_dependencies(
             "total": dep_analysis.dependencies.len(),
         });
         let json_output = serde_json::to_string_pretty(&json_data)?;
-        println!("{}", json_output);
+        if !quiet {
+            println!("{}", json_output);
+        }
         output.push_str(&json_output);
     }
 

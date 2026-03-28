@@ -250,10 +250,42 @@ fn extract_issues(output: &Value) -> Vec<Value> {
         "results",
         "diagnostics",
         "failures", // LintResult from kubelint, hadolint, dclint, helmlint
+        "vulnerable_dependencies",
     ];
 
     for field in &issue_fields {
         if let Some(arr) = output.get(field).and_then(|v| v.as_array()) {
+            // For vulnerable_dependencies, flatten inner vulnerabilities
+            // so each vuln has a severity field the compressor can classify
+            if field == &"vulnerable_dependencies" && !arr.is_empty() {
+                let mut flat = Vec::new();
+                for dep in arr {
+                    let dep_name = dep
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown");
+                    let dep_version = dep.get("version").and_then(|v| v.as_str()).unwrap_or("?");
+                    let language = dep
+                        .get("language")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null);
+                    if let Some(vulns) = dep.get("vulnerabilities").and_then(|v| v.as_array()) {
+                        for vuln in vulns {
+                            let mut entry = vuln.clone();
+                            if let Some(obj) = entry.as_object_mut() {
+                                obj.insert("package".to_string(), serde_json::json!(dep_name));
+                                obj.insert(
+                                    "package_version".to_string(),
+                                    serde_json::json!(dep_version),
+                                );
+                                obj.insert("language".to_string(), language.clone());
+                            }
+                            flat.push(entry);
+                        }
+                    }
+                }
+                return flat;
+            }
             return arr.clone();
         }
     }
@@ -634,6 +666,308 @@ pub fn compress_analysis_output(output: &Value, config: &CompressionConfig) -> S
     })
 }
 
+/// CLI variant of compress_tool_output - produces strict valid JSON with CLI-syntax retrieval hints.
+///
+/// Differences from compress_tool_output():
+/// - retrieval_hint uses CLI syntax (`sync-ctl retrieve '<ref_id>' --query '...'`)
+/// - Does NOT append format_session_refs_for_agent() plaintext footer
+/// - Output is guaranteed valid JSON
+pub fn compress_tool_output_cli(
+    output: &Value,
+    tool_name: &str,
+    config: &CompressionConfig,
+) -> String {
+    // Check if output is small enough - no compression needed
+    let raw_str = serde_json::to_string(output).unwrap_or_default();
+    if raw_str.len() <= config.target_size_bytes {
+        // Still store and add retrieval fields for consistency
+        let ref_id = output_store::store_output(output, tool_name);
+        let mut obj = match output.clone() {
+            Value::Object(m) => m,
+            other => {
+                let mut m = serde_json::Map::new();
+                m.insert("data".to_string(), other);
+                m
+            }
+        };
+        obj.insert("full_data_ref".to_string(), json!(ref_id));
+        obj.insert(
+            "retrieval_hint".to_string(),
+            json!(format!(
+                "Use `sync-ctl retrieve '{}' --query 'severity:critical'` for details. Paginate with --limit N --offset M. Other queries: 'file:<path>', 'code:<id>'",
+                ref_id
+            )),
+        );
+        return serde_json::to_string_pretty(&Value::Object(obj)).unwrap_or(raw_str);
+    }
+
+    // Store full output for later retrieval
+    let ref_id = output_store::store_output(output, tool_name);
+
+    // Handle dependency-map outputs (e.g. {"dependencies": {...}, "total": N})
+    // These aren't issues/findings — compress by summarizing the dep map
+    if let Some(deps_obj) = output.get("dependencies").and_then(|v| v.as_object()) {
+        let total = output
+            .get("total")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(deps_obj.len() as u64);
+
+        // Build a compact summary: counts by source, license distribution
+        let mut by_source: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
+        let mut by_license: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
+        let mut dev_count = 0usize;
+        let mut prod_count = 0usize;
+
+        for dep in deps_obj.values() {
+            let source = dep
+                .get("source")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            *by_source.entry(source.to_string()).or_default() += 1;
+            let license = dep
+                .get("license")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Unknown");
+            *by_license.entry(license.to_string()).or_default() += 1;
+            if dep.get("is_dev").and_then(|v| v.as_bool()).unwrap_or(false) {
+                dev_count += 1;
+            } else {
+                prod_count += 1;
+            }
+        }
+
+        return serde_json::to_string_pretty(&json!({
+            "tool": tool_name,
+            "total": total,
+            "production": prod_count,
+            "development": dev_count,
+            "by_source": by_source,
+            "by_license": by_license,
+            "full_data_ref": ref_id,
+            "retrieval_hint": format!(
+                "Use `sync-ctl retrieve '{}' --query 'file:<path>'` for details. Paginate with --limit N --offset M.",
+                ref_id
+            )
+        }))
+        .unwrap_or(raw_str);
+    }
+
+    // Extract issues/findings array from the output
+    let issues = extract_issues(output);
+
+    if issues.is_empty() {
+        // No issues to compress, just store and return summary as strict JSON
+        return serde_json::to_string_pretty(&json!({
+            "tool": tool_name,
+            "status": "NO_ISSUES",
+            "summary": { "total": 0 },
+            "full_data_ref": ref_id,
+            "retrieval_hint": format!(
+                "Use `sync-ctl retrieve '{}' --query 'severity:critical'` for details. Paginate with --limit N --offset M.",
+                ref_id
+            )
+        }))
+        .unwrap_or(raw_str);
+    }
+
+    // Classify issues by severity
+    let (critical, high, medium, low, info) = classify_by_severity(&issues);
+
+    // Build summary
+    let summary = SeveritySummary {
+        total: issues.len(),
+        critical: critical.len(),
+        high: high.len(),
+        medium: medium.len(),
+        low: low.len(),
+        info: info.len(),
+    };
+
+    // Critical issues: always full detail
+    let critical_issues: Vec<Value> = critical.clone();
+
+    // High issues: full detail if few, otherwise show first max_high_full
+    let high_issues: Vec<Value> = if high.len() <= config.max_high_full {
+        high.clone()
+    } else {
+        high.iter().take(config.max_high_full).cloned().collect()
+    };
+
+    // Deduplicate medium/low/info issues into patterns
+    let mut all_lower: Vec<Value> = Vec::new();
+    all_lower.extend(medium.clone());
+    all_lower.extend(low.clone());
+    all_lower.extend(info.clone());
+
+    // Also add remaining high issues if there were too many
+    if high.len() > config.max_high_full {
+        all_lower.extend(high.iter().skip(config.max_high_full).cloned());
+    }
+
+    let patterns = deduplicate_to_patterns(&all_lower, config);
+
+    // Determine status
+    let status = if summary.critical > 0 {
+        "CRITICAL_ISSUES_FOUND"
+    } else if summary.high > 0 {
+        "HIGH_ISSUES_FOUND"
+    } else if summary.total > 0 {
+        "ISSUES_FOUND"
+    } else {
+        "CLEAN"
+    };
+
+    let compressed = CompressedOutput {
+        tool: tool_name.to_string(),
+        status: status.to_string(),
+        summary,
+        critical_issues,
+        high_issues,
+        patterns,
+        full_data_ref: ref_id.clone(),
+        retrieval_hint: format!(
+            "Use `sync-ctl retrieve '{}' --query 'severity:critical'` for details. Paginate with --limit N --offset M. Other queries: 'file:<path>', 'code:<id>'",
+            ref_id
+        ),
+    };
+
+    // Return strict JSON - no plaintext footer appended
+    serde_json::to_string_pretty(&compressed).unwrap_or(raw_str)
+}
+
+/// CLI variant of compress_analysis_output - produces strict valid JSON with CLI-syntax retrieval hints.
+///
+/// Differences from compress_analysis_output():
+/// - retrieval_hint uses CLI syntax (`sync-ctl retrieve '<ref_id>' --query '...'`)
+/// - Does NOT append format_session_refs_for_agent() plaintext footer
+/// - Output is guaranteed valid JSON
+pub fn compress_analysis_output_cli(output: &Value, _config: &CompressionConfig) -> String {
+    // Store full output for later retrieval
+    let ref_id = output_store::store_output(output, "analyze_project");
+
+    // Build a MINIMAL summary - just enough to understand the project
+    let mut summary = json!({
+        "tool": "analyze_project",
+        "status": "ANALYSIS_COMPLETE",
+        "full_data_ref": ref_id.clone()
+    });
+
+    let summary_obj = summary.as_object_mut().unwrap();
+
+    // Detect output type and extract accordingly
+    let is_monorepo = output.get("projects").is_some() || output.get("is_monorepo").is_some();
+    let is_project_analysis =
+        output.get("languages").is_some() && output.get("analysis_metadata").is_some();
+
+    if is_monorepo {
+        // MonorepoAnalysis structure
+        if let Some(mono) = output.get("is_monorepo").and_then(|v| v.as_bool()) {
+            summary_obj.insert("is_monorepo".to_string(), json!(mono));
+        }
+        if let Some(root) = output.get("root_path").and_then(|v| v.as_str()) {
+            summary_obj.insert("root_path".to_string(), json!(root));
+        }
+
+        if let Some(projects) = output.get("projects").and_then(|v| v.as_array()) {
+            summary_obj.insert("project_count".to_string(), json!(projects.len()));
+
+            let mut all_languages: Vec<String> = Vec::new();
+            let mut all_frameworks: Vec<String> = Vec::new();
+            let mut project_names: Vec<String> = Vec::new();
+
+            for project in projects.iter().take(20) {
+                if let Some(name) = project.get("name").and_then(|v| v.as_str()) {
+                    project_names.push(name.to_string());
+                }
+                if let Some(analysis) = project.get("analysis") {
+                    if let Some(langs) = analysis.get("languages").and_then(|v| v.as_array()) {
+                        for lang in langs {
+                            if let Some(name) = lang.get("name").and_then(|v| v.as_str())
+                                && !all_languages.contains(&name.to_string())
+                            {
+                                all_languages.push(name.to_string());
+                            }
+                        }
+                    }
+                    if let Some(fws) = analysis.get("frameworks").and_then(|v| v.as_array()) {
+                        for fw in fws {
+                            if let Some(name) = fw.get("name").and_then(|v| v.as_str())
+                                && !all_frameworks.contains(&name.to_string())
+                            {
+                                all_frameworks.push(name.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+
+            summary_obj.insert("project_names".to_string(), json!(project_names));
+            summary_obj.insert("languages_detected".to_string(), json!(all_languages));
+            summary_obj.insert("frameworks_detected".to_string(), json!(all_frameworks));
+        }
+    } else if is_project_analysis {
+        // ProjectAnalysis flat structure - languages/technologies at top level
+        if let Some(root) = output.get("project_root").and_then(|v| v.as_str()) {
+            summary_obj.insert("project_root".to_string(), json!(root));
+        }
+        if let Some(arch) = output.get("architecture_type").and_then(|v| v.as_str()) {
+            summary_obj.insert("architecture_type".to_string(), json!(arch));
+        }
+        if let Some(proj_type) = output.get("project_type").and_then(|v| v.as_str()) {
+            summary_obj.insert("project_type".to_string(), json!(proj_type));
+        }
+
+        // Extract languages (at top level)
+        if let Some(langs) = output.get("languages").and_then(|v| v.as_array()) {
+            let names: Vec<&str> = langs
+                .iter()
+                .filter_map(|l| l.get("name").and_then(|n| n.as_str()))
+                .collect();
+            summary_obj.insert("languages_detected".to_string(), json!(names));
+        }
+
+        // Extract technologies (at top level)
+        if let Some(techs) = output.get("technologies").and_then(|v| v.as_array()) {
+            let names: Vec<&str> = techs
+                .iter()
+                .filter_map(|t| t.get("name").and_then(|n| n.as_str()))
+                .collect();
+            summary_obj.insert("technologies_detected".to_string(), json!(names));
+        }
+
+        // Extract services (include names, not just count)
+        if let Some(services) = output.get("services").and_then(|v| v.as_array()) {
+            summary_obj.insert("services_count".to_string(), json!(services.len()));
+            let service_names: Vec<&str> = services
+                .iter()
+                .filter_map(|s| s.get("name").and_then(|n| n.as_str()))
+                .collect();
+            if !service_names.is_empty() {
+                summary_obj.insert("services_detected".to_string(), json!(service_names));
+            }
+        }
+    }
+
+    // CLI-syntax retrieval hint
+    summary_obj.insert(
+        "retrieval_hint".to_string(),
+        json!(format!(
+            "Use `sync-ctl retrieve '{}' --query 'section:summary'` for full details. Other queries: 'section:languages', 'section:frameworks', 'section:services'",
+            ref_id
+        )),
+    );
+
+    // Return strict JSON - no plaintext footer appended
+    serde_json::to_string_pretty(&summary).unwrap_or_else(|_| {
+        format!(
+            r#"{{"tool":"analyze_project","status":"STORED","full_data_ref":"{}","retrieval_hint":"Use `sync-ctl retrieve '{}' --query 'section:summary'` for full details."}}"#,
+            ref_id, ref_id
+        )
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -694,5 +1028,40 @@ mod tests {
         let result = compress_tool_output(&small_output, "test", &config);
         // Should return original (not compressed) since it's small
         assert!(!result.contains("full_data_ref"));
+    }
+
+    #[test]
+    fn test_compress_tool_output_cli_produces_valid_json() {
+        let output = serde_json::json!({
+            "findings": (0..100).map(|i| serde_json::json!({
+                "code": format!("SEC{:03}", i),
+                "severity": if i < 3 { "critical" } else if i < 15 { "high" } else { "medium" },
+                "message": format!("Finding {} with enough text to exceed compression threshold when multiplied", i),
+                "file": format!("src/file_{}.rs", i),
+            })).collect::<Vec<_>>()
+        });
+        let config = CompressionConfig::default();
+        let result = compress_tool_output_cli(&output, "security", &config);
+
+        // Must be valid JSON
+        let parsed: Result<serde_json::Value, _> = serde_json::from_str(&result);
+        assert!(
+            parsed.is_ok(),
+            "CLI output must be valid JSON, got: {}",
+            &result[..200.min(result.len())]
+        );
+
+        let json = parsed.unwrap();
+        // Must contain CLI-syntax retrieval hint
+        let hint = json.get("retrieval_hint").and_then(|v| v.as_str()).unwrap();
+        assert!(
+            hint.contains("sync-ctl retrieve"),
+            "Hint should use CLI syntax, got: {}",
+            hint
+        );
+        assert!(
+            !hint.contains("retrieve_output("),
+            "Hint should NOT use internal tool call syntax"
+        );
     }
 }
