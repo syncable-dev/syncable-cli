@@ -1,6 +1,6 @@
 ---
 name: syncable-optimize
-description: Use when optimizing Kubernetes resource requests/limits, analyzing costs, or detecting configuration drift using Syncable CLI. Trigger on: "optimize k8s", "right-size pods", "k8s cost analysis", "resource recommendations", "over-provisioned containers".
+description: Optimize Kubernetes resource requests and limits, analyze costs, detect over-provisioned containers, and right-size pods using the Syncable CLI sync-ctl tool
 ---
 
 ## Purpose

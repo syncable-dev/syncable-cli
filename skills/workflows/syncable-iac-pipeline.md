@@ -1,6 +1,6 @@
 ---
 name: syncable-iac-pipeline
-description: Use when validating all infrastructure-as-code files in a project - combines IaC linting with Kubernetes optimization and security checks via Syncable CLI. Trigger on: "validate infrastructure", "lint all IaC", "check my k8s and docker files", "infrastructure review".
+description: Validate all infrastructure-as-code files by combining Dockerfile linting, Docker Compose validation, Kubernetes manifest checking, and Helm chart analysis using the Syncable CLI sync-ctl tool
 ---
 
 ## Purpose

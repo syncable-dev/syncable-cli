@@ -1,6 +1,6 @@
 ---
 name: syncable-platform
-description: Use when authenticating with Syncable, switching projects/orgs/environments, checking context, or deploying services through the Syncable platform. Trigger on: "syncable login", "select project", "switch project", "change project to", "use environment", "switch org", "deploy to syncable", "list environments", "what project am I on", "show current context".
+description: Authenticate, login, sign in to Syncable platform. Switch organizations, projects, and environments. Deploy services to cloud providers. Check current context and manage platform settings using sync-ctl
 ---
 
 ## Purpose

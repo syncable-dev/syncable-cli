@@ -1,6 +1,6 @@
 ---
 name: syncable-project-assessment
-description: Use when a user wants a comprehensive project health check - combines stack analysis, security scanning, vulnerability checks, and dependency auditing via Syncable CLI. Trigger on: "assess this project", "full health check", "project overview", "what's the state of this codebase", "onboard me to this repo".
+description: Run a comprehensive project health check combining stack analysis, security scanning, vulnerability detection, and dependency auditing using the Syncable CLI sync-ctl tool
 ---
 
 ## Purpose

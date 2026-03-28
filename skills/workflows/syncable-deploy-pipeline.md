@@ -1,6 +1,6 @@
 ---
 name: syncable-deploy-pipeline
-description: Use when deploying a project through Syncable - orchestrates auth, analysis, security gating, and deployment via Syncable CLI. Trigger on: "deploy this", "push to syncable", "set up deployment", "deploy my project".
+description: Deploy a project through Syncable by orchestrating authentication, project analysis, security gating, and cloud deployment using the Syncable CLI sync-ctl tool
 ---
 
 ## Purpose
