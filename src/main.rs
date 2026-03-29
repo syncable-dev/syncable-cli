@@ -742,6 +742,15 @@ async fn run() -> syncable_cli::Result<()> {
             ag_ui,
             ag_ui_port,
         } => {
+            eprintln!(
+                "\n  ⚠️  `sync-ctl chat` is deprecated and will be removed in a future release.\n"
+            );
+            eprintln!("  Syncable CLI now works through AI coding agent skills instead.");
+            eprintln!("  Install skills with: npx syncable-cli-skills\n");
+            eprintln!(
+                "  Skills are available for: Claude Code, Codex, Gemini CLI, Cursor, Windsurf\n"
+            );
+
             // Handle --list-sessions flag first (before starting chat)
             if list_sessions {
                 use syncable_cli::agent::persistence::{SessionSelector, format_relative_time};
@@ -1070,6 +1079,12 @@ async fn run() -> syncable_cli::Result<()> {
             provider,
             model,
         } => {
+            eprintln!(
+                "\n  ⚠️  `sync-ctl agent` is deprecated and will be removed in a future release.\n"
+            );
+            eprintln!("  Syncable CLI now works through AI coding agent skills instead.");
+            eprintln!("  Install skills with: npx syncable-cli-skills\n");
+
             // Agent command is handled by lib.rs
             syncable_cli::run_command(
                 Commands::Agent {
