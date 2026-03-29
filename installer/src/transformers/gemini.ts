@@ -1,7 +1,23 @@
 import { Skill } from '../skills.js';
+import { TransformResult } from './types.js';
 import { SKILL_MARKER_START, SKILL_MARKER_END } from '../constants.js';
 
-export function transformForGemini(skills: Skill[]): string {
+/**
+ * Transform a skill into Gemini CLI skill format.
+ * Each skill becomes a directory with SKILL.md inside skills/<skill-name>/
+ * Format: frontmatter with name + description, then markdown body.
+ */
+export function transformForGemini(skill: Skill): TransformResult[] {
+  const skillName = skill.filename.replace(/\.md$/, '');
+  const content = `---\nname: ${skillName}\ndescription: ${skill.frontmatter.description}\n---\n\n${skill.body}`;
+  return [{ relativePath: `${skillName}/SKILL.md`, content }];
+}
+
+/**
+ * Legacy: generate a flat GEMINI.md section for older Gemini CLI versions.
+ * Used as a fallback when the skills directory approach isn't available.
+ */
+export function transformForGeminiLegacy(skills: Skill[]): string {
   const sections = skills
     .map((s) => `### ${s.frontmatter.name}\n\n${s.body}`)
     .join('\n\n');

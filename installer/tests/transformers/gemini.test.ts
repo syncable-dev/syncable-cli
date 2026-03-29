@@ -2,43 +2,29 @@ import { describe, it, expect } from 'vitest';
 import { transformForGemini } from '../../src/transformers/gemini.js';
 import { Skill } from '../../src/skills.js';
 
-const skills: Skill[] = [
-  {
-    frontmatter: { name: 'syncable-analyze', description: 'Analyze stuff' },
-    body: '## Purpose\n\nAnalyze.',
-    category: 'command',
-    filename: 'syncable-analyze.md',
-  },
-  {
-    frontmatter: { name: 'syncable-security', description: 'Security scan' },
-    body: '## Purpose\n\nScan.',
-    category: 'command',
-    filename: 'syncable-security.md',
-  },
-];
+const sampleSkill: Skill = {
+  frontmatter: { name: 'syncable-analyze', description: 'Analyze stuff' },
+  body: '## Purpose\n\nAnalyze.',
+  category: 'command',
+  filename: 'syncable-analyze.md',
+};
 
 describe('transformForGemini', () => {
-  it('produces a single content block with markers', () => {
-    const result = transformForGemini(skills);
-    expect(result).toContain('<!-- SYNCABLE-CLI-SKILLS-START -->');
-    expect(result).toContain('<!-- SYNCABLE-CLI-SKILLS-END -->');
+  it('creates skill directory with SKILL.md', () => {
+    const result = transformForGemini(sampleSkill);
+    expect(result.length).toBe(1);
+    expect(result[0].relativePath).toBe('syncable-analyze/SKILL.md');
   });
 
-  it('includes all skills as sections', () => {
-    const result = transformForGemini(skills);
-    expect(result).toContain('### syncable-analyze');
-    expect(result).toContain('### syncable-security');
+  it('includes frontmatter with name and description', () => {
+    const result = transformForGemini(sampleSkill);
+    expect(result[0].content).toContain('name: syncable-analyze');
+    expect(result[0].content).toContain('description: Analyze stuff');
   });
 
   it('includes skill body content', () => {
-    const result = transformForGemini(skills);
-    expect(result).toContain('Analyze.');
-    expect(result).toContain('Scan.');
-  });
-
-  it('has header text', () => {
-    const result = transformForGemini(skills);
-    expect(result).toContain('## Syncable CLI Skills');
-    expect(result).toContain('The following skills describe how to use the Syncable CLI');
+    const result = transformForGemini(sampleSkill);
+    expect(result[0].content).toContain('## Purpose');
+    expect(result[0].content).toContain('Analyze.');
   });
 });

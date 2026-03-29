@@ -80,33 +80,17 @@ describe('writeSkillsForWindsurf', () => {
 });
 
 describe('writeSkillsForGemini', () => {
-  it('writes content with markers to a file', () => {
-    const filePath = path.join(tmpDir, 'GEMINI.md');
-    writeSkillsForGemini(sampleSkills, filePath);
-    const content = fs.readFileSync(filePath, 'utf-8');
-    expect(content).toContain('<!-- SYNCABLE-CLI-SKILLS-START -->');
-    expect(content).toContain('<!-- SYNCABLE-CLI-SKILLS-END -->');
-    expect(content).toContain('### syncable-analyze');
+  it('writes each skill as a directory with SKILL.md', () => {
+    writeSkillsForGemini(sampleSkills, tmpDir);
+    expect(fs.existsSync(path.join(tmpDir, 'syncable-analyze', 'SKILL.md'))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'syncable-project-assessment', 'SKILL.md'))).toBe(true);
   });
 
-  it('appends to existing file without destroying content', () => {
-    const filePath = path.join(tmpDir, 'GEMINI.md');
-    fs.writeFileSync(filePath, '# My Project\n\nExisting content.\n');
-    writeSkillsForGemini(sampleSkills, filePath);
-    const content = fs.readFileSync(filePath, 'utf-8');
-    expect(content).toContain('# My Project');
-    expect(content).toContain('Existing content.');
-    expect(content).toContain('<!-- SYNCABLE-CLI-SKILLS-START -->');
-  });
-
-  it('replaces existing Syncable section on re-install', () => {
-    const filePath = path.join(tmpDir, 'GEMINI.md');
-    fs.writeFileSync(filePath, '# Header\n<!-- SYNCABLE-CLI-SKILLS-START -->\nold content\n<!-- SYNCABLE-CLI-SKILLS-END -->\n# Footer\n');
-    writeSkillsForGemini(sampleSkills, filePath);
-    const content = fs.readFileSync(filePath, 'utf-8');
-    expect(content).toContain('# Header');
-    expect(content).toContain('# Footer');
-    expect(content).not.toContain('old content');
-    expect(content).toContain('### syncable-analyze');
+  it('includes frontmatter with name and description', () => {
+    writeSkillsForGemini(sampleSkills, tmpDir);
+    const content = fs.readFileSync(path.join(tmpDir, 'syncable-analyze', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('name: syncable-analyze');
+    expect(content).toContain('description: Analyze');
+    expect(content).toContain('Analyze.');
   });
 });

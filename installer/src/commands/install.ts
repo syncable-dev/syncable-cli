@@ -7,6 +7,7 @@ import { transformForCursor } from '../transformers/cursor.js';
 import { transformForWindsurf } from '../transformers/windsurf.js';
 import { transformForGemini } from '../transformers/gemini.js';
 import { SKILL_MARKER_START, SKILL_MARKER_END } from '../constants.js';
+import { TransformResult } from '../transformers/types.js';
 
 export function writeSkillsForClaude(skills: Skill[], _destDir: string): void {
   // Claude Code uses the plugin marketplace system — destDir is ignored.
@@ -45,27 +46,17 @@ export function writeSkillsForWindsurf(skills: Skill[], destDir: string): void {
   }
 }
 
-export function writeSkillsForGemini(skills: Skill[], filePath: string): void {
-  const geminiContent = transformForGemini(skills);
-  let existing = '';
-
-  if (fs.existsSync(filePath)) {
-    existing = fs.readFileSync(filePath, 'utf-8');
-
-    // Replace existing section if present
-    const startIdx = existing.indexOf(SKILL_MARKER_START);
-    const endIdx = existing.indexOf(SKILL_MARKER_END);
-    if (startIdx !== -1 && endIdx !== -1) {
-      const before = existing.slice(0, startIdx);
-      const after = existing.slice(endIdx + SKILL_MARKER_END.length);
-      fs.writeFileSync(filePath, before + geminiContent + after);
-      return;
+export function writeSkillsForGemini(skills: Skill[], destDir: string): void {
+  // Gemini CLI uses skills/<skill-name>/SKILL.md format
+  // destDir is ~/.gemini/<profile>/skills/
+  for (const skill of skills) {
+    const results = transformForGemini(skill);
+    for (const { relativePath, content } of results) {
+      const fullPath = path.join(destDir, relativePath);
+      fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+      fs.writeFileSync(fullPath, content);
     }
   }
-
-  // Append to existing or create new
-  const separator = existing && !existing.endsWith('\n') ? '\n\n' : existing ? '\n' : '';
-  fs.writeFileSync(filePath, existing + separator + geminiContent + '\n');
 }
 
 export interface InstallOptions {

@@ -23,11 +23,11 @@ One command installs **11 skills** (7 command + 4 workflow) that give AI coding 
 
 | Agent | Install Type | Format |
 |-------|-------------|--------|
-| **Claude Code** | Global (`~/.claude/skills/`) | Native markdown |
-| **Codex** | Global (`~/.codex/skills/`) | `SKILL.md` directories |
+| **Claude Code** | Plugin (`~/.claude/plugins/cache/syncable/`) | Plugin marketplace with `SKILL.md` directories |
+| **Codex** | Global (`~/.agents/skills/`) | `SKILL.md` directories |
 | **Cursor** | Per-project (`.cursor/rules/`) | `.mdc` with `alwaysApply` |
 | **Windsurf** | Per-project (`.windsurf/rules/`) | `.md` with `trigger: always` |
-| **Gemini CLI** | Per-project (`GEMINI.md`) | Concatenated markdown block |
+| **Gemini CLI** | Global (`~/.gemini/<profile>/skills/`) | `SKILL.md` directories |
 
 ## Quick Start
 
