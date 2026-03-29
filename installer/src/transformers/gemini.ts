@@ -9,7 +9,14 @@ import { SKILL_MARKER_START, SKILL_MARKER_END } from '../constants.js';
  */
 export function transformForGemini(skill: Skill): TransformResult[] {
   const skillName = skill.filename.replace(/\.md$/, '');
-  const content = `---\nname: ${skillName}\ndescription: ${skill.frontmatter.description}\n---\n\n${skill.body}`;
+
+  // Gemini CLI loads name + description at startup, then activates the full
+  // SKILL.md on demand when a task matches. Description should be concise
+  // and clearly describe when to activate. Max ~125 chars recommended.
+  const safeDesc = skill.frontmatter.description
+    .replace(/"/g, '\\"');
+
+  const content = `---\nname: "${skillName}"\ndescription: "${safeDesc}"\n---\n\n${skill.body}`;
   return [{ relativePath: `${skillName}/SKILL.md`, content }];
 }
 

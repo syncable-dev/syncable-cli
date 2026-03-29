@@ -5,38 +5,20 @@ import { AgentConfig } from './types.js';
 import { commandExists } from '../utils.js';
 
 /**
- * Find the Gemini CLI skills directory.
- * Gemini CLI stores skills under ~/.gemini/<profile>/skills/
- * The default profile is 'antigravity'.
+ * Gemini CLI agent configuration.
+ *
+ * Per the official Gemini CLI documentation, skills are discovered from:
+ *   1. Workspace skills: .gemini/skills/ or .agents/skills/ (project-level)
+ *   2. User skills:      ~/.gemini/skills/ or ~/.agents/skills/ (global)
+ *   3. Extension skills:  bundled within installed extensions
+ *
+ * For global installation, we use ~/.gemini/skills/ which is the documented
+ * user-level skills directory. There is NO profile subdirectory in the
+ * skill discovery path — ~/.gemini/antigravity/skills/ is NOT a valid
+ * skill location.
+ *
+ * Reference: https://geminicli.com/docs/cli/skills/
  */
-function findGeminiSkillsDir(): string {
-  const geminiDir = path.join(os.homedir(), '.gemini');
-
-  // Check for antigravity profile (default)
-  const antigravitySkills = path.join(geminiDir, 'antigravity', 'skills');
-  if (fs.existsSync(antigravitySkills)) {
-    return antigravitySkills;
-  }
-
-  // Check for any profile with a skills directory
-  if (fs.existsSync(geminiDir)) {
-    try {
-      const entries = fs.readdirSync(geminiDir);
-      for (const entry of entries) {
-        const skillsPath = path.join(geminiDir, entry, 'skills');
-        if (fs.existsSync(skillsPath) && fs.statSync(skillsPath).isDirectory()) {
-          return skillsPath;
-        }
-      }
-    } catch {
-      // Ignore errors
-    }
-  }
-
-  // Default to antigravity profile
-  return antigravitySkills;
-}
-
 export const geminiAgent: AgentConfig = {
   name: 'gemini',
   displayName: 'Gemini CLI',
@@ -45,6 +27,7 @@ export const geminiAgent: AgentConfig = {
     return fs.existsSync(path.join(os.homedir(), '.gemini')) || await commandExists('gemini');
   },
   getSkillPath: () => {
-    return findGeminiSkillsDir();
+    // User-level skills directory — Gemini CLI auto-discovers skills here
+    return path.join(os.homedir(), '.gemini', 'skills');
   },
 };

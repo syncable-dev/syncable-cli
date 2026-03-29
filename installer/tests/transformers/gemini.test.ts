@@ -18,8 +18,8 @@ describe('transformForGemini', () => {
 
   it('includes frontmatter with name and description', () => {
     const result = transformForGemini(sampleSkill);
-    expect(result[0].content).toContain('name: syncable-analyze');
-    expect(result[0].content).toContain('description: Analyze stuff');
+    expect(result[0].content).toContain('name: "syncable-analyze"');
+    expect(result[0].content).toContain('description: "Analyze stuff"');
   });
 
   it('includes skill body content', () => {
