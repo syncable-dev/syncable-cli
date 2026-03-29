@@ -89,8 +89,8 @@ describe('writeSkillsForGemini', () => {
   it('includes frontmatter with name and description', () => {
     writeSkillsForGemini(sampleSkills, tmpDir);
     const content = fs.readFileSync(path.join(tmpDir, 'syncable-analyze', 'SKILL.md'), 'utf-8');
-    expect(content).toContain('name: syncable-analyze');
-    expect(content).toContain('description: Analyze');
+    expect(content).toContain('name: "syncable-analyze"');
+    expect(content).toContain('description: "Analyze"');
     expect(content).toContain('Analyze.');
   });
 });

@@ -11,7 +11,7 @@
   "plugins": [
     {
       "name": "syncable-cli-skills",
-      "source": "./plugins/syncable-cli-skills",
+      "source": "./installer/plugins/syncable-cli-skills",
       "description": "Syncable CLI skills for project analysis, security scanning, vulnerability detection, dependency auditing, IaC validation, Kubernetes optimization, and cloud deployment.",
       "version": "0.1.0",
       "author": {
