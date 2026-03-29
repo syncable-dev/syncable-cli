@@ -19,15 +19,15 @@ describe('agent configs', () => {
     expect(allAgents().length).toBe(5);
   });
 
-  it('claude and codex are global, others are project', async () => {
+  it('claude, codex, and gemini are global, others are project', async () => {
     const agents = allAgents();
     const globalAgents = agents.filter((a) => a.installType === 'global');
     const projectAgents = agents.filter((a) => a.installType === 'project');
 
     expect(globalAgents.map((a) => a.name)).toContain('claude');
     expect(globalAgents.map((a) => a.name)).toContain('codex');
+    expect(globalAgents.map((a) => a.name)).toContain('gemini');
     expect(projectAgents.map((a) => a.name)).toContain('cursor');
     expect(projectAgents.map((a) => a.name)).toContain('windsurf');
-    expect(projectAgents.map((a) => a.name)).toContain('gemini');
   });
 });

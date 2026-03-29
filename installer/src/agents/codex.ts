@@ -12,6 +12,7 @@ export const codexAgent: AgentConfig = {
     return fs.existsSync(path.join(os.homedir(), '.codex')) || await commandExists('codex');
   },
   getSkillPath: () => {
-    return path.join(os.homedir(), '.codex', 'skills');
+    // Codex user-level skills path per docs: $HOME/.agents/skills
+    return path.join(os.homedir(), '.agents', 'skills');
   },
 };
