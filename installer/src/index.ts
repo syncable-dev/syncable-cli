@@ -210,7 +210,8 @@ program
       if (syncCtlStatus.status === 'ok') {
         console.log(chalk.green(`  ✓ sync-ctl v${syncCtlStatus.version}`));
       } else if (syncCtlStatus.status === 'outdated') {
-        console.log(chalk.yellow(`  ⚠ sync-ctl v${syncCtlStatus.version} (outdated)`));
+        const latestInfo = syncCtlStatus.latestVersion ? ` → ${syncCtlStatus.latestVersion} available` : '';
+        console.log(chalk.yellow(`  ⚠ sync-ctl v${syncCtlStatus.version} (outdated${latestInfo})`));
       } else {
         console.log(chalk.red('  ✗ sync-ctl not found'));
       }
@@ -236,21 +237,30 @@ program
       if (syncCtlStatus.status === 'missing' || syncCtlStatus.status === 'outdated') {
         const cargoNow = await checkCargo();
         if (cargoNow.status === 'ok') {
-          const message = syncCtlStatus.status === 'outdated'
-            ? 'Update syncable-cli via cargo?'
-            : 'Install syncable-cli via cargo?';
-          const { installCli } = opts.yes
-            ? { installCli: true }
-            : await inquirer.prompt([{ type: 'confirm', name: 'installCli', message, default: true }]);
-
-          if (installCli) {
-            const spinner = ora('  Running: cargo install syncable-cli').start();
-            const force = syncCtlStatus.status === 'outdated';
-            const success = await installSyncCtl(force);
+          if (syncCtlStatus.status === 'outdated') {
+            // Always auto-upgrade to latest — no prompt needed
+            const latestLabel = syncCtlStatus.latestVersion ? ` to v${syncCtlStatus.latestVersion}` : '';
+            const spinner = ora(`  Upgrading sync-ctl${latestLabel}...`).start();
+            const success = await installSyncCtl(true); // force = true for upgrade
             if (success) {
-              spinner.succeed('  sync-ctl installed');
+              spinner.succeed(`  sync-ctl upgraded${latestLabel}`);
             } else {
-              spinner.fail('  Failed to install sync-ctl. Try: cargo install syncable-cli');
+              spinner.fail('  Failed to upgrade sync-ctl. Try: cargo install syncable-cli --force');
+            }
+          } else {
+            // Missing — ask to install
+            const { installCli } = opts.yes
+              ? { installCli: true }
+              : await inquirer.prompt([{ type: 'confirm', name: 'installCli', message: 'Install syncable-cli via cargo?', default: true }]);
+
+            if (installCli) {
+              const spinner = ora('  Running: cargo install syncable-cli').start();
+              const success = await installSyncCtl(false);
+              if (success) {
+                spinner.succeed('  sync-ctl installed');
+              } else {
+                spinner.fail('  Failed to install sync-ctl. Try: cargo install syncable-cli');
+              }
             }
           }
         }
@@ -441,7 +451,8 @@ program
     const projectOnlyFlag = opts.projectOnly ? ['--project-only'] : [];
     const verboseFlag = opts.verbose ? ['--verbose'] : [];
     await program.commands.find((c) => c.name() === 'uninstall')!.parseAsync(['node', 'x', ...agentsFlag, ...yesFlag]);
-    await program.commands.find((c) => c.name() === 'install')!.parseAsync(['node', 'x', '--skip-cli', ...agentsFlag, ...yesFlag, ...dryRunFlag, ...globalOnlyFlag, ...projectOnlyFlag, ...verboseFlag]);
+    // NOTE: Do NOT pass --skip-cli here — update must always check for and install the latest sync-ctl
+    await program.commands.find((c) => c.name() === 'install')!.parseAsync(['node', 'x', ...agentsFlag, ...yesFlag, ...dryRunFlag, ...globalOnlyFlag, ...projectOnlyFlag, ...verboseFlag]);
   });
 
 program
