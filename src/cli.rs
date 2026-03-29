@@ -4,9 +4,9 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(name = "sync-ctl")]
 #[command(version = env!("CARGO_PKG_VERSION"))]
-#[command(about = "Generate Infrastructure as Code from your codebase")]
+#[command(about = "DevOps CLI toolbox for AI coding agents and developers")]
 #[command(
-    long_about = "A powerful CLI tool that analyzes your codebase and automatically generates optimized Infrastructure as Code configurations including Dockerfiles, Docker Compose files, and Terraform configurations"
+    long_about = "Analyze tech stacks, scan for security issues and CVEs, validate IaC files, optimize Kubernetes resources, and deploy to cloud providers. Works standalone or through AI coding agent skills (Claude Code, Codex, Gemini CLI, Cursor, Windsurf)."
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -361,7 +361,8 @@ pub enum Commands {
         offset: usize,
     },
 
-    /// Start an interactive AI chat session to analyze and understand your project
+    /// [DEPRECATED] Start an interactive AI chat session. Use AI coding agent skills instead.
+    #[command(hide = true)]
     Chat {
         /// Path to the project directory (default: current directory)
         #[arg(value_name = "PROJECT_PATH", default_value = ".")]
@@ -430,7 +431,8 @@ pub enum Commands {
         command: Option<DeployCommand>,
     },
 
-    /// Run as dedicated AG-UI agent server (headless mode for containers)
+    /// [DEPRECATED] Run as dedicated AG-UI agent server. Use AI coding agent skills instead.
+    #[command(hide = true)]
     Agent {
         /// Path to the project directory
         #[arg(value_name = "PROJECT_PATH", default_value = ".")]
