@@ -21,6 +21,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Other
 
+- release v0.37.0
+- *(installer)* update README with correct install paths for Claude, Codex, Gemini
+
+## [0.37.1](https://github.com/syncable-dev/syncable-cli/compare/v0.37.0...v0.37.1) - 2026-03-29
+
+### Added
+
+- deprecate chat/agent commands, rebrand CLI as DevOps toolbox
+- updated codex/gemini skill path
+
+### Fixed
+
+- install Codex skills to ~/.agents/skills/ per official docs
+- rewrite Gemini CLI skill installer to use proper SKILL.md directory format
+- rewrite skill descriptions for semantic matching, skip CI for non-Rust changes
+
+### Other
+
 - *(installer)* update README with correct install paths for Claude, Codex, Gemini
 
 ## [0.37.0](https://github.com/syncable-dev/syncable-cli/compare/v0.36.0...v0.37.0) - 2026-03-28
