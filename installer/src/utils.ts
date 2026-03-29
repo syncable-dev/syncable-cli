@@ -1,5 +1,6 @@
 import { exec as execCb } from 'child_process';
 import { promisify } from 'util';
+import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
@@ -55,4 +56,53 @@ export async function commandExists(command: string): Promise<boolean> {
 
 export function prependCargoToPath(): void {
   process.env.PATH = `${cargoBinDir()}${path.delimiter}${process.env.PATH}`;
+}
+
+/**
+ * Check if sync-ctl is accessible from a fresh login shell.
+ *
+ * This is critical because the installer's Node.js process may have
+ * ~/.cargo/bin in PATH (via prependCargoToPath), but the user's actual
+ * shell — and more importantly, the AI agent's shell — may not.
+ *
+ * A false here means agents will fail with "sync-ctl: command not found"
+ * even though the binary is installed.
+ */
+export async function isSyncCtlInLoginShell(): Promise<boolean> {
+  try {
+    if (isWindows()) {
+      // On Windows, check if sync-ctl is in the system PATH
+      await execAsync('where sync-ctl');
+      return true;
+    }
+
+    // Spawn a fresh login shell to check — this mimics what agents do
+    const shell = process.env.SHELL || '/bin/bash';
+    await execAsync(`${shell} -l -c "which sync-ctl"`, { timeout: 10_000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get the user's shell profile file path for PATH modifications.
+ */
+export function getShellProfile(): string {
+  const shell = process.env.SHELL || '/bin/bash';
+
+  if (shell.endsWith('/zsh')) {
+    const zshrc = path.join(os.homedir(), '.zshrc');
+    if (fs.existsSync(zshrc)) return zshrc;
+    return path.join(os.homedir(), '.zprofile');
+  }
+
+  if (shell.endsWith('/fish')) {
+    return path.join(os.homedir(), '.config', 'fish', 'config.fish');
+  }
+
+  // Default to bash
+  const bashrc = path.join(os.homedir(), '.bashrc');
+  if (fs.existsSync(bashrc)) return bashrc;
+  return path.join(os.homedir(), '.bash_profile');
 }

@@ -9,10 +9,11 @@ import { transformForGemini } from '../transformers/gemini.js';
 import { SKILL_MARKER_START, SKILL_MARKER_END } from '../constants.js';
 import { TransformResult } from '../transformers/types.js';
 
-export function writeSkillsForClaude(skills: Skill[], _destDir: string): void {
-  // Claude Code uses the plugin marketplace system — destDir is ignored.
-  // Skills are installed as a plugin at ~/.claude/plugins/cache/syncable/...
-  installClaudePlugin(skills);
+export async function writeSkillsForClaude(skills: Skill[], _destDir: string): Promise<void> {
+  // Claude Code uses the plugin system — destDir is ignored.
+  // installClaudePlugin tries the CLI first, then falls back to
+  // writing cache files + enabling in settings.json.
+  await installClaudePlugin(skills);
 }
 
 export function writeSkillsForCodex(skills: Skill[], destDir: string): void {
@@ -48,7 +49,7 @@ export function writeSkillsForWindsurf(skills: Skill[], destDir: string): void {
 
 export function writeSkillsForGemini(skills: Skill[], destDir: string): void {
   // Gemini CLI uses skills/<skill-name>/SKILL.md format
-  // destDir is ~/.gemini/<profile>/skills/
+  // destDir is ~/.gemini/skills/ (the documented user-level discovery path)
   for (const skill of skills) {
     const results = transformForGemini(skill);
     for (const { relativePath, content } of results) {
@@ -69,7 +70,7 @@ export interface InstallOptions {
   verbose: boolean;
 }
 
-export type AgentWriter = (skills: Skill[], destOrPath: string) => void;
+export type AgentWriter = (skills: Skill[], destOrPath: string) => void | Promise<void>;
 
 export const agentWriters: Record<string, AgentWriter> = {
   claude: writeSkillsForClaude,

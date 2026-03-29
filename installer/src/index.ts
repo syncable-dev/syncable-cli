@@ -5,6 +5,7 @@ import inquirer from 'inquirer';
 import ora from 'ora';
 import path from 'path';
 import os from 'os';
+import fs from 'fs';
 import chalk from 'chalk';
 import { createRequire } from 'module';
 import { checkNodeVersion, checkCargo, checkSyncCtl } from './prerequisites/check.js';
@@ -24,6 +25,7 @@ import {
 import { removeSyncableSkills, removeGeminiSection } from './commands/uninstall.js';
 import { uninstallClaudePlugin } from './transformers/claude.js';
 import { countInstalledSkills } from './commands/status.js';
+import { isSyncCtlInLoginShell, getShellProfile, cargoBinDir, execCommand, isWindows } from './utils.js';
 
 const require = createRequire(import.meta.url);
 const pkg = require('../package.json');
@@ -34,6 +36,142 @@ program
   .name('syncable-cli-skills')
   .description('Install Syncable CLI skills for AI coding agents')
   .version(pkg.version);
+
+/**
+ * Verify sync-ctl is accessible from a fresh login shell and fix PATH if needed.
+ * This ensures AI agents (which spawn fresh shells) can actually find sync-ctl.
+ */
+async function verifySyncCtlPath(opts: { yes?: boolean }): Promise<void> {
+  const inLoginShell = await isSyncCtlInLoginShell();
+  if (inLoginShell) {
+    console.log(chalk.green('  ✓ sync-ctl accessible from shell PATH'));
+    return;
+  }
+
+  const syncCtlBinary = path.join(cargoBinDir(), isWindows() ? 'sync-ctl.exe' : 'sync-ctl');
+  if (!fs.existsSync(syncCtlBinary)) {
+    // Binary doesn't exist at all — nothing to fix here
+    return;
+  }
+
+  console.log(chalk.yellow('\n  ⚠ sync-ctl is installed but NOT in your shell PATH.'));
+  console.log(chalk.yellow('    AI agents will fail with "sync-ctl: command not found".\n'));
+
+  if (isWindows()) {
+    console.log(chalk.cyan('  To fix, add this to your system PATH:'));
+    console.log(chalk.dim(`    ${cargoBinDir()}\n`));
+    return;
+  }
+
+  const choices = [
+    { name: 'Create symlink in /usr/local/bin (recommended, may need sudo)', value: 'symlink' },
+    { name: `Add ~/.cargo/bin to shell profile (${getShellProfile()})`, value: 'profile' },
+    { name: 'Skip — I will fix it manually', value: 'skip' },
+  ];
+
+  const { fix } = opts.yes
+    ? { fix: 'profile' }
+    : await inquirer.prompt([{
+        type: 'list',
+        name: 'fix',
+        message: 'How would you like to fix this?',
+        choices,
+      }]);
+
+  if (fix === 'symlink') {
+    const spinner = ora('  Creating symlink...').start();
+    try {
+      await execCommand(`sudo ln -sf "${syncCtlBinary}" /usr/local/bin/sync-ctl`);
+      spinner.succeed('  Symlink created: /usr/local/bin/sync-ctl');
+    } catch {
+      spinner.fail('  Failed to create symlink (sudo may have been denied)');
+      console.log(chalk.dim(`    Try manually: sudo ln -sf "${syncCtlBinary}" /usr/local/bin/sync-ctl`));
+    }
+  } else if (fix === 'profile') {
+    const profilePath = getShellProfile();
+    const exportLine = 'export PATH="$HOME/.cargo/bin:$PATH"';
+
+    // Check if it's already in the profile
+    try {
+      const profileContent = fs.existsSync(profilePath) ? fs.readFileSync(profilePath, 'utf-8') : '';
+      if (profileContent.includes('.cargo/bin')) {
+        console.log(chalk.yellow(`  ~/.cargo/bin is already in ${profilePath} but your current shell hasn't sourced it.`));
+        console.log(chalk.cyan(`  Run: source ${profilePath}\n`));
+        return;
+      }
+    } catch {
+      // Can't read profile — proceed with append
+    }
+
+    try {
+      fs.appendFileSync(profilePath, `\n# Added by syncable-cli-skills installer\n${exportLine}\n`);
+      console.log(chalk.green(`  ✓ Added to ${profilePath}`));
+      console.log(chalk.cyan(`    Restart your terminal or run: source ${profilePath}\n`));
+    } catch {
+      console.log(chalk.red(`  Failed to update ${profilePath}. Add this line manually:`));
+      console.log(chalk.dim(`    ${exportLine}\n`));
+    }
+  } else {
+    console.log(chalk.dim(`  To fix later, run: export PATH="$HOME/.cargo/bin:$PATH"\n`));
+  }
+}
+
+/**
+ * Print agent-specific post-install instructions that users need to know.
+ */
+function printPostInstallNotes(agents: AgentConfig[]): void {
+  const notes: string[] = [];
+
+  for (const agent of agents) {
+    switch (agent.name) {
+      case 'claude':
+        notes.push(
+          `  ${chalk.cyan('Claude Code')}: Skills are auto-enabled. If they don't appear:`,
+          `    1. Run ${chalk.bold('/reload-plugins')} inside Claude Code`,
+          `    2. Or manually: ${chalk.bold('/plugin marketplace add syncable-dev/syncable-cli')}`,
+          `       then: ${chalk.bold('/plugin install syncable-cli-skills@syncable')}`,
+        );
+        break;
+
+      case 'codex':
+        notes.push(
+          `  ${chalk.cyan('Codex')}: You must enable skills when starting Codex:`,
+          `    ${chalk.bold('codex --enable skills')}`,
+          `    Or invoke explicitly: ${chalk.bold('$syncable-analyze')}`,
+          `    Skills installed to: ${chalk.dim('~/.codex/skills/')}`,
+        );
+        break;
+
+      case 'gemini':
+        notes.push(
+          `  ${chalk.cyan('Gemini CLI')}: Skills are auto-discovered. Verify with:`,
+          `    ${chalk.bold('/skills list')} inside Gemini CLI`,
+          `    Skills installed to: ${chalk.dim('~/.gemini/skills/')}`,
+        );
+        break;
+
+      case 'cursor':
+        notes.push(
+          `  ${chalk.cyan('Cursor')}: Rules are loaded automatically in projects.`,
+        );
+        break;
+
+      case 'windsurf':
+        notes.push(
+          `  ${chalk.cyan('Windsurf')}: Rules are loaded automatically in projects.`,
+        );
+        break;
+    }
+  }
+
+  if (notes.length > 0) {
+    console.log(chalk.bold('\n  Agent-specific notes:\n'));
+    for (const note of notes) {
+      console.log(note);
+    }
+    console.log();
+  }
+}
 
 program
   .command('install', { isDefault: true })
@@ -117,6 +255,9 @@ program
           }
         }
       }
+
+      // Verify sync-ctl is actually in the shell PATH (not just this process)
+      await verifySyncCtlPath(opts);
     }
 
     // Detect agents
@@ -189,7 +330,7 @@ program
         const dest = agent.getSkillPath();
         switch (agent.name) {
           case 'claude':
-            writeSkillsForClaude(skills, dest);
+            await writeSkillsForClaude(skills, dest);
             break;
           case 'codex':
             writeSkillsForCodex(skills, dest);
@@ -217,7 +358,15 @@ program
     console.log(`  Installed:`);
     console.log(`    • ${commandCount} command skills + ${workflowCount} workflow skills`);
     console.log(`    • Agents: ${selectedAgents.map((a) => a.displayName).join(', ')}`);
-    console.log(`\n  Try it: Open Claude Code and say "assess this project"\n`);
+
+    // Print agent-specific post-install notes (Codex --enable skills, etc.)
+    printPostInstallNotes(selectedAgents);
+
+    // Manual install fallback — if installer didn't work for some reason
+    console.log(chalk.dim('  If skills are not loading, install manually from GitHub:'));
+    console.log(chalk.dim('    https://github.com/syncable-dev/syncable-cli/tree/main/installer/skills'));
+    console.log();
+    console.log(`  Try it: Open your agent and say "assess this project"\n`);
   });
 
 program
@@ -246,7 +395,7 @@ program
         const dest = agent.getSkillPath();
         switch (agent.name) {
           case 'claude':
-            uninstallClaudePlugin();
+            await uninstallClaudePlugin();
             break;
           case 'codex':
             removeSyncableSkills(dest, 'syncable-*');
@@ -261,6 +410,11 @@ program
             break;
           case 'gemini':
             removeSyncableSkills(dest, 'syncable-*');
+            // Also clean old antigravity profile location from previous installer versions
+            const oldGeminiDir = path.join(os.homedir(), '.gemini', 'antigravity', 'skills');
+            if (fs.existsSync(oldGeminiDir)) {
+              removeSyncableSkills(oldGeminiDir, 'syncable-*');
+            }
             break;
         }
         spinner.succeed(`  Skills removed from ${agent.displayName}`);
@@ -324,7 +478,85 @@ program
     } else {
       console.log(`  cargo         ${chalk.red('✗ not found')}`);
     }
+
+    // Check if sync-ctl is visible in login shell
+    const inPath = await isSyncCtlInLoginShell();
+    if (syncCtlStatus.status === 'ok' && !inPath) {
+      console.log(chalk.yellow(`\n  ⚠ sync-ctl is installed but NOT in your shell PATH.`));
+      console.log(chalk.yellow(`    AI agents may not be able to run skills.`));
+      console.log(chalk.dim(`    Fix: run "syncable-cli-skills install" to update your PATH`));
+    }
+
     console.log();
+  });
+
+program
+  .command('doctor')
+  .description('Diagnose installation health')
+  .action(async () => {
+    console.log(chalk.bold('\n  Syncable CLI Skills Doctor\n'));
+    let issues = 0;
+
+    // 1. Check sync-ctl binary exists
+    const syncCtlStatus = await checkSyncCtl();
+    if (syncCtlStatus.status === 'ok') {
+      console.log(chalk.green(`  ✓ sync-ctl v${syncCtlStatus.version} installed`));
+    } else {
+      console.log(chalk.red('  ✗ sync-ctl not installed'));
+      console.log(chalk.dim('    Fix: cargo install syncable-cli'));
+      issues++;
+    }
+
+    // 2. Check sync-ctl is in login shell PATH
+    const inPath = await isSyncCtlInLoginShell();
+    if (inPath) {
+      console.log(chalk.green('  ✓ sync-ctl accessible from shell PATH'));
+    } else if (syncCtlStatus.status === 'ok') {
+      console.log(chalk.red('  ✗ sync-ctl NOT in shell PATH — agents will fail'));
+      console.log(chalk.dim('    Fix: run "syncable-cli-skills install" to update PATH'));
+      issues++;
+    }
+
+    // 3. Check each agent's skill directory
+    const detectionResults = await detectAgents();
+    for (const { agent, detected } of detectionResults) {
+      if (!detected) continue;
+
+      const dest = agent.getSkillPath();
+      const count = countInstalledSkills(dest, agent.name);
+      if (count > 0) {
+        console.log(chalk.green(`  ✓ ${agent.displayName}: ${count} skills at ${dest}`));
+      } else {
+        console.log(chalk.red(`  ✗ ${agent.displayName}: no skills found at ${dest}`));
+        issues++;
+      }
+
+      // Claude-specific: check enabledPlugins
+      if (agent.name === 'claude') {
+        const settingsFile = path.join(os.homedir(), '.claude', 'settings.json');
+        try {
+          const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
+          const key = 'syncable-cli-skills@syncable';
+          if (settings.enabledPlugins && settings.enabledPlugins[key] === true) {
+            console.log(chalk.green('  ✓ Claude Code: plugin enabled in settings.json'));
+          } else {
+            console.log(chalk.red('  ✗ Claude Code: plugin NOT enabled in settings.json'));
+            console.log(chalk.dim('    Fix: run "syncable-cli-skills install --agents claude"'));
+            issues++;
+          }
+        } catch {
+          console.log(chalk.red('  ✗ Claude Code: could not read settings.json'));
+          issues++;
+        }
+      }
+    }
+
+    console.log('\n  ' + '─'.repeat(40));
+    if (issues === 0) {
+      console.log(chalk.green.bold('  ✓ Everything looks good!\n'));
+    } else {
+      console.log(chalk.yellow.bold(`  Found ${issues} issue${issues === 1 ? '' : 's'} — see above for fixes.\n`));
+    }
   });
 
 program.parse();
