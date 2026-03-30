@@ -21,6 +21,7 @@
 //! callers build the `Vec<CiFile>` from the `CiPipeline` they assembled.
 //! A `WriteSummary` is returned so the CLI can display a results table.
 
+use std::io::BufRead;
 use std::path::{Path, PathBuf};
 
 use similar::{ChangeTag, TextDiff};
@@ -61,6 +62,17 @@ impl CiFile {
     }
 }
 
+/// User's chosen resolution when a conflict is detected during interactive mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConflictResolution {
+    /// Replace the existing file with the generated content.
+    Overwrite,
+    /// Write both versions into the file using git-style conflict markers.
+    Merge,
+    /// Leave the existing file unchanged.
+    Skip,
+}
+
 /// Result of writing a single file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WriteOutcome {
@@ -72,6 +84,8 @@ pub enum WriteOutcome {
     Overwritten,
     /// File existed with different content and `force = false` → not written.
     Skipped,
+    /// File written with git-style conflict markers for manual resolution.
+    Merged,
     /// Generated content failed the YAML validation round-trip.
     InvalidYaml(String),
 }
@@ -105,16 +119,20 @@ impl WriteSummary {
     pub fn invalid(&self) -> usize {
         self.results.iter().filter(|r| matches!(r.outcome, WriteOutcome::InvalidYaml(_))).count()
     }
+    pub fn merged(&self) -> usize {
+        self.results.iter().filter(|r| r.outcome == WriteOutcome::Merged).count()
+    }
     pub fn has_conflicts(&self) -> bool {
         self.results.iter().any(|r| r.outcome == WriteOutcome::Skipped)
     }
 
-    /// Returns a human-readable summary table line.
+    /// Returns a human-readable single-line summary.
     pub fn display_line(&self) -> String {
         format!(
-            "{} created, {} overwritten, {} skipped, {} invalid",
+            "{} created, {} overwritten, {} merged, {} skipped, {} invalid",
             self.created(),
             self.overwritten(),
+            self.merged(),
             self.skipped(),
             self.invalid(),
         )
@@ -147,6 +165,114 @@ pub fn write_ci_files(
     Ok(summary)
 }
 
+/// Interactive variant of `write_ci_files`.
+///
+/// Runs a first pass with `force = false` to detect conflicts, then for each
+/// `Skipped` file reads one line from `reader` to ask the user what to do:
+///
+/// - `o` → overwrite (replace existing file with generated content)
+/// - `m` → merge (write both versions with git-style conflict markers)
+/// - `s` / anything else → skip (keep existing file)
+///
+/// `reader` is generic over `BufRead` so tests can inject a cursor instead of
+/// reading from real stdin.
+pub fn write_ci_files_interactive<R: BufRead>(
+    files: &[CiFile],
+    output_dir: &Path,
+    reader: &mut R,
+) -> crate::Result<WriteSummary> {
+    let mut summary = write_ci_files(files, output_dir, false)?;
+
+    for (file, result) in files.iter().zip(summary.results.iter_mut()) {
+        if result.outcome != WriteOutcome::Skipped {
+            continue;
+        }
+        let diff = result.diff.as_deref().unwrap_or("");
+        let resolution = prompt_conflict_resolution(&result.path, diff, reader);
+        match resolution {
+            ConflictResolution::Overwrite => {
+                do_write(&result.path, &file.content)?;
+                result.outcome = WriteOutcome::Overwritten;
+            }
+            ConflictResolution::Merge => {
+                let existing = std::fs::read_to_string(&result.path)?;
+                let merged = conflict_markers(&existing, &file.content);
+                do_write(&result.path, &merged)?;
+                result.outcome = WriteOutcome::Merged;
+            }
+            ConflictResolution::Skip => {}
+        }
+    }
+
+    Ok(summary)
+}
+
+/// Reads a single conflict-resolution choice from `reader`.
+///
+/// Prints a prompt line to stderr (non-blocking in tests). Parses:
+/// - `"o"` → `Overwrite`
+/// - `"m"` → `Merge`
+/// - anything else (including `"s"`) → `Skip`
+pub fn prompt_conflict_resolution<R: BufRead>(
+    path: &Path,
+    _diff: &str,
+    reader: &mut R,
+) -> ConflictResolution {
+    eprintln!(
+        "  conflict: {}  [o]verwrite / [m]erge / [s]kip?",
+        path.display()
+    );
+    let mut line = String::new();
+    let _ = reader.read_line(&mut line);
+    match line.trim() {
+        "o" => ConflictResolution::Overwrite,
+        "m" => ConflictResolution::Merge,
+        _ => ConflictResolution::Skip,
+    }
+}
+
+/// Renders a formatted table summarising `WriteSummary` results.
+///
+/// Uses the box-drawing style consistent with the rest of the codebase.
+/// Returns a `String` so the caller decides when/how to print it.
+pub fn render_summary_table(summary: &WriteSummary) -> String {
+    const PATH_W: usize = 44;
+    const OUT_W: usize = 12;
+    const LINE_W: usize = PATH_W + OUT_W + 5; // borders + padding
+
+    let ruler = "─".repeat(LINE_W);
+    let mut out = String::new();
+
+    out.push_str(&format!("┌─ CI Files Written {}┐\n", "─".repeat(LINE_W - 20)));
+    out.push_str(&format!(
+        "│  {:<PATH_W$}  {:<OUT_W$}│\n",
+        "File",
+        "Outcome",
+        PATH_W = PATH_W,
+        OUT_W = OUT_W
+    ));
+    out.push_str(&format!("│  {}│\n", ruler));
+
+    for r in &summary.results {
+        let label = outcome_label(&r.outcome);
+        // Show only the last two path components for readability
+        let display = compact_path(&r.path);
+        out.push_str(&format!(
+            "│  {:<PATH_W$}  {:<OUT_W$}│\n",
+            display,
+            label,
+            PATH_W = PATH_W,
+            OUT_W = OUT_W
+        ));
+    }
+
+    out.push_str(&format!("├{}┤\n", ruler));
+    out.push_str(&format!("│  {:<width$}│\n", summary.display_line(), width = LINE_W - 2));
+    out.push_str(&format!("└{}┘\n", ruler));
+
+    out
+}
+
 /// Resolves the on-disk path for a `CiFileKind` relative to `output_dir`.
 pub fn resolve_path(output_dir: &Path, kind: &CiFileKind) -> PathBuf {
     match kind {
@@ -165,7 +291,7 @@ pub fn pipeline_path(format: &CiFormat) -> &'static str {
     }
 }
 
-// ── Internal helpers ──────────────────────────────────────────────────────────
+// ── Internal helpers ─────────────────────────────────────────────────────────
 
 /// Validates, diffs, and conditionally writes a single `CiFile`.
 fn write_one(file: &CiFile, path: &Path, force: bool) -> crate::Result<FileResult> {
@@ -233,6 +359,37 @@ fn validate_yaml(content: &str) -> Result<(), String> {
     serde_yaml::from_str::<serde_yaml::Value>(content)
         .map(|_| ())
         .map_err(|e| e.to_string())
+}
+
+/// Writes both `old` and `new` into a single file using git-style conflict markers.
+fn conflict_markers(old: &str, new: &str) -> String {
+    format!("<<<<<<< current\n{}=======\n{}>>>>>>> generated\n", old, new)
+}
+
+/// Returns a short human-readable label for a `WriteOutcome`.
+fn outcome_label(outcome: &WriteOutcome) -> &'static str {
+    match outcome {
+        WriteOutcome::Created => "created",
+        WriteOutcome::Unchanged => "unchanged",
+        WriteOutcome::Overwritten => "overwritten",
+        WriteOutcome::Skipped => "skipped",
+        WriteOutcome::Merged => "merged",
+        WriteOutcome::InvalidYaml(_) => "invalid yaml",
+    }
+}
+
+/// Returns the last two components of `path` joined by `/` for compact display.
+fn compact_path(path: &Path) -> String {
+    let parts: Vec<_> = path.components().collect();
+    if parts.len() >= 2 {
+        let n = parts.len();
+        format!("{}/{}",
+            parts[n - 2].as_os_str().to_string_lossy(),
+            parts[n - 1].as_os_str().to_string_lossy()
+        )
+    } else {
+        path.display().to_string()
+    }
 }
 
 /// Builds a compact unified diff for display purposes.
@@ -418,6 +575,100 @@ mod tests {
         let line = summary.display_line();
         assert!(line.contains("1 created"));
         assert!(line.contains("0 skipped"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_render_summary_table_contains_headers() {
+        let dir = tmp_dir("table");
+        let files = vec![CiFile::pipeline(VALID_YAML.to_string(), CiFormat::GithubActions)];
+        let summary = write_ci_files(&files, &dir, false).unwrap();
+        let table = render_summary_table(&summary);
+        assert!(table.contains("CI Files Written"));
+        assert!(table.contains("File"));
+        assert!(table.contains("Outcome"));
+        assert!(table.contains("created"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // ── prompt_conflict_resolution ────────────────────────────────────────
+
+    #[test]
+    fn test_prompt_overwrite() {
+        let mut reader = std::io::Cursor::new("o\n");
+        let res = prompt_conflict_resolution(Path::new("/tmp/ci.yml"), "", &mut reader);
+        assert_eq!(res, ConflictResolution::Overwrite);
+    }
+
+    #[test]
+    fn test_prompt_merge() {
+        let mut reader = std::io::Cursor::new("m\n");
+        let res = prompt_conflict_resolution(Path::new("/tmp/ci.yml"), "", &mut reader);
+        assert_eq!(res, ConflictResolution::Merge);
+    }
+
+    #[test]
+    fn test_prompt_skip() {
+        let mut reader = std::io::Cursor::new("s\n");
+        let res = prompt_conflict_resolution(Path::new("/tmp/ci.yml"), "", &mut reader);
+        assert_eq!(res, ConflictResolution::Skip);
+    }
+
+    #[test]
+    fn test_prompt_unrecognised_defaults_to_skip() {
+        let mut reader = std::io::Cursor::new("x\n");
+        let res = prompt_conflict_resolution(Path::new("/tmp/ci.yml"), "", &mut reader);
+        assert_eq!(res, ConflictResolution::Skip);
+    }
+
+    // ── write_ci_files_interactive ────────────────────────────────────────
+
+    #[test]
+    fn test_interactive_overwrite_resolves_conflict() {
+        let dir = tmp_dir("interactive_ow");
+        let files = vec![CiFile::pipeline(VALID_YAML.to_string(), CiFormat::GithubActions)];
+        write_ci_files(&files, &dir, false).unwrap();
+        let new_content = VALID_YAML.replace("CI", "CI-MODIFIED");
+        let files2 = vec![CiFile::pipeline(new_content.clone(), CiFormat::GithubActions)];
+        // Simulate user typing "o" at the prompt
+        let mut reader = std::io::Cursor::new("o\n");
+        let summary = write_ci_files_interactive(&files2, &dir, &mut reader).unwrap();
+        assert_eq!(summary.overwritten(), 1);
+        let written = std::fs::read_to_string(dir.join(".github/workflows/ci.yml")).unwrap();
+        assert_eq!(written, new_content);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_interactive_merge_writes_conflict_markers() {
+        let dir = tmp_dir("interactive_merge");
+        let files = vec![CiFile::pipeline(VALID_YAML.to_string(), CiFormat::GithubActions)];
+        write_ci_files(&files, &dir, false).unwrap();
+        let new_content = VALID_YAML.replace("CI", "CI-MODIFIED");
+        let files2 = vec![CiFile::pipeline(new_content, CiFormat::GithubActions)];
+        // Simulate user typing "m" at the prompt
+        let mut reader = std::io::Cursor::new("m\n");
+        let summary = write_ci_files_interactive(&files2, &dir, &mut reader).unwrap();
+        assert_eq!(summary.merged(), 1);
+        let written = std::fs::read_to_string(dir.join(".github/workflows/ci.yml")).unwrap();
+        assert!(written.contains("<<<<<<< current"));
+        assert!(written.contains(">>>>>>> generated"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_interactive_skip_leaves_existing_file() {
+        let dir = tmp_dir("interactive_skip");
+        let files = vec![CiFile::pipeline(VALID_YAML.to_string(), CiFormat::GithubActions)];
+        write_ci_files(&files, &dir, false).unwrap();
+        let new_content = VALID_YAML.replace("CI", "CI-MODIFIED");
+        let files2 = vec![CiFile::pipeline(new_content, CiFormat::GithubActions)];
+        let mut reader = std::io::Cursor::new("s\n");
+        let summary = write_ci_files_interactive(&files2, &dir, &mut reader).unwrap();
+        assert_eq!(summary.skipped(), 1);
+        let written = std::fs::read_to_string(dir.join(".github/workflows/ci.yml")).unwrap();
+        // Original content must be intact
+        assert_eq!(written, VALID_YAML);
         std::fs::remove_dir_all(&dir).ok();
     }
 }
