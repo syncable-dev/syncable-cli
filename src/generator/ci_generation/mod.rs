@@ -18,6 +18,7 @@ pub mod context;
 pub mod runtime_resolver;
 pub mod schema;
 pub mod templates;
+pub mod test_step;
 pub mod token_resolver;
 pub mod triggers;
 
