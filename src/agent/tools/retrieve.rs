@@ -94,7 +94,7 @@ Without a query, analyze_project returns compacted output (file arrays replaced 
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
         // Try to retrieve filtered data
-        let result = output_store::retrieve_filtered(&args.ref_id, args.query.as_deref());
+        let result = output_store::retrieve_filtered(&args.ref_id, args.query.as_deref(), 20, 0);
 
         match result {
             Some(data) => {

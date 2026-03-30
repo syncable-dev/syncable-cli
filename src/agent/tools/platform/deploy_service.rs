@@ -53,6 +53,8 @@ pub struct SecretKeyInput {
 pub struct DeployServiceArgs {
     /// Optional: specific subdirectory/service to deploy (for monorepos)
     pub path: Option<String>,
+    /// Optional: override service name (default: derived from directory name)
+    pub service_name: Option<String>,
     /// Optional: override recommended provider (gcp, hetzner, azure)
     pub provider: Option<String>,
     /// Optional: override machine type selection
@@ -370,8 +372,11 @@ User: "deploy this service"
             }
         };
 
-        // Get service name early to check for duplicates
-        let service_name = get_service_name(&analysis_path);
+        // Get service name — use override if provided, otherwise derive from path
+        let service_name = args
+            .service_name
+            .clone()
+            .unwrap_or_else(|| get_service_name(&analysis_path));
 
         // Find existing config with same service name
         let existing_config = existing_configs
@@ -946,9 +951,9 @@ User: "deploy this service"
                         "available": p.available,
                         "reason_if_unavailable": p.reason_if_unavailable,
                     })).collect::<Vec<_>>(),
-                    "machine_types": if hetzner_availability.is_some() {
+                    "machine_types": if let Some(ref ha) = hetzner_availability {
                         // Use real-time data for Hetzner
-                        hetzner_availability.as_ref().unwrap().server_types.iter().take(6).map(|st| json!({
+                        ha.server_types.iter().take(6).map(|st| json!({
                             "machine_type": st.id,
                             "vcpu": st.cores,
                             "memory_gb": st.memory_gb,
@@ -963,9 +968,9 @@ User: "deploy this service"
                             "description": m.description,
                         })).collect::<Vec<_>>()
                     },
-                    "regions": if hetzner_availability.is_some() {
+                    "regions": if let Some(ref ha) = hetzner_availability {
                         // Use real-time data for Hetzner
-                        hetzner_availability.as_ref().unwrap().regions.iter().map(|r| json!({
+                        ha.regions.iter().map(|r| json!({
                             "region": r.id,
                             "display_name": format!("{}, {}", r.name, r.location),
                             "available_server_types_count": r.available_server_types.len(),
@@ -1678,6 +1683,7 @@ mod tests {
         let tool = DeployServiceTool::new(PathBuf::from("/nonexistent/path/that/does/not/exist"));
         let args = DeployServiceArgs {
             path: Some("nope".to_string()),
+            service_name: None,
             provider: None,
             machine_type: None,
             region: None,

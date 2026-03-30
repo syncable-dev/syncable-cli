@@ -1,10 +1,8 @@
 name: CI
 
 on:
-  push:
-    branches: [develop]
   pull_request:
-    branches: [develop]
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -13,8 +11,34 @@ env:
   RUSTFLAGS: ""
 
 jobs:
+  # Detect what changed to decide which jobs to run
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      installer: ${{ steps.filter.outputs.installer }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - 'src/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'tests/**/*.rs'
+              - '.github/workflows/ci.yml'
+            installer:
+              - 'installer/**'
+              - 'skills/**'
+
+  # Rust build, test, lint — only when Rust code changes
   build:
     name: Build & Test
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -68,9 +92,37 @@ jobs:
             -A clippy::manual_strip -A clippy::manual_div_ceil \
             -A dead_code -A unused_assignments
 
-  # Security audit
+  # Installer tests — only when installer or skills change
+  installer:
+    name: Installer Tests
+    needs: changes
+    if: needs.changes.outputs.installer == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: installer
+        run: npm ci
+
+      - name: Build
+        working-directory: installer
+        run: npm run build
+
+      - name: Run tests
+        working-directory: installer
+        run: npm test
+
+  # Security audit — only when Rust deps change
   security:
     name: Security Audit
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     permissions:
       checks: write
@@ -83,5 +135,7 @@ jobs:
           # Ignore advisories in transitive dependencies we cannot control:
           # - gix-date (RUSTSEC-2025-0140): via rustsec crate, awaiting upstream fix
           # - bincode (RUSTSEC-2025-0141): via syntect, marked "complete" by maintainer
+          # - aws-lc-sys (RUSTSEC-2026-0044..0048): via aws-sdk, awaiting upstream bump to >=0.39.0
+          # - rustls-webpki (RUSTSEC-2026-0049): via rustls, awaiting upstream bump to >=0.103.10
           # - Other transitive deps from rustsec, aws-sdk, kube, etc.
-          ignore: RUSTSEC-2020-0163,RUSTSEC-2024-0320,RUSTSEC-2025-0057,RUSTSEC-2025-0074,RUSTSEC-2025-0075,RUSTSEC-2025-0080,RUSTSEC-2025-0081,RUSTSEC-2025-0098,RUSTSEC-2025-0104,RUSTSEC-2025-0134,RUSTSEC-2025-0140,RUSTSEC-2025-0141
+          ignore: RUSTSEC-2020-0163,RUSTSEC-2024-0320,RUSTSEC-2025-0057,RUSTSEC-2025-0074,RUSTSEC-2025-0075,RUSTSEC-2025-0080,RUSTSEC-2025-0081,RUSTSEC-2025-0098,RUSTSEC-2025-0104,RUSTSEC-2025-0134,RUSTSEC-2025-0140,RUSTSEC-2025-0141,RUSTSEC-2026-0044,RUSTSEC-2026-0045,RUSTSEC-2026-0046,RUSTSEC-2026-0047,RUSTSEC-2026-0048,RUSTSEC-2026-0049

@@ -73,6 +73,10 @@ impl ToolInstaller {
 
     /// Print tool installation status with detailed information
     pub fn print_tool_status(&mut self, languages: &[Language]) {
+        // Skip printing in agent/quiet mode
+        if std::env::var("SYNCABLE_QUIET").is_ok() {
+            return;
+        }
         println!("\n🔧 Vulnerability Scanning Tools Status:");
         println!("{}", "=".repeat(50));
 

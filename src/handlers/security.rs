@@ -20,6 +20,7 @@ pub fn handle_security(
     format: OutputFormat,
     output: Option<PathBuf>,
     fail_on_findings: bool,
+    quiet: bool,
 ) -> crate::Result<String> {
     let project_path = path.canonicalize().unwrap_or_else(|_| path.clone());
 
@@ -27,14 +28,16 @@ pub fn handle_security(
     let mut result_output = String::new();
 
     // Print and collect header
-    println!(
-        "🛡️  Running security analysis on: {}",
-        project_path.display()
-    );
-    result_output.push_str(&format!(
-        "🛡️  Running security analysis on: {}\n",
-        project_path.display()
-    ));
+    if !quiet {
+        println!(
+            "🛡️  Running security analysis on: {}",
+            project_path.display()
+        );
+        result_output.push_str(&format!(
+            "🛡️  Running security analysis on: {}\n",
+            project_path.display()
+        ));
+    }
 
     // Convert CLI mode to internal ScanMode, with flag overrides
     let scan_mode = determine_scan_mode(mode, include_low, no_secrets, no_code_patterns);
@@ -58,11 +61,13 @@ pub fn handle_security(
     let scan_duration = start_time.elapsed();
 
     // Print and collect scan completion
-    println!("⚡ Scan completed in {:.2}s", scan_duration.as_secs_f64());
-    result_output.push_str(&format!(
-        "⚡ Scan completed in {:.2}s\n",
-        scan_duration.as_secs_f64()
-    ));
+    if !quiet {
+        println!("⚡ Scan completed in {:.2}s", scan_duration.as_secs_f64());
+        result_output.push_str(&format!(
+            "⚡ Scan completed in {:.2}s\n",
+            scan_duration.as_secs_f64()
+        ));
+    }
 
     // Format output
     let output_string = match format {
@@ -76,12 +81,14 @@ pub fn handle_security(
     // Output results
     if let Some(output_path) = output {
         std::fs::write(&output_path, &output_string)?;
-        println!("Security report saved to: {}", output_path.display());
+        if !quiet {
+            println!("Security report saved to: {}", output_path.display());
+        }
         result_output.push_str(&format!(
             "\nSecurity report saved to: {}\n",
             output_path.display()
         ));
-    } else {
+    } else if !quiet {
         print!("{}", output_string);
     }
 

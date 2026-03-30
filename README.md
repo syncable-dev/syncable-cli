@@ -5,14 +5,14 @@
 <h1 align="center">Syncable CLI</h1>
 
 <p align="center">
-  <strong>Your AI-Powered DevOps Engineer in the Terminal</strong>
+  <strong>DevOps toolbox for AI coding agents and developers</strong>
 </p>
 
 <p align="center">
   <!-- Build & Quality -->
   <a href="https://github.com/syncable-dev/syncable-cli/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/syncable-dev/syncable-cli/ci.yml?branch=main&style=flat-square&label=CI" alt="CI Status"></a>
   <a href="https://crates.io/crates/syncable-cli"><img src="https://img.shields.io/crates/v/syncable-cli?style=flat-square&color=blue" alt="Crates.io"></a>
-  <a href="https://docs.rs/syncable-cli"><img src="https://img.shields.io/docsrs/syncable-cli?style=flat-square&label=docs.rs" alt="docs.rs"></a>
+  <a href="https://www.npmjs.com/package/syncable-cli-skills"><img src="https://img.shields.io/npm/v/syncable-cli-skills?style=flat-square&color=cb3837" alt="npm"></a>
   <br>
   <!-- Downloads & Community -->
   <a href="https://crates.io/crates/syncable-cli"><img src="https://img.shields.io/crates/d/syncable-cli?style=flat-square" alt="Downloads"></a>
@@ -21,169 +21,173 @@
   <br>
   <!-- Tech Stack -->
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPL%20v3-blue.svg?style=flat-square" alt="License"></a>
-  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-1.85+-orange?style=flat-square&logo=rust" alt="Rust 1.85+"></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-1.88+-orange?style=flat-square&logo=rust" alt="Rust 1.88+"></a>
   <a href="https://github.com/syncable-dev/syncable-cli"><img src="https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey?style=flat-square" alt="Platform"></a>
 </p>
 
 <p align="center">
   <a href="#-quick-start">Quick Start</a> •
-  <a href="#-ai-agent">AI Agent</a> •
-  <a href="#-features">Features</a> •
+  <a href="#-ai-agent-skills">AI Agent Skills</a> •
+  <a href="#-commands">Commands</a> •
   <a href="#-installation">Installation</a> •
   <a href="https://syncable.dev">Syncable Platform →</a>
 </p>
 
 ---
 
-> **🚀 Ready to deploy?** Take your infrastructure to production with [Syncable Platform](https://syncable.dev) — seamless cloud deployments, monitoring, and team collaboration built on top of this CLI.
-
----
-
 ## What is Syncable CLI?
 
-**Stop copy-pasting Dockerfiles from Stack Overflow.** Syncable CLI is an AI-powered assistant that understands your codebase and generates production-ready infrastructure — Dockerfiles, Kubernetes manifests, Terraform configs, and CI/CD pipelines — tailored specifically to your project.
-
-<p align="center">
-  <img src="syncable-cli-demo.gif" alt="Syncable CLI Demo" width="800" />
-</p>
+Syncable CLI (`sync-ctl`) is a DevOps toolbox that analyzes codebases, scans for security issues, validates infrastructure files, and deploys to cloud providers. It works standalone from the terminal or through **AI coding agent skills** — giving Claude Code, Codex, Gemini CLI, Cursor, and Windsurf the ability to run security scans, check for CVEs, lint Dockerfiles, and deploy services through natural conversation.
 
 ## ⚡ Quick Start
 
+### For AI coding agents (recommended)
+
 ```bash
-# Install
+npx syncable-cli-skills
+```
+
+This installs 11 skills (7 command + 4 workflow) into your AI coding agent. Then just ask:
+
+- *"assess this project"* — full health check
+- *"scan for security issues"* — secrets and credential detection
+- *"check for vulnerabilities"* — CVE scanning across all dependencies
+- *"validate my Dockerfiles"* — lint IaC files
+- *"deploy this service"* — cloud deployment with preview
+
+### For direct CLI use
+
+```bash
 cargo install syncable-cli
-
-# Start the AI Agent
-sync-ctl chat
-
-# Or run a quick analysis
 sync-ctl analyze .
 ```
 
-That's it. The agent analyzes your codebase, understands your stack, and helps you build infrastructure that actually works.
+## 🤖 AI Agent Skills
 
-## 🤖 AI Agent
-
-The Syncable Agent is like having a senior DevOps engineer available 24/7. It can:
-
-### Generate Infrastructure
-- **Dockerfiles** — Optimized multi-stage builds for any language
-- **Docker Compose** — Full local development environments
-- **Kubernetes** — Deployments, services, ingress, and more
-- **Terraform** — Cloud infrastructure as code
-- **CI/CD** — GitHub Actions, GitLab CI, Jenkins pipelines
-
-### Understand Your Code
-- Detects **260+ technologies** across JavaScript, Python, Go, Rust, and Java
-- Identifies architecture patterns (monolith, microservices, serverless)
-- Maps service dependencies and port configurations
-- Reads your existing configs and improves them
-
-### 🔌 VS Code Integration (Recommended)
-
-For the best experience, install the **Syncable IDE Companion** extension:
+One command installs skills for all major AI coding agents:
 
 ```bash
-code --install-extension syncable.syncable-ide-companion
+npx syncable-cli-skills
 ```
 
-This enables:
-- **Native diff views** — Review file changes side-by-side in VS Code
-- **One-click accept/reject** — Accept with `Cmd+S` or reject changes easily
-- **Auto-detection** — Works automatically when running `sync-ctl chat` in VS Code's terminal
+| Agent | Install Path | Format |
+|-------|-------------|--------|
+| **Claude Code** | Plugin marketplace | `SKILL.md` with plugin.json |
+| **Codex** | `~/.agents/skills/` | `SKILL.md` directories |
+| **Gemini CLI** | `~/.gemini/<profile>/skills/` | `SKILL.md` directories |
+| **Cursor** | `.cursor/rules/` | `.mdc` with `alwaysApply` |
+| **Windsurf** | `.windsurf/rules/` | `.md` with `trigger: always` |
 
-> Without the extension, the agent still works but shows diffs in the terminal instead.
+### What the skills teach your agent
 
-### Chat Commands
-| Command | Description |
-|---------|-------------|
-| `/model` | Switch AI model (GPT-4, Claude, etc.) |
-| `/provider` | Switch between OpenAI and Anthropic |
-| `/clear` | Clear conversation history |
-| `/help` | Show available commands |
+**Command skills** — atomic wrappers around `sync-ctl` commands:
 
-### Keyboard Shortcuts
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+J` | Insert newline (multi-line input) |
-| `Shift+Enter` | Insert newline |
-| `@filename` | Add file to context |
-| `Ctrl+C` | Cancel / Exit |
+| Skill | What it does |
+|-------|-------------|
+| `syncable-analyze` | Detect tech stack, languages, frameworks, dependencies |
+| `syncable-security` | Scan for secrets, hardcoded credentials, insecure patterns |
+| `syncable-vulnerabilities` | Check dependencies for known CVEs across all ecosystems |
+| `syncable-dependencies` | Audit licenses, production vs dev split, package details |
+| `syncable-validate` | Lint Dockerfiles, Compose files, K8s manifests, Helm charts, Terraform |
+| `syncable-optimize` | Analyze Kubernetes resource requests, limits, cost efficiency |
+| `syncable-platform` | Authenticate, switch projects/environments, deploy to cloud |
 
-## 🔍 Features
+**Workflow skills** — multi-step orchestrations with decision logic:
+
+| Skill | What it does |
+|-------|-------------|
+| `syncable-project-assessment` | Full health check: stack + security + vulnerabilities + dependencies |
+| `syncable-security-audit` | Deep pre-deployment review with paranoid-mode scanning |
+| `syncable-iac-pipeline` | Validate all IaC files + Kubernetes optimization |
+| `syncable-deploy-pipeline` | End-to-end: auth → analyze → security gate → deploy + monitor |
+
+### How it works
+
+Skills teach your AI agent to use `sync-ctl` with the `--agent` flag, which outputs compressed JSON instead of terminal formatting. The agent gets a summary with the key findings, plus a reference ID to retrieve full details on demand:
+
+```bash
+# Agent runs this (compressed output, ~2KB)
+sync-ctl security . --mode balanced --agent
+
+# Agent drills into details only when needed (paginated)
+sync-ctl retrieve <ref_id> --query "severity:critical" --limit 10
+```
+
+This keeps the agent's context window small while giving access to the full data.
+
+## 🔍 Commands
 
 ### Project Analysis
 ```bash
-sync-ctl analyze .
+sync-ctl analyze .                    # Human-readable matrix view
+sync-ctl analyze . --agent            # Compressed JSON for agents
 ```
-Get a complete breakdown of your project — languages, frameworks, databases, ports, and architecture patterns.
+Detects 260+ technologies across JavaScript, Python, Go, Rust, and Java ecosystems.
 
 ### Security Scanning
 ```bash
-sync-ctl security
+sync-ctl security . --mode balanced   # Standard scan
+sync-ctl security . --mode paranoid   # Deep compliance audit
 ```
-Blazing-fast secret detection powered by Rust. Finds API keys, tokens, and credentials in seconds, not minutes.
 
 | Mode | Speed | Use Case |
 |------|-------|----------|
-| `--mode lightning` | 🚀 Fastest | Pre-commit hooks |
-| `--mode fast` | ⚡ Fast | Development |
-| `--mode thorough` | 🔍 Complete | Security audits |
-| `--mode paranoid` | 🕵️ Maximum | Compliance |
+| `lightning` | Fastest | Pre-commit hooks |
+| `fast` | Fast | Development |
+| `balanced` | Standard | Default |
+| `thorough` | Complete | PR reviews |
+| `paranoid` | Maximum | Compliance audits |
 
-### Vulnerability Checking
+### Vulnerability Detection
 ```bash
-sync-ctl vulnerabilities
+sync-ctl vulnerabilities .            # Scan all dependencies for CVEs
+sync-ctl vulnerabilities . --severity high  # Only high+ severity
 ```
-Scan your dependencies for known CVEs across npm, pip, cargo, and more.
+Scans npm, pip, cargo, go, and Java dependencies. Automatically discovers and scans all subdirectories in monorepos.
+
+### IaC Validation
+```bash
+sync-ctl validate .                   # Lint all IaC files
+sync-ctl validate . --types dockerfile,compose  # Specific types
+sync-ctl validate . --types compose --fix       # Auto-fix issues
+```
+
+| Linter | What it checks | Rules |
+|--------|---------------|-------|
+| **Hadolint** | Dockerfiles | 60+ rules |
+| **Dclint** | Docker Compose | 15 rules (8 auto-fixable) |
+| **Kubelint** | K8s manifests | 63+ security & best-practice checks |
+| **Helmlint** | Helm charts | 40+ rules |
+
+### Deployment
+```bash
+sync-ctl deploy preview .             # Get deployment recommendation (JSON)
+sync-ctl deploy run . --provider hetzner --port 8080 --public  # Deploy
+sync-ctl deploy status <task_id> --watch  # Monitor progress
+sync-ctl deploy wizard                # Interactive wizard (for humans)
+```
+
+### Platform Management
+```bash
+sync-ctl auth login                   # Authenticate with Syncable
+sync-ctl project current              # Show current context
+sync-ctl org list                     # List organizations
+sync-ctl project select <id>          # Switch project
+sync-ctl env select staging           # Switch environment
+```
 
 ## 📦 Installation
 
-### Cargo (Recommended)
+### Cargo (recommended)
 ```bash
 cargo install syncable-cli
 ```
 
-### Linux/macOS
-```bash
-curl -sSL https://install.syncable.dev | sh
-```
-
-### Windows
-```powershell
-iwr -useb https://raw.githubusercontent.com/syncable-dev/syncable-cli/main/install.ps1 | iex
-```
-
-### From Source
+### From source
 ```bash
 git clone https://github.com/syncable-dev/syncable-cli.git
 cd syncable-cli
 cargo install --path .
-```
-
-## 🔧 Configuration
-
-### AI Provider Setup
-```bash
-# OpenAI
-export OPENAI_API_KEY="sk-..."
-
-# Anthropic
-export ANTHROPIC_API_KEY="sk-ant-..."
-```
-
-### Project Config (`.syncable.toml`)
-```toml
-[agent]
-default_provider = "anthropic"
-default_model = "claude-sonnet-4-20250514"
-
-[security]
-default_mode = "thorough"
-fail_on_high_severity = true
-
-[analysis]
-ignore_patterns = ["node_modules", "target", "dist"]
 ```
 
 ## 🌟 Supported Technologies
@@ -203,11 +207,11 @@ ignore_patterns = ["node_modules", "target", "dist"]
 
 </details>
 
-## 🚀 What's Next?
+## 🚀 Syncable Platform
 
 This CLI is the foundation of the **Syncable Platform** — a complete DevOps solution that takes you from code to production:
 
-- **One-click deployments** to AWS, GCP, or Azure
+- **One-click deployments** to AWS, GCP, Hetzner, or Azure
 - **Team collaboration** with shared environments
 - **Monitoring & logs** built-in
 - **Cost optimization** recommendations
@@ -219,15 +223,10 @@ This CLI is the foundation of the **Syncable Platform** — a complete DevOps so
 We love contributions! Whether it's bug fixes, new features, or documentation improvements.
 
 ```bash
-# Clone and build
 git clone https://github.com/syncable-dev/syncable-cli.git
 cd syncable-cli
 cargo build
-
-# Run tests
 cargo test
-
-# Check code quality
 cargo clippy && cargo fmt
 ```
 
@@ -246,21 +245,10 @@ of [Hadolint](https://github.com/hadolint/hadolint), originally written in Haske
 Lukas Martinelli and contributors.
 
 The Docker Compose linting functionality (`src/analyzer/dclint/`) is a Rust implementation
-inspired by [docker-compose-linter](https://github.com/zavoloklom/docker-compose-linter)
-by Sergey Suspended.
+inspired by [dclint](https://github.com/zavoloklom/docker-compose-linter) by Sergey Kupletsky.
 
-See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for full attribution details.
+The Kubernetes manifest linting functionality (`src/analyzer/kubelint/`) is a Rust reimplementation
+inspired by [KubeLinter](https://github.com/stackrox/kube-linter) by StackRox / Red Hat.
 
----
-
-<p align="center">
-  <strong>Built with 🦀 Rust</strong>
-  <br>
-  <a href="https://github.com/syncable-dev/syncable-cli">GitHub</a> •
-  <a href="https://syncable.dev">Website</a> •
-  <a href="https://github.com/syncable-dev/syncable-cli/issues">Issues</a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/syncable-dev/syncable-cli"><img src="https://img.shields.io/github/stars/syncable-dev/syncable-cli?style=social" alt="GitHub stars"></a>
-</p>
+The Helm chart linting functionality (`src/analyzer/helmlint/`) is a Rust implementation
+inspired by the official [Helm lint](https://helm.sh/docs/helm/helm_lint/) command.
