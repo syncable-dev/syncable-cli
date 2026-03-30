@@ -15,6 +15,7 @@
 //! - `triggers`         — Trigger configuration resolver (CI-18)
 pub mod cache;
 pub mod context;
+pub mod lint_step;
 pub mod runtime_resolver;
 pub mod schema;
 pub mod templates;
