@@ -100,55 +100,13 @@ pub fn resolve_cache(ctx: &CiContext) -> Option<CacheConfig> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::{AnalysisMetadata, ProjectAnalysis};
-    use crate::cli::{CiFormat, CiPlatform};
     use crate::generator::ci_generation::context::{Linter, PackageManager, TestFramework};
-    use std::collections::HashMap;
+    use crate::generator::ci_generation::test_helpers::make_base_ctx;
     use std::path::PathBuf;
     use tempfile::TempDir;
 
     fn make_ctx(pm: PackageManager, lock_file: Option<PathBuf>, root: &std::path::Path) -> CiContext {
-        #[allow(deprecated)]
-        CiContext {
-            analysis: ProjectAnalysis {
-                project_root: root.to_path_buf(),
-                languages: vec![],
-                technologies: vec![],
-                frameworks: vec![],
-                dependencies: Default::default(),
-                entry_points: vec![],
-                ports: vec![],
-                health_endpoints: vec![],
-                environment_variables: vec![],
-                project_type: crate::analyzer::ProjectType::Unknown,
-                build_scripts: vec![],
-                services: vec![],
-                architecture_type: crate::analyzer::ArchitectureType::Monolithic,
-                docker_analysis: None,
-                infrastructure: None,
-                analysis_metadata: AnalysisMetadata {
-                    timestamp: String::new(),
-                    analyzer_version: String::new(),
-                    analysis_duration_ms: 0,
-                    files_analyzed: 0,
-                    confidence_score: 0.0,
-                },
-            },
-            primary_language: String::new(),
-            runtime_versions: HashMap::new(),
-            package_manager: pm,
-            lock_file,
-            test_framework: None,
-            linter: None,
-            build_command: None,
-            has_dockerfile: false,
-            monorepo: false,
-            monorepo_packages: vec![],
-            default_branch: "main".into(),
-            platform: CiPlatform::Gcp,
-            format: CiFormat::GithubActions,
-            project_name: "test".into(),
-        }
+        CiContext { package_manager: pm, lock_file, ..make_base_ctx(root, "") }
     }
 
     fn ctx_with_lock(pm: PackageManager, lock_name: &str) -> (CiContext, TempDir) {

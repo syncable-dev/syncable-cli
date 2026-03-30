@@ -17,3 +17,6 @@ pub mod context;
 pub mod runtime_resolver;
 pub mod schema;
 pub mod templates;
+
+#[cfg(test)]
+pub mod test_helpers;
