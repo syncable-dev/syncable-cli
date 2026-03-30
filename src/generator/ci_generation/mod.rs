@@ -10,12 +10,15 @@
 //! - `runtime_resolver` — Runtime version resolver (CI-03)
 //! - `cache`            — Dependency cache strategy (CI-04)
 //! - `schema`           — Platform-agnostic `CiPipeline` data model (CI-14)
-//! - `templates`        — Per-platform YAML assemblers (CI-11, CI-12, CI-13)//! - `triggers`         — Trigger configuration resolver (CI-18)
+//! - `templates`        — Per-platform YAML assemblers (CI-11, CI-12, CI-13)
+//! - `token_resolver`   — Two-pass placeholder token engine (CI-15)
+//! - `triggers`         — Trigger configuration resolver (CI-18)
 pub mod cache;
 pub mod context;
 pub mod runtime_resolver;
 pub mod schema;
 pub mod templates;
+pub mod token_resolver;
 pub mod triggers;
 
 #[cfg(test)]
