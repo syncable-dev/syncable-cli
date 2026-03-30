@@ -46,4 +46,4 @@ syncable-ide-companion/*.vsix
 syncable-ide-companion/node_modules/
 syncable-ide-companion/dist/
 
-syncable-cli.tape
+syncable-cli.tape.DS_Store
