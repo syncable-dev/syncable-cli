@@ -17,6 +17,7 @@ pub mod build_step;
 pub mod cache;
 pub mod ci_config;
 pub mod context;
+pub mod matrix;
 pub mod monorepo;
 pub mod secrets_doc;
 pub mod docker_step;
