@@ -16,8 +16,11 @@
 pub mod build_step;
 pub mod cache;
 pub mod context;
+pub mod docker_step;
+pub mod image_scan_step;
 pub mod lint_step;
 pub mod runtime_resolver;
+pub mod secret_scan_step;
 pub mod schema;
 pub mod templates;
 pub mod test_step;
