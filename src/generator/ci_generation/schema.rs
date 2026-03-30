@@ -109,22 +109,37 @@ pub struct DockerBuildStep {
     pub image_tag: String,
     /// Whether to push the image as part of the CI job.
     pub push: bool,
-    /// Enable multi-platform QEMU cross-compilation.
+    /// Enable multi-platform QEMU cross-compilation via `docker/setup-qemu-action`.
     pub qemu: bool,
+    /// Whether to set up a multi-platform Buildx builder via `docker/setup-buildx-action`.
+    pub buildx: bool,
 }
 
-/// Container image security scan step (Trivy).
+/// Container image security scan step (Trivy via `aquasecurity/trivy-action`).
 #[derive(Debug, Clone, Serialize)]
 pub struct ImageScanStep {
     /// Image reference to scan — typically matches `DockerBuildStep.image_tag`.
     pub image_ref: String,
     /// Comma-separated severity levels that trigger a non-zero exit, e.g. `"CRITICAL,HIGH"`.
     pub fail_on_severity: String,
+    /// Output format for the scan report (`"sarif"`, `"table"`, etc.).
+    pub format: String,
+    /// Output file path for the scan report, e.g. `"trivy-results.sarif"`.
+    pub output: String,
+    /// Whether to upload the SARIF report to the GitHub Security tab.
+    pub upload_sarif: bool,
 }
 
-/// Secret / credential leak scan step (Gitleaks) — always emitted.
+/// Secret / credential leak scan step (Gitleaks via `gitleaks/gitleaks-action@v2`) — always emitted.
 #[derive(Debug, Clone, Serialize)]
-pub struct SecretScanStep;
+pub struct SecretScanStep {
+    /// `${{ secrets.GITHUB_TOKEN }}` — always available in Actions, never a placeholder.
+    pub github_token_expr: String,
+    /// Repository secret name for the Gitleaks licence key.
+    /// `None` for open-source repos (no licence required).
+    /// `Some("GITLEAKS_LICENSE")` when a private-repo licence is detected or requested.
+    pub gitleaks_license_secret: Option<String>,
+}
 
 /// Artifact upload step.
 #[derive(Debug, Clone, Serialize)]

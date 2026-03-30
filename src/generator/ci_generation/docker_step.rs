@@ -20,6 +20,7 @@ pub fn generate_docker_step(ctx: &CiContext) -> Option<DockerBuildStep> {
         image_tag: "{{REGISTRY_URL}}/{{IMAGE_NAME}}:${{ github.sha }}".to_string(),
         push: false,
         qemu: false,
+        buildx: true,
     })
 }
 
@@ -75,6 +76,13 @@ mod tests {
         let (ctx, _dir) = ctx_with_dockerfile(true);
         let step = generate_docker_step(&ctx).unwrap();
         assert!(!step.push);
+    }
+
+    #[test]
+    fn test_buildx_defaults_to_true() {
+        let (ctx, _dir) = ctx_with_dockerfile(true);
+        let step = generate_docker_step(&ctx).unwrap();
+        assert!(step.buildx);
     }
 
     #[test]

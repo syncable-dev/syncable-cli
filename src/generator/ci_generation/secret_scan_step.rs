@@ -7,7 +7,10 @@ use crate::generator::ci_generation::schema::SecretScanStep;
 
 /// Returns a `SecretScanStep`. Unconditional — every pipeline gets this step.
 pub fn generate_secret_scan_step() -> SecretScanStep {
-    SecretScanStep
+    SecretScanStep {
+        github_token_expr: "${{ secrets.GITHUB_TOKEN }}".to_string(),
+        gitleaks_license_secret: None,
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -18,9 +21,19 @@ mod tests {
 
     #[test]
     fn test_secret_scan_step_is_always_produced() {
-        // SecretScanStep is a unit struct — constructing it succeeds and
-        // confirms the function returns without conditions.
         let _ = generate_secret_scan_step();
+    }
+
+    #[test]
+    fn test_github_token_is_builtin_expression() {
+        let step = generate_secret_scan_step();
+        assert_eq!(step.github_token_expr, "${{ secrets.GITHUB_TOKEN }}");
+    }
+
+    #[test]
+    fn test_gitleaks_license_defaults_to_none() {
+        let step = generate_secret_scan_step();
+        assert!(step.gitleaks_license_secret.is_none());
     }
 
     #[test]

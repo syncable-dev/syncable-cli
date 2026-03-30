@@ -195,7 +195,10 @@ mod tests {
             build: None,
             docker_build: None,
             image_scan: None,
-            secret_scan: SecretScanStep,
+            secret_scan: SecretScanStep {
+                github_token_expr: "${{ secrets.GITHUB_TOKEN }}".to_string(),
+                gitleaks_license_secret: None,
+            },
             upload_artifact: None,
             unresolved_tokens: vec![],
         }
@@ -261,6 +264,7 @@ mod tests {
             image_tag: "{{REGISTRY_URL}}/my-app:latest".to_string(),
             push: true,
             qemu: false,
+            buildx: true,
         });
 
         resolve_tokens(&ctx, &mut pipeline);
@@ -283,10 +287,14 @@ mod tests {
             image_tag: "{{REGISTRY_URL}}/app:tag".to_string(),
             push: true,
             qemu: false,
+            buildx: true,
         });
         pipeline.image_scan = Some(crate::generator::ci_generation::schema::ImageScanStep {
             image_ref: "{{REGISTRY_URL}}/app:tag".to_string(),
             fail_on_severity: "HIGH".to_string(),
+            format: "sarif".to_string(),
+            output: "trivy-results.sarif".to_string(),
+            upload_sarif: true,
         });
 
         resolve_tokens(&ctx, &mut pipeline);

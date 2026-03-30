@@ -14,6 +14,9 @@ pub fn generate_image_scan_step(docker: &Option<DockerBuildStep>) -> Option<Imag
     docker.as_ref().map(|d| ImageScanStep {
         image_ref: d.image_tag.clone(),
         fail_on_severity: "CRITICAL,HIGH".to_string(),
+        format: "sarif".to_string(),
+        output: "trivy-results.sarif".to_string(),
+        upload_sarif: true,
     })
 }
 
@@ -29,6 +32,7 @@ mod tests {
             image_tag: "{{REGISTRY_URL}}/{{IMAGE_NAME}}:${{ github.sha }}".to_string(),
             push: false,
             qemu: false,
+            buildx: true,
         }
     }
 
@@ -58,11 +62,33 @@ mod tests {
     }
 
     #[test]
+    fn test_format_is_sarif() {
+        let docker = Some(make_docker_step());
+        let scan = generate_image_scan_step(&docker).unwrap();
+        assert_eq!(scan.format, "sarif");
+    }
+
+    #[test]
+    fn test_output_is_trivy_sarif_file() {
+        let docker = Some(make_docker_step());
+        let scan = generate_image_scan_step(&docker).unwrap();
+        assert_eq!(scan.output, "trivy-results.sarif");
+    }
+
+    #[test]
+    fn test_upload_sarif_is_true() {
+        let docker = Some(make_docker_step());
+        let scan = generate_image_scan_step(&docker).unwrap();
+        assert!(scan.upload_sarif);
+    }
+
+    #[test]
     fn test_custom_image_tag_propagated() {
         let docker = Some(DockerBuildStep {
             image_tag: "ghcr.io/myorg/myapp:abc123".to_string(),
             push: true,
             qemu: false,
+            buildx: true,
         });
         let scan = generate_image_scan_step(&docker).unwrap();
         assert_eq!(scan.image_ref, "ghcr.io/myorg/myapp:abc123");
