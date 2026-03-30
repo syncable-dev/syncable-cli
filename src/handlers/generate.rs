@@ -531,6 +531,10 @@ fn count_severities_helmlint(
 /// acceptance criterion (`--dry-run` prints valid YAML) is satisfied at the
 /// CLI layer. Full template rendering (CI-11/12/13) replaces this output once
 /// the context and schema layers (CI-02, CI-14) are implemented.
+///
+/// TODO(CI-WIRE): replace stub body with:
+///   collect_ci_context(path) → build_ci_pipeline(ctx) → CiFileWriter or dry-run print.
+///   See Session 10 in the implementation plan.
 pub fn handle_generate_ci(
     path: std::path::PathBuf,
     platform: crate::cli::CiPlatform,
