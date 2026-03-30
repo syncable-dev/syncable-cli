@@ -17,6 +17,7 @@ pub mod build_step;
 pub mod cache;
 pub mod ci_config;
 pub mod context;
+pub mod secrets_doc;
 pub mod docker_step;
 pub mod image_scan_step;
 pub mod lint_step;
