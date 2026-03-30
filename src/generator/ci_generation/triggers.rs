@@ -21,7 +21,7 @@ pub fn resolve_triggers(ctx: &CiContext) -> TriggerConfig {
         push_branches: vec![branch.clone()],
         pr_branches: vec![branch],
         tag_pattern: detect_semver_tag_pattern(root),
-        scheduled: None,
+        scheduled: Some("{{CRON_SCHEDULE}}".to_string()),
     }
 }
 
@@ -63,10 +63,10 @@ mod tests {
     }
 
     #[test]
-    fn test_scheduled_is_always_none() {
+    fn test_scheduled_emits_cron_placeholder() {
         let dir = TempDir::new().unwrap();
         let triggers = resolve_triggers(&ctx_on(dir.path(), "main"));
-        assert!(triggers.scheduled.is_none());
+        assert_eq!(triggers.scheduled, Some("{{CRON_SCHEDULE}}".to_string()));
     }
 
     #[test]

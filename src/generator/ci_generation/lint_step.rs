@@ -5,7 +5,7 @@
 //! optional in the CI pipeline model.
 
 use crate::generator::ci_generation::{
-    context::{CiContext, Linter},
+    context::{CiContext, Linter, PackageManager},
     schema::LintStep,
 };
 
@@ -18,7 +18,13 @@ pub fn generate_lint_step(ctx: &CiContext) -> Option<LintStep> {
         Some(Linter::Ruff) => "ruff check .",
         Some(Linter::Clippy) => "cargo clippy -- -D warnings",
         Some(Linter::GolangciLint) => "golangci-lint run",
-        Some(Linter::Checkstyle) => "mvn checkstyle:check",
+        Some(Linter::Checkstyle) => {
+            if matches!(ctx.package_manager, PackageManager::Gradle) {
+                "./gradlew checkstyleMain"
+            } else {
+                "mvn checkstyle:check"
+            }
+        }
         Some(Linter::Ktlint) => "ktlint",
         Some(Linter::None) | None => return None,
     };
@@ -31,7 +37,10 @@ pub fn generate_lint_step(ctx: &CiContext) -> Option<LintStep> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::generator::ci_generation::{context::CiContext, test_helpers::make_base_ctx};
+    use crate::generator::ci_generation::{
+        context::{CiContext, PackageManager},
+        test_helpers::make_base_ctx,
+    };
     use tempfile::TempDir;
 
     fn ctx_with_linter(linter: Option<Linter>) -> (CiContext, TempDir) {
@@ -83,10 +92,23 @@ mod tests {
     }
 
     #[test]
-    fn test_checkstyle_command() {
+    fn test_checkstyle_maven_command() {
+        // make_base_ctx defaults to a non-Gradle package manager
         let (ctx, _dir) = ctx_with_linter(Some(Linter::Checkstyle));
         let step = generate_lint_step(&ctx).expect("should produce step");
         assert_eq!(step.command, "mvn checkstyle:check");
+    }
+
+    #[test]
+    fn test_checkstyle_gradle_command() {
+        let dir = TempDir::new().unwrap();
+        let ctx = CiContext {
+            linter: Some(Linter::Checkstyle),
+            package_manager: PackageManager::Gradle,
+            ..make_base_ctx(dir.path(), "")
+        };
+        let step = generate_lint_step(&ctx).expect("should produce step");
+        assert_eq!(step.command, "./gradlew checkstyleMain");
     }
 
     #[test]
