@@ -275,6 +275,7 @@ async fn run() -> syncable_cli::Result<()> {
                 output,
                 env_prefix,
                 skip_docker,
+                notify,
             } => {
                 let mut properties = HashMap::new();
                 properties.insert(
@@ -287,7 +288,8 @@ async fn run() -> syncable_cli::Result<()> {
                 if let Some(telemetry_client) = telemetry::get_telemetry_client() {
                     telemetry_client.track_generate(properties);
                 }
-                handle_generate_ci(path, platform, format, dry_run, output, env_prefix, skip_docker)
+                let notify_enabled = notify || config.generation.notify;
+                handle_generate_ci(path, platform, format, dry_run, output, env_prefix, skip_docker, notify_enabled)
             }
         },
 

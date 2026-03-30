@@ -543,6 +543,7 @@ pub fn handle_generate_ci(
     output: Option<std::path::PathBuf>,
     env_prefix: Option<String>,
     skip_docker: bool,
+    notify: bool,
 ) -> crate::Result<()> {
     use crate::cli::{CiFormat, CiPlatform};
 
@@ -718,8 +719,17 @@ options:
         ),
     };
 
+    // Append Slack notify step if requested (CI-24).
+    let notify_snippet = if notify {
+        use crate::generator::ci_generation::notify_step::{NotifyStep, render_notify_yaml};
+        render_notify_yaml(&NotifyStep::default())
+    } else {
+        String::new()
+    };
+    let full_output = format!("{}{}", skeleton, notify_snippet);
+
     if dry_run {
-        println!("{}", skeleton);
+        println!("{}", full_output);
     } else {
         // Full file writing arrives in CI-20 (writer.rs).  Until then, inform
         // the user that non-dry-run mode requires CI-20 to be implemented.

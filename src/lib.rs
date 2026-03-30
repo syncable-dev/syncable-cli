@@ -65,8 +65,9 @@ pub async fn run_command(
                 output,
                 env_prefix,
                 skip_docker,
+                notify,
             } => handlers::handle_generate_ci(
-                path, platform, format, dry_run, output, env_prefix, skip_docker,
+                path, platform, format, dry_run, output, env_prefix, skip_docker, notify,
             ),
         },
         Commands::Validate {

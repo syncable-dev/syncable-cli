@@ -30,6 +30,10 @@ pub struct GenerationConfig {
     pub dockerfile: DockerfileConfig,
     pub compose: ComposeConfig,
     pub terraform: TerraformConfig,
+    /// Emit a Slack failure-notify step in generated CI pipelines.
+    /// Equivalent to passing `--notify` on the CLI.
+    #[serde(default)]
+    pub notify: bool,
 }
 
 /// Dockerfile generation configuration
@@ -247,6 +251,7 @@ impl Default for Config {
                     include_networking: true,
                     include_monitoring: false,
                 },
+                notify: false,
             },
             output: OutputConfig {
                 format: OutputFormat::Files,

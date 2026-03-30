@@ -814,6 +814,10 @@ pub enum GenerateCommand {
         /// Omit Docker build steps even when a Dockerfile is detected
         #[arg(long)]
         skip_docker: bool,
+
+        /// Emit a Slack failure-notification step in the generated pipeline
+        #[arg(long)]
+        notify: bool,
     },
 }
 
