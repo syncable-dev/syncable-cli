@@ -188,6 +188,14 @@ pub struct CiContext {
     pub platform: CiPlatform,
     pub format: CiFormat,
     pub project_name: String,
+    /// Test command override from `.syncable.ci.toml` (CI-22).
+    pub config_test_command: Option<String>,
+    /// Env/secret variable name prefix override from config or CLI.
+    pub env_prefix: Option<String>,
+    /// Step names to skip (from config file).
+    pub skip_steps: Vec<String>,
+    /// Extra push/PR branches from config file.
+    pub extra_branches: Vec<String>,
 }
 
 // ── Helper functions ──────────────────────────────────────────────────────────
@@ -356,5 +364,9 @@ pub fn collect_ci_context(
         platform,
         format,
         project_name,
+        config_test_command: None,
+        env_prefix: None,
+        skip_steps: vec![],
+        extra_branches: vec![],
     })
 }

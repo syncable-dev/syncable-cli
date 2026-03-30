@@ -15,6 +15,7 @@
 //! - `triggers`         — Trigger configuration resolver (CI-18)
 pub mod build_step;
 pub mod cache;
+pub mod ci_config;
 pub mod context;
 pub mod docker_step;
 pub mod image_scan_step;

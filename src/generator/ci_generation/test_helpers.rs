@@ -57,5 +57,15 @@ pub fn make_base_ctx(root: &Path, primary_language: &str) -> CiContext {
         platform: CiPlatform::Gcp,
         format: CiFormat::GithubActions,
         project_name: "test-project".to_string(),
+        config_test_command: None,
+        env_prefix: None,
+        skip_steps: vec![],
+        extra_branches: vec![],
     }
+}
+
+/// Alias used by CI-22 tests.
+pub fn make_minimal_context() -> CiContext {
+    use std::path::PathBuf;
+    make_base_ctx(&PathBuf::from("/tmp/test"), "Rust")
 }
