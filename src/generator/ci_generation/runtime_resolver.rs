@@ -5,12 +5,14 @@
 
 use std::path::Path;
 
+use serde::Serialize;
+
 use crate::generator::ci_generation::context::CiContext;
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
 /// Resolved setup step for the project's primary runtime.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct RuntimeSetup {
     /// GitHub Actions action identifier, e.g. `"actions/setup-node@v4"`.
     pub action: &'static str,

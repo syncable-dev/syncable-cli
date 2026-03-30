@@ -4,13 +4,17 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use std::fmt;
+
+use serde::Serialize;
+
 use crate::analyzer::{analyze_monorepo, analyze_project, ProjectAnalysis, TechnologyCategory};
 use crate::cli::{CiFormat, CiPlatform};
 
 // ── Domain enums ─────────────────────────────────────────────────────────────
 
 /// Package manager detected for the primary language.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum PackageManager {
     Npm,
     Yarn,
@@ -45,8 +49,28 @@ impl From<&str> for PackageManager {
     }
 }
 
+impl fmt::Display for PackageManager {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Self::Npm => "npm",
+            Self::Yarn => "yarn",
+            Self::Pnpm => "pnpm",
+            Self::Bun => "bun",
+            Self::Pip => "pip",
+            Self::Poetry => "poetry",
+            Self::Uv => "uv",
+            Self::Cargo => "cargo",
+            Self::GoMod => "go mod",
+            Self::Maven => "maven",
+            Self::Gradle => "gradle",
+            Self::Unknown => "unknown",
+        };
+        write!(f, "{}", s)
+    }
+}
+
 /// Test framework detected in the project.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum TestFramework {
     Jest,
     Vitest,
@@ -75,8 +99,25 @@ impl From<&str> for TestFramework {
     }
 }
 
+impl fmt::Display for TestFramework {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Self::Jest => "jest",
+            Self::Vitest => "vitest",
+            Self::Mocha => "mocha",
+            Self::Pytest => "pytest",
+            Self::CargoTest => "cargo test",
+            Self::GoTest => "go test",
+            Self::JunitMaven => "junit (maven)",
+            Self::JunitGradle => "junit (gradle)",
+            Self::Unknown => "unknown",
+        };
+        write!(f, "{}", s)
+    }
+}
+
 /// Linter or formatter detected in the project.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum Linter {
     Eslint,
     Prettier,
@@ -105,10 +146,27 @@ impl From<&str> for Linter {
     }
 }
 
+impl fmt::Display for Linter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Self::Eslint => "eslint",
+            Self::Prettier => "prettier",
+            Self::Pylint => "pylint",
+            Self::Ruff => "ruff",
+            Self::Clippy => "clippy",
+            Self::GolangciLint => "golangci-lint",
+            Self::Checkstyle => "checkstyle",
+            Self::Ktlint => "ktlint",
+            Self::None => "",
+        };
+        write!(f, "{}", s)
+    }
+}
+
 // ── Primary struct ────────────────────────────────────────────────────────────
 
 /// Enriched snapshot of a project consumed by all CI generators.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CiContext {
     /// Raw analyzer output; available to generators that need fields beyond what CiContext promotes.
     pub analysis: ProjectAnalysis,

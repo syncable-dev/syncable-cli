@@ -818,7 +818,7 @@ pub enum GenerateCommand {
 }
 
 /// Cloud platform target for CI pipeline generation
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, serde::Serialize)]
 pub enum CiPlatform {
     /// Microsoft Azure (Azure Pipelines)
     Azure,
@@ -829,7 +829,7 @@ pub enum CiPlatform {
 }
 
 /// CI pipeline file format
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, serde::Serialize)]
 pub enum CiFormat {
     /// GitHub Actions workflow (.github/workflows/ci.yml)
     GithubActions,

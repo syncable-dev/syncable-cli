@@ -4,12 +4,14 @@
 //! `actions/cache` step configuration. Returns `None` when no lock file is
 //! present so the caller can omit the step entirely.
 
+use serde::Serialize;
+
 use crate::generator::ci_generation::context::{CiContext, PackageManager};
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
 /// Cache step configuration for `actions/cache`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CacheConfig {
     /// Directories the runner should persist between jobs.
     pub paths: Vec<String>,
