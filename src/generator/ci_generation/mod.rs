@@ -13,6 +13,7 @@
 //! - `templates`        — Per-platform YAML assemblers (CI-11, CI-12, CI-13)
 //! - `token_resolver`   — Two-pass placeholder token engine (CI-15)
 //! - `triggers`         — Trigger configuration resolver (CI-18)
+pub mod build_step;
 pub mod cache;
 pub mod context;
 pub mod lint_step;
