@@ -164,6 +164,85 @@ sync-ctl generate . --all --force
 
 ---
 
+### 2b. `sync-ctl generate ci <PROJECT_PATH>`
+
+Generate a CI pipeline skeleton for GitHub Actions, Azure Pipelines, or Google Cloud Build from automatic project analysis. The command detects the language, runtime version, package manager, test framework, linter, build script, and Dockerfile presence — then produces a ready-to-use YAML file with `{{PLACEHOLDER}}` tokens only where values cannot be inferred from project files.
+
+**Arguments:**
+- `<PROJECT_PATH>` — Path to the project directory to analyse
+
+**Options:**
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--platform <azure\|gcp\|hetzner>` | | Target cloud platform (required) |
+| `--format <github-actions\|azure-pipelines\|cloud-build>` | | Override the default format for the chosen platform |
+| `--dry-run` | | Print generated YAML to stdout; do not write any files |
+| `--output <DIR>` | `-o` | Write files to this directory instead of the project root |
+| `--env-prefix <PREFIX>` | | Prefix for secret/env variable names (default: `APP`) |
+| `--skip-docker` | | Omit Docker build steps even when a Dockerfile is detected |
+| `--notify` | | Append a Slack failure-notification step (requires `SLACK_BOT_TOKEN` and `SLACK_CHANNEL_ID` secrets) |
+
+**Platform defaults:**
+
+| Platform | Default format | Pipeline file written |
+|----------|---------------|----------------------|
+| `azure` | `azure-pipelines` | `azure-pipelines.yml` |
+| `gcp` | `cloud-build` | `cloudbuild.yaml` |
+| `hetzner` | `github-actions` | `.github/workflows/ci.yml` |
+
+**CI steps generated (canonical order):**
+
+| Step | Condition |
+|------|-----------|
+| Trigger config (push/PR branches, optional tag trigger) | Always |
+| Checkout | Always |
+| Runtime setup (language version) | Always |
+| Dependency cache | Only when a lock file is detected |
+| Install | Always |
+| Lint | Only when a linter config file is detected |
+| Test + coverage | Always |
+| Build | Only when a build command is detected |
+| Docker build | Only when `has_dockerfile = true` and `--skip-docker` is not set |
+| Container image scan (Trivy) | Only when Docker build is present |
+| Secret leak scan (Gitleaks) | Always |
+| Artifact upload | Only when a build artifact path is known |
+| Slack notify on failure | Only with `--notify` |
+
+**Output files:**
+
+```
+.github/workflows/ci.yml          (GitHub Actions)
+azure-pipelines.yml               (Azure Pipelines)
+cloudbuild.yaml                   (Cloud Build)
+.syncable/SECRETS_REQUIRED.md     (all platforms — secret setup instructions)
+```
+
+**Examples:**
+
+```bash
+# Preview a GitHub Actions pipeline for a GCP-hosted project
+sync-ctl generate ci . --platform gcp --dry-run
+
+# Write Azure Pipelines config
+sync-ctl generate ci . --platform azure
+
+# Cloud Build with Slack notifications
+sync-ctl generate ci . --platform gcp --notify
+
+# Skip Docker steps, custom output directory
+sync-ctl generate ci . --platform hetzner --skip-docker --output ./ci/
+
+# Custom secret prefix (secrets become MY_APP_REGISTRY_URL etc.)
+sync-ctl generate ci . --platform azure --env-prefix MY_APP
+```
+
+**Unresolved tokens:** When a value cannot be inferred (e.g. no `.nvmrc` exists for a Node project), the generated YAML contains a `{{PLACEHOLDER}}` and `.syncable/SECRETS_REQUIRED.md` lists what needs to be filled in.
+
+**Status:** ✅ Implemented (EPIC 1 complete)
+
+---
+
 ### 3. `sync-ctl validate <PATH>`
 
 Validate existing IaC files against best practices.

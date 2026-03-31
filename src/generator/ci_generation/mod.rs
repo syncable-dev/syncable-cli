@@ -34,5 +34,6 @@ pub mod test_step;
 pub mod token_resolver;
 pub mod triggers;
 pub mod writer;
+pub mod pipeline;
 
 pub mod test_helpers;
