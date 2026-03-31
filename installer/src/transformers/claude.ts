@@ -6,7 +6,7 @@ import { TransformResult } from './types.js';
 import { execCommand, commandExists } from '../utils.js';
 
 const PLUGIN_NAME = 'syncable-cli-skills';
-const PLUGIN_VERSION = '0.1.0';
+const PLUGIN_VERSION = '0.1.11';
 const MARKETPLACE_NAME = 'syncable';
 const MARKETPLACE_REPO = 'syncable-dev/syncable-cli';
 
@@ -202,7 +202,30 @@ export async function installClaudePlugin(skills: Skill[]): Promise<{ cacheDir: 
   writePluginManifest(cacheDir);
   enablePluginInSettings();
 
+  // Also write skills to ~/.claude/skills/ for SDK-based integrations
+  // (e.g. Zed's ACP adapter) that don't read from the plugin cache.
+  // The SDK loads user-level skills from this directory when configured
+  // with settingSources: ["user"].
+  writeUserLevelSkills(skills);
+
   return { cacheDir, skillCount: skills.length };
+}
+
+/**
+ * Write skills to ~/.claude/skills/ so they're available to SDK-based
+ * integrations (Zed, etc.) that don't read the plugin cache.
+ */
+function writeUserLevelSkills(skills: Skill[]): void {
+  const userSkillsDir = path.join(os.homedir(), '.claude', 'skills');
+
+  for (const skill of skills) {
+    const results = transformForClaude(skill);
+    for (const { relativePath, content } of results) {
+      const fullPath = path.join(userSkillsDir, relativePath);
+      fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+      fs.writeFileSync(fullPath, content);
+    }
+  }
 }
 
 /**
@@ -254,19 +277,18 @@ export async function uninstallClaudePlugin(): Promise<void> {
     }
   }
 
-  // Clean up old flat-file skills
-  const oldDirs = [
-    path.join(os.homedir(), '.claude', 'skills', 'syncable'),
-  ];
-  for (const dir of oldDirs) {
-    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true });
-  }
-
-  const flatSkillsDir = path.join(os.homedir(), '.claude', 'skills');
-  if (fs.existsSync(flatSkillsDir)) {
-    for (const file of fs.readdirSync(flatSkillsDir)) {
-      if (file.startsWith('syncable-') && file.endsWith('.md')) {
-        fs.unlinkSync(path.join(flatSkillsDir, file));
+  // Clean up user-level skills (both old flat files and new directory format)
+  const userSkillsDir = path.join(os.homedir(), '.claude', 'skills');
+  if (fs.existsSync(userSkillsDir)) {
+    for (const entry of fs.readdirSync(userSkillsDir)) {
+      if (entry.startsWith('syncable-')) {
+        const entryPath = path.join(userSkillsDir, entry);
+        const stat = fs.statSync(entryPath);
+        if (stat.isDirectory()) {
+          fs.rmSync(entryPath, { recursive: true });
+        } else if (entry.endsWith('.md')) {
+          fs.unlinkSync(entryPath);
+        }
       }
     }
   }
