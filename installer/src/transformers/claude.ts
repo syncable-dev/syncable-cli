@@ -6,7 +6,7 @@ import { TransformResult } from './types.js';
 import { execCommand, commandExists } from '../utils.js';
 
 const PLUGIN_NAME = 'syncable-cli-skills';
-const PLUGIN_VERSION = '0.1.8';
+const PLUGIN_VERSION = '0.1.0';
 const MARKETPLACE_NAME = 'syncable';
 const MARKETPLACE_REPO = 'syncable-dev/syncable-cli';
 
@@ -173,32 +173,23 @@ function enablePluginInSettings(): void {
  *  2. Fall back to manual: write cache files + update settings.json
  */
 export async function installClaudePlugin(skills: Skill[]): Promise<{ cacheDir: string; skillCount: number }> {
-  // Try the official CLI first — this handles enabledPlugins registration.
-  // We don't return early on success because the CLI may have cached an old
-  // version of the plugin that is missing the skills directory (e.g. from a
-  // previous install before skills were added, or from a stale npx cache).
-  // We always write skills directly to the cache so they're guaranteed to exist.
+  // Try the official CLI first — this registers the marketplace and plugin
+  // in Claude Code's settings. We still do a manual write afterwards because
+  // the CLI-cached version may be stale or missing skills.
   await tryClaudeCliInstall();
 
   const cacheDir = getClaudePluginCacheDir();
+  const pluginRootDir = path.dirname(cacheDir); // .../syncable-cli-skills/
 
-  // Remove stale older-version cache entries so Claude Code doesn't load an
-  // empty/outdated version instead of the current one.
-  const pluginRootDir = path.dirname(cacheDir);
+  // Nuke the ENTIRE plugin cache (all versions) and recreate fresh.
+  // This prevents version mismatches, stale caches, and — critically —
+  // removes any .orphaned_at marker that Claude Code writes when a cached
+  // version doesn't match the marketplace catalog.
   if (fs.existsSync(pluginRootDir)) {
-    for (const entry of fs.readdirSync(pluginRootDir)) {
-      if (entry !== PLUGIN_VERSION) {
-        fs.rmSync(path.join(pluginRootDir, entry), { recursive: true, force: true });
-      }
-    }
+    fs.rmSync(pluginRootDir, { recursive: true, force: true });
   }
 
-  // Clear old skills and rewrite them so the cache is always up to date.
-  const skillsDir = path.join(cacheDir, 'skills');
-  if (fs.existsSync(skillsDir)) {
-    fs.rmSync(skillsDir, { recursive: true });
-  }
-
+  // Write every skill into a clean cache directory.
   for (const skill of skills) {
     const results = transformForClaude(skill);
     for (const { relativePath, content } of results) {
