@@ -213,7 +213,19 @@ export async function installClaudePlugin(skills: Skill[]): Promise<{ cacheDir: 
     cacheDir = getClaudePluginCacheDir();
   }
 
-  // Step 3: Clear and rewrite skills so the cache is always fresh.
+  // Step 3: Remove ALL other version directories. Previous installs may have
+  // created directories at different versions that are now stale/orphaned.
+  const pluginRoot = getPluginCacheRoot();
+  if (fs.existsSync(pluginRoot)) {
+    const activeDirName = path.basename(cacheDir);
+    for (const entry of fs.readdirSync(pluginRoot)) {
+      if (entry !== activeDirName && entry !== '.DS_Store') {
+        fs.rmSync(path.join(pluginRoot, entry), { recursive: true, force: true });
+      }
+    }
+  }
+
+  // Step 4: Clear and rewrite skills so the cache is always fresh.
   const skillsDir = path.join(cacheDir, 'skills');
   if (fs.existsSync(skillsDir)) {
     fs.rmSync(skillsDir, { recursive: true });
