@@ -48,17 +48,9 @@ if (existsSync(marketplacePath)) {
   console.log(`Synced marketplace.json version to ${version}`);
 }
 
-// 3. PLUGIN_VERSION constant in src/transformers/claude.ts
-const claudeTsPath = resolve(__dirname, '..', 'src', 'transformers', 'claude.ts');
-if (existsSync(claudeTsPath)) {
-  let claudeTs = readFileSync(claudeTsPath, 'utf-8');
-  claudeTs = claudeTs.replace(
-    /const PLUGIN_VERSION = '[^']+';/,
-    `const PLUGIN_VERSION = '${version}';`
-  );
-  writeFileSync(claudeTsPath, claudeTs);
-  console.log(`Synced PLUGIN_VERSION to ${version}`);
-}
+// NOTE: We do NOT sync PLUGIN_VERSION in claude.ts — the installer no longer
+// uses a hardcoded version. It piggybacks on whatever version Claude Code's
+// CLI cached from the GitHub marketplace, avoiding version mismatches.
 
 // ── Regenerate plugin skills ────────────────────────────────────────
 
