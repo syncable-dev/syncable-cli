@@ -3,6 +3,7 @@ import { TransformResult } from './types.js';
 
 export function transformForWindsurf(skill: Skill): TransformResult[] {
   const filename = skill.frontmatter.name + '.md';
-  const content = `---\ntrigger: always\ndescription: "Syncable CLI: ${skill.frontmatter.description}"\n---\n\n${skill.body}`;
+  const safeDesc = skill.frontmatter.description.replace(/"/g, '\\"');
+  const content = `---\ntrigger: always\ndescription: "Syncable CLI: ${safeDesc}"\n---\n\n${skill.body}`;
   return [{ relativePath: filename, content }];
 }
