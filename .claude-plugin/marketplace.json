@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Syncable CLI skills for AI coding agents — project analysis, security, vulnerabilities, dependencies, IaC validation, and cloud deployment.",
-    "version": "0.1.0"
+    "version": "0.1.11"
   },
   "plugins": [
     {
       "name": "syncable-cli-skills",
       "source": "./installer/plugins/syncable-cli-skills",
       "description": "Syncable CLI skills for project analysis, security scanning, vulnerability detection, dependency auditing, IaC validation, Kubernetes optimization, and cloud deployment.",
-      "version": "0.1.0",
+      "version": "0.1.11",
       "author": {
         "name": "Syncable",
         "email": "support@syncable.dev"
@@ -21,7 +21,15 @@
       "homepage": "https://syncable.dev",
       "repository": "https://github.com/syncable-dev/syncable-cli",
       "license": "MIT",
-      "keywords": ["syncable", "devops", "security", "deployment", "kubernetes", "docker", "iac"]
+      "keywords": [
+        "syncable",
+        "devops",
+        "security",
+        "deployment",
+        "kubernetes",
+        "docker",
+        "iac"
+      ]
     }
   ]
 }
