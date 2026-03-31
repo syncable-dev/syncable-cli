@@ -4,6 +4,7 @@
 //! Produces a `DockerBuildStep` with placeholder tokens for registry and image
 //! name that are resolved by the token engine or wired in by the CD generator.
 
+use crate::cli::CiPlatform;
 use crate::generator::ci_generation::{context::CiContext, schema::DockerBuildStep};
 
 /// Returns `Some(DockerBuildStep)` when a Dockerfile is present, `None` otherwise.
@@ -16,8 +17,14 @@ pub fn generate_docker_step(ctx: &CiContext) -> Option<DockerBuildStep> {
         return None;
     }
 
+    // The commit SHA expression differs per CI platform.
+    let sha_expr = match ctx.platform {
+        CiPlatform::Azure => "$(Build.SourceVersion)",
+        CiPlatform::Gcp => "$SHORT_SHA",
+        _ => "${{ github.sha }}",
+    };
     Some(DockerBuildStep {
-        image_tag: "{{REGISTRY_URL}}/{{IMAGE_NAME}}:${{ github.sha }}".to_string(),
+        image_tag: format!("{{{{REGISTRY_URL}}}}/{{{{IMAGE_NAME}}}}:{sha_expr}"),
         push: false,
         qemu: false,
         buildx: true,
@@ -29,6 +36,7 @@ pub fn generate_docker_step(ctx: &CiContext) -> Option<DockerBuildStep> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::CiPlatform;
     use crate::generator::ci_generation::{context::CiContext, test_helpers::make_base_ctx};
     use tempfile::TempDir;
 
@@ -65,10 +73,39 @@ mod tests {
     }
 
     #[test]
-    fn test_image_tag_contains_github_sha_expression() {
-        let (ctx, _dir) = ctx_with_dockerfile(true);
+    fn test_image_tag_github_actions_uses_github_sha() {
+        let dir = TempDir::new().unwrap();
+        let ctx = CiContext {
+            has_dockerfile: true,
+            platform: CiPlatform::Hetzner,
+            ..make_base_ctx(dir.path(), "")
+        };
         let step = generate_docker_step(&ctx).unwrap();
         assert!(step.image_tag.contains("${{ github.sha }}"));
+    }
+
+    #[test]
+    fn test_image_tag_azure_uses_build_source_version() {
+        let dir = TempDir::new().unwrap();
+        let ctx = CiContext {
+            has_dockerfile: true,
+            platform: CiPlatform::Azure,
+            ..make_base_ctx(dir.path(), "")
+        };
+        let step = generate_docker_step(&ctx).unwrap();
+        assert!(step.image_tag.contains("$(Build.SourceVersion)"));
+    }
+
+    #[test]
+    fn test_image_tag_gcp_uses_short_sha() {
+        let dir = TempDir::new().unwrap();
+        let ctx = CiContext {
+            has_dockerfile: true,
+            platform: CiPlatform::Gcp,
+            ..make_base_ctx(dir.path(), "")
+        };
+        let step = generate_docker_step(&ctx).unwrap();
+        assert!(step.image_tag.contains("$SHORT_SHA"));
     }
 
     #[test]
@@ -93,8 +130,13 @@ mod tests {
     }
 
     #[test]
-    fn test_full_image_tag_format() {
-        let (ctx, _dir) = ctx_with_dockerfile(true);
+    fn test_full_image_tag_format_hetzner() {
+        let dir = TempDir::new().unwrap();
+        let ctx = CiContext {
+            has_dockerfile: true,
+            platform: CiPlatform::Hetzner,
+            ..make_base_ctx(dir.path(), "")
+        };
         let step = generate_docker_step(&ctx).unwrap();
         assert_eq!(
             step.image_tag,

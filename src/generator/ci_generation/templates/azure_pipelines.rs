@@ -148,10 +148,12 @@ fn build_steps(pipeline: &CiPipeline) -> Vec<AzureStep> {
     // 2. Cache (optional)
     if let Some(cache) = &pipeline.cache {
         let mut inputs = BTreeMap::new();
-        inputs.insert("key".to_string(), cache.key.clone());
+        inputs.insert("key".to_string(), gh_cache_key_to_azure(&cache.key));
         inputs.insert("path".to_string(), cache.paths.join("\n"));
         if !cache.restore_keys.is_empty() {
-            inputs.insert("restoreKeys".to_string(), cache.restore_keys.join("\n"));
+            let azure_restore_keys: Vec<String> =
+                cache.restore_keys.iter().map(|k| gh_cache_key_to_azure(k)).collect();
+            inputs.insert("restoreKeys".to_string(), azure_restore_keys.join("\n"));
         }
         steps.push(AzureStep {
             task: Some("Cache@2".to_string()),
@@ -234,9 +236,10 @@ fn build_steps(pipeline: &CiPipeline) -> Vec<AzureStep> {
          gitleaks detect --source . --exit-code 1"
             .to_string();
     let mut sec_env = BTreeMap::new();
+    // Azure Pipelines variables are accessed via $(VAR_NAME), not ${{ secrets.VAR }}
     sec_env.insert(
         "GITHUB_TOKEN".to_string(),
-        pipeline.secret_scan.github_token_expr.clone(),
+        "$(GITHUB_TOKEN)".to_string(),
     );
     if let Some(license) = &pipeline.secret_scan.gitleaks_license_secret {
         sec_env.insert(
@@ -265,6 +268,62 @@ fn build_steps(pipeline: &CiPipeline) -> Vec<AzureStep> {
     }
 
     steps
+}
+
+/// Translates a GitHub Actions cache key expression to the Azure Pipelines
+/// `Cache@2` key format.
+///
+/// Conversions applied:
+///   `${{ runner.os }}`          → `$(Agent.OS)`
+///   `${{ hashFiles('GLOB') }}`  → `GLOB`   (Azure hashes file content natively)
+///   `pm-$(Agent.OS)-glob`       → `pm | $(Agent.OS) | glob`
+///
+/// `split_once` is used for the separator conversion so that hyphens **inside**
+/// file names (e.g. `package-lock.json`) are never corrupted.
+fn gh_cache_key_to_azure(key: &str) -> String {
+    let key = key.replace("${{ runner.os }}", "$(Agent.OS)");
+    let key = strip_hash_files_wrapper(&key);
+    // Rebuild as pipe-separated Azure key.  The OS variable is the fixed
+    // boundary; everything before it is the PM prefix, everything after is
+    // the lock-file glob.
+    if let Some((prefix, rest)) = key.split_once("-$(Agent.OS)-") {
+        let trimmed = rest.trim_end_matches('-');
+        let combined = format!("{prefix} | $(Agent.OS) | {trimmed}");
+        return combined.trim_end_matches(|c: char| c == ' ' || c == '|').to_string();
+    }
+    // Restore key: `pm-$(Agent.OS)` with no trailing glob.
+    if let Some((prefix, _)) = key.split_once("-$(Agent.OS)") {
+        return format!("{prefix} | $(Agent.OS)");
+    }
+    key
+}
+
+/// Removes `${{ hashFiles('GLOB') }}` wrappers, leaving only the glob(s).
+/// Inner single-quotes from multi-argument calls are stripped so the result
+/// is a clean comma-separated list compatible with Azure `Cache@2`.
+fn strip_hash_files_wrapper(s: &str) -> String {
+    let mut result = s.to_string();
+    let prefix = "${{ hashFiles('";
+    let suffix = "') }}";
+    loop {
+        match result.find(prefix) {
+            None => break,
+            Some(start) => {
+                let content_start = start + prefix.len();
+                match result[content_start..].find(suffix) {
+                    None => break,
+                    Some(rel_end) => {
+                        let content_end = content_start + rel_end;
+                        let full_end = content_end + suffix.len();
+                        // Strip inner quotes produced by multi-arg hashFiles calls.
+                        let glob = result[content_start..content_end].replace('\'', "");
+                        result.replace_range(start..full_end, &glob);
+                    }
+                }
+            }
+        }
+    }
+    result
 }
 
 /// Maps a GitHub Actions runtime action identifier to the equivalent Azure
@@ -458,6 +517,9 @@ mod tests {
         let output = render(&make_pipeline());
         assert!(output.contains("gitleaks detect"));
         assert!(output.contains("GITHUB_TOKEN"));
+        // Must use Azure variable syntax, not GitHub Actions expression
+        assert!(output.contains("$(GITHUB_TOKEN)"));
+        assert!(!output.contains("secrets.GITHUB_TOKEN"));
     }
 
     #[test]
@@ -509,5 +571,43 @@ mod tests {
         p.secret_scan.gitleaks_license_secret = Some("GITLEAKS_LICENSE".to_string());
         let output = render(&p);
         assert!(output.contains("GITLEAKS_LICENSE"));
+    }
+
+    #[test]
+    fn test_cache_key_translated_to_azure_syntax() {
+        let mut p = make_pipeline();
+        p.cache = Some(CacheStep {
+            paths: vec!["~/.cargo/registry".to_string()],
+            key: "cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}".to_string(),
+            restore_keys: vec!["cargo-${{ runner.os }}-".to_string()],
+        });
+        let output = render(&p);
+        // GitHub Actions expressions must be absent
+        assert!(!output.contains("runner.os"), "runner.os should be translated");
+        assert!(!output.contains("hashFiles"), "hashFiles() should be stripped");
+        // Azure syntax must be present
+        assert!(output.contains("Agent.OS"));
+        assert!(output.contains("Cargo.lock"));
+    }
+
+    #[test]
+    fn test_gh_cache_key_to_azure_cargo() {
+        let input = "cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}";
+        let result = gh_cache_key_to_azure(input);
+        assert_eq!(result, "cargo | $(Agent.OS) | **/Cargo.lock");
+    }
+
+    #[test]
+    fn test_gh_cache_key_to_azure_restore_key() {
+        let input = "cargo-${{ runner.os }}-";
+        let result = gh_cache_key_to_azure(input);
+        assert_eq!(result, "cargo | $(Agent.OS)");
+    }
+
+    #[test]
+    fn test_gh_cache_key_to_azure_npm() {
+        let input = "npm-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}";
+        let result = gh_cache_key_to_azure(input);
+        assert_eq!(result, "npm | $(Agent.OS) | **/package-lock.json");
     }
 }

@@ -252,6 +252,57 @@ fn detect_project_name(analysis: &ProjectAnalysis) -> String {
         .unwrap_or_else(|| "project".to_string())
 }
 
+/// Checks for a canonical manifest file directly at `project_root` and returns
+/// the language name that should take priority over confidence-score ranking.
+///
+/// Manifests are tested in priority order so compiled/backend languages always
+/// win over a companion `package.json` that lives in a sub-directory but gets
+/// scanned by the project analyzer.
+fn detect_root_manifest_language(project_root: &Path) -> Option<&'static str> {
+    const MANIFESTS: &[(&str, &str)] = &[
+        ("Cargo.toml",       "Rust"),
+        ("go.mod",           "Go"),
+        ("pyproject.toml",   "Python"),
+        ("setup.py",         "Python"),
+        ("requirements.txt", "Python"),
+        ("pom.xml",          "Java"),
+        ("build.gradle",     "Java"),
+        ("build.gradle.kts", "Kotlin"),
+        ("package.json",     "TypeScript"),
+    ];
+    MANIFESTS.iter().find_map(|(file, lang)| project_root.join(file).exists().then_some(*lang))
+}
+
+/// Returns `true` when `tf` is a reasonable test framework for `language`.
+/// Used to discard cross-language detections (e.g. Vitest when primary is Rust).
+fn test_framework_matches_language(language: &str, tf: &TestFramework) -> bool {
+    match language.to_lowercase().as_str() {
+        "typescript" | "javascript" => {
+            matches!(tf, TestFramework::Jest | TestFramework::Vitest | TestFramework::Mocha)
+        }
+        "python" => matches!(tf, TestFramework::Pytest),
+        "rust" => matches!(tf, TestFramework::CargoTest),
+        "go" => matches!(tf, TestFramework::GoTest),
+        "java" | "kotlin" => {
+            matches!(tf, TestFramework::JunitMaven | TestFramework::JunitGradle)
+        }
+        _ => true,
+    }
+}
+
+/// Returns `true` when `linter` is appropriate for `language`.
+fn linter_matches_language(language: &str, linter: &Linter) -> bool {
+    match language.to_lowercase().as_str() {
+        "typescript" | "javascript" => matches!(linter, Linter::Eslint | Linter::Prettier),
+        "python" => matches!(linter, Linter::Pylint | Linter::Ruff),
+        "rust" => matches!(linter, Linter::Clippy),
+        "go" => matches!(linter, Linter::GolangciLint),
+        "java" => matches!(linter, Linter::Checkstyle),
+        "kotlin" => matches!(linter, Linter::Ktlint),
+        _ => true,
+    }
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /// Runs the project analyzer and assembles a `CiContext` for the given path.
@@ -263,11 +314,22 @@ pub fn collect_ci_context(
     let analysis = analyze_project(path)?;
 
     // ── Primary language ──────────────────────────────────────────────────
-    let primary_language = analysis
-        .languages
-        .iter()
-        .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap_or(std::cmp::Ordering::Equal))
-        .map(|l| l.name.clone())
+    // Prefer the language whose manifest lives directly at the project root so
+    // a companion sub-project (e.g. a TypeScript IDE extension in a sub-dir)
+    // cannot outrank the primary manifest by raw file-count confidence alone.
+    let primary_language = detect_root_manifest_language(&analysis.project_root)
+        .map(|s| s.to_string())
+        .or_else(|| {
+            analysis
+                .languages
+                .iter()
+                .max_by(|a, b| {
+                    a.confidence
+                        .partial_cmp(&b.confidence)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .map(|l| l.name.clone())
+        })
         .unwrap_or_else(|| "unknown".to_string());
 
     // ── Runtime versions ──────────────────────────────────────────────────
@@ -278,26 +340,53 @@ pub fn collect_ci_context(
         .collect();
 
     // ── Package manager ───────────────────────────────────────────────────
+    // Look up the package manager from the root language's DetectedLanguage
+    // entry so the sub-project's manager does not override the primary one.
     let package_manager = analysis
         .languages
         .iter()
-        .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap_or(std::cmp::Ordering::Equal))
+        .find(|l| l.name.to_lowercase() == primary_language.to_lowercase())
         .and_then(|l| l.package_manager.as_deref())
         .map(PackageManager::from)
+        .or_else(|| {
+            analysis
+                .languages
+                .iter()
+                .max_by(|a, b| {
+                    a.confidence
+                        .partial_cmp(&b.confidence)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .and_then(|l| l.package_manager.as_deref())
+                .map(PackageManager::from)
+        })
         .unwrap_or(PackageManager::Unknown);
 
     let lock_file = detect_lock_file(&analysis.project_root, &package_manager);
 
     // ── Test framework ────────────────────────────────────────────────────
+    // Filter to frameworks belonging to the primary language so a Vitest
+    // detection in a companion sub-project does not shadow `cargo test`.
     let test_framework = analysis
         .technologies
         .iter()
         .filter(|t| t.category == TechnologyCategory::Testing)
         .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap_or(std::cmp::Ordering::Equal))
         .map(|t| TestFramework::from(t.name.as_str()))
-        .filter(|tf| *tf != TestFramework::Unknown);
+        .filter(|tf| *tf != TestFramework::Unknown)
+        .filter(|tf| test_framework_matches_language(&primary_language, tf))
+        // cargo test is always available even without an explicit tech entry.
+        .or_else(|| {
+            if primary_language.to_lowercase() == "rust" {
+                Some(TestFramework::CargoTest)
+            } else {
+                None
+            }
+        });
 
     // ── Linter ────────────────────────────────────────────────────────────
+    // Apply the same root-language filter so a detected eslint from a companion
+    // project does not suppress clippy for a Rust workspace.
     let linter_tech = analysis.technologies.iter().find(|t| {
         matches!(
             t.name.to_lowercase().as_str(),
@@ -313,7 +402,16 @@ pub fn collect_ci_context(
     });
     let linter = linter_tech
         .map(|t| Linter::from(t.name.as_str()))
-        .filter(|l| *l != Linter::None);
+        .filter(|l| *l != Linter::None)
+        .filter(|l| linter_matches_language(&primary_language, l))
+        // Clippy is always available for Rust projects.
+        .or_else(|| {
+            if primary_language.to_lowercase() == "rust" {
+                Some(Linter::Clippy)
+            } else {
+                None
+            }
+        });
 
     // ── Build command ─────────────────────────────────────────────────────
     let build_command = analysis

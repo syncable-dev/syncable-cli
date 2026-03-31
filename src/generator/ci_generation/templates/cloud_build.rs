@@ -153,10 +153,8 @@ fn build_steps(pipeline: &CiPipeline) -> Vec<CloudBuildStep> {
     }
 
     // 7. Secret scan (always) — zricethezav/gitleaks image
-    let mut sec_env = vec![format!(
-        "GITHUB_TOKEN={}",
-        pipeline.secret_scan.github_token_expr
-    )];
+    // GCP Cloud Build uses $_VARIABLE_NAME for user-defined substitution variables.
+    let mut sec_env = vec!["GITHUB_TOKEN=$_GITHUB_TOKEN".to_string()];
     if let Some(license) = &pipeline.secret_scan.gitleaks_license_secret {
         sec_env.push(format!("GITLEAKS_LICENSE=${{{}}}", license));
     }
@@ -422,6 +420,9 @@ mod tests {
         let output = render(&make_pipeline());
         assert!(output.contains("zricethezav/gitleaks"));
         assert!(output.contains("GITHUB_TOKEN"));
+        // Must use GCP substitution variable syntax, not GitHub Actions expression
+        assert!(output.contains("$_GITHUB_TOKEN"));
+        assert!(!output.contains("secrets.GITHUB_TOKEN"));
     }
 
     #[test]
