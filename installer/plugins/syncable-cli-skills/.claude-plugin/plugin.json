@@ -1,12 +1,20 @@
 {
   "name": "syncable-cli-skills",
   "description": "Syncable CLI skills for project analysis, security scanning, vulnerability detection, dependency auditing, IaC validation, Kubernetes optimization, and cloud deployment.",
-  "version": "0.1.8",
+  "version": "0.1.11",
   "author": {
     "name": "Syncable",
     "email": "support@syncable.dev"
   },
   "homepage": "https://syncable.dev",
   "license": "MIT",
-  "keywords": ["syncable", "devops", "security", "deployment", "kubernetes", "docker", "iac"]
+  "keywords": [
+    "syncable",
+    "devops",
+    "security",
+    "deployment",
+    "kubernetes",
+    "docker",
+    "iac"
+  ]
 }
