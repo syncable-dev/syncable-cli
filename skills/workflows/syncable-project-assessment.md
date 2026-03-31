@@ -1,105 +1,77 @@
 ---
 name: syncable-project-assessment
-description: Run a comprehensive project health check combining stack analysis, security scanning, vulnerability detection, and dependency auditing using the Syncable CLI sync-ctl tool
+description: Use when the user asks to assess a project, run a health check, get an overview of project status, evaluate project health, or wants a comprehensive report covering stack, security, vulnerabilities, and dependencies
+allowed-tools:
+  - Bash
+user-invocable: true
 ---
 
-## Purpose
+## Overview
 
-Run a comprehensive project health check by chaining multiple Syncable CLI commands. Produces a unified report covering tech stack, security posture, vulnerability status, and dependency health.
+Chain analyze + security + vulnerabilities + dependencies into a unified health report. Each step informs the next via decision points.
 
-## Prerequisites
+## Steps
 
-- `sync-ctl` binary installed and on PATH
-- Agent has access to the project directory
-
-## Workflow Steps
-
-### Step 1: Analyze the project stack
+### 1. Analyze the project stack
 
 ```bash
 sync-ctl analyze <PATH> --agent
 ```
 
-Parse the output to understand:
-- What languages and frameworks are present
-- Whether dependencies exist (needed for steps 3 and 4)
-- Whether secrets-capable files exist (affects step 2 mode)
+Parse output for: languages, frameworks, whether dependencies exist (gates steps 3-4), whether secrets-capable files exist (gates step 2 mode). Save `full_data_ref`.
 
-Save the `full_data_ref` from the analyze output — you'll use it to retrieve details without re-running analyze.
+**Success criteria:** JSON with `summary` field. You know what languages, frameworks, and dependency files are present.
 
-### Step 2: Security scan
+### 2. Security scan
 
 ```bash
 sync-ctl security <PATH> --mode balanced --agent
 ```
 
-**Decision point:** If step 1 shows no config files, secrets files, or environment files, use `--mode lightning` instead of `--mode balanced` to save time.
+**Decision:** No config/secrets/env files in step 1 → use `--mode lightning` instead.
 
-### Step 3: Vulnerability scan
+**Success criteria:** JSON with severity counts. All critical/high findings captured.
+
+### 3. Vulnerability scan
 
 ```bash
 sync-ctl vulnerabilities <PATH> --agent
 ```
 
-**Decision point:** If step 1 detected no dependencies (no package.json, requirements.txt, Cargo.toml, go.mod, etc.), **skip this step entirely** and note "No dependencies detected" in the report.
+**Decision:** No dependencies detected in step 1 → **skip entirely**, note "No dependencies detected" in report.
 
-### Step 4: Dependency audit
+If scanner missing: `sync-ctl tools install --yes`, then retry.
+
+**Success criteria:** JSON with CVE counts by severity, or step skipped with documented reason.
+
+### 4. Dependency audit
 
 ```bash
 sync-ctl dependencies <PATH> --licenses --agent
 ```
 
-**Decision point:** Same as step 3 — skip if no dependencies detected.
+**Decision:** Same as step 3 — skip if no dependencies.
 
-## Decision Points Summary
+**Success criteria:** JSON with total count, prod/dev split, license distribution, or step skipped.
+
+## Decision Points
 
 | Condition | Action |
 |-----------|--------|
-| No dependencies detected in step 1 | Skip steps 3 and 4 |
+| No dependencies in step 1 | Skip steps 3 and 4 |
 | No secrets-capable files in step 1 | Use `--mode lightning` in step 2 |
-| Vulnerability scanner missing | Run `sync-ctl tools install --yes`, then retry step 3 |
+| Vulnerability scanner missing | `sync-ctl tools install --yes`, retry |
 
 ## Report Synthesis
 
-After all steps complete, synthesize a unified report for the user:
+After all steps, synthesize ONE report:
 
 1. **Tech Stack** — primary language, frameworks, runtimes
-2. **Security Score** — score from security scan, critical/high finding count
-3. **Vulnerabilities** — critical/high CVE count, packages with available fixes
-4. **Dependencies** — total count, license concerns (copyleft, unknown)
-5. **Recommendations** — top 3-5 actionable items prioritized by severity
+2. **Security Score** — score, critical/high count
+3. **Vulnerabilities** — critical/high CVE count, packages with fixes
+4. **Dependencies** — total count, license concerns
+5. **Recommendations** — top 3-5 actions by severity
 
-## Examples
+## Retrieval
 
-**Assess current directory:**
-
-The agent runs these commands in sequence, skipping steps based on decision points:
-
-```bash
-sync-ctl analyze . --agent
-sync-ctl security . --mode balanced --agent
-sync-ctl vulnerabilities . --agent
-sync-ctl dependencies . --licenses --agent
-```
-
-Then synthesizes the results into a single report for the user.
-
-## Cross-Step Retrieval
-
-Each step produces a `full_data_ref` in its output. You can retrieve details from any previous step at any time:
-
-```bash
-# Check what data is available from all steps
-sync-ctl retrieve --list
-
-# Get framework details from Step 1 (analyze)
-sync-ctl retrieve <analyze_ref_id> --query "section:frameworks"
-
-# Get critical security findings from Step 2
-sync-ctl retrieve <security_ref_id> --query "severity:critical"
-
-# Get vulnerability details from Step 3
-sync-ctl retrieve <vuln_ref_id> --query "severity:high"
-```
-
-Do NOT re-run a command just to get more detail — use `sync-ctl retrieve` instead.
+Save each step's `full_data_ref`. Use `sync-ctl retrieve <ref_id> --query "..."` for drill-down. Do NOT re-run commands for more detail.

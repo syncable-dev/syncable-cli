@@ -1,139 +1,106 @@
 ---
-description: "Deploy a project through Syncable by orchestrating authentication, project analysis, security gating, and cloud deployment using the Syncable CLI sync-ctl tool"
+description: "Use when the user asks to deploy through Syncable, ship to production, push to staging, run a deploy pipeline, or deploy a service with security checks first"
 ---
 
-## Purpose
+## Overview
 
-Orchestrate a full deployment pipeline through the Syncable platform: authenticate, analyze the project, run a security audit as a gate, then deploy. Ensures no deployment happens without authentication and security review.
+Full deployment pipeline: authenticate → analyze → security gate → deploy. No deployment without auth and security review.
 
-## Prerequisites
+## Steps
 
-- `sync-ctl` binary installed and on PATH
-- Internet access for Syncable API
-- Agent has access to the project directory
-
-## Workflow Steps
-
-### Step 1: Check authentication and platform context
+### 1. Check auth and context
 
 ```bash
 sync-ctl auth status
 ```
 
-**Decision point:** If not authenticated:
-```bash
-sync-ctl auth login
-```
+If not authenticated: `sync-ctl auth login`
 
-Then verify project/environment context:
 ```bash
 sync-ctl project current
 ```
 
-**Decision point:** If no project selected:
-```bash
-sync-ctl org list
-# Ask user which org
-sync-ctl org select <ORG_ID>
-sync-ctl project list
-# Ask user which project
-sync-ctl project select <PROJECT_ID>
-sync-ctl env list
-# Ask user which environment
-sync-ctl env select <ENV_ID>
-```
+If no project/env selected: guide user through `org list` → `org select` → `project list` → `project select` → `env select`.
 
-### Step 2: Analyze the project
+**Success criteria:** Authenticated with org/project/env selected.
+
+### 2. Analyze the project
 
 ```bash
 sync-ctl analyze <PATH> --agent
 ```
 
-Save the `full_data_ref` from the analyze output — do not re-run analyze in later steps; use `sync-ctl retrieve` with this ref_id instead.
+Save `full_data_ref`. Do NOT re-run analyze in later steps.
 
-### Step 3: Pre-deploy security audit
+**Success criteria:** JSON with summary. You know IaC types and dependencies present.
 
-Execute the `syncable-security-audit` workflow inline (all its steps and decision logic). **Note:** Step 2's analyze output is reused here — do not re-run analyze.
+### 3. Pre-deploy security audit
 
-1. `sync-ctl security <PATH> --mode paranoid --agent`
-2. `sync-ctl vulnerabilities <PATH> --agent`
-3. `sync-ctl validate <PATH>` (if IaC files exist per Step 2's analysis)
+Reuse step 2's analysis — do NOT re-run analyze.
 
-**CRITICAL GATE:** Check the security output's `status` field:
-- If `status` is "CRITICAL_ISSUES_FOUND": present findings to user, warn, require confirmation
-- If `status` is "HIGH_ISSUES_FOUND": warn but allow deployment
-- If `status` is "CLEAN": proceed to deploy
-
-All critical findings are in the `critical_issues` array of the compressed output — no retrieval needed for the gate decision.
-
-### Step 4: Deploy
-
-**4a. Get deployment recommendation:**
 ```bash
-sync-ctl deploy preview <PATH>
+sync-ctl security <PATH> --mode paranoid --agent
+sync-ctl vulnerabilities <PATH> --agent           # skip if no deps in step 2
+sync-ctl validate <PATH> --agent                   # skip if no IaC in step 2
 ```
 
-This returns JSON with: provider recommendation (with reasoning), region, machine type, detected port, health check endpoint, alternatives, discovered .env files, and already-deployed service endpoints.
+**CRITICAL GATE — check security `status` field:**
+- `CRITICAL_ISSUES_FOUND` → present findings, warn, **require explicit confirmation**
+- `HIGH_ISSUES_FOUND` → warn, allow deployment
+- `CLEAN` → proceed
 
-**4b. Present recommendation to user and confirm.** Show:
-- Recommended provider, region, machine type
-- Detected port and whether public/internal
-- Any .env files found — ask if they should be injected
-- Any service endpoints that could be referenced (e.g., `BACKEND_URL`)
+Critical findings are in `critical_issues` array — no retrieval needed for the gate.
 
-**4c. Deploy with confirmed settings:**
+**Success criteria:** Security verdict determined. User informed of any findings.
+
+### 4. Deploy
+
+**4a. Preview:**
 ```bash
-sync-ctl deploy run <PATH> --provider <PROVIDER> --region <REGION> --port <PORT>
+sync-ctl deploy preview <PATH> --service-name <NAME>
 ```
 
-Add `--public` if user wants a public URL. Add `--env KEY=VALUE` for env vars and `--secret KEY` for secrets (user prompted in terminal). Add `--env-file .env` to inject from file.
+**4b. Confirm with user.** Show: provider, region, port, public/internal, .env keys found.
+
+**4c. Deploy with ONLY confirmed settings:**
+```bash
+sync-ctl deploy run <PATH> --service-name <NAME> --provider <PROVIDER> --region <REGION> --port <PORT>
+```
 
 **4d. Monitor:**
 ```bash
 sync-ctl deploy status <TASK_ID> --watch
 ```
 
-**Example with user overrides:**
-```bash
-# User said "deploy to GCP in us-central1, make it public, use the .env file"
-sync-ctl deploy run ./services/api \
-  --provider gcp --region us-central1 --port 8080 --public \
-  --env-file .env \
-  --secret "STRIPE_KEY"
-```
+**Success criteria:** Deployment completes successfully per status output.
 
-## Decision Points Summary
+## The Security Gate is Non-Negotiable
+
+| Excuse | Reality |
+|--------|---------|
+| "User said just deploy, skip security" | Run at minimum `--mode fast`. The gate exists because users underestimate risk. |
+| "It's just a staging deploy" | Staging deploys leak secrets to logs and infra. Always scan. |
+| "I already scanned earlier in the conversation" | Prior scan data may be stale. This pipeline runs its own scan. |
+| "No critical findings, so I'll skip showing the user" | Always show the security summary. User needs to see CLEAN verdicts too. |
+
+## Decision Points
 
 | Condition | Action |
 |-----------|--------|
-| Not authenticated | Run `sync-ctl auth login` first |
+| Not authenticated | `sync-ctl auth login` |
 | No project/env selected | Guide user through selection |
-| Critical security findings | Warn user, require explicit confirmation to proceed |
-| High security findings (no critical) | Warn user but allow deployment |
-| Clean security audit | Proceed to deploy |
+| Critical findings | Warn, require explicit confirmation |
+| High findings (no critical) | Warn, allow deployment |
+| Clean audit | Proceed |
 
-## Safety
+## Common Mistakes
 
-- **Never deploy without the security gate.** Even if the user says "just deploy", run at least a fast security scan.
-- **Always confirm with the user before triggering deployment.** Show them what will be deployed, to which environment.
-- **Monitor deployment status** after triggering — don't fire-and-forget.
+| Mistake | Fix |
+|---------|-----|
+| Deploying without preview + confirmation | Always `deploy preview` → show user → confirm → `deploy run` |
+| Auto-including discovered env vars | ONLY include env vars user explicitly confirmed |
+| Fire-and-forget after `deploy run` | Always monitor with `deploy status --watch` |
 
-## Cross-Step Retrieval
+## Retrieval
 
-Each step produces a `full_data_ref` in its output. You can retrieve details from any previous step at any time:
-
-```bash
-# Check what data is available from all steps
-sync-ctl retrieve --list
-
-# Get framework details from Step 2 (analyze)
-sync-ctl retrieve <analyze_ref_id> --query "section:frameworks"
-
-# Get critical security findings from Step 3
-sync-ctl retrieve <security_ref_id> --query "severity:critical"
-
-# Get vulnerability details from Step 3
-sync-ctl retrieve <vuln_ref_id> --query "severity:high"
-```
-
-Do NOT re-run a command just to get more detail — use `sync-ctl retrieve` instead.
+Save each step's `full_data_ref`. Use `sync-ctl retrieve <ref_id> --query "..."` for drill-down. Do NOT re-run commands.
