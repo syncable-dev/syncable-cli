@@ -1,6 +1,6 @@
 {
   "name": "syncable-cli-skills",
-  "version": "0.1.5",
+  "version": "0.1.8",
   "type": "module",
   "description": "Install Syncable CLI skills for AI coding agents (Claude Code, Cursor, Windsurf, Codex, Gemini CLI)",
   "license": "GPL-3.0",

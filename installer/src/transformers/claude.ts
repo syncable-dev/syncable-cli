@@ -6,7 +6,7 @@ import { TransformResult } from './types.js';
 import { execCommand, commandExists } from '../utils.js';
 
 const PLUGIN_NAME = 'syncable-cli-skills';
-const PLUGIN_VERSION = '0.1.0';
+const PLUGIN_VERSION = '0.1.8';
 const MARKETPLACE_NAME = 'syncable';
 const MARKETPLACE_REPO = 'syncable-dev/syncable-cli';
 
@@ -19,8 +19,6 @@ export function transformForClaude(skill: Skill): TransformResult[] {
 
   const safeDesc = skill.frontmatter.description
     .replace(/"/g, '\\"')
-    .replace(/: /g, ' - ')
-    .replace(/Trigger on:.*$/, '')
     .trim();
 
   const content = `---\ndescription: "${safeDesc}"\n---\n\n${skill.body}`;
@@ -154,14 +152,15 @@ function enablePluginInSettings(): void {
     settings.extraKnownMarketplaces = {};
   }
   const marketplaces = settings.extraKnownMarketplaces as Record<string, unknown>;
-  if (!marketplaces[MARKETPLACE_NAME]) {
-    marketplaces[MARKETPLACE_NAME] = {
-      source: {
-        source: 'github',
-        repo: MARKETPLACE_REPO,
-      },
-    };
-  }
+  // Always overwrite the marketplace entry to ensure it is canonical and free
+  // of non-standard fields (e.g. a stale "path" override added by Claude Code
+  // dev-mode that causes the plugin to be loaded from the local filesystem).
+  marketplaces[MARKETPLACE_NAME] = {
+    source: {
+      source: 'github',
+      repo: MARKETPLACE_REPO,
+    },
+  };
 
   fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
   fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
@@ -174,22 +173,32 @@ function enablePluginInSettings(): void {
  *  2. Fall back to manual: write cache files + update settings.json
  */
 export async function installClaudePlugin(skills: Skill[]): Promise<{ cacheDir: string; skillCount: number }> {
-  // ── Attempt 1: Official CLI ────────────────────────────────────────
-  const cliSuccess = await tryClaudeCliInstall();
-  if (cliSuccess) {
-    return { cacheDir: getClaudePluginCacheDir(), skillCount: skills.length };
-  }
+  // Try the official CLI first — this handles enabledPlugins registration.
+  // We don't return early on success because the CLI may have cached an old
+  // version of the plugin that is missing the skills directory (e.g. from a
+  // previous install before skills were added, or from a stale npx cache).
+  // We always write skills directly to the cache so they're guaranteed to exist.
+  await tryClaudeCliInstall();
 
-  // ── Attempt 2: Manual write + settings.json ────────────────────────
   const cacheDir = getClaudePluginCacheDir();
 
-  // Clear old skills
+  // Remove stale older-version cache entries so Claude Code doesn't load an
+  // empty/outdated version instead of the current one.
+  const pluginRootDir = path.dirname(cacheDir);
+  if (fs.existsSync(pluginRootDir)) {
+    for (const entry of fs.readdirSync(pluginRootDir)) {
+      if (entry !== PLUGIN_VERSION) {
+        fs.rmSync(path.join(pluginRootDir, entry), { recursive: true, force: true });
+      }
+    }
+  }
+
+  // Clear old skills and rewrite them so the cache is always up to date.
   const skillsDir = path.join(cacheDir, 'skills');
   if (fs.existsSync(skillsDir)) {
     fs.rmSync(skillsDir, { recursive: true });
   }
 
-  // Write each skill
   for (const skill of skills) {
     const results = transformForClaude(skill);
     for (const { relativePath, content } of results) {
@@ -199,10 +208,7 @@ export async function installClaudePlugin(skills: Skill[]): Promise<{ cacheDir: 
     }
   }
 
-  // Write plugin manifest
   writePluginManifest(cacheDir);
-
-  // Enable in settings.json (THE KEY FIX)
   enablePluginInSettings();
 
   return { cacheDir, skillCount: skills.length };
