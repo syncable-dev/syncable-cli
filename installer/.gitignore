@@ -1,3 +1,4 @@
 node_modules/
 dist/
 skills/
+!plugins/syncable-cli-skills/skills/

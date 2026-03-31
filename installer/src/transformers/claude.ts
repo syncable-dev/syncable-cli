@@ -6,7 +6,6 @@ import { TransformResult } from './types.js';
 import { execCommand, commandExists } from '../utils.js';
 
 const PLUGIN_NAME = 'syncable-cli-skills';
-const PLUGIN_VERSION = '0.1.11';
 const MARKETPLACE_NAME = 'syncable';
 const MARKETPLACE_REPO = 'syncable-dev/syncable-cli';
 
@@ -27,18 +26,36 @@ export function transformForClaude(skill: Skill): TransformResult[] {
 }
 
 /**
- * Get the plugin cache directory for Claude Code.
+ * Root directory for all cached versions of this plugin.
+ */
+function getPluginCacheRoot(): string {
+  return path.join(os.homedir(), '.claude', 'plugins', 'cache', MARKETPLACE_NAME, PLUGIN_NAME);
+}
+
+/**
+ * Find the cache directory that Claude Code's CLI created (from `claude plugin install`).
+ * This version is guaranteed to match the GitHub marketplace, so we piggyback on it
+ * to avoid creating a version that Claude Code would later orphan.
+ */
+function findCliInstalledCacheDir(): string | null {
+  const root = getPluginCacheRoot();
+  if (!fs.existsSync(root)) return null;
+
+  for (const entry of fs.readdirSync(root)) {
+    const dir = path.join(root, entry);
+    if (!fs.statSync(dir).isDirectory()) continue;
+    // Return any version dir (there should be at most one after CLI install)
+    return dir;
+  }
+  return null;
+}
+
+/**
+ * Fallback cache directory when the CLI install didn't create one.
+ * Uses "0.0.0" as a sentinel — the real version comes from the CLI.
  */
 export function getClaudePluginCacheDir(): string {
-  return path.join(
-    os.homedir(),
-    '.claude',
-    'plugins',
-    'cache',
-    MARKETPLACE_NAME,
-    PLUGIN_NAME,
-    PLUGIN_VERSION
-  );
+  return path.join(getPluginCacheRoot(), '0.0.0');
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -101,11 +118,14 @@ function writePluginManifest(cacheDir: string): void {
   const manifestDir = path.join(cacheDir, '.claude-plugin');
   fs.mkdirSync(manifestDir, { recursive: true });
 
+  // Derive version from the cache directory name (e.g. ".../0.1.0" → "0.1.0")
+  const version = path.basename(cacheDir);
+
   const manifest = {
     name: PLUGIN_NAME,
     description:
       'Syncable CLI skills for project analysis, security scanning, vulnerability detection, dependency auditing, IaC validation, Kubernetes optimization, and cloud deployment.',
-    version: PLUGIN_VERSION,
+    version,
     author: {
       name: 'Syncable',
       email: 'support@syncable.dev',
@@ -173,23 +193,32 @@ function enablePluginInSettings(): void {
  *  2. Fall back to manual: write cache files + update settings.json
  */
 export async function installClaudePlugin(skills: Skill[]): Promise<{ cacheDir: string; skillCount: number }> {
-  // Try the official CLI first — this registers the marketplace and plugin
-  // in Claude Code's settings. We still do a manual write afterwards because
-  // the CLI-cached version may be stale or missing skills.
+  // Step 1: Run the official CLI — this fetches marketplace.json from GitHub,
+  // determines the correct version, caches the plugin, and registers it in
+  // settings.json. The version it creates MATCHES what GitHub advertises,
+  // so Claude Code will never orphan it.
   await tryClaudeCliInstall();
 
-  const cacheDir = getClaudePluginCacheDir();
-  const pluginRootDir = path.dirname(cacheDir); // .../syncable-cli-skills/
+  // Step 2: Find the directory the CLI created. We write our skills INTO it
+  // rather than creating a new version directory, because any version we
+  // invent might not match the GitHub marketplace and get orphaned.
+  let cacheDir = findCliInstalledCacheDir();
 
-  // Nuke the ENTIRE plugin cache (all versions) and recreate fresh.
-  // This prevents version mismatches, stale caches, and — critically —
-  // removes any .orphaned_at marker that Claude Code writes when a cached
-  // version doesn't match the marketplace catalog.
-  if (fs.existsSync(pluginRootDir)) {
-    fs.rmSync(pluginRootDir, { recursive: true, force: true });
+  if (cacheDir) {
+    // Remove .orphaned_at if present (stale from a previous bad install)
+    const orphanedFile = path.join(cacheDir, '.orphaned_at');
+    if (fs.existsSync(orphanedFile)) fs.unlinkSync(orphanedFile);
+  } else {
+    // CLI install failed or claude isn't installed — use fallback path
+    cacheDir = getClaudePluginCacheDir();
   }
 
-  // Write every skill into a clean cache directory.
+  // Step 3: Clear and rewrite skills so the cache is always fresh.
+  const skillsDir = path.join(cacheDir, 'skills');
+  if (fs.existsSync(skillsDir)) {
+    fs.rmSync(skillsDir, { recursive: true });
+  }
+
   for (const skill of skills) {
     const results = transformForClaude(skill);
     for (const { relativePath, content } of results) {
@@ -202,29 +231,30 @@ export async function installClaudePlugin(skills: Skill[]): Promise<{ cacheDir: 
   writePluginManifest(cacheDir);
   enablePluginInSettings();
 
-  // Also write skills to ~/.claude/skills/ for SDK-based integrations
-  // (e.g. Zed's ACP adapter) that don't read from the plugin cache.
-  // The SDK loads user-level skills from this directory when configured
-  // with settingSources: ["user"].
+  // Step 4: Also write skills to ~/.claude/skills/ for SDK-based integrations
+  // (Zed ACP, etc.) that don't read the plugin cache.
   writeUserLevelSkills(skills);
 
   return { cacheDir, skillCount: skills.length };
 }
 
 /**
- * Write skills to ~/.claude/skills/ so they're available to SDK-based
- * integrations (Zed, etc.) that don't read the plugin cache.
+ * Write skills to ~/.claude/skills/ for SDK-based integrations.
+ * transformForClaude returns paths like "skills/name/SKILL.md", but
+ * user-level skills live at ~/.claude/skills/name/SKILL.md, so we
+ * strip the leading "skills/" prefix.
  */
 function writeUserLevelSkills(skills: Skill[]): void {
   const userSkillsDir = path.join(os.homedir(), '.claude', 'skills');
 
   for (const skill of skills) {
-    const results = transformForClaude(skill);
-    for (const { relativePath, content } of results) {
-      const fullPath = path.join(userSkillsDir, relativePath);
-      fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-      fs.writeFileSync(fullPath, content);
-    }
+    const skillName = skill.filename.replace(/\.md$/, '');
+    const safeDesc = skill.frontmatter.description.replace(/"/g, '\\"').trim();
+    const content = `---\ndescription: "${safeDesc}"\n---\n\n${skill.body}`;
+
+    const outDir = path.join(userSkillsDir, skillName);
+    fs.mkdirSync(outDir, { recursive: true });
+    fs.writeFileSync(path.join(outDir, 'SKILL.md'), content);
   }
 }
 
