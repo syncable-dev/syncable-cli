@@ -12,7 +12,7 @@ use crate::generator::ci_generation::context::{CiContext, PackageManager};
 /// Fields that matter for the test under hand should be overridden by the
 /// caller after construction. Using struct-update syntax is idiomatic:
 ///
-/// ```rust
+/// ```ignore
 /// let ctx = make_base_ctx(dir.path(), "TypeScript");
 /// let ctx = CiContext { package_manager: PackageManager::Npm, ..ctx };
 /// ```

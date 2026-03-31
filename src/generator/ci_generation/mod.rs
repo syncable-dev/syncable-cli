@@ -35,5 +35,4 @@ pub mod token_resolver;
 pub mod triggers;
 pub mod writer;
 
-#[cfg(test)]
 pub mod test_helpers;

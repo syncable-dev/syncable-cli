@@ -1,0 +1,13 @@
+{
+  "name": "test-node-app",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "jest --passWithNoTests",
+    "build": "tsc -b"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "typescript": "^5.0.0",
+    "@types/jest": "^29.0.0"
+  }
+}
