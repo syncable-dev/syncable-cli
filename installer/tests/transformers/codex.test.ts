@@ -15,10 +15,10 @@ describe('transformForCodex', () => {
     expect(result[0].relativePath).toBe('syncable-analyze/SKILL.md');
   });
 
-  it('preserves frontmatter in SKILL.md', () => {
+  it('preserves frontmatter in SKILL.md with quoted values', () => {
     const result = transformForCodex(sampleSkill);
-    expect(result[0].content).toContain('name: syncable-analyze');
-    expect(result[0].content).toContain('description: Use when analyzing a project');
+    expect(result[0].content).toContain('name: "syncable-analyze"');
+    expect(result[0].content).toContain('description: "Use when analyzing a project"');
   });
 
   it('preserves body content', () => {
