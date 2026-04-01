@@ -78,7 +78,7 @@ simdutf8 = "0.1"                  # SIMD UTF-8 validation
 
 # Telemetry dependencies
 uuid = { version = "1.0", features = ["v4", "serde"] }
-rand = "0.9"
+rand = "0.10"
 futures-util = "0.3"
 
 # Agent dependencies (using Rig - LLM application framework)
