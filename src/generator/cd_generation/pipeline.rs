@@ -15,10 +15,12 @@ use super::deploy_gcp;
 use super::deploy_hetzner;
 use super::health_check;
 use super::migration;
+use super::notification;
 use super::registry;
 use super::schema::{
     CdPipeline, DockerBuildPushStep, EnvironmentConfig,
 };
+use super::terraform_step;
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -105,6 +107,25 @@ pub fn build_cd_pipeline(ctx: &CdContext) -> CdPipeline {
         })
         .collect();
 
+    // ── Terraform step (CD-16) ─────────────────────────────────────────
+    let terraform = if ctx.has_terraform {
+        let tf_dir = ctx
+            .terraform_dir
+            .as_ref()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| "terraform".to_string());
+        Some(terraform_step::generate_terraform_step(&tf_dir, false))
+    } else {
+        None
+    };
+
+    // ── Notification step (CD-21) ────────────────────────────────────────
+    let notifications = Some(notification::generate_notification_step(
+        "SLACK_WEBHOOK_URL",
+        true,
+        true,
+    ));
+
     CdPipeline {
         project_name: ctx.project_name.clone(),
         platform: ctx.platform.clone(),
@@ -114,11 +135,11 @@ pub fn build_cd_pipeline(ctx: &CdContext) -> CdPipeline {
         registry: registry_step,
         docker_build_push,
         migration: migration_step,
-        terraform: None, // Terraform step is deferred to a future story.
+        terraform,
         deploy,
         health_check: health_check_step,
         rollback_info,
-        notifications: None, // Notification step is deferred to a future story.
+        notifications,
         unresolved_tokens: vec![],
         default_branch: ctx.default_branch.clone(),
         image_name: ctx.image_name.clone(),

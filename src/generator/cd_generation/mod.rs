@@ -21,6 +21,13 @@
 //! - `health_check`    — Post-deploy health check step (CD-11)
 //! - `templates`       — Full workflow YAML builders: Azure, GCP, Hetzner (CD-18/19/20)
 //! - `writer`          — CD file writer with conflict detection
+//! - `environments`    — Multi-environment job strategy (CD-12)
+//! - `rollback`        — Rollback script & YAML comments (CD-13)
+//! - `reusable_workflow` — Reusable `_deploy-base.yml` with `workflow_call` (CD-14)
+//! - `versioning`      — Image tag versioning strategy (CD-15)
+//! - `terraform_step`  — Terraform init/plan/apply steps (CD-16)
+//! - `notification`    — Slack deployment notifications (CD-21)
+//! - `dispatch`        — Manual workflow_dispatch inputs (CD-29)
 
 pub mod auth_azure;
 pub mod auth_gcp;
@@ -29,12 +36,19 @@ pub mod context;
 pub mod deploy_azure;
 pub mod deploy_gcp;
 pub mod deploy_hetzner;
+pub mod dispatch;
+pub mod environments;
 pub mod health_check;
 pub mod manifest;
 pub mod migration;
+pub mod notification;
 pub mod pipeline;
 pub mod registry;
+pub mod reusable_workflow;
+pub mod rollback;
 pub mod schema;
 pub mod templates;
+pub mod terraform_step;
 pub mod token_resolver;
+pub mod versioning;
 pub mod writer;
