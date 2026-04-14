@@ -5,7 +5,7 @@ use syncable_cli::{
         ChatProvider, Cli, ColorScheme, Commands, DisplayFormat, EnvCommand,
         GenerateCommand, OutputFormat, SecurityScanMode, SeverityThreshold, ToolsCommand,
     },
-    config, generator, handle_generate_ci,
+    config, generator, handle_generate_cd, handle_generate_ci,
     telemetry::{self},
 };
 
@@ -290,6 +290,32 @@ async fn run() -> syncable_cli::Result<()> {
                 }
                 let notify_enabled = notify || config.generation.notify;
                 handle_generate_ci(path, platform, format, dry_run, output, env_prefix, skip_docker, notify_enabled)
+            }
+            GenerateCommand::Cd {
+                path,
+                platform,
+                target,
+                registry,
+                image_name,
+                dry_run,
+                output,
+                force,
+            } => {
+                let mut properties = HashMap::new();
+                properties.insert(
+                    "cd_platform".to_string(),
+                    json!(format!("{:?}", platform).to_lowercase()),
+                );
+                if let Some(ref t) = target {
+                    properties.insert("cd_target".to_string(), json!(format!("{:?}", t).to_lowercase()));
+                }
+                if dry_run {
+                    properties.insert("dry_run".to_string(), json!(true));
+                }
+                if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                    telemetry_client.track_generate(properties);
+                }
+                handle_generate_cd(path, platform, target, registry, image_name, dry_run, output, force)
             }
         },
 

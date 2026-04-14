@@ -819,6 +819,41 @@ pub enum GenerateCommand {
         #[arg(long)]
         notify: bool,
     },
+
+    /// Generate a CD (deployment) pipeline skeleton for your project
+    Cd {
+        /// Path to the project directory
+        #[arg(value_name = "PROJECT_PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Cloud platform target for deployment
+        #[arg(long, value_enum)]
+        platform: CdPlatform,
+
+        /// Specific deploy target within the platform
+        #[arg(long, value_enum)]
+        target: Option<CdTarget>,
+
+        /// Container registry to use (defaults per platform)
+        #[arg(long, value_enum)]
+        registry: Option<CdRegistry>,
+
+        /// Docker image name (defaults to project name)
+        #[arg(long, value_name = "IMAGE_NAME")]
+        image_name: Option<String>,
+
+        /// Print the generated pipeline to stdout instead of writing files
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Output directory for generated pipeline files
+        #[arg(short, long, value_name = "OUTPUT_DIR")]
+        output: Option<PathBuf>,
+
+        /// Overwrite existing files
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 /// Cloud platform target for CI pipeline generation
@@ -841,6 +876,49 @@ pub enum CiFormat {
     AzurePipelines,
     /// Google Cloud Build (cloudbuild.yaml)
     CloudBuild,
+}
+
+/// Cloud platform for CD pipeline generation
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, serde::Serialize)]
+pub enum CdPlatform {
+    /// Microsoft Azure (App Service, AKS, Container Apps)
+    Azure,
+    /// Google Cloud Platform (Cloud Run, GKE)
+    Gcp,
+    /// Hetzner (VPS, Kubernetes, Coolify)
+    Hetzner,
+}
+
+/// Specific deploy target within a cloud platform
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, serde::Serialize)]
+pub enum CdTarget {
+    /// Azure App Service
+    AppService,
+    /// Azure Kubernetes Service
+    Aks,
+    /// Azure Container Apps
+    ContainerApps,
+    /// Google Cloud Run
+    CloudRun,
+    /// Google Kubernetes Engine
+    Gke,
+    /// Hetzner VPS (direct SSH deploy)
+    Vps,
+    /// Hetzner Kubernetes (k3s / managed)
+    HetznerK8s,
+    /// Coolify PaaS on Hetzner
+    Coolify,
+}
+
+/// Container registry for CD pipeline generation
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, serde::Serialize)]
+pub enum CdRegistry {
+    /// Azure Container Registry
+    Acr,
+    /// Google Artifact Registry
+    Gar,
+    /// GitHub Container Registry
+    Ghcr,
 }
 
 impl Cli {

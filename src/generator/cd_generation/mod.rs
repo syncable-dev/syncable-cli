@@ -19,6 +19,8 @@
 //! - `deploy_hetzner`  — Hetzner deploy steps: VPS, HetznerK8s, Coolify (CD-09)
 //! - `migration`       — Database migration step generator (CD-10)
 //! - `health_check`    — Post-deploy health check step (CD-11)
+//! - `templates`       — Full workflow YAML builders: Azure, GCP, Hetzner (CD-18/19/20)
+//! - `writer`          — CD file writer with conflict detection
 
 pub mod auth_azure;
 pub mod auth_gcp;
@@ -30,6 +32,9 @@ pub mod deploy_hetzner;
 pub mod health_check;
 pub mod manifest;
 pub mod migration;
+pub mod pipeline;
 pub mod registry;
 pub mod schema;
+pub mod templates;
 pub mod token_resolver;
+pub mod writer;

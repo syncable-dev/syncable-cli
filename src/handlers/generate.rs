@@ -648,3 +648,111 @@ pub fn handle_generate_ci(
 
     Ok(())
 }
+
+/// Collects project context, assembles a `CdPipeline`, renders it to YAML,
+/// and either prints it (dry-run) or writes it to disk.
+pub fn handle_generate_cd(
+    path: std::path::PathBuf,
+    platform: crate::cli::CdPlatform,
+    target: Option<crate::cli::CdTarget>,
+    registry: Option<crate::cli::CdRegistry>,
+    image_name: Option<String>,
+    dry_run: bool,
+    output: Option<std::path::PathBuf>,
+    force: bool,
+) -> crate::Result<()> {
+    use crate::generator::cd_generation::{
+        context::{
+            self, CdPlatform as CtxPlatform, DeployTarget, Registry,
+        },
+        pipeline::build_cd_pipeline,
+        templates,
+        token_resolver::resolve_tokens,
+        writer::{print_cd_dry_run, write_cd_files, CdFile},
+    };
+
+    // ── Map CLI enums to context enums ────────────────────────────────────
+    let ctx_platform = match platform {
+        crate::cli::CdPlatform::Azure => CtxPlatform::Azure,
+        crate::cli::CdPlatform::Gcp => CtxPlatform::Gcp,
+        crate::cli::CdPlatform::Hetzner => CtxPlatform::Hetzner,
+    };
+
+    let ctx_target = target.map(|t| match t {
+        crate::cli::CdTarget::AppService => DeployTarget::AppService,
+        crate::cli::CdTarget::Aks => DeployTarget::Aks,
+        crate::cli::CdTarget::ContainerApps => DeployTarget::ContainerApps,
+        crate::cli::CdTarget::CloudRun => DeployTarget::CloudRun,
+        crate::cli::CdTarget::Gke => DeployTarget::Gke,
+        crate::cli::CdTarget::Vps => DeployTarget::Vps,
+        crate::cli::CdTarget::HetznerK8s => DeployTarget::HetznerK8s,
+        crate::cli::CdTarget::Coolify => DeployTarget::Coolify,
+    });
+
+    let ctx_registry = registry.map(|r| match r {
+        crate::cli::CdRegistry::Acr => Registry::Acr,
+        crate::cli::CdRegistry::Gar => Registry::Gar,
+        crate::cli::CdRegistry::Ghcr => Registry::Ghcr,
+    });
+
+    // ── Context collection ────────────────────────────────────────────────
+    let ctx = context::collect_cd_context(
+        &path,
+        ctx_platform.clone(),
+        ctx_target,
+        None, // environments: use defaults
+        ctx_registry,
+        image_name,
+    )?;
+
+    // ── Pipeline assembly ─────────────────────────────────────────────────
+    let mut pipeline = build_cd_pipeline(&ctx);
+
+    // ── Token resolution (two-pass) ───────────────────────────────────────
+    resolve_tokens(&ctx, &mut pipeline);
+
+    // ── YAML rendering ────────────────────────────────────────────────────
+    let pipeline_yaml = match ctx_platform {
+        CtxPlatform::Azure => templates::azure::render(&pipeline),
+        CtxPlatform::Gcp => templates::gcp::render(&pipeline),
+        CtxPlatform::Hetzner => templates::hetzner::render(&pipeline),
+    };
+
+    // ── Manifest content ──────────────────────────────────────────────────
+    let manifest_content = toml::to_string_pretty(&pipeline).unwrap_or_default();
+
+    // ── Dry-run or write ──────────────────────────────────────────────────
+    let output_dir = output.unwrap_or_else(|| path.clone());
+
+    let files = vec![
+        CdFile::pipeline(pipeline_yaml, ctx_platform.clone()),
+        CdFile::manifest(manifest_content),
+    ];
+
+    if dry_run {
+        print_cd_dry_run(&files);
+    } else {
+        let summary = write_cd_files(&files, &output_dir, force)?;
+        println!(
+            "✅ CD pipeline generated — {} created, {} overwritten, {} skipped",
+            summary.created(), summary.overwritten(), summary.skipped(),
+        );
+    }
+
+    // ── Telemetry ─────────────────────────────────────────────────────────
+    if let Some(client) = crate::telemetry::get_telemetry_client() {
+        use serde_json::json;
+        let mut props = std::collections::HashMap::new();
+        props.insert("platform".to_string(), json!(format!("{:?}", ctx_platform)));
+        props.insert(
+            "deploy_target".to_string(),
+            json!(format!("{}", ctx.deploy_target)),
+        );
+        props.insert("registry".to_string(), json!(format!("{}", ctx.registry)));
+        props.insert("has_docker".to_string(), json!(ctx.has_dockerfile));
+        props.insert("has_migration".to_string(), json!(ctx.migration_tool.is_some()));
+        client.track_event("generate_cd", props);
+    }
+
+    Ok(())
+}
