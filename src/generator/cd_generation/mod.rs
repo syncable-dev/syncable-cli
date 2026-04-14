@@ -28,10 +28,13 @@
 //! - `terraform_step`  — Terraform init/plan/apply steps (CD-16)
 //! - `notification`    — Slack deployment notifications (CD-21)
 //! - `dispatch`        — Manual workflow_dispatch inputs (CD-29)
+//! - `secrets_doc`     — CD secrets inventory & Hetzner prerequisites (CD-27/28)
+//! - `cd_config`       — `.syncable.cd.toml` project-level config (CD-24)
 
 pub mod auth_azure;
 pub mod auth_gcp;
 pub mod auth_hetzner;
+pub mod cd_config;
 pub mod context;
 pub mod deploy_azure;
 pub mod deploy_gcp;
@@ -47,8 +50,12 @@ pub mod registry;
 pub mod reusable_workflow;
 pub mod rollback;
 pub mod schema;
+pub mod secrets_doc;
 pub mod templates;
 pub mod terraform_step;
 pub mod token_resolver;
 pub mod versioning;
 pub mod writer;
+
+#[cfg(test)]
+mod cd_tests;

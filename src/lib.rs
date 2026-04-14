@@ -81,6 +81,21 @@ pub async fn run_command(
             } => handlers::handle_generate_cd(
                 path, platform, target, registry, image_name, dry_run, output, force,
             ),
+            cli::GenerateCommand::CiCd {
+                path,
+                platform,
+                ci_format,
+                target,
+                registry,
+                image_name,
+                dry_run,
+                output,
+                force,
+                notify,
+            } => handlers::handle_generate_cicd(
+                path, platform, ci_format, target, registry, image_name, dry_run, output, force,
+                notify,
+            ),
         },
         Commands::Validate {
             path,

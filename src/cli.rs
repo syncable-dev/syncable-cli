@@ -854,6 +854,49 @@ pub enum GenerateCommand {
         #[arg(long)]
         force: bool,
     },
+
+    /// Generate both CI and CD pipelines in one shot
+    CiCd {
+        /// Path to the project directory
+        #[arg(value_name = "PROJECT_PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Cloud platform target
+        #[arg(long, value_enum)]
+        platform: CdPlatform,
+
+        /// CI pipeline file format (defaults to GitHub Actions)
+        #[arg(long, value_enum)]
+        ci_format: Option<CiFormat>,
+
+        /// Specific deploy target within the platform
+        #[arg(long, value_enum)]
+        target: Option<CdTarget>,
+
+        /// Container registry to use (defaults per platform)
+        #[arg(long, value_enum)]
+        registry: Option<CdRegistry>,
+
+        /// Docker image name (defaults to project name)
+        #[arg(long, value_name = "IMAGE_NAME")]
+        image_name: Option<String>,
+
+        /// Print the generated pipelines to stdout instead of writing files
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Output directory for generated pipeline files
+        #[arg(short, long, value_name = "OUTPUT_DIR")]
+        output: Option<PathBuf>,
+
+        /// Overwrite existing files
+        #[arg(long)]
+        force: bool,
+
+        /// Emit a Slack failure-notification step in the CI pipeline
+        #[arg(long)]
+        notify: bool,
+    },
 }
 
 /// Cloud platform target for CI pipeline generation
