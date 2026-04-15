@@ -142,6 +142,10 @@ pub fn merge_config_into_cd_context(config: &CdConfig, ctx: &mut CdContext) {
         ctx.health_check_path = Some(path.clone());
     }
 
+    if let Some(ref cmd) = config.migration_command {
+        ctx.migration_command_override = Some(cmd.clone());
+    }
+
     if let Some(ref branch) = config.default_branch {
         ctx.default_branch = branch.clone();
     }
@@ -429,6 +433,28 @@ mod tests {
     }
 
     #[test]
+    fn merge_migration_command() {
+        let cfg = parse_config(r#"migration_command = "bundle exec rails db:migrate""#);
+        let dir = TempDir::new().unwrap();
+        let mut ctx = make_test_context(dir.path());
+        assert!(ctx.migration_command_override.is_none());
+        merge_config_into_cd_context(&cfg, &mut ctx);
+        assert_eq!(
+            ctx.migration_command_override.as_deref(),
+            Some("bundle exec rails db:migrate")
+        );
+    }
+
+    #[test]
+    fn merge_migration_command_absent_leaves_none() {
+        let cfg = parse_config(r#"platform = "gcp""#);
+        let dir = TempDir::new().unwrap();
+        let mut ctx = make_test_context(dir.path());
+        merge_config_into_cd_context(&cfg, &mut ctx);
+        assert!(ctx.migration_command_override.is_none());
+    }
+
+    #[test]
     fn merge_empty_config_no_changes() {
         let cfg = parse_config("");
         let dir = TempDir::new().unwrap();
@@ -466,6 +492,7 @@ mod tests {
             has_helm_chart: false,
             helm_chart_dir: None,
             migration_tool: None,
+            migration_command_override: None,
             health_check_path: None,
             default_branch: "main".to_string(),
             has_dockerfile: false,

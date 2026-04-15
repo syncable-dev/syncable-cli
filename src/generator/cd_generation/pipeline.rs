@@ -86,6 +86,12 @@ pub fn build_cd_pipeline(ctx: &CdContext) -> CdPipeline {
     let via_ssh = ctx.deploy_target == DeployTarget::Vps;
     let migration_step =
         migration::generate_migration_step(ctx.migration_tool.as_ref(), via_ssh);
+    let migration_step = migration_step.map(|mut s| {
+        if let Some(ref cmd) = ctx.migration_command_override {
+            s.command = cmd.clone();
+        }
+        s
+    });
 
     // ── Health check step ─────────────────────────────────────────────────
     let health_check_step = health_check::generate_health_check(
@@ -219,6 +225,7 @@ mod tests {
             has_helm_chart: false,
             helm_chart_dir: None,
             migration_tool: None,
+            migration_command_override: None,
             health_check_path: Some("/health".to_string()),
             default_branch: "main".to_string(),
             has_dockerfile: true,
@@ -353,6 +360,29 @@ mod tests {
         ctx.migration_tool = Some(MigrationTool::Alembic);
         let pipeline = build_cd_pipeline(&ctx);
         assert!(pipeline.migration.as_ref().unwrap().via_ssh);
+    }
+
+    #[test]
+    fn migration_command_override_replaces_tool_default() {
+        use crate::generator::cd_generation::context::MigrationTool;
+        let mut ctx = sample_context(CdPlatform::Azure, DeployTarget::AppService);
+        ctx.migration_tool = Some(MigrationTool::Prisma);
+        ctx.migration_command_override = Some("npx prisma migrate deploy --schema=custom/schema.prisma".to_string());
+        let pipeline = build_cd_pipeline(&ctx);
+        let step = pipeline.migration.expect("migration step should be present");
+        assert_eq!(
+            step.command,
+            "npx prisma migrate deploy --schema=custom/schema.prisma"
+        );
+    }
+
+    #[test]
+    fn migration_command_override_without_tool_produces_no_step() {
+        let mut ctx = sample_context(CdPlatform::Azure, DeployTarget::AppService);
+        ctx.migration_command_override = Some("custom-migrate".to_string());
+        // No migration_tool → generate_migration_step returns None, override is not applied
+        let pipeline = build_cd_pipeline(&ctx);
+        assert!(pipeline.migration.is_none());
     }
 
     // ── Docker build ──────────────────────────────────────────────────────

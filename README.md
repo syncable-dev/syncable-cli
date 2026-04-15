@@ -65,6 +65,15 @@ sync-ctl analyze .
 sync-ctl generate ci . --platform gcp --dry-run   # preview without writing files
 sync-ctl generate ci . --platform azure            # write azure-pipelines.yml
 sync-ctl generate ci . --platform hetzner --notify # with Slack failure alert
+
+# Generate a CD pipeline skeleton
+sync-ctl generate cd . --platform gcp --target cloud-run --dry-run
+sync-ctl generate cd . --platform azure --target aks -o ./pipelines
+sync-ctl generate cd . --platform hetzner --target vps --notify
+
+# Generate both CI + CD in one shot
+sync-ctl generate ci-cd . --platform gcp --target cloud-run --dry-run
+sync-ctl generate ci-cd . --platform hetzner --target vps --notify
 ```
 
 ## 🤖 AI Agent Skills

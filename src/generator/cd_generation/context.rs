@@ -151,6 +151,9 @@ pub struct CdContext {
     pub helm_chart_dir: Option<PathBuf>,
     /// Database migration tool detected, if any.
     pub migration_tool: Option<MigrationTool>,
+    /// Custom migration command from `.syncable.cd.toml`, overrides the
+    /// tool-derived default when set.
+    pub migration_command_override: Option<String>,
     /// Health check endpoint path (e.g. `/health`, `/healthz`).
     pub health_check_path: Option<String>,
     /// Default git branch name.
@@ -470,6 +473,7 @@ pub fn collect_cd_context(
         has_helm_chart,
         helm_chart_dir,
         migration_tool,
+        migration_command_override: None,
         health_check_path,
         default_branch,
         has_dockerfile,

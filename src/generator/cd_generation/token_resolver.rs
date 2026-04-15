@@ -239,6 +239,7 @@ mod tests {
             has_helm_chart: false,
             helm_chart_dir: None,
             migration_tool: None,
+            migration_command_override: None,
             health_check_path: Some("/health".to_string()),
             default_branch: "main".to_string(),
             has_dockerfile: true,
