@@ -102,8 +102,7 @@ fn render_auth_step(pipeline: &CdPipeline) -> String {
         .unwrap_or("google-github-actions/auth@v2");
 
     format!(
-        "\
-      - name: Authenticate to Google Cloud
+        "      - name: Authenticate to Google Cloud
         id: auth
         uses: {action}
         with:
@@ -116,16 +115,14 @@ fn render_auth_step(pipeline: &CdPipeline) -> String {
 }
 
 fn render_gar_docker_auth() -> String {
-    "\
-      - name: Configure Docker for Artifact Registry
+    "      - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ secrets.GAR_LOCATION }}-docker.pkg.dev --quiet\n\n"
         .to_string()
 }
 
 fn render_docker_step(pipeline: &CdPipeline) -> String {
     format!(
-        "\
-      - name: Set up Docker Buildx
+        "      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push Docker image
@@ -148,8 +145,7 @@ fn render_migration_step(
 ) -> String {
     if migration.via_ssh {
         format!(
-            "\
-      - name: Run database migrations ({tool}) via SSH
+            "      - name: Run database migrations ({tool}) via SSH
         run: |
           ssh ${{{{ secrets.SSH_USER }}}}@${{{{ secrets.SSH_HOST }}}} << 'MIGRATE_EOF'
             cd /opt/app && {command}
@@ -161,8 +157,7 @@ fn render_migration_step(
         )
     } else {
         format!(
-            "\
-      - name: Run database migrations ({tool})
+            "      - name: Run database migrations ({tool})
         run: {command}
         env:
           DATABASE_URL: ${{{{ secrets.DATABASE_URL }}}}\n\n",
@@ -175,8 +170,7 @@ fn render_migration_step(
 fn render_deploy_step(pipeline: &CdPipeline) -> String {
     match pipeline.deploy_target {
         DeployTarget::CloudRun => format!(
-            "\
-      - name: Deploy to Cloud Run
+            "      - name: Deploy to Cloud Run
         id: deploy
         uses: google-github-actions/deploy-cloudrun@v2
         with:
@@ -186,8 +180,7 @@ fn render_deploy_step(pipeline: &CdPipeline) -> String {
             image_tag = pipeline.docker_build_push.image_tag,
         ),
         DeployTarget::Gke => format!(
-            "\
-      - name: Get GKE credentials
+            "      - name: Get GKE credentials
         uses: google-github-actions/get-gke-credentials@v2
         with:
           cluster_name: ${{{{ secrets.GKE_CLUSTER_NAME }}}}
@@ -204,8 +197,7 @@ fn render_deploy_step(pipeline: &CdPipeline) -> String {
             image_tag = pipeline.docker_build_push.image_tag,
         ),
         _ => format!(
-            "\
-      - name: Deploy ({target})
+            "      - name: Deploy ({target})
         run: echo 'Deploy step for {target} — customize this step'
         env:
           IMAGE_TAG: {image_tag}\n\n",
@@ -219,8 +211,7 @@ fn render_health_check_step(pipeline: &CdPipeline) -> String {
     if is_kubectl_health_check(&pipeline.deploy_target) {
         let timeout = pipeline.health_check.retries * pipeline.health_check.interval_secs;
         format!(
-            "\
-      - name: Health check — rollout status
+            "      - name: Health check — rollout status
         run: |
           kubectl rollout status deployment/${{{{ secrets.K8S_DEPLOYMENT_NAME }}}} \\
             --namespace=${{{{ secrets.K8S_NAMESPACE }}}} \\
@@ -228,8 +219,7 @@ fn render_health_check_step(pipeline: &CdPipeline) -> String {
         )
     } else if matches!(pipeline.deploy_target, DeployTarget::CloudRun) {
         format!(
-            "\
-      - name: Health check
+            "      - name: Health check
         run: |
           curl --fail \\
             --retry {retries} \\
@@ -242,8 +232,7 @@ fn render_health_check_step(pipeline: &CdPipeline) -> String {
         )
     } else {
         format!(
-            "\
-      - name: Health check
+            "      - name: Health check
         run: |
           curl --fail \\
             --retry {retries} \\

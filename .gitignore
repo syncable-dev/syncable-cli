@@ -48,3 +48,10 @@ syncable-ide-companion/dist/
 
 .DS_Store
 **/.DS_Store
+
+# Generated CD/CI pipeline output (sync-ctl generate cd/ci)
+.github/workflows/deploy-azure.yml
+.github/workflows/deploy-gcp.yml
+.github/workflows/deploy-hetzner.yml
+.syncable/cd-manifest.toml
+.syncable/SECRETS_REQUIRED.md

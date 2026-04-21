@@ -108,8 +108,7 @@ env:
 }
 
 fn render_ghcr_login() -> String {
-    "\
-      - name: Log in to GitHub Container Registry
+    "      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -120,8 +119,7 @@ fn render_ghcr_login() -> String {
 
 fn render_docker_step(pipeline: &CdPipeline) -> String {
     format!(
-        "\
-      - name: Set up Docker Buildx
+        "      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push Docker image
@@ -140,8 +138,7 @@ fn render_docker_step(pipeline: &CdPipeline) -> String {
 }
 
 fn render_ssh_agent() -> String {
-    "\
-      - name: Set up SSH agent
+    "      - name: Set up SSH agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}\n\n"
@@ -149,8 +146,7 @@ fn render_ssh_agent() -> String {
 }
 
 fn render_kubeconfig() -> String {
-    "\
-      - name: Set up kubeconfig
+    "      - name: Set up kubeconfig
         run: |
           mkdir -p ~/.kube
           echo \"${{ secrets.KUBECONFIG }}\" > ~/.kube/config
@@ -163,8 +159,7 @@ fn render_migration_step(
 ) -> String {
     if migration.via_ssh {
         format!(
-            "\
-      - name: Run database migrations ({tool}) via SSH
+            "      - name: Run database migrations ({tool}) via SSH
         run: |
           ssh ${{{{ secrets.SSH_USER }}}}@${{{{ secrets.SSH_HOST }}}} << 'MIGRATE_EOF'
             cd /opt/app && {command}
@@ -176,8 +171,7 @@ fn render_migration_step(
         )
     } else {
         format!(
-            "\
-      - name: Run database migrations ({tool})
+            "      - name: Run database migrations ({tool})
         run: {command}
         env:
           DATABASE_URL: ${{{{ secrets.DATABASE_URL }}}}\n\n",
@@ -190,8 +184,7 @@ fn render_migration_step(
 fn render_deploy_step(pipeline: &CdPipeline) -> String {
     match pipeline.deploy_target {
         DeployTarget::Vps => format!(
-            "\
-      - name: Deploy to VPS via SSH
+            "      - name: Deploy to VPS via SSH
         run: |
           ssh ${{{{ secrets.SSH_USER }}}}@${{{{ secrets.SSH_HOST }}}} << 'DEPLOY_EOF'
             docker pull {image_tag}
@@ -200,8 +193,7 @@ fn render_deploy_step(pipeline: &CdPipeline) -> String {
             image_tag = pipeline.docker_build_push.image_tag,
         ),
         DeployTarget::HetznerK8s => format!(
-            "\
-      - name: Deploy to Hetzner Kubernetes
+            "      - name: Deploy to Hetzner Kubernetes
         run: |
           kubectl set image deployment/${{{{ secrets.K8S_DEPLOYMENT_NAME }}}} \\
             ${{{{ secrets.K8S_DEPLOYMENT_NAME }}}}={image_tag} \\
@@ -211,14 +203,12 @@ fn render_deploy_step(pipeline: &CdPipeline) -> String {
             --timeout=300s\n\n",
             image_tag = pipeline.docker_build_push.image_tag,
         ),
-        DeployTarget::Coolify => "\
-      - name: Deploy via Coolify webhook
+        DeployTarget::Coolify => "      - name: Deploy via Coolify webhook
         run: |
           curl -fsSL -X POST ${{ secrets.COOLIFY_WEBHOOK_URL }}\n\n"
             .to_string(),
         _ => format!(
-            "\
-      - name: Deploy ({target})
+            "      - name: Deploy ({target})
         run: echo 'Deploy step for {target} — customize this step'
         env:
           IMAGE_TAG: {image_tag}\n\n",
@@ -232,8 +222,7 @@ fn render_health_check_step(pipeline: &CdPipeline) -> String {
     if is_kubectl_health_check(&pipeline.deploy_target) {
         let timeout = pipeline.health_check.retries * pipeline.health_check.interval_secs;
         format!(
-            "\
-      - name: Health check — rollout status
+            "      - name: Health check — rollout status
         run: |
           kubectl rollout status deployment/${{{{ secrets.K8S_DEPLOYMENT_NAME }}}} \\
             --namespace=${{{{ secrets.K8S_NAMESPACE }}}} \\
@@ -241,8 +230,7 @@ fn render_health_check_step(pipeline: &CdPipeline) -> String {
         )
     } else {
         format!(
-            "\
-      - name: Health check
+            "      - name: Health check
         run: |
           curl --fail \\
             --retry {retries} \\
