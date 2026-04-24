@@ -1,6 +1,8 @@
 use crate::analyzer::ProjectAnalysis;
 use crate::error::Result;
 
+pub mod cd_generation;
+pub mod ci_generation;
 pub mod compose_gen;
 pub mod dockerfile_gen;
 pub mod templates;

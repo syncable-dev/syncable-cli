@@ -7,7 +7,10 @@ This document provides a comprehensive reference for all Syncable CLI commands, 
 - [Global Options](#-global-options)
 - [Commands](#-commands)
   - [analyze](#1-sync-ctl-analyze) - Project analysis
-  - [generate](#2-sync-ctl-generate) - IaC generation
+  - [generate iac](#2-sync-ctl-generate) - IaC generation (Dockerfile, Compose, Terraform)
+  - [generate ci](#2b-sync-ctl-generate-ci-project_path) - CI pipeline generation
+  - [generate cd](#2c-sync-ctl-generate-cd-project_path) - CD pipeline generation
+  - [generate ci-cd](#2d-sync-ctl-generate-ci-cd-project_path) - Combined CI+CD generation
   - [validate](#3-sync-ctl-validate) - IaC validation (planned)
   - [support](#4-sync-ctl-support) - Show supported tech
   - [dependencies](#5-sync-ctl-dependencies) - Dependency analysis
@@ -161,6 +164,239 @@ sync-ctl generate . --all --force
 **Status:** 🚧 In Development
 - Basic generation implemented
 - Enhanced monorepo generation with per-project IaC files coming soon
+
+---
+
+### 2b. `sync-ctl generate ci <PROJECT_PATH>`
+
+Generate a CI pipeline skeleton for GitHub Actions, Azure Pipelines, or Google Cloud Build from automatic project analysis. The command detects the language, runtime version, package manager, test framework, linter, build script, and Dockerfile presence — then produces a ready-to-use YAML file with `{{PLACEHOLDER}}` tokens only where values cannot be inferred from project files.
+
+**Arguments:**
+- `<PROJECT_PATH>` — Path to the project directory to analyse
+
+**Options:**
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--platform <azure\|gcp\|hetzner>` | | Target cloud platform (required) |
+| `--format <github-actions\|azure-pipelines\|cloud-build>` | | Override the default format for the chosen platform |
+| `--dry-run` | | Print generated YAML to stdout; do not write any files |
+| `--output <DIR>` | `-o` | Write files to this directory instead of the project root |
+| `--env-prefix <PREFIX>` | | Prefix for secret/env variable names (default: `APP`) |
+| `--skip-docker` | | Omit Docker build steps even when a Dockerfile is detected |
+| `--notify` | | Append a Slack failure-notification step (requires `SLACK_BOT_TOKEN` and `SLACK_CHANNEL_ID` secrets) |
+
+**Platform defaults:**
+
+| Platform | Default format | Pipeline file written |
+|----------|---------------|----------------------|
+| `azure` | `azure-pipelines` | `azure-pipelines.yml` |
+| `gcp` | `cloud-build` | `cloudbuild.yaml` |
+| `hetzner` | `github-actions` | `.github/workflows/ci.yml` |
+
+**CI steps generated (canonical order):**
+
+| Step | Condition |
+|------|-----------|
+| Trigger config (push/PR branches, optional tag trigger) | Always |
+| Checkout | Always |
+| Runtime setup (language version) | Always |
+| Dependency cache | Only when a lock file is detected |
+| Install | Always |
+| Lint | Only when a linter config file is detected |
+| Test + coverage | Always |
+| Build | Only when a build command is detected |
+| Docker build | Only when `has_dockerfile = true` and `--skip-docker` is not set |
+| Container image scan (Trivy) | Only when Docker build is present |
+| Secret leak scan (Gitleaks) | Always |
+| Artifact upload | Only when a build artifact path is known |
+| Slack notify on failure | Only with `--notify` |
+
+**Output files:**
+
+```
+.github/workflows/ci.yml          (GitHub Actions)
+azure-pipelines.yml               (Azure Pipelines)
+cloudbuild.yaml                   (Cloud Build)
+.syncable/SECRETS_REQUIRED.md     (all platforms — secret setup instructions)
+```
+
+**Examples:**
+
+```bash
+# Preview a GitHub Actions pipeline for a GCP-hosted project
+sync-ctl generate ci . --platform gcp --dry-run
+
+# Write Azure Pipelines config
+sync-ctl generate ci . --platform azure
+
+# Cloud Build with Slack notifications
+sync-ctl generate ci . --platform gcp --notify
+
+# Skip Docker steps, custom output directory
+sync-ctl generate ci . --platform hetzner --skip-docker --output ./ci/
+
+# Custom secret prefix (secrets become MY_APP_REGISTRY_URL etc.)
+sync-ctl generate ci . --platform azure --env-prefix MY_APP
+```
+
+**Unresolved tokens:** When a value cannot be inferred (e.g. no `.nvmrc` exists for a Node project), the generated YAML contains a `{{PLACEHOLDER}}` and `.syncable/SECRETS_REQUIRED.md` lists what needs to be filled in.
+
+**Status:** ✅ Implemented (EPIC 1 complete)
+
+---
+
+### 2c. `sync-ctl generate cd <PROJECT_PATH>`
+
+Generate a CD (Continuous Deployment) pipeline skeleton for GitHub Actions from automatic project analysis. Detects Dockerfile presence, Terraform and Helm charts, migration tooling, and existing Kubernetes manifests — then produces a deployment workflow with environment gates, health checks, rollback comments, and a `SECRETS_REQUIRED.md` listing every credential needed.
+
+**Arguments:**
+- `<PROJECT_PATH>` — Path to the project directory to analyse (default: `.`)
+
+**Options:**
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--platform <azure\|gcp\|hetzner>` | | Target cloud platform (required) |
+| `--target <TARGET>` | | Specific deploy target within the platform (see table below) |
+| `--registry <acr\|gar\|ghcr>` | | Container registry override (defaults per platform) |
+| `--image-name <NAME>` | | Docker image name (defaults to project directory name) |
+| `--dry-run` | | Print generated YAML to stdout; do not write any files |
+| `--output <DIR>` | `-o` | Write files to this directory instead of the project root |
+| `--force` | | Overwrite existing pipeline files |
+
+**Platform targets:**
+
+| Platform | Target | Deploy mechanism |
+|----------|--------|-----------------|
+| `azure` | `app-service` (default) | `az webapp deploy` |
+| `azure` | `aks` | `azure/k8s-deploy@v5` + `kubectl` |
+| `azure` | `container-apps` | `az containerapp update` |
+| `gcp` | `cloud-run` (default) | `gcloud run deploy` |
+| `gcp` | `gke` | `gcloud container clusters get-credentials` + `kubectl` |
+| `hetzner` | `vps` (default) | SSH + `docker compose pull && up -d` |
+| `hetzner` | `hetzner-k8s` | kubeconfig + `kubectl apply` |
+| `hetzner` | `coolify` | Coolify webhook deploy |
+
+**Registry defaults per platform:**
+
+| Platform | Default registry |
+|----------|-----------------|
+| `azure` | ACR (Azure Container Registry) |
+| `gcp` | GAR (Google Artifact Registry) |
+| `hetzner` | GHCR (GitHub Container Registry) |
+
+**CD steps generated (canonical order):**
+
+| Step | Condition |
+|------|-----------|
+| Trigger (push to default branch + `workflow_dispatch`) | Always |
+| Checkout | Always |
+| Platform authentication (OIDC/SSH) | Always |
+| Container registry login | Always |
+| Docker build + push | Only when `has_dockerfile = true` |
+| Terraform init/plan/apply | Only when Terraform directory is detected |
+| Database migration | Only when migration tool is detected (Prisma, Flyway, Alembic, etc.) |
+| Deploy (platform-specific) | Always |
+| Health check (post-deploy) | Always |
+| Slack notification | Wired up; requires `SLACK_WEBHOOK_URL` secret |
+| Rollback strategy comment | Always (documents `kubectl rollout undo` / `az webapp deployment slot swap` etc.) |
+
+**Multi-environment structure:** Every generated pipeline includes a `staging` and `production` job. Production requires a GitHub environment approval gate (`environment: production`).
+
+**Output files:**
+
+```
+.github/workflows/deploy-<platform>.yml     CD workflow
+.syncable/cd-manifest.toml                  Machine-readable context + unresolved tokens
+.syncable/SECRETS_REQUIRED.md               Per-platform secret setup instructions
+```
+
+**Project-level config (`.syncable.cd.toml`):**
+
+Override any detected value without CLI flags by placing a config file at the project root:
+
+```toml
+platform = "azure"
+target = "aks"
+registry = "acr"
+image_name = "my-api"
+health_check_path = "/api/health"
+default_branch = "main"
+environments = ["staging", "production"]
+```
+
+Priority order: auto-detected value → config file → CLI flag.
+
+**Examples:**
+
+```bash
+# Preview CD pipeline for Azure App Service
+sync-ctl generate cd . --platform azure --dry-run
+
+# Write GCP Cloud Run pipeline
+sync-ctl generate cd . --platform gcp --target cloud-run
+
+# Hetzner VPS deploy with custom image name
+sync-ctl generate cd . --platform hetzner --target vps --image-name my-api
+
+# AKS deploy, write to a specific directory
+sync-ctl generate cd . --platform azure --target aks -o ./pipelines --force
+```
+
+**Status:** ✅ Implemented (EPIC 2 complete)
+
+---
+
+### 2d. `sync-ctl generate ci-cd <PROJECT_PATH>`
+
+Generate both CI and CD pipelines in one shot. Runs both generators from a single project analysis, cross-links the `IMAGE_TAG` environment variable between CI and CD outputs, and produces a single merged `SECRETS_REQUIRED.md` covering all secrets for both pipelines.
+
+**Arguments:**
+- `<PROJECT_PATH>` — Path to the project directory to analyse (default: `.`)
+
+**Options:**
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--platform <azure\|gcp\|hetzner>` | | Target cloud platform (required) |
+| `--ci-format <github-actions\|azure-pipelines\|cloud-build>` | | Override CI format (defaults to platform convention) |
+| `--target <TARGET>` | | CD deploy target (same options as `generate cd`) |
+| `--registry <acr\|gar\|ghcr>` | | Container registry override |
+| `--image-name <NAME>` | | Docker image name |
+| `--dry-run` | | Print both pipelines to stdout; do not write files |
+| `--output <DIR>` | `-o` | Write all files to this directory |
+| `--force` | | Overwrite existing files |
+| `--notify` | | Append a Slack failure-notification step in the CI pipeline |
+
+**Output files:**
+
+```
+.github/workflows/ci.yml                    CI workflow (GitHub Actions)
+.github/workflows/deploy-<platform>.yml     CD workflow
+azure-pipelines.yml                         CI workflow (Azure Pipelines, if platform=azure)
+cloudbuild.yaml                             CI workflow (Cloud Build, if platform=gcp)
+.syncable/cd-manifest.toml                  CD context + unresolved tokens
+.syncable/SECRETS_REQUIRED.md               Merged CI + CD secrets documentation
+```
+
+**Examples:**
+
+```bash
+# Preview both pipelines for Azure AKS
+sync-ctl generate ci-cd . --platform azure --target aks --dry-run
+
+# Write GCP Cloud Run CI+CD, with Slack notifications on CI failure
+sync-ctl generate ci-cd . --platform gcp --target cloud-run --notify
+
+# Hetzner VPS, write to a temp directory
+sync-ctl generate ci-cd . --platform hetzner --target vps -o /tmp/pipelines --force
+
+# Azure, override CI format to GitHub Actions instead of Azure Pipelines
+sync-ctl generate ci-cd . --platform azure --ci-format github-actions --dry-run
+```
+
+**Status:** ✅ Implemented (CD-23)
 
 ---
 

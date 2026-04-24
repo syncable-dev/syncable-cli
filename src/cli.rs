@@ -70,39 +70,10 @@ pub enum Commands {
         agent: bool,
     },
 
-    /// Generate IaC files for a project
+    /// Generate files for a project (IaC, CI pipelines, and more)
     Generate {
-        /// Path to the project directory to analyze
-        #[arg(value_name = "PROJECT_PATH")]
-        path: PathBuf,
-
-        /// Output directory for generated files
-        #[arg(short, long, value_name = "OUTPUT_DIR")]
-        output: Option<PathBuf>,
-
-        /// Generate Dockerfile
-        #[arg(long)]
-        dockerfile: bool,
-
-        /// Generate Docker Compose file
-        #[arg(long)]
-        compose: bool,
-
-        /// Generate Terraform configuration
-        #[arg(long)]
-        terraform: bool,
-
-        /// Generate all supported IaC files
-        #[arg(long, conflicts_with_all = ["dockerfile", "compose", "terraform"])]
-        all: bool,
-
-        /// Perform a dry run without creating files
-        #[arg(long)]
-        dry_run: bool,
-
-        /// Overwrite existing files
-        #[arg(long)]
-        force: bool,
+        #[command(subcommand)]
+        command: GenerateCommand,
     },
 
     /// Validate existing IaC files against best practices
@@ -774,6 +745,223 @@ pub enum ChatProvider {
     /// Use saved default from config file
     #[default]
     Auto,
+}
+
+/// Generate subcommands
+#[derive(Subcommand)]
+pub enum GenerateCommand {
+    /// Generate IaC files (Dockerfile, Docker Compose, Terraform)
+    Iac {
+        /// Path to the project directory to analyze
+        #[arg(value_name = "PROJECT_PATH")]
+        path: PathBuf,
+
+        /// Output directory for generated files
+        #[arg(short, long, value_name = "OUTPUT_DIR")]
+        output: Option<PathBuf>,
+
+        /// Generate Dockerfile
+        #[arg(long)]
+        dockerfile: bool,
+
+        /// Generate Docker Compose file
+        #[arg(long)]
+        compose: bool,
+
+        /// Generate Terraform configuration
+        #[arg(long)]
+        terraform: bool,
+
+        /// Generate all supported IaC files
+        #[arg(long, conflicts_with_all = ["dockerfile", "compose", "terraform"])]
+        all: bool,
+
+        /// Perform a dry run without creating files
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Overwrite existing files
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Generate a CI pipeline skeleton for your project
+    Ci {
+        /// Path to the project directory
+        #[arg(value_name = "PROJECT_PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Cloud platform target for the pipeline
+        #[arg(long, value_enum)]
+        platform: CiPlatform,
+
+        /// Pipeline file format (defaults to canonical format for the chosen platform)
+        #[arg(long, value_enum)]
+        format: Option<CiFormat>,
+
+        /// Print the generated pipeline to stdout instead of writing files
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Output directory for generated pipeline files
+        #[arg(short, long, value_name = "OUTPUT_DIR")]
+        output: Option<PathBuf>,
+
+        /// Prefix applied to all environment variable and secret names
+        #[arg(long, value_name = "PREFIX")]
+        env_prefix: Option<String>,
+
+        /// Omit Docker build steps even when a Dockerfile is detected
+        #[arg(long)]
+        skip_docker: bool,
+
+        /// Emit a Slack failure-notification step in the generated pipeline
+        #[arg(long)]
+        notify: bool,
+    },
+
+    /// Generate a CD (deployment) pipeline skeleton for your project
+    Cd {
+        /// Path to the project directory
+        #[arg(value_name = "PROJECT_PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Cloud platform target for deployment
+        #[arg(long, value_enum)]
+        platform: CdPlatform,
+
+        /// Specific deploy target within the platform
+        #[arg(long, value_enum)]
+        target: Option<CdTarget>,
+
+        /// Container registry to use (defaults per platform)
+        #[arg(long, value_enum)]
+        registry: Option<CdRegistry>,
+
+        /// Docker image name (defaults to project name)
+        #[arg(long, value_name = "IMAGE_NAME")]
+        image_name: Option<String>,
+
+        /// Print the generated pipeline to stdout instead of writing files
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Output directory for generated pipeline files
+        #[arg(short, long, value_name = "OUTPUT_DIR")]
+        output: Option<PathBuf>,
+
+        /// Overwrite existing files
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Generate both CI and CD pipelines in one shot
+    CiCd {
+        /// Path to the project directory
+        #[arg(value_name = "PROJECT_PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Cloud platform target
+        #[arg(long, value_enum)]
+        platform: CdPlatform,
+
+        /// CI pipeline file format (defaults to GitHub Actions)
+        #[arg(long, value_enum)]
+        ci_format: Option<CiFormat>,
+
+        /// Specific deploy target within the platform
+        #[arg(long, value_enum)]
+        target: Option<CdTarget>,
+
+        /// Container registry to use (defaults per platform)
+        #[arg(long, value_enum)]
+        registry: Option<CdRegistry>,
+
+        /// Docker image name (defaults to project name)
+        #[arg(long, value_name = "IMAGE_NAME")]
+        image_name: Option<String>,
+
+        /// Print the generated pipelines to stdout instead of writing files
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Output directory for generated pipeline files
+        #[arg(short, long, value_name = "OUTPUT_DIR")]
+        output: Option<PathBuf>,
+
+        /// Overwrite existing files
+        #[arg(long)]
+        force: bool,
+
+        /// Emit a Slack failure-notification step in the CI pipeline
+        #[arg(long)]
+        notify: bool,
+    },
+}
+
+/// Cloud platform target for CI pipeline generation
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, serde::Serialize)]
+pub enum CiPlatform {
+    /// Microsoft Azure (Azure Pipelines)
+    Azure,
+    /// Google Cloud Platform (Cloud Build)
+    Gcp,
+    /// Hetzner (GitHub Actions on Hetzner-hosted runners)
+    Hetzner,
+}
+
+/// CI pipeline file format
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, serde::Serialize)]
+pub enum CiFormat {
+    /// GitHub Actions workflow (.github/workflows/ci.yml)
+    GithubActions,
+    /// Azure Pipelines (azure-pipelines.yml)
+    AzurePipelines,
+    /// Google Cloud Build (cloudbuild.yaml)
+    CloudBuild,
+}
+
+/// Cloud platform for CD pipeline generation
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, serde::Serialize)]
+pub enum CdPlatform {
+    /// Microsoft Azure (App Service, AKS, Container Apps)
+    Azure,
+    /// Google Cloud Platform (Cloud Run, GKE)
+    Gcp,
+    /// Hetzner (VPS, Kubernetes, Coolify)
+    Hetzner,
+}
+
+/// Specific deploy target within a cloud platform
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, serde::Serialize)]
+pub enum CdTarget {
+    /// Azure App Service
+    AppService,
+    /// Azure Kubernetes Service
+    Aks,
+    /// Azure Container Apps
+    ContainerApps,
+    /// Google Cloud Run
+    CloudRun,
+    /// Google Kubernetes Engine
+    Gke,
+    /// Hetzner VPS (direct SSH deploy)
+    Vps,
+    /// Hetzner Kubernetes (k3s / managed)
+    HetznerK8s,
+    /// Coolify PaaS on Hetzner
+    Coolify,
+}
+
+/// Container registry for CD pipeline generation
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, serde::Serialize)]
+pub enum CdRegistry {
+    /// Azure Container Registry
+    Acr,
+    /// Google Artifact Registry
+    Gar,
+    /// GitHub Container Registry
+    Ghcr,
 }
 
 impl Cli {

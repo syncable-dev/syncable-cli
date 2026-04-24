@@ -1,6 +1,6 @@
 [package]
 name = "syncable-cli"
-version = "0.36.0"
+version = "0.37.1"
 edition = "2024"
 rust-version = "1.88"  # MSRV - AWS SDK requires 1.88
 authors = ["Syncable Team"]
@@ -125,6 +125,7 @@ assert_cmd = "2"
 predicates = "3"
 tempfile = "3"
 proptest = "1"
+insta = { version = "1", features = ["yaml"] }
 
 # Fast debug builds - prioritize compile speed over runtime
 [profile.dev]
