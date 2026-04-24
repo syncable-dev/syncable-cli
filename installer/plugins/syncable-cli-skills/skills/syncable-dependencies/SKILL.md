@@ -1,9 +1,5 @@
 ---
-name: syncable-dependencies
-description: Use when the user asks to audit dependencies, check licenses, list packages, review dependency health, check for copyleft issues, or see prod vs dev dependency split
-allowed-tools:
-  - Bash
-user-invocable: true
+description: "Use when the user asks to audit dependencies, check licenses, list packages, review dependency health, check for copyleft issues, or see prod vs dev dependency split"
 ---
 
 ## Overview

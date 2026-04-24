@@ -1,9 +1,5 @@
 ---
-name: syncable-optimize
-description: Use when the user asks to optimize Kubernetes resources, right-size pods, estimate cluster costs, detect over-provisioned containers, analyze resource waste, or check K8s configuration drift
-allowed-tools:
-  - Bash
-user-invocable: true
+description: "Use when the user asks to optimize Kubernetes resources, right-size pods, estimate cluster costs, detect over-provisioned containers, analyze resource waste, or check K8s configuration drift"
 ---
 
 ## Overview

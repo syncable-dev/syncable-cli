@@ -1,9 +1,5 @@
 ---
-name: syncable-platform
-description: Use when the user asks to log in to Syncable, authenticate, switch projects or organizations, check current context, deploy a service, check deployment status, or manage platform settings
-allowed-tools:
-  - Bash
-user-invocable: true
+description: "Use when the user asks to log in to Syncable, authenticate, switch projects or organizations, check current context, deploy a service, check deployment status, or manage platform settings"
 ---
 
 ## Overview

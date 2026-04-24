@@ -1,9 +1,5 @@
 ---
-name: syncable-deploy-pipeline
-description: Use when the user asks to deploy through Syncable, ship to production, push to staging, run a deploy pipeline, or deploy a service with security checks first
-allowed-tools:
-  - Bash
-user-invocable: true
+description: "Use when the user asks to deploy through Syncable, ship to production, push to staging, run a deploy pipeline, or deploy a service with security checks first"
 ---
 
 ## Overview

@@ -1,9 +1,5 @@
 ---
-name: syncable-validate
-description: Use when the user asks to validate Dockerfiles, lint Docker Compose files, check Kubernetes manifests, validate Terraform configs, lint IaC files, or review infrastructure-as-code
-allowed-tools:
-  - Bash
-user-invocable: true
+description: "Use when the user asks to validate Dockerfiles, lint Docker Compose files, check Kubernetes manifests, validate Terraform configs, lint IaC files, or review infrastructure-as-code"
 ---
 
 ## Overview

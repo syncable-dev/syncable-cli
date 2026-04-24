@@ -1,9 +1,5 @@
 ---
-name: syncable-security-audit
-description: Use when the user asks for a security audit, pre-deployment security review, compliance check, thorough security assessment before shipping, or deep security scan for production readiness
-allowed-tools:
-  - Bash
-user-invocable: true
+description: "Use when the user asks for a security audit, pre-deployment security review, compliance check, thorough security assessment before shipping, or deep security scan for production readiness"
 ---
 
 ## Overview

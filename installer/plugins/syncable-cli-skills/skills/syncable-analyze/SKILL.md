@@ -1,9 +1,5 @@
 ---
-name: syncable-analyze
-description: Use when the user asks to analyze a project, understand the tech stack, detect frameworks, check what languages are used, identify runtimes or package managers, or as a first step before security/vulnerability scans
-allowed-tools:
-  - Bash
-user-invocable: true
+description: "Use when the user asks to analyze a project, understand the tech stack, detect frameworks, check what languages are used, identify runtimes or package managers, or as a first step before security/vulnerability scans"
 ---
 
 ## Overview

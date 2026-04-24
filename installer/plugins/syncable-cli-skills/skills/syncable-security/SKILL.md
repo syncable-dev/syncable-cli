@@ -1,9 +1,5 @@
 ---
-name: syncable-security
-description: Use when the user asks to scan for secrets, find leaked credentials, check for API keys in code, detect hardcoded passwords, review code security, or run a secrets scan
-allowed-tools:
-  - Bash
-user-invocable: true
+description: "Use when the user asks to scan for secrets, find leaked credentials, check for API keys in code, detect hardcoded passwords, review code security, or run a secrets scan"
 ---
 
 ## Overview

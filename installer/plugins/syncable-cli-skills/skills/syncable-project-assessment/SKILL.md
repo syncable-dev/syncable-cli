@@ -1,9 +1,5 @@
 ---
-name: syncable-project-assessment
-description: Use when the user asks to assess a project, run a health check, get an overview of project status, evaluate project health, or wants a comprehensive report covering stack, security, vulnerabilities, and dependencies
-allowed-tools:
-  - Bash
-user-invocable: true
+description: "Use when the user asks to assess a project, run a health check, get an overview of project status, evaluate project health, or wants a comprehensive report covering stack, security, vulnerabilities, and dependencies"
 ---
 
 ## Overview

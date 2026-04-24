@@ -1,9 +1,5 @@
 ---
-name: syncable-iac-pipeline
-description: Use when the user asks to validate all infrastructure files, run an IaC review, check Docker/Compose/K8s/Terraform/Helm files together, or lint infrastructure-as-code
-allowed-tools:
-  - Bash
-user-invocable: true
+description: "Use when the user asks to validate all infrastructure files, run an IaC review, check Docker/Compose/K8s/Terraform/Helm files together, or lint infrastructure-as-code"
 ---
 
 ## Overview

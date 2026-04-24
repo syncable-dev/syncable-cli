@@ -1,9 +1,5 @@
 ---
-name: syncable-vulnerabilities
-description: Use when the user asks to check for CVEs, scan dependencies for vulnerabilities, find known security issues in packages, or audit npm/pip/cargo/go/java dependency security
-allowed-tools:
-  - Bash
-user-invocable: true
+description: "Use when the user asks to check for CVEs, scan dependencies for vulnerabilities, find known security issues in packages, or audit npm/pip/cargo/go/java dependency security"
 ---
 
 ## Overview
