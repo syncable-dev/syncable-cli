@@ -6,6 +6,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.38.0](https://github.com/syncable-dev/syncable-cli/compare/v0.37.1...v0.38.0) - 2026-05-17
+
+### Added
+
+- *(cd)* combined CI+CD command, config, secrets doc & tests (CD-23/24/25/26/27/28)
+- *(cd)* Advanced features (CD-12..CD-16, CD-21, CD-29)
+- *(cd)* Templates, Writer, Pipeline Builder & CLI Entrypoint
+- *(cd)* Session 3 — Deploy steps, migration & health check (CD-07..CD-11)
+- *(cd)* Session 2 — Auth & Registry modules (CD-03, CD-04, CD-05, CD-06)
+- *(cd)* CD generation foundation (CD-02, CD-17, CD-22)
+- *(ci)* DEV-43 — secrets_doc scalar walker, platform-aware where_to_set, multi-platform sections
+- *(ci)* CI-01/27/28 — wire full pipeline, telemetry, update docs
+- *(ci)* CI-21/23/24 dry-run renderer, coverage upload step, Slack notify step
+- *(ci)* CI-20 close gaps — interactive prompt, merge, summary table
+- *(ci)* CI-20 CI file writer & conflict detection
+- *(ci)* CI-17 multi-version test matrix generator
+- *(ci)* CI-16 monorepo CI strategy generator
+- *(ci)* CI-19 secrets inventory generator
+- *(ci)* CI-22 .syncable.ci.toml config struct and merge
+- *(ci)* CI-13 GCP Cloud Build CI template builder
+- *(ci)* CI-12 Azure Pipelines CI template builder
+- *(ci)* CI-11 GitHub Actions CI template builder
+- *(ci)* CI-10 secret and credential leak scan step generator
+- *(ci)* CI-09 container image security scan step generator
+- *(ci)* CI-08 Docker build and tag step generator
+- *(ci)* CI-07 build step generator
+- *(ci)* CI-06 lint step generator
+- *(ci)* CI-05 test step generator
+- *(ci)* CI-15 placeholder token resolution engine
+- *(ci)* CI-18 trigger configuration module
+- *(ci)* CI-14 CiPipeline skeleton schema
+- added syncable-cli upgrade function
+- updated skills/installer and marketplace logic for coding agents
+
+### Fixed
+
+- *(cd)* correct YAML step indentation in Azure/GCP/Hetzner templates
+- *(CD-24)* apply migration_command from .syncable.cd.toml to pipeline
+- *(ci)* root-manifest language priority, platform SHA exprs, Azure/GCP env syntax
+- *(ci)* CI-24 wire --notify flag and config key through handler (gap fix)
+- *(ci)* expand schema fields for CI-08/09/10 spec gaps (buildx, SARIF, GITHUB_TOKEN)
+- *(ci)* CI-18 scheduled placeholder, CI-06 Gradle Checkstyle variant
+- *(ci)* add Serialize derives to CiContext, RuntimeSetup, CacheConfig (CI-02/03/04)
+
+### Other
+
+- Merge remote-tracking branch 'origin/main' into feature/ci-pipeline-generation
+- *(cd)* add generate cd and generate ci-cd sections to command-overview (CD-30)
+- *(ci)* CI-25/26 unit and integration tests, language fixtures, insta snapshot
+- ignore all .DS_Store files
+- *(ci)* mark CI handler wiring gap for integration
+- *(ci)* extract shared make_ctx test helper
+- add .DS_Store to .gitignore
+- Merge remote-tracking branch 'origin/develop' into feature/ci-pipeline-generation
+
 ## [0.37.1](https://github.com/syncable-dev/syncable-cli/compare/v0.37.0...v0.37.1) - 2026-03-29
 
 ### Added
