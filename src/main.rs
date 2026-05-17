@@ -2,10 +2,10 @@ use clap::Parser;
 use syncable_cli::{
     analyzer::{self, analyze_monorepo, vulnerability::VulnerabilitySeverity},
     cli::{
-        ChatProvider, Cli, ColorScheme, Commands, DisplayFormat, EnvCommand, OutputFormat,
-        SecurityScanMode, SeverityThreshold, ToolsCommand,
+        ChatProvider, Cli, ColorScheme, Commands, DisplayFormat, EnvCommand,
+        GenerateCommand, OutputFormat, SecurityScanMode, SeverityThreshold, ToolsCommand,
     },
-    config, generator,
+    config, generator, handle_generate_cd, handle_generate_ci, handle_generate_cicd,
     telemetry::{self},
 };
 
@@ -216,56 +216,137 @@ async fn run() -> syncable_cli::Result<()> {
                 }
             }
         }
-        Commands::Generate {
-            path,
-            output,
-            dockerfile,
-            compose,
-            terraform,
-            all,
-            dry_run,
-            force,
-        } => {
-            // Create telemetry properties
-            let mut properties = HashMap::new();
+        Commands::Generate { command } => match command {
+            GenerateCommand::Iac {
+                path,
+                output,
+                dockerfile,
+                compose,
+                terraform,
+                all,
+                dry_run,
+                force,
+            } => {
+                // Create telemetry properties
+                let mut properties = HashMap::new();
 
-            if dockerfile {
-                properties.insert("generate_dockerfile".to_string(), json!(true));
+                if dockerfile {
+                    properties.insert("generate_dockerfile".to_string(), json!(true));
+                }
+
+                if compose {
+                    properties.insert("generate_compose".to_string(), json!(true));
+                }
+
+                if terraform {
+                    properties.insert("generate_terraform".to_string(), json!(true));
+                }
+
+                if all {
+                    properties.insert("generate_all".to_string(), json!(true));
+                }
+
+                if dry_run {
+                    properties.insert("dry_run".to_string(), json!(true));
+                }
+
+                if force {
+                    properties.insert("force_overwrite".to_string(), json!(true));
+                }
+
+                if output.is_some() {
+                    properties.insert("custom_output_dir".to_string(), json!(true));
+                }
+
+                // Track Generate command with properties
+                if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                    telemetry_client.track_generate(properties);
+                }
+
+                handle_generate(
+                    path, output, dockerfile, compose, terraform, all, dry_run, force,
+                )
             }
-
-            if compose {
-                properties.insert("generate_compose".to_string(), json!(true));
+            GenerateCommand::Ci {
+                path,
+                platform,
+                format,
+                dry_run,
+                output,
+                env_prefix,
+                skip_docker,
+                notify,
+            } => {
+                let mut properties = HashMap::new();
+                properties.insert(
+                    "ci_platform".to_string(),
+                    json!(format!("{:?}", platform).to_lowercase()),
+                );
+                if dry_run {
+                    properties.insert("dry_run".to_string(), json!(true));
+                }
+                if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                    telemetry_client.track_generate(properties);
+                }
+                let notify_enabled = notify || config.generation.notify;
+                handle_generate_ci(path, platform, format, dry_run, output, env_prefix, skip_docker, notify_enabled)
             }
-
-            if terraform {
-                properties.insert("generate_terraform".to_string(), json!(true));
+            GenerateCommand::Cd {
+                path,
+                platform,
+                target,
+                registry,
+                image_name,
+                dry_run,
+                output,
+                force,
+            } => {
+                let mut properties = HashMap::new();
+                properties.insert(
+                    "cd_platform".to_string(),
+                    json!(format!("{:?}", platform).to_lowercase()),
+                );
+                if let Some(ref t) = target {
+                    properties.insert("cd_target".to_string(), json!(format!("{:?}", t).to_lowercase()));
+                }
+                if dry_run {
+                    properties.insert("dry_run".to_string(), json!(true));
+                }
+                if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                    telemetry_client.track_generate(properties);
+                }
+                handle_generate_cd(path, platform, target, registry, image_name, dry_run, output, force)
             }
-
-            if all {
-                properties.insert("generate_all".to_string(), json!(true));
+            GenerateCommand::CiCd {
+                path,
+                platform,
+                ci_format,
+                target,
+                registry,
+                image_name,
+                dry_run,
+                output,
+                force,
+                notify,
+            } => {
+                let mut properties = HashMap::new();
+                properties.insert(
+                    "cd_platform".to_string(),
+                    json!(format!("{:?}", platform).to_lowercase()),
+                );
+                properties.insert("combined_cicd".to_string(), json!(true));
+                if let Some(ref t) = target {
+                    properties.insert("cd_target".to_string(), json!(format!("{:?}", t).to_lowercase()));
+                }
+                if dry_run {
+                    properties.insert("dry_run".to_string(), json!(true));
+                }
+                if let Some(telemetry_client) = telemetry::get_telemetry_client() {
+                    telemetry_client.track_generate(properties);
+                }
+                handle_generate_cicd(path, platform, ci_format, target, registry, image_name, dry_run, output, force, notify)
             }
-
-            if dry_run {
-                properties.insert("dry_run".to_string(), json!(true));
-            }
-
-            if force {
-                properties.insert("force_overwrite".to_string(), json!(true));
-            }
-
-            if output.is_some() {
-                properties.insert("custom_output_dir".to_string(), json!(true));
-            }
-
-            // Track Generate command with properties
-            if let Some(telemetry_client) = telemetry::get_telemetry_client() {
-                telemetry_client.track_generate(properties);
-            }
-
-            handle_generate(
-                path, output, dockerfile, compose, terraform, all, dry_run, force,
-            )
-        }
+        },
 
         Commands::Validate {
             path,

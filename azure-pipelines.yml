@@ -1,0 +1,58 @@
+trigger:
+  branches:
+    include:
+    - main
+  tags:
+    include:
+    - v*
+pr:
+  branches:
+    include:
+    - main
+schedules:
+- cron: '{{CRON_SCHEDULE}}'
+  displayName: Scheduled build
+  branches:
+    include:
+    - main
+  always: true
+pool:
+  vmImage: ubuntu-latest
+steps:
+- script: rustup default stable
+  displayName: Set up runtime
+- task: Cache@2
+  displayName: Cache dependencies
+  inputs:
+    key: cargo | $(Agent.OS) | **/Cargo.lock
+    path: |-
+      ~/.cargo/registry/index
+      ~/.cargo/registry/cache
+      ~/.cargo/git/db
+      target/
+    restoreKeys: cargo | $(Agent.OS)
+- script: cargo fetch
+  displayName: Install dependencies
+- script: cargo clippy -- -D warnings
+  displayName: Lint
+- script: cargo test
+  displayName: Test
+- script: cargo build --release
+  displayName: Build
+- script: docker build -t {{REGISTRY_URL}}/{{IMAGE_NAME}}:$(Build.SourceVersion) .
+  displayName: Build Docker image
+- script: |-
+    curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+    trivy image --exit-code 1 --severity CRITICAL,HIGH --format sarif --output trivy-results.sarif {{REGISTRY_URL}}/{{IMAGE_NAME}}:$(Build.SourceVersion)
+  displayName: Scan image (Trivy)
+- script: |-
+    curl -sSfL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_linux_x64.tar.gz | tar xz -C /usr/local/bin
+    gitleaks detect --source . --exit-code 1
+  displayName: Secret scan (Gitleaks)
+  env:
+    GITHUB_TOKEN: $(GITHUB_TOKEN)
+- task: PublishBuildArtifacts@1
+  displayName: Upload artifact
+  inputs:
+    artifactName: syncable-cli
+    pathToPublish: target/release/
