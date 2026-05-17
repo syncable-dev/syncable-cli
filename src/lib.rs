@@ -44,18 +44,59 @@ pub async fn run_command(
                 Err(e) => Err(e),
             }
         }
-        Commands::Generate {
-            path,
-            output,
-            dockerfile,
-            compose,
-            terraform,
-            all,
-            dry_run,
-            force,
-        } => handlers::handle_generate(
-            path, output, dockerfile, compose, terraform, all, dry_run, force,
-        ),
+        Commands::Generate { command } => match command {
+            cli::GenerateCommand::Iac {
+                path,
+                output,
+                dockerfile,
+                compose,
+                terraform,
+                all,
+                dry_run,
+                force,
+            } => handlers::handle_generate(
+                path, output, dockerfile, compose, terraform, all, dry_run, force,
+            ),
+            cli::GenerateCommand::Ci {
+                path,
+                platform,
+                format,
+                dry_run,
+                output,
+                env_prefix,
+                skip_docker,
+                notify,
+            } => handlers::handle_generate_ci(
+                path, platform, format, dry_run, output, env_prefix, skip_docker, notify,
+            ),
+            cli::GenerateCommand::Cd {
+                path,
+                platform,
+                target,
+                registry,
+                image_name,
+                dry_run,
+                output,
+                force,
+            } => handlers::handle_generate_cd(
+                path, platform, target, registry, image_name, dry_run, output, force,
+            ),
+            cli::GenerateCommand::CiCd {
+                path,
+                platform,
+                ci_format,
+                target,
+                registry,
+                image_name,
+                dry_run,
+                output,
+                force,
+                notify,
+            } => handlers::handle_generate_cicd(
+                path, platform, ci_format, target, registry, image_name, dry_run, output, force,
+                notify,
+            ),
+        },
         Commands::Validate {
             path,
             types,

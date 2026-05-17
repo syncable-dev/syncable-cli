@@ -6,6 +6,97 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.37.1](https://github.com/syncable-dev/syncable-cli/compare/v0.37.0...v0.37.1) - 2026-03-29
+
+### Added
+
+- deprecate chat/agent commands, rebrand CLI as DevOps toolbox
+- updated codex/gemini skill path
+
+### Fixed
+
+- install Codex skills to ~/.agents/skills/ per official docs
+- rewrite Gemini CLI skill installer to use proper SKILL.md directory format
+- rewrite skill descriptions for semantic matching, skip CI for non-Rust changes
+
+### Other
+
+- release v0.37.0
+- *(installer)* update README with correct install paths for Claude, Codex, Gemini
+
+## [0.37.1](https://github.com/syncable-dev/syncable-cli/compare/v0.37.0...v0.37.1) - 2026-03-29
+
+### Added
+
+- deprecate chat/agent commands, rebrand CLI as DevOps toolbox
+- updated codex/gemini skill path
+
+### Fixed
+
+- install Codex skills to ~/.agents/skills/ per official docs
+- rewrite Gemini CLI skill installer to use proper SKILL.md directory format
+- rewrite skill descriptions for semantic matching, skip CI for non-Rust changes
+
+### Other
+
+- *(installer)* update README with correct install paths for Claude, Codex, Gemini
+
+## [0.37.0](https://github.com/syncable-dev/syncable-cli/compare/v0.36.0...v0.37.0) - 2026-03-28
+
+### Added
+
+- wire validate command, fix per-directory vuln/dep scanning, add deploy preview/run, and pagination
+- updating test cases
+- removed .env
+- claude skills feature
+- rewrite command skills to use --agent flag
+- rewrite workflow skills with --agent and cross-step retrieval
+- wire --agent flag in command handlers and add Retrieve command
+- add --agent flag to 5 scan commands and Retrieve subcommand
+- add CLI variants of compression functions
+- add resolve_latest() for cross-process ref_id resolution
+- *(installer)* add CLI entrypoint with commander, inquirer, ora, chalk
+- *(installer)* add update command (re-exports uninstall + install)
+- *(installer)* add status command with per-agent skill counting
+- *(installer)* add uninstall command with glob removal and Gemini marker cleanup
+- *(installer)* add install command with skill writers for all 5 agents
+- *(installer)* add prerequisite check and installation modules
+- *(installer)* add Cursor, Windsurf, and Gemini format transformers
+- *(installer)* add Claude and Codex format transformers
+- *(installer)* add agent detection for 5 AI coding agents
+- *(installer)* add skill loader with frontmatter parsing
+- *(installer)* add constants and utils module with version parsing
+- *(skills)* add syncable-deploy-pipeline workflow skill
+- *(skills)* add syncable-iac-pipeline workflow skill
+- *(skills)* add syncable-security-audit workflow skill
+- *(skills)* add syncable-project-assessment workflow skill
+- *(skills)* add syncable-platform command skill
+- *(skills)* add syncable-optimize command skill
+- *(skills)* add syncable-validate command skill
+- *(skills)* add syncable-dependencies command skill
+- *(skills)* add syncable-vulnerabilities command skill
+- *(skills)* add syncable-security command skill
+- *(skills)* add syncable-analyze command skill
+- early agu-ui protocol added
+
+### Fixed
+
+- add failures/diagnostics fields to find_issues_array
+- *(installer)* add verbose logging, forward all flags in update command
+
+### Other
+
+- ignore 6 new transitive dependency advisories (aws-lc-sys, rustls-webpki)
+- agent output pipeline implementation plan (10 tasks)
+- agent output pipeline design spec
+- *(installer)* add professional npm README with logo and metadata
+- *(installer)* scaffold npx installer project
+- add npx installer implementation plan
+- add npx installer design spec
+- scaffold skills directory structure
+- add syncable CLI skills implementation plan
+- add syncable CLI skills design spec
+
 ## [0.36.0](https://github.com/syncable-dev/syncable-cli/compare/v0.35.1...v0.36.0) - 2026-03-15
 
 ### Fixed
